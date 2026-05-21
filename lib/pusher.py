@@ -12,7 +12,7 @@ from typing import Optional
 
 from .models import Message, MsgStatus, Priority
 from .utils import json_read, json_write, jsonl_append, log_error, resolve_paths, _now_iso
-from .scanner import mark_as_pushed
+from .scanner import mark_as_pushed, update_message_status
 
 
 def push_messages(
@@ -30,7 +30,7 @@ def push_messages(
         data_dir: 数据目录
         agent_name: agent 名称
         messages: 消息列表（Message 对象或 dict）
-        cli_cmd: CLI 命令模板（实际消息内容会追加）
+        cli_cmd: CLI 命令模板（空字符串 = 仅文件通信，不等待 ack）
         ack_timeout: 等待 ack 超时（秒）
         max_retries: 最大重试次数（不含首次推送）
     
@@ -42,6 +42,12 @@ def push_messages(
     
     # 1. 标记为 pushed
     mark_as_pushed(data_dir, agent_name, msg_ids)
+    
+    # 如果没有 CLI 配置，走纯文件通信 — 不等待 ack，直接标记成功
+    if not cli_cmd:
+        for mid in msg_ids:
+            update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
+        return []
     
     # 2. 构建推送内容（将所有未读消息一次推过去）
     msg_dicts = [m.to_dict() if hasattr(m, 'to_dict') else m for m in messages]
