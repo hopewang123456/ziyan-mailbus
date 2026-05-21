@@ -44,30 +44,45 @@ def push_messages(
     # 1. 标记为 pushed
     mark_as_pushed(data_dir, agent_name, msg_ids)
     
-    # 如果没有 CLI 配置，走纯文件通信
+    # 如果没有 CLI 配置，走纯文件通信 — 标记为 pushed，等待 agent 自检后写 ack
     if not cli_cmd:
         for mid in msg_ids:
-            update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
+            update_message_status(data_dir, agent_name, mid, MsgStatus.PUSHED)
         return []
     
     # 2. 构建推送文本（支持多条批量推）
+    #    包含消息内容 + 回复格式说明
     text_parts = []
     for m in messages:
         from_ = m.from_ if hasattr(m, 'from_') else m.get("from", "?")
         content = m.content if hasattr(m, 'content') else m.get("content", "")
-        text_parts.append(f"[来自 {from_}] {content}")
+        msg_id = m.id if hasattr(m, 'id') else m["id"]
+        reply_fmt = m.reply_format if hasattr(m, 'reply_format') else m.get("reply_format", {})
+        
+        # 提取 ack 路径
+        ack_path = ""
+        if isinstance(reply_fmt, dict):
+            ack_info = reply_fmt.get("ack", {})
+            ack_path = ack_info.get("file", "") if isinstance(ack_info, dict) else ""
+        
+        text_parts.append(
+            f"[来自 {from_}] {content}\n"
+            f"  消息ID: {msg_id}\n"
+            f"  回复ack: {ack_path}\n"
+            f"  格式: {{\"action\":\"ack\",\"msg_id\":\"{msg_id}\",\"agent\":\"{agent_name}\",\"timestamp\":\"<ISO时间>\"}}"
+        )
     combined_text = "\n---\n".join(text_parts)
     
     # 3. 替换 'MSG' 占位符
     cmd = cli_cmd.replace("'MSG'", f"'{combined_text}'")
     
-    # 4. CLI 推送（不等待 ack，推了就算送达）
+    # 4. CLI 推送
     success = _invoke_cli(cmd)
     
     if success:
-        # 推送成功 → 标记为 acknowledged（不等待 agent 回复）
+        # 推送成功 → 标记为 pushed（等待 agent 写 ack 确认）
         for mid in msg_ids:
-            update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
+            update_message_status(data_dir, agent_name, mid, MsgStatus.PUSHED)
         return []
     
     # 5. 首次失败 → 重试
@@ -76,7 +91,7 @@ def push_messages(
         success = _invoke_cli(cmd)
         if success:
             for mid in msg_ids:
-                update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
+                update_message_status(data_dir, agent_name, mid, MsgStatus.PUSHED)
             return []
     
     # 6. 全部失败 → 写错误日志
