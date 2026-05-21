@@ -31,25 +31,26 @@ def push_messages(
         messages: 消息列表（Message 对象或 dict）
         cli_cmd: CLI 命令模板（空字符串 = 仅文件通信，不等待 ack）
                  模板中的 'MSG' 占位符会被替换为实际消息内容
-        ack_timeout: 等待 ack 超时（秒）
-        max_retries: 最大重试次数（不含首次推送）
+        ack_timeout: 未使用（保留参数兼容）
+        max_retries: 最大重试次数
     
     返回:
-        推送失败的消息 ID 列表
+        推送失败的消息 ID 列表（推送成功即视为送达，不等待 ack）
     """
     failed_ids = []
     msg_ids = [m.id if hasattr(m, 'id') else m["id"] for m in messages]
+    paths = resolve_paths(data_dir)
     
     # 1. 标记为 pushed
     mark_as_pushed(data_dir, agent_name, msg_ids)
     
-    # 如果没有 CLI 配置，走纯文件通信 — 不等待 ack，直接标记成功
+    # 如果没有 CLI 配置，走纯文件通信
     if not cli_cmd:
         for mid in msg_ids:
             update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
         return []
     
-    # 2. 构建推送内容 — 将消息内容拼成文本（支持多条批量推）
+    # 2. 构建推送文本（支持多条批量推）
     text_parts = []
     for m in messages:
         from_ = m.from_ if hasattr(m, 'from_') else m.get("from", "?")
@@ -57,59 +58,34 @@ def push_messages(
         text_parts.append(f"[来自 {from_}] {content}")
     combined_text = "\n---\n".join(text_parts)
     
-    # 3. 替换 'MSG' 占位符为实际内容
+    # 3. 替换 'MSG' 占位符
     cmd = cli_cmd.replace("'MSG'", f"'{combined_text}'")
     
-    # 4. CLI 推送
+    # 4. CLI 推送（不等待 ack，推了就算送达）
     success = _invoke_cli(cmd)
     
     if success:
-        # 等待 ack
-        ack_received = _wait_for_ack(data_dir, agent_name, msg_ids, ack_timeout)
-        
-        if ack_received:
-            # 所有消息已 ack
+        # 推送成功 → 标记为 acknowledged（不等待 agent 回复）
+        for mid in msg_ids:
+            update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
+        return []
+    
+    # 5. 首次失败 → 重试
+    for attempt in range(1, max_retries + 1):
+        time.sleep(5)
+        success = _invoke_cli(cmd)
+        if success:
+            for mid in msg_ids:
+                update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
             return []
-        
-        # 部分/全部未 ack，进入重试
-        unacked = _get_unacked_ids(data_dir, agent_name, msg_ids)
-        
-        for attempt in range(1, max_retries + 1):
-            if not unacked:
-                break
-            
-            # 附上断线说明
-            retry_text = f"[重试] 这是之前推送但未收到确认的消息:\n"
-            for m in messages:
-                mid = m.id if hasattr(m, 'id') else m["id"]
-                content = m.content if hasattr(m, 'content') else m.get("content", "")
-                retry_text += f"  [{mid}] {content[:60]}\n"
-            
-            retry_cmd = cli_cmd.replace("'MSG'", f"'{retry_text}'")
-            success = _invoke_cli(retry_cmd)
-            if success:
-                ack_received = _wait_for_ack(data_dir, agent_name, unacked, ack_timeout)
-                if ack_received:
-                    unacked = _get_unacked_ids(data_dir, agent_name, unacked)
-                else:
-                    time.sleep(5)  # 重试间隔
-            else:
-                time.sleep(5)
-        
-        failed_ids = unacked
-    else:
-        # CLI 调用失败，直接标记所有消息为 failed
-        failed_ids = msg_ids
     
-    # 4. 处理失败
-    if failed_ids:
-        paths = resolve_paths(data_dir)
-        for fid in failed_ids:
-            _update_status_direct(data_dir, agent_name, fid, MsgStatus.FAILED)
-            log_error(paths["errors"], fid, agent_name,
-                      f"CLI 推送失败（{max_retries} 次重试均无 ack）")
+    # 6. 全部失败 → 写错误日志
+    for mid in msg_ids:
+        update_message_status(data_dir, agent_name, mid, MsgStatus.FAILED)
+        log_error(paths["errors"], mid, agent_name,
+                  f"CLI 推送失败（{max_retries} 次重试均失败）")
     
-    return failed_ids
+    return msg_ids
 
 
 def _invoke_cli(cmd: str) -> bool:
