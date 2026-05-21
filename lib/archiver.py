@@ -30,30 +30,30 @@ def archive_agent(data_dir: str, agent_name: str, archive_days: int = 7, max_mes
     
     inbox = Inbox.from_dict(inbox_data)
     
-    # 检查是否需要归档
-    if len(inbox.messages) < max_messages:
-        # 数量没超，检查是否有 7 天以上的已确认消息
-        has_old = _has_old_acknowledged(inbox.messages, archive_days)
-        if not has_old:
-            return 0
+    def _get_status(m):
+        return m.status if hasattr(m, 'status') else (m.get("status") if isinstance(m, dict) else None)
     
-    # 找出需要归档的消息（acknowledged 且满足条件）
+    def _is_acked(m):
+        return _get_status(m) == MsgStatus.ACKNOWLEDGED
+    
+    # 找出需要归档的消息：acknowledged 且（超过数量限制 或 超过时间限制）
+    acked_count = sum(1 for m in inbox.messages if _is_acked(m))
+    
+    if acked_count == 0:
+        return 0
+    
+    should_archive_by_count = len(inbox.messages) >= max_messages
+    should_archive_by_time = _has_old_acknowledged(inbox.messages, archive_days)
+    
+    if not should_archive_by_count and not should_archive_by_time:
+        return 0
+    
     to_archive = []
     keep = []
     
     for m in inbox.messages:
-        if isinstance(m, dict):
-            should_archive = False
-            if m.get("status") == MsgStatus.ACKNOWLEDGED:
-                if len(inbox.messages) >= max_messages:
-                    should_archive = True
-                elif _is_old(m, archive_days):
-                    should_archive = True
-            
-            if should_archive:
-                to_archive.append(m)
-            else:
-                keep.append(m)
+        if _is_acked(m):
+            to_archive.append(m)
         else:
             keep.append(m)
     
@@ -66,8 +66,11 @@ def archive_agent(data_dir: str, agent_name: str, archive_days: int = 7, max_mes
     os.makedirs(os.path.dirname(archive_file), exist_ok=True)
     
     for m in to_archive:
-        m["status"] = MsgStatus.ARCHIVED
-        jsonl_append(archive_file, m)
+        if hasattr(m, 'status'):
+            m.status = MsgStatus.ARCHIVED
+        else:
+            m["status"] = MsgStatus.ARCHIVED
+        jsonl_append(archive_file, m.to_dict() if hasattr(m, 'to_dict') else m)
     
     # 更新 inbox
     inbox.messages = keep
@@ -93,17 +96,18 @@ def archive_all(data_dir: str, agents: dict, archive_days: int = 7, max_messages
 
 
 def _has_old_acknowledged(messages: list, archive_days: int) -> bool:
-    """检查是否有 7 天以上的已确认消息"""
+    """检查是否有 archive_days 天以上的已确认消息"""
     for m in messages:
-        if isinstance(m, dict) and m.get("status") == MsgStatus.ACKNOWLEDGED:
+        status = m.status if hasattr(m, 'status') else (m.get("status") if isinstance(m, dict) else None)
+        if status == MsgStatus.ACKNOWLEDGED:
             if _is_old(m, archive_days):
                 return True
     return False
 
 
-def _is_old(msg: dict, archive_days: int) -> bool:
+def _is_old(msg, archive_days: int) -> bool:
     """检查消息是否超过归档天数"""
-    ack_at = msg.get("acknowledged_at")
+    ack_at = msg.acknowledged_at if hasattr(msg, 'acknowledged_at') else (msg.get("acknowledged_at") if isinstance(msg, dict) else None)
     if not ack_at:
         return False
     

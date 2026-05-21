@@ -112,15 +112,13 @@ def mark_as_pushed(data_dir: str, agent_name: str, msg_ids: list):
     changed = False
     
     for m in inbox.messages:
-        if isinstance(m, dict):
-            m_obj = Message.from_dict(m)
-        else:
-            m_obj = m
-        
-        if m_obj.id in msg_ids and m_obj.status == MsgStatus.PENDING:
-            m_obj.status = MsgStatus.PUSHED
-            if isinstance(m, dict):
-                m.update(m_obj.to_dict())
+        mid = m.id if hasattr(m, 'id') else (m.get("id") if isinstance(m, dict) else None)
+        mstatus = m.status if hasattr(m, 'status') else (m.get("status") if isinstance(m, dict) else None)
+        if mid in msg_ids and mstatus == MsgStatus.PENDING:
+            if hasattr(m, 'status'):
+                m.status = MsgStatus.PUSHED
+            else:
+                m["status"] = MsgStatus.PUSHED
             changed = True
     
     if changed:
@@ -142,14 +140,20 @@ def update_message_status(data_dir: str, agent_name: str, msg_id: str, new_statu
     found = False
     
     for m in inbox.messages:
-        if isinstance(m, dict):
-            if m.get("id") == msg_id:
+        mid = m.id if hasattr(m, 'id') else (m.get("id") if isinstance(m, dict) else None)
+        if mid == msg_id:
+            if hasattr(m, 'status'):
+                m.status = new_status
+                if new_status == MsgStatus.ACKNOWLEDGED:
+                    from .utils import _now_iso
+                    m.acknowledged_at = _now_iso()
+            else:
                 m["status"] = new_status
                 if new_status == MsgStatus.ACKNOWLEDGED:
                     from .utils import _now_iso
                     m["acknowledged_at"] = _now_iso()
-                found = True
-                break
+            found = True
+            break
     
     if found:
         json_write(inbox_file, inbox.to_dict())
