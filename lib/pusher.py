@@ -103,6 +103,18 @@ def push_messages(
     return msg_ids
 
 
+def resolve_cli(agent_cfg: dict, agent_types: dict) -> str:
+    """根据 agent 配置和类型，解析最终的 CLI 命令"""
+    atype = agent_cfg.get("type", "none")
+    tmpl = agent_types.get(atype, {}).get("push", "")
+    if not tmpl:
+        return ""
+    cmd = tmpl
+    cmd = cmd.replace("PROFILE", agent_cfg.get("profile", ""))
+    cmd = cmd.replace("AGENT", agent_cfg.get("agent", ""))
+    return cmd
+
+
 def _invoke_cli(cmd: str) -> bool:
     """
     执行 CLI 命令将消息推送给 agent。

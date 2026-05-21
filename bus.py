@@ -36,7 +36,7 @@ from lib.utils import (
     build_message, _now_iso, _ensure_dir, file_lock,
 )
 from lib.scanner import build_queues, update_message_status
-from lib.pusher import push_messages
+from lib.pusher import push_messages, resolve_cli
 from lib.ack_handler import scan_ack_files, scan_forward_files
 from lib.archiver import archive_all
 
@@ -201,6 +201,7 @@ def cmd_scan(args):
 
 def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
     """推送一个队列（加急/普通）"""
+    agent_types = config.get("agent_types", {})
     all_failed = []
     for agent_name, messages in queue.items():
         agent_cfg = config["agents"].get(agent_name)
@@ -208,7 +209,7 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
             print(f"   ⚠ {agent_name}: 配置不存在，跳过")
             continue
         
-        cli_cmd = agent_cfg.get("cli", "")
+        cli_cmd = resolve_cli(agent_cfg, agent_types)
         print(f"   → {agent_name} ({label}): {len(messages)} 条")
         
         failed = push_messages(
@@ -247,6 +248,11 @@ def cmd_send(args):
         print(f"✗ agent '{to}' 未注册")
         print(f"  已注册: {', '.join(agents.keys())}")
         return 1
+    
+    agent_types = config.get("agent_types", {})
+    cli_cmd = resolve_cli(agents[to], agent_types)
+    
+    print(f"  CLI: {cli_cmd or '(纯文件通信)'}")
     
     # 构建消息
     msg = build_message(from_, to, content, msg_type, priority)
@@ -549,22 +555,35 @@ def cmd_agent_add(args):
     config = load_config(config_path)
     data_dir = config["data_dir"]
     
+    # register
     name = args.agent
-    cli = args.cli or ""
+    atype = args.type or "none"
     role = getattr(args, 'role', "")
+    agent_id = getattr(args, 'agent_id', None) or name
+    profile = getattr(args, 'profile', None)
     
     if name in config["agents"]:
         print(f"✗ agent '{name}' 已存在")
         print("  如需修改，请直接编辑配置文件")
         return 1
     
+    if atype != "none" and atype not in config.get("agent_types", {}):
+        print(f"✗ 未知类型 '{atype}'")
+        print(f"  可用类型: {', '.join(config.get('agent_types', {}).keys())}")
+        return 1
+    
     # 注册到配置
-    config["agents"][name] = {
+    agent_entry = {
         "name": name,
         "role": role,
-        "cli": cli,
+        "type": atype,
         "inbox": f"{data_dir}/inbox/{name}/inbox.json",
     }
+    if atype == "hermes_profile":
+        agent_entry["profile"] = profile or name
+    if atype == "openclaw":
+        agent_entry["agent"] = agent_id
+    config["agents"][name] = agent_entry
     save_config(config_path, config)
     
     # 创建 inbox 目录
@@ -703,8 +722,10 @@ def main():
     p_aa = sub.add_parser("agent-add", help="注册新 agent")
     _add_data_dir_arg(p_aa)
     p_aa.add_argument("agent", help="agent 名称")
-    p_aa.add_argument("--cli", default="", help="CLI 命令模板")
+    p_aa.add_argument("--type", default="none", choices=["hermes", "hermes_profile", "openclaw", "cline", "opencode", "none"], help="agent 类型")
     p_aa.add_argument("--role", default="", help="角色说明")
+    p_aa.add_argument("--profile", default=None, help="Hermes profile 名称（仅 hermes_profile 类型）")
+    p_aa.add_argument("--agent-id", default=None, help="OpenClaw agent ID（仅 openclaw 类型）")
     
     # agent-remove
     p_ar = sub.add_parser("agent-remove", help="移除 agent")
