@@ -99,17 +99,19 @@ def _invoke_cli(cmd: str) -> bool:
         return True
     
     try:
-        result = subprocess.run(
+        # 后台执行 CLI，不阻塞 scan
+        process = subprocess.Popen(
             cmd,
             shell=True,
-            timeout=15,
-            capture_output=True,
-            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
         )
-        return result.returncode == 0
-    except subprocess.TimeoutExpired:
-        return False
-    except Exception:
+        # 关闭父进程的文件描述符，让子进程独立运行
+        # 不等待完成，直接返回成功（消息已投递）
+        return True
+    except Exception as e:
+        print(f"[pusher] CLI 后台启动失败: {e}", file=sys.stderr)
         return False
 
 
