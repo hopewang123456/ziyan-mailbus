@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "ziyan-mailbus"
+version = "1.0.0-alpha"
+description = "多 Agent 消息总线系统 — 独立、解耦、轻量的文件级消息中间件"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "子言·塔罗", email = "hopewang123456@users.noreply.github.com"},
+]
+requires-python = ">=3.10"
+keywords = ["message-bus", "multi-agent", "file-based", "lightweight"]
+
+[project.scripts]
+mailbus = "bus:main"

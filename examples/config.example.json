@@ -1,0 +1,23 @@
+{
+  "project": "ziyan-mailbus",
+  "version": "1.0.0",
+  "data_dir": "/path/to/your/mailbus-store",
+  "ack_timeout": 30,
+  "max_retries": 3,
+  "archive_days": 7,
+  "archive_max_messages": 300,
+  "agents": {
+    "agent-a": {
+      "name": "agent-a",
+      "role": "你的角色",
+      "cli": "your-cli --message",
+      "inbox": "/path/to/your/mailbus-store/inbox/agent-a/inbox.json"
+    },
+    "agent-b": {
+      "name": "agent-b",
+      "role": "另一个角色",
+      "cli": "another-cli --message",
+      "inbox": "/path/to/your/mailbus-store/inbox/agent-b/inbox.json"
+    }
+  }
+}
