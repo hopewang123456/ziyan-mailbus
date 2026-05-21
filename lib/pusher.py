@@ -6,7 +6,6 @@ ziyan-mailbus pusher
 
 import os
 import subprocess
-import json
 import time
 from typing import Optional
 
@@ -31,6 +30,7 @@ def push_messages(
         agent_name: agent 名称
         messages: 消息列表（Message 对象或 dict）
         cli_cmd: CLI 命令模板（空字符串 = 仅文件通信，不等待 ack）
+                 模板中的 'MSG' 占位符会被替换为实际消息内容
         ack_timeout: 等待 ack 超时（秒）
         max_retries: 最大重试次数（不含首次推送）
     
@@ -49,12 +49,19 @@ def push_messages(
             update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
         return []
     
-    # 2. 构建推送内容（将所有未读消息一次推过去）
-    msg_dicts = [m.to_dict() if hasattr(m, 'to_dict') else m for m in messages]
-    payload = json.dumps(msg_dicts, ensure_ascii=False)
+    # 2. 构建推送内容 — 将消息内容拼成文本（支持多条批量推）
+    text_parts = []
+    for m in messages:
+        from_ = m.from_ if hasattr(m, 'from_') else m.get("from", "?")
+        content = m.content if hasattr(m, 'content') else m.get("content", "")
+        text_parts.append(f"[来自 {from_}] {content}")
+    combined_text = "\n---\n".join(text_parts)
     
-    # 3. CLI 推送
-    success = _invoke_cli(cli_cmd, payload)
+    # 3. 替换 'MSG' 占位符为实际内容
+    cmd = cli_cmd.replace("'MSG'", f"'{combined_text}'")
+    
+    # 4. CLI 推送
+    success = _invoke_cli(cmd)
     
     if success:
         # 等待 ack
@@ -72,13 +79,14 @@ def push_messages(
                 break
             
             # 附上断线说明
-            retry_payload = json.dumps({
-                "retry": True,
-                "note": "这是之前推送但未收到确认的消息，请确认是否已完成或需要继续执行",
-                "messages": [m for m in msg_dicts if m["id"] in unacked],
-            }, ensure_ascii=False)
+            retry_text = f"[重试] 这是之前推送但未收到确认的消息:\n"
+            for m in messages:
+                mid = m.id if hasattr(m, 'id') else m["id"]
+                content = m.content if hasattr(m, 'content') else m.get("content", "")
+                retry_text += f"  [{mid}] {content[:60]}\n"
             
-            success = _invoke_cli(cli_cmd, retry_payload)
+            retry_cmd = cli_cmd.replace("'MSG'", f"'{retry_text}'")
+            success = _invoke_cli(retry_cmd)
             if success:
                 ack_received = _wait_for_ack(data_dir, agent_name, unacked, ack_timeout)
                 if ack_received:
@@ -104,22 +112,19 @@ def push_messages(
     return failed_ids
 
 
-def _invoke_cli(cli_cmd: str, payload: str) -> bool:
+def _invoke_cli(cmd: str) -> bool:
     """
-    调用 CLI 将消息推送给 agent。
+    执行 CLI 命令将消息推送给 agent。
     
-    返回 True 表示 CLI 执行成功（返回码 0），
-    不代表 agent 已收到（ack 由 ack_handler 处理）。
+    参数 cmd 已替换好 'MSG' 占位符。
+    返回 True 表示 CLI 执行成功（返回码 0）。
     """
-    if not cli_cmd:
-        # 没有 CLI 配置，记录消息到 sent.json 由 agent 自行轮询
+    if not cmd:
         return True
     
     try:
-        # 用 stdin 传 payload（避免 shell 转义问题）
-        full_cmd = f"echo '{payload}' | {cli_cmd}"
         result = subprocess.run(
-            full_cmd,
+            cmd,
             shell=True,
             timeout=15,
             capture_output=True,
