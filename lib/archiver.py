@@ -70,7 +70,14 @@ def archive_agent(data_dir: str, agent_name: str, archive_days: int = 7, max_mes
             m.status = MsgStatus.ARCHIVED
         else:
             m["status"] = MsgStatus.ARCHIVED
-        jsonl_append(archive_file, m.to_dict() if hasattr(m, 'to_dict') else m)
+        msg_dict = m.to_dict() if hasattr(m, 'to_dict') else m
+        jsonl_append(archive_file, msg_dict)
+        # 同时写入搜索索引（如果在同一项目下）
+        try:
+            from .search import index_message
+            index_message(data_dir, msg_dict)
+        except (ImportError, Exception):
+            pass
     
     # 更新 inbox
     inbox.messages = keep

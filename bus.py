@@ -221,7 +221,7 @@ def cmd_scan(args):
 
     # 5. 心跳检测
     heartbeat_interval = config.get("heartbeat_interval", 300)
-    hb_changes = heartbeat_scan(agents, config.get("agent_types", {}), data_dir,
+    hb_changes = heartbeat_scan(agents, config.get("agent_types", {}), data_dir, config=config,
                                  interval=heartbeat_interval)
     if hb_changes:
         for c in hb_changes:
@@ -307,7 +307,7 @@ def cmd_heartbeat(args):
     interval = config.get("heartbeat_interval", 300)
     missed_limit = config.get("heartbeat_missed_limit", 3)
 
-    changes = heartbeat_scan(agents, agent_types, data_dir, interval, missed_limit,
+    changes = heartbeat_scan(agents, agent_types, data_dir, config=config, interval=interval, missed_limit=missed_limit,
                               full_health_interval=0)  # 手动触发时总是执行健康检查
     
     # Agent 状态变化
