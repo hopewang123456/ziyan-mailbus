@@ -115,32 +115,22 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         self._send_json({"tasks": tasks, "count": len(tasks)})
 
     def _handle_heartbeat(self):
-        """心跳状态（如果距离上次检测超过 30 秒，现场触发一轮）"""
-        from lib.heartbeat import heartbeat_scan, load_status
-        # 检查是否最近检测过
-        hb_status = load_status(self.data_dir)
-        last_check = hb_status.get("health", {}).get("last_check", "")
-        need_scan = True
-        if last_check:
-            try:
-                from datetime import datetime, timezone, timedelta
-                last_dt = datetime.strptime(last_check, "%Y-%m-%dT%H:%M:%S%z")
-                now_dt = datetime.now(timezone(timedelta(hours=8)))
-                if (now_dt - last_dt).total_seconds() < 30:
-                    need_scan = False
-            except (ValueError, TypeError):
-                pass
-        if need_scan:
-            # 用线程后台执行，不阻塞 API 响应
+        """心跳状态（仅返回缓存，?force=1 时触发一轮检测）"""
+        from lib.heartbeat import load_status, heartbeat_scan as _hb_scan
+        from urllib.parse import urlparse, parse_qs
+
+        qs = parse_qs(urlparse(self.path).query)
+        force = qs.get("force", [""])[0] == "1"
+
+        if force:
             import threading
-            from lib.heartbeat import heartbeat_scan as _hb_scan
             t = threading.Thread(target=_hb_scan, args=(self.agents, self.agent_types, self.data_dir),
                                  kwargs={"config": {"agents": self.agents, "agent_types": self.agent_types},
-                                          "interval": 0, "full_health_interval": 0,
-                                          "ping_timeout": 3}, daemon=True)
+                                          "interval": 0, "full_health_interval": 0}, daemon=True)
             t.start()
-            t.join(timeout=8)  # 最多等 8 秒，超时就返回缓存
-        hb = load_heartbeat(self.data_dir)
+            t.join(timeout=15)
+
+        hb = load_status(self.data_dir)
         self._send_json(hb)
 
     def _handle_alerts(self):

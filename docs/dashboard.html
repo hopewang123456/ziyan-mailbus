@@ -67,8 +67,9 @@ pre.json{background:#0f172a;padding:12px;border-radius:6px;font-size:11px;overfl
 
 <div class="toolbar">
   <input class="search-input" id="apiInput" value="http://localhost:9812" placeholder="API 地址">
-  <button class="btn btn-primary" onclick="loadAll()">🔄 刷新</button>
-  <button class="btn" onclick="showRaw()">📄 查看原始 JSON</button>
+  <button class="btn btn-primary" onclick="loadAll()">🔄 刷新全部</button>
+  <button class="btn" onclick="triggerHeartbeat()">💓 触发心跳检测</button>
+  <button class="btn" onclick="showRaw()">📄 原始 JSON</button>
 </div>
 
 <!-- 概览卡片 -->
@@ -76,25 +77,37 @@ pre.json{background:#0f172a;padding:12px;border-radius:6px;font-size:11px;overfl
 
 <!-- Agent 列表 -->
 <div class="section">
-  <h2>🤖 Agent <span class="count" id="agentCount"></span></h2>
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <h2>🤖 Agent <span class="count" id="agentCount"></span></h2>
+    <button class="btn btn-sm" onclick="reloadSection('agents')">🔄 刷新</button>
+  </div>
   <div class="flex" id="agentList"></div>
 </div>
 
 <!-- 任务追踪 -->
 <div class="section">
-  <h2>🎯 任务追踪 <span class="count" id="taskCount"></span></h2>
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <h2>🎯 任务追踪 <span class="count" id="taskCount"></span></h2>
+    <button class="btn btn-sm" onclick="reloadSection('tasks')">🔄 刷新</button>
+  </div>
   <div id="taskTable"></div>
 </div>
 
 <!-- 心跳状态 -->
 <div class="section">
-  <h2>💓 心跳状态</h2>
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <h2>💓 心跳状态</h2>
+    <button class="btn btn-sm" onclick="reloadSection('heartbeat')">🔄 刷新</button>
+  </div>
   <div id="heartbeatStatus"></div>
 </div>
 
 <!-- 告警 -->
 <div class="section">
-  <h2>🔔 告警 <span class="count" id="alertCount"></span></h2>
+  <div style="display:flex;align-items:center;justify-content:space-between">
+    <h2>🔔 告警 <span class="count" id="alertCount"></span></h2>
+    <button class="btn btn-sm" onclick="reloadSection('alerts')">🔄 刷新</button>
+  </div>
   <div id="alertTable"></div>
 </div>
 
@@ -148,6 +161,45 @@ async function loadAll() {
     renderAlerts(alerts);
   } catch(e) {
     document.getElementById('summaryCards').innerHTML = `<div class="card" style="text-align:center;padding:40px"><div style="font-size:40px;margin-bottom:12px">⚠️</div><div style="color:#fca5a5">无法连接到 API: ${e.message}</div><div style="color:#64748b;font-size:12px;margin-top:8px">请确认 <code>mailbus serve</code> 已在运行，并且 API 地址正确。</div></div>`;
+  }
+}
+
+async function reloadSection(name) {
+  const endpointMap = {
+    agents: '/api/agents',
+    tasks: '/api/tasks',
+    heartbeat: '/api/heartbeat',
+    alerts: '/api/alerts',
+  };
+  const renderMap = {
+    agents: (d) => { rawData.agents = d; renderAgents(d); },
+    tasks: (d) => { rawData.tasks = d; renderTasks(d); },
+    heartbeat: (d) => { rawData.hb = d; renderHeartbeat(d); },
+    alerts: (d) => { rawData.alerts = d; renderAlerts(d); },
+  };
+  try {
+    const data = await fetchJSON(endpointMap[name]);
+    renderMap[name](data);
+  } catch(e) {
+    console.error('刷新 ' + name + ' 失败:', e);
+  }
+}
+
+async function triggerHeartbeat() {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '⏳ 检测中...';
+  try {
+    // 调 mailbus heartbeat CLI（通过 API 间接触发）
+    const resp = await fetch(apiUrl('/api/heartbeat?force=1'));
+    const data = await resp.json();
+    rawData.hb = data;
+    renderHeartbeat(data);
+    btn.textContent = '✅ 已完成';
+    setTimeout(() => { btn.textContent = '💓 触发心跳检测'; btn.disabled = false; }, 2000);
+  } catch(e) {
+    btn.textContent = '❌ 失败';
+    setTimeout(() => { btn.textContent = '💓 触发心跳检测'; btn.disabled = false; }, 2000);
   }
 }
 
