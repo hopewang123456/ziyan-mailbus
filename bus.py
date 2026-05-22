@@ -40,7 +40,7 @@ from lib.pusher import push_messages, resolve_cli_chain
 from lib.ack_handler import scan_ack_files, scan_forward_files, scan_error_reports
 from lib.archiver import archive_all
 from lib.tracker import TaskTracker
-from lib.heartbeat import heartbeat_scan, is_online
+from lib.heartbeat import heartbeat_scan, is_online, load_status
 from lib.search import scan_and_index, search
 
 
@@ -221,14 +221,26 @@ def cmd_scan(args):
 
     # 5. 心跳检测
     heartbeat_interval = config.get("heartbeat_interval", 300)
-    # 每次 scan 都做心跳太频繁，cron 每1分钟一次，300 秒才需要检测一次
-    # 这里由 heartbeat_scan 自行判断是否该 ping
     hb_changes = heartbeat_scan(agents, config.get("agent_types", {}), data_dir,
                                  interval=heartbeat_interval)
     if hb_changes:
         for c in hb_changes:
-            icon = "🟢" if c["new_status"] == "online" else "🔴"
-            print(f"   {icon} 心跳 {c['agent']}: {c['old_status']} → {c['new_status']}")
+            if c.get("type") == "health":
+                print(f"   🔄 AgentMemory: {c['old_status']} → {c['new_status']}")
+            else:
+                icon = "🟢" if c["new_status"] == "online" else "🔴"
+                print(f"   {icon} 心跳 {c['agent']}: {c['old_status']} → {c['new_status']}")
+    
+    # 健康状态摘要（每轮 scan 显示一次）
+    hb_status = load_status(data_dir)
+    health = hb_status.get("health", {})
+    am = health.get("agentmemory", {})
+    if am.get("status") == "unreachable":
+        print(f"   ⚠️ AgentMemory 不可用")
+    inbox_warnings = health.get("inbox_warnings", [])
+    if inbox_warnings:
+        for w in inbox_warnings[:3]:
+            print(f"   ⚠️ {w['agent']}: inbox {w['count']} 条消息积压")
 
     # 6. 催办检查
     tracker = TaskTracker(data_dir)
@@ -295,15 +307,49 @@ def cmd_heartbeat(args):
     interval = config.get("heartbeat_interval", 300)
     missed_limit = config.get("heartbeat_missed_limit", 3)
 
-    changes = heartbeat_scan(agents, agent_types, data_dir, interval, missed_limit)
-    if changes:
-        print(f"💓 心跳状态变化: {len(changes)} 条")
-        for c in changes:
-            icon = "🟢" if c["new_status"] == "online" else "🔴"
+    changes = heartbeat_scan(agents, agent_types, data_dir, interval, missed_limit,
+                              full_health_interval=0)  # 手动触发时总是执行健康检查
+    
+    # Agent 状态变化
+    agent_changes = [c for c in changes if c.get("type") != "health"]
+    health_changes = [c for c in changes if c.get("type") == "health"]
+    
+    if agent_changes:
+        print(f"💓 Agent 状态变化: {len(agent_changes)} 条")
+        for c in agent_changes:
+            icon = "🟢" if c["new_status"] == "online" else "🔴" if c["new_status"] == "offline" else "⚠️"
             print(f"   {icon} {c['agent']}: {c['old_status']} → {c['new_status']}")
     else:
-        print("💓 心跳检测完成，无状态变化")
+        print("💓 Agent 心跳正常")
+    
+    # 健康状态
+    hb_status = load_status(data_dir)
+    health = hb_status.get("health", {})
+    
+    # AgentMemory
+    am = health.get("agentmemory", {})
+    am_status = am.get("status", "unknown")
+    am_icon = "🟢" if am_status == "healthy" else "🔴" if am_status == "unreachable" else "⚠️"
+    print(f"   {am_icon} AgentMemory: {am_status}" + (f" ({am.get('detail','')})" if am.get('detail') else ""))
+    
+    # 磁盘
+    disk = health.get("disk", {})
+    if disk.get("status") == "warn":
+        print(f"   ⚠️  磁盘: {disk['size_mb']}MB（超过告警阈值 {disk['warn_mb']}MB）")
+    elif disk.get("size_mb"):
+        print(f"   💾 磁盘: {disk['size_mb']}MB")
+    
+    # inbox 积压
+    inbox_warnings = health.get("inbox_warnings", [])
+    if inbox_warnings:
+        for w in inbox_warnings:
+            level_icon = "🔴" if w["level"] == "critical" else "⚠️"
+            print(f"   {level_icon} {w['agent']}: inbox {w['count']} 条消息积压")
 
+    if health_changes:
+        for c in health_changes:
+            print(f"   🔄 AgentMemory: {c['old_status']} → {c['new_status']}")
+    
     return 0
 
 
