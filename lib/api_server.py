@@ -203,7 +203,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         self._send_json(safe)
 
     def _handle_agent_profile(self, agent: str):
-        """Agent 详情：身份文件 + 技能文件"""
+        """Agent 详情：从 config.profile_paths 读取身份文件 + 扫描技能"""
         profile = {
             "agent": agent,
             "identity": None,
@@ -211,64 +211,40 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "skills": [],
             "config": self.agents.get(agent, {}),
         }
-        # 搜索身份文件路径
-        search_paths = [
-            # OpenClaw 空间
-            "/mnt/e/ai_tools/openclaw_space/IDENTITY.md",
-            "/mnt/e/ai_tools/openclaw_space/SOUL.md",
-            "/mnt/e/ai_tools/openclaw_space/agents/" + agent + "/IDENTITY.md",
-            "/mnt/e/ai_tools/openclaw_space/agents/" + agent + "/SOUL.md",
-            # OpenCode
-            "/mnt/e/ai_tools/opencode/AGENTS.md",
-            "/mnt/e/ai_tools/opencode/SOUL.md",
-            # Cline
-            "/mnt/e/ai_tools/lingxiao/SOUL.md",
-            "/mnt/e/ai_tools/lingxiao/IDENTITY.md",
-            # Hermes prefills
-            "/mnt/e/hermes-data/.hermes/prefill/" + agent + ".md",
-            # Aider
-            "/mnt/e/ai_tools/aider/.aider/SOUL.md",
-            "/mnt/e/ai_tools/aider/.aider/IDENTITY.md",
-        ]
-        identities = []
-        for sp in search_paths:
+        cfg = self.agents.get(agent, {})
+        paths = cfg.get("profile_paths", {})
+
+        # 读身份文件
+        identity_path = paths.get("identity", "")
+        if identity_path and os.path.isfile(identity_path):
             try:
-                if os.path.isfile(sp):
-                    with open(sp, "r", encoding="utf-8", errors="replace") as f:
-                        content = f.read(2000)  # 只读前 2000 字符
-                        fname = os.path.basename(sp)
-                        if fname.upper() in ("IDENTITY.MD",):
-                            profile["identity"] = content[:1000]
-                        elif fname.upper() in ("SOUL.MD",):
-                            profile["soul"] = content[:1000]
-                        else:
-                            identities.append({"file": sp, "preview": content[:500]})
-            except (OSError, Exception):
+                with open(identity_path, "r", encoding="utf-8", errors="replace") as f:
+                    profile["identity"] = f.read(2000)[:1000]
+            except Exception:
                 pass
 
-        if identities:
-            profile["identity_files"] = identities
+        # 读 soul 文件
+        soul_path = paths.get("soul", "")
+        if soul_path and os.path.isfile(soul_path):
+            try:
+                with open(soul_path, "r", encoding="utf-8", errors="replace") as f:
+                    profile["soul"] = f.read(2000)[:1000]
+            except Exception:
+                pass
 
-        # 搜索 skill 文件
-        skill_dirs = [
-            "/mnt/e/ai_tools/openclaw_space/skills/",
-            "/mnt/e/hermes-data/.hermes/skills/",
-            "/mnt/e/ai_tools/opencode/.opencode/skills/",
-            "/home/administrator/.codex/skills/",
-            "/mnt/e/ai_tools/aider/.aider/skills/",
-        ]
+        # 扫描技能目录
+        skill_dirs = paths.get("skills_dirs", [])
         all_skills = []
         for sd in skill_dirs:
             if os.path.isdir(sd):
-                for root, dirs, files in os.walk(sd):
-                    for f in files:
-                        if f == "SKILL.md":
-                            rel = os.path.relpath(root, sd)
-                            all_skills.append(rel)
-                            if len(all_skills) >= 8:
-                                break
-                    if len(all_skills) >= 8:
-                        break
+                for entry in sorted(os.listdir(sd)):
+                    skill_path = os.path.join(sd, entry)
+                    if os.path.isdir(skill_path) and os.path.isfile(os.path.join(skill_path, "SKILL.md")):
+                        all_skills.append(entry)
+                        if len(all_skills) >= 20:
+                            break
+                if len(all_skills) >= 20:
+                    break
         profile["skills"] = all_skills
 
         self._send_json(profile)

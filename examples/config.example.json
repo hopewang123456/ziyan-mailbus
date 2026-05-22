@@ -16,14 +16,24 @@
       "role": "设计",
       "type": "hermes",
       "models": ["deepseek-chat"],
-      "inbox": "/path/to/your/store/inbox/agent-a/inbox.json"
+      "inbox": "/path/to/your/store/inbox/agent-a/inbox.json",
+      "profile_paths": {
+        "identity": "/path/to/agent-a/IDENTITY.md",
+        "soul": "/path/to/agent-a/SOUL.md",
+        "skills_dirs": ["/path/to/skills/"]
+      }
     },
     "agent-b": {
       "name": "Agent B",
       "role": "编码",
       "type": "opencode",
       "models": ["deepseek-chat", "qwen-max"],
-      "inbox": "/path/to/your/store/inbox/agent-b/inbox.json"
+      "inbox": "/path/to/your/store/inbox/agent-b/inbox.json",
+      "profile_paths": {
+        "identity": "/path/to/agent-b/AGENTS.md",
+        "soul": "",
+        "skills_dirs": []
+      }
     },
     "agent-c": {
       "name": "Agent C",
@@ -31,7 +41,12 @@
       "type": "openclaw",
       "agent": "main",
       "models": ["deepseek-chat"],
-      "inbox": "/path/to/your/store/inbox/agent-c/inbox.json"
+      "inbox": "/path/to/your/store/inbox/agent-c/inbox.json",
+      "profile_paths": {
+        "identity": "/path/to/agent-c/IDENTITY.md",
+        "soul": "",
+        "skills_dirs": ["/path/to/agent-c/skills/"]
+      }
     }
   },
   "agent_types": {

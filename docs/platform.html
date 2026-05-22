@@ -354,16 +354,18 @@ function renderTasks(t) {
   count.textContent = t.count;
   const rows = t.tasks.map(task => {
     const hops = (task.chain || []).map(h => `${h.agent}:${h.action}`).join(' → ');
+    const creator = (task.chain && task.chain.length > 0) ? task.chain[0].agent : '-';
     return `<tr>
       <td>${task.task_id}</td>
       <td>${statusBadge(task.status)}</td>
       <td>${task.summary || '-'}</td>
+      <td>${creator}</td>
       <td>${task.assignee || '-'}</td>
       <td style="font-size:11px;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${hops || '-'}</td>
       <td style="font-size:11px;color:#64748b">${task.reminded_count || 0}</td>
     </tr>`;
   }).join('');
-  el.innerHTML = `<table><thead><tr><th>ID</th><th>状态</th><th>概要</th><th>负责人</th><th>追踪链</th><th>催办</th></tr></thead><tbody>${rows}</tbody></table>`;
+  el.innerHTML = `<table><thead><tr><th>ID</th><th>状态</th><th>概要</th><th>发起人</th><th>负责人</th><th>追踪链</th><th>催办</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function renderHeartbeat(hb) {
