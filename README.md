@@ -1,180 +1,179 @@
 # ziyan-mailbus
 
-**打破 Agent 之间的交互壁垒，实现真正的 A2A（Agent-to-Agent）通信。**
+**Break down the barriers between AI Agents. True A2A (Agent-to-Agent) communication, framework-agnostic.**
 
-ziyan-mailbus 是一个独立、解耦、轻量的**文件级消息中间件**，专为多 Agent 团队设计。不依赖任何 Agent 框架，不入侵 Agent 代码——CLI 是唯一契约，即插即用。
+ziyan-mailbus is an independent, decoupled, lightweight **file-based message bus** designed for multi-agent teams. No framework lock-in, no agent code modification — the CLI is the only contract. Plug and play.
 
-> 不需要 Redis / RabbitMQ / 数据库。消息存 JSON 文件，CLI 推送，Agent 即时回复 ack。
+> No Redis / RabbitMQ / Database required. Messages stored as JSON files. CLI push delivery with bidirectional ACK confirmation.
 
-## 设计哲学
+## Design Philosophy
 
-- **真正的 A2A** — 让不同框架的 Agent 之间可以自由通信，不绑定任何特定的 Agent 实现
-- **文件即通信** — 消息存 JSON 文件，零中间件依赖。备份=cp，迁移=scp
-- **双向确认** — CLI 推送 + Agent 主动 ack，不搞"推送即送达"的幻觉
-- **先队列再推送** — 加急排队优先，普通排队顺序，同 Agent 批量推送
-- **故障隔离** — 推送失败 3 次 → 写错误日志 → 监控 Agent 扫日志找修复方案
-- **Agent 类型抽象** — 统一 `agent_types` 配置，支持 Hermes / OpenClaw / Cline / OpenCode 等框架
-- **即插即用** — 不入侵 Agent 代码，CLI 是唯一契约
+- **True A2A** — Let agents built with different frameworks talk to each other freely. Not tied to any specific agent implementation.
+- **Files as Communication** — Messages stored as JSON files, zero middleware dependency. Backup = `cp`, migrate = `scp`.
+- **Bidirectional Confirmation** — CLI push + Agent writes ACK. No "fire and forget" illusion.
+- **Queue-then-Push** — Urgent messages first, normal messages queued, batched per agent.
+- **Fault Isolation** — 3 failed push attempts → error log → monitoring agent scans logs for recovery.
+- **Agent Type Abstraction** — Unified `agent_types` config. Supports Hermes, OpenClaw, Cline, OpenCode, and more.
+- **Plug and Play** — Zero agent code modification. The CLI is the only contract.
 
-## 前置条件
+## Prerequisites
 
-- **Python ≥ 3.10**（核心运行环境）
-- **各 Agent 的 CLI 工具**（Hermes / OpenClaw / Cline / OpenCode 等，按需安装）
-- **API Key**（通过 `.env` 文件配置，见 `examples/config.example.json` 的说明）
-- **AgentMemory**（可选）— 用于消息持久化记忆，确保 Agent 重启后能检索历史消息
-  - 安装: `npm install -g @agentmemory/agentmemory`
-  - 启动: `agentmemory`（默认监听 http://localhost:3111）
-  - 桥接: mailbus 自动将已 ack 的消息同步到 AgentMemory
+- **Python ≥ 3.10**
+- **CLI tools** for your agents (Hermes, OpenClaw, Cline, OpenCode, etc.)
+- **API Keys** — configured via `.env` file (see `examples/config.example.json`)
+- **AgentMemory** (optional) — persistent memory for message history
+  - Install: `npm install -g @agentmemory/agentmemory`
+  - Start: `agentmemory` (default: http://localhost:3111)
+  - Bridge: mailbus automatically syncs acknowledged messages to AgentMemory
 
-## 快速开始
+## Quick Start
 
 ```bash
-# 1. 安装
+# 1. Install
 git clone https://github.com/hopewang123456/ziyan-mailbus.git
 cd ziyan-mailbus
 pip install -e .
 
-# 2. 初始化
+# 2. Initialize
 mailbus init --data-dir /path/to/your/store
 
-# 3. 注册 Agent
-mailbus agent-add agent-a --cli "your-cli --message" --role "你的角色"
+# 3. Register an Agent
+mailbus agent-add agent-a --cli "your-cli --message" --role "your role"
 
-# 4. 启动总线（cron，每分钟扫描）
+# 4. Start the bus (cron, scans every minute)
 crontab -e
-# 添加：* * * * * cd /path/to/ziyan-mailbus && mailbus scan
+# Add: * * * * * cd /path/to/ziyan-mailbus && mailbus scan
 
-# 5. 发消息
-mailbus send agent-a --msg "你好，请处理这个任务" --from lingzhao
-mailbus broadcast --msg "系统维护通知"
+# 5. Send a message
+mailbus send agent-a --msg "Hello, please handle this task" --from lingzhao
+mailbus broadcast --msg "System maintenance notice"
 
-# 6. 查看状态
+# 6. Check status
 mailbus status
 mailbus status --failed
 ```
 
-## 核心特性
+## Core Features
 
-| 特性 | 说明 |
-|------|------|
-| **零依赖** | 纯 Python + 文件系统，不需要 Redis / MQ / DB |
-| **双向确认** | CLI 推送 → Agent 写 ack → 总线更新状态，不丢消息 |
-| **消息协议** | type + action 结构化字段，Agent 不猜自然语言 |
-| **任务追踪** | pending → running → success/failed/timeout，全链路追踪 |
-| **优先级队列** | 加急消息优先推送，支持抢占 |
-| **Agent 类型抽象** | 统一配置模板，支持 6 种 Agent 框架（见下方） |
-| **多模型 Fallback** | 模型别名系统，按顺序试，不通自动换下一个 |
-| **公告板** | `broadcast` 一键全员推送 |
-| **催办** | 超时自动重推 + 升级通知 |
-| **心跳检测** | 定时 ping Agent，离线不进重试 |
-| **消息检索** | SQLite FTS5 全文索引 |
-| **错误回执** | 标准化 error_code/reason/trace |
-| **错误日志** | 推送失败写 JSONL 日志，按周分文件 |
-| **记忆同步** | 可选桥接 AgentMemory，消息自动持久化 |
-| **归档策略** | 已 ack 超 7 天 / 超 300 条自动归档 |
+| Feature | Description |
+|---------|-------------|
+| **Zero Dependencies** | Pure Python + filesystem. No Redis / MQ / DB. |
+| **Bidirectional ACK** | CLI push → Agent writes ACK → bus updates status. No message loss. |
+| **Message Protocol** | Structured `type` + `action` fields. Agents don't guess intent from natural language. |
+| **Task Tracking** | `pending → running → success/failed/timeout`. Full chain tracing. |
+| **Priority Queue** | Urgent messages first, with preemption support. |
+| **Agent Type Abstraction** | Single config template, 6 frameworks built-in (see below). |
+| **Multi-Model Fallback** | Model alias system. Tries models in order, falls through automatically. |
+| **Broadcast** | `broadcast` command pushes to all agents at once. |
+| **Reminders** | Auto-retry on timeout + escalation notifications. |
+| **Heartbeat** | Periodic agent ping. Offline agents skip retry. |
+| **Message Search** | SQLite FTS5 full-text index. |
+| **Error Reports** | Standardized `error_code/reason/trace` format. |
+| **Error Logs** | JSONL format, weekly rotation, auto-cleanup after 30 days. |
+| **Memory Sync** | Optional AgentMemory bridge for persistent message history. |
+| **Archival** | Acknowledged messages auto-archived after 7 days / 300 messages. |
 
-### 支持的 Agent 框架
+### Supported Agent Frameworks
 
-| 类型 | CLI 模板 | 框架 |
-|------|----------|------|
+| Type | CLI Template | Framework |
+|------|-------------|-----------|
 | `hermes` | `hermes chat -q 'MSG' -Q` | Hermes Agent |
-| `hermes_profile` | `hermes chat -q 'MSG' -Q --profile PROFILE` | Hermes 多 Profile |
+| `hermes_profile` | `hermes chat -q 'MSG' -Q --profile PROFILE` | Hermes Multi-Profile |
 | `openclaw` | `openclaw agent --local --agent AGENT --message 'MSG'` | OpenClaw Gateway |
 | `cline` | `cline 'MSG' --provider openai-compatible` | Cline CLI |
 | `opencode` | `opencode run 'MSG' --dangerously-skip-permissions MODEL` | OpenCode |
-| `none` | 纯文件通信，无 CLI 推送 | 手动调度 |
+| `none` | File-only communication, no CLI push | Manual dispatch |
 
-> 新增框架只需在 `agent_types` 加一条 CLI 模板，代码零改动。
+> Adding a new framework? Just add one CLI template to `agent_types`. Zero code changes.
 
-## CLI 命令总览
+## CLI Commands
 
 ```bash
-mailbus init                        # 初始化目录结构
-mailbus scan                        # 扫描全员 inbox → 推送 + 心跳 + 催办 + 索引
-mailbus send <agent>                # 手动发消息（--priority/--type/--forward-to）
-mailbus broadcast                   # 发公告板（全员推送）
-mailbus ack --msg-id <ID>           # Agent 确认收到
-mailbus mark-read --msg-ids <ID>    # Agent 标记已读
-mailbus status [--agent <名>]       # 查看消息状态
-mailbus status --failed             # 查看失败消息
-mailbus retry [--msg-id <ID>]       # 重试失败消息
-mailbus archive                     # 手动触发归档
-mailbus errors                      # 查看错误日志
-mailbus agent-add <名>              # 注册新 Agent
-mailbus agent-remove <名>           # 移除 Agent
-mailbus heartbeat                   # 心跳检测（检测所有 Agent 在线状态）
-mailbus search                      # 消息全文检索（--query/--from/--to/--type/--status）
-mailbus serve [--port]              # 启动 HTTP API 服务（默认端口 9812）
+mailbus init                        # Initialize directory structure
+mailbus scan                        # Scan all inboxes → push + heartbeat + reminders + index
+mailbus send <agent>                # Send a message (--priority/--type/--forward-to)
+mailbus broadcast                   # Broadcast to all agents
+mailbus ack --msg-id <ID>           # Agent acknowledges receipt
+mailbus mark-read --msg-ids <ID>    # Agent marks messages as read
+mailbus status [--agent <name>]     # View message status
+mailbus status --failed             # View failed messages
+mailbus retry [--msg-id <ID>]       # Retry failed messages
+mailbus archive                     # Trigger archival manually
+mailbus errors                      # View error logs
+mailbus agent-add <name>            # Register a new agent
+mailbus agent-remove <name>         # Remove an agent
+mailbus heartbeat                   # Heartbeat detection (check all agent online status)
+mailbus search                      # Full-text message search
+mailbus serve [--port]              # Start HTTP API server (default port 9812)
 ```
 
-## Platform 管理界面
+## Platform Web UI
 
-mailbus 自带一个独立 Web 管理界面 **ziyan-mailbus Platform**，零依赖，打开即用：
+mailbus ships with a standalone web management interface — **ziyan-mailbus Platform**. Zero dependencies, open and use:
 
 ```bash
-# 1. 启动 HTTP API
+# 1. Start the HTTP API
 mailbus serve --port 9812 --data-dir /path/to/store
 
-# 2. 浏览器打开 docs/platform.html（或用任意静态服务器托管）
-#    页面自动从 API 加载数据
+# 2. Open docs/platform.html in your browser (or serve with any static server)
 ```
 
-**功能：**
+**Dashboard sections:**
 
-| 区域 | 内容 |
-|------|------|
-| **概览** | Agent 数量、消息总数、待处理数 |
-| **Agent 列表** | 名称、类型、角色、模型配置（动态读取 config.json） |
-| **任务追踪** | 状态、追踪链、催办次数 |
-| **心跳状态** | AgentMemory / 磁盘 / inbox 积压 / 各 Agent 在线状态 |
-| **告警历史** | 级别、类型、时间 |
-| **原始 JSON** | 各 API 端点的原始数据查看 |
+| Section | Content |
+|---------|---------|
+| **Overview** | Agent count, total messages, pending count |
+| **Agent List** | Name, type, role, model config (dynamically reads config.json) |
+| **Task Tracking** | Status, trace chain, reminder count |
+| **Heartbeat** | AgentMemory / disk / inbox backlog / per-agent online status |
+| **Alerts** | Severity, type, timestamp |
+| **Raw JSON** | View raw API response data |
 
-**操作：**
-- 🔄 **刷新全部** — 重新加载所有数据
-- 💓 **触发心跳检测** — 手动跑一轮 Agent 在线检测
-- 各区域独立 **🔄 刷新** — 单独刷新某个区块，不用全部重载
-- **自动刷新** — 在 `config.json` 设置 `dashboard_refresh_seconds`（如 15 秒），平台自动定时刷新
+**Controls:**
+- 🔄 **Refresh All** — reload all data
+- 💓 **Trigger Heartbeat** — run an on-demand agent health check
+- Per-section **🔄 Refresh** buttons — refresh individual sections
+- **Auto-refresh** — set `dashboard_refresh_seconds` in `config.json`, Platform auto-updates
 
-Platform 完全独立于 Agent 框架，迁移到其他环境只需改 API 地址即可使用。
+Platform is completely framework-agnostic. Move to a different environment? Just change the API URL.
 
-## Agent 回复格式
+## Agent Reply Format
 
-Agent 收到推送后，写文件回复总线（不调 CLI）：
+Agents reply to the bus by writing files (not by calling CLI):
 
-**确认收到（ack.json）：**
+**ACK (ack.json):**
 ```json
 {"action":"ack","msg_id":"msg-xxx","agent":"agent-a","timestamp":"2026-05-21T12:00:05+0800"}
 ```
 
-**标记已读（mark.json）：**
+**Mark as Read (mark.json):**
 ```json
 {"action":"mark_read","msg_ids":["msg-xxx","msg-yyy"],"agent":"agent-a","timestamp":"2026-05-21T12:00:05+0800"}
 ```
 
-**转发给其他 Agent：**
-直接写目标 Agent 的 `inbox.json`（追加到 `messages` 数组 + 设 `has_unread: true`）
+**Forward to Another Agent:**
+Write directly to the target agent's `inbox.json` (append to `messages` array + set `has_unread: true`)
 
-## AgentMemory 记忆同步（可选）
+## AgentMemory Bridge (Optional)
 
-mailbus 可以自动将已 ack 的消息同步到 [AgentMemory](https://github.com/AgentMemory/AgentMemory)，保证 Agent 重启后能检索到历史消息。
+mailbus can automatically sync acknowledged messages to [AgentMemory](https://github.com/AgentMemory/AgentMemory), ensuring agents can retrieve message history after restart.
 
 ```bash
-# 先确保 AgentMemory 在 http://localhost:3111 运行
-# 然后在 cron 中 chain 调用：
+# Ensure AgentMemory is running at http://localhost:3111
+# Chain in cron:
 * * * * * cd /path/to/ziyan-mailbus && mailbus scan && python3 mailbus-memory-bridge.py --data-dir /path/to/store
 ```
 
-消息以标签格式存入记忆：`[agent:xxx] [from:yyy] [msg_id:zzz] <消息内容>`
+Messages stored with tags: `[agent:xxx] [from:yyy] [msg_id:zzz] <message content>`
 
-## 多模型 Fallback
+## Multi-Model Fallback
 
-每个 agent 可以配置多个 LLM 模型别名，总线按顺序试，通了一个就停：
+Each agent can be configured with multiple LLM model aliases. The bus tries them in order and stops at the first successful one:
 
 ```json
 {
   "agents": {
-    "dali": {
+    "agent-b": {
       "type": "opencode",
       "models": ["deepseek-chat", "qwen-max", "zhipu-4"]
     }
@@ -198,11 +197,11 @@ mailbus 可以自动将已 ack 的消息同步到 [AgentMemory](https://github.c
 }
 ```
 
-CLI 模板中用 `MODEL` 占位符，总线自动根据 agent 的 `models` 列表和类型解析出对应的参数。
+Use the `MODEL` placeholder in CLI templates; the bus resolves it from the agent's model alias list.
 
-## 配置参考
+## Configuration Reference
 
-完整的配置示例见 [examples/config.example.json](examples/config.example.json)。
+Full example config at [examples/config.example.json](examples/config.example.json).
 
 ```json
 {
@@ -217,7 +216,7 @@ CLI 模板中用 `MODEL` 占位符，总线自动根据 agent 的 `models` 列�
   "agents": {
     "agent-a": {
       "name": "Agent A",
-      "role": "描述",
+      "role": "Description",
       "type": "hermes",
       "models": ["deepseek-chat"],
       "inbox": "/path/to/your/store/inbox/agent-a/inbox.json"
@@ -226,7 +225,7 @@ CLI 模板中用 `MODEL` 占位符，总线自动根据 agent 的 `models` 列�
   "agent_types": {
     "hermes": {
       "push": "hermes chat -q 'MSG' -Q",
-      "description": "Hermes Agent 实例"
+      "description": "Hermes Agent"
     },
     "models": {
       "deepseek-chat": {
@@ -238,58 +237,59 @@ CLI 模板中用 `MODEL` 占位符，总线自动根据 agent 的 `models` 列�
 }
 ```
 
-## 项目结构
+## Project Structure
 
 ```
 ziyan-mailbus/
-├── bus.py                        # 入口脚本（CLI 命令入口）
+├── bus.py                        # CLI entry point
 ├── lib/
 │   ├── __init__.py
-│   ├── models.py                 # 数据模型（Message / Inbox / MsgType）
-│   ├── scanner.py                # 扫描 inbox → 构建推送队列
-│   ├── pusher.py                 # CLI 推送 + 多模型 fallback
-│   ├── ack_handler.py            # 处理 Agent 回复（ack / mark_read / forward）
-│   ├── archiver.py               # 已读消息归档
-│   ├── tracker.py                # 任务追踪 + 催办
-│   ├── heartbeat.py              # 心跳检测 + 健康监控
-│   ├── search.py                 # SQLite FTS5 全文检索
-│   ├── alerter.py                # 告警系统
-│   ├── api_server.py             # HTTP API 服务
-│   └── utils.py                  # 文件锁、JSON 读写、消息构建
-├── mailbus-memory-bridge.py      # AgentMemory 桥接（可选）
-├── store/                        # 运行时数据目录（gitignore，不提交）
-├── tests/                        # 测试套件（10 文件，90+ 用例）
+│   ├── models.py                 # Data models (Message, Inbox, MsgType)
+│   ├── scanner.py                # Inbox scanning → queue building
+│   ├── pusher.py                 # CLI push + multi-model fallback
+│   ├── ack_handler.py            # Agent reply handling
+│   ├── archiver.py               # Message archival
+│   ├── tracker.py                # Task tracking + reminders
+│   ├── heartbeat.py              # Heartbeat + health monitoring
+│   ├── search.py                 # SQLite FTS5 full-text search
+│   ├── alerter.py                # Alert system
+│   ├── api_server.py             # HTTP API server
+│   └── utils.py                  # File lock, JSON I/O, message builder
+├── mailbus-memory-bridge.py      # AgentMemory bridge (optional)
+├── store/                        # Runtime data (gitignored)
+├── tests/                        # Test suite (10 files, 90+ tests)
 ├── docs/
-│   ├── platform.html             # Web 管理界面（独立 HTML，零依赖）
-│   ├── architecture-v2.html      # 架构图
+│   ├── platform.html             # Web management UI
+│   ├── architecture-v2.html      # Architecture diagram
 │   ├── quickstart.md
 │   └── message-format.md
 ├── examples/
-│   └── config.example.json       # 示例配置（不含私有信息）
+│   └── config.example.json       # Clean example config
 ├── ARCHITECTURE.md
 ├── README.md
+├── README.zh.md
 ├── CHANGELOG.md
 ├── LICENSE
 └── pyproject.toml
 ```
 
-## 架构
+## Architecture
 
-详见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+See [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## 欢迎共建
+## Contributing
 
-ziyan-mailbus 的目标是实现真正的 **A2A（Agent-to-Agent）** 通信，打破不同 Agent 框架之间的交互壁垒。
+ziyan-mailbus aims to achieve true **A2A (Agent-to-Agent)** communication — breaking down the barriers between different AI agent frameworks.
 
-无论你用的是 Hermes、OpenClaw、Cline、OpenCode、Aider 还是其他 AI Agent 框架——mailbus 都能让它们无缝对话。
+Whether you use Hermes, OpenClaw, Cline, OpenCode, Aider, or any other AI agent framework — mailbus makes them talk to each other seamlessly.
 
-欢迎各位大佬一起参与：
-- **提 Issue** — 发现 bug、建议新功能
-- **提交 PR** — 修复问题、扩展框架支持
-- **分享案例** — 你是怎么用 mailbus 串联你的 Agent 团队的
+Contributions welcome:
+- **File an Issue** — bug reports, feature requests
+- **Submit a PR** — bug fixes, new framework support
+- **Share your story** — how you use mailbus with your agent team
 
-## 协议
+## License
 
-MIT License — 参见 [LICENSE](LICENSE)。
+MIT License — see [LICENSE](LICENSE).
 
 Copyright (c) 2026 子言·塔罗
