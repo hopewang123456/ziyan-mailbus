@@ -85,7 +85,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                         if isinstance(m, dict) and m.get("status") == "pending":
                             unread_count += 1
             agent_statuses[name] = {
-                "messages": len(data.get("messages", [])) if data else 0,
+                "active_messages": len([m for m in data.get("messages", []) if isinstance(m, dict) and m.get("status") != "archived"]) if data else 0,
                 "has_unread": data.get("has_unread", False) if data else False,
                 "type": self.agents[name].get("type", "?"),
                 "role": self.agents[name].get("role", ""),
@@ -142,7 +142,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         self._send_json({"alerts": alerts, "count": len(alerts)})
 
     def _handle_inbox(self, agent: str):
-        """指定 Agent 的 inbox 内容"""
+        """指定 Agent 的 inbox 内容（排除已归档消息）"""
         if agent not in self.agents:
             self._send_json({"error": f"agent '{agent}' not found"}, 404)
             return
@@ -152,10 +152,11 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         if not data:
             self._send_json({"agent": agent, "messages": [], "has_unread": False})
             return
-        # 只返回最近 50 条消息的内容摘要
         msgs = data.get("messages", [])
+        # 只返回未归档的消息
+        active = [m for m in msgs if isinstance(m, dict) and m.get("status") != "archived"]
         summary = []
-        for m in msgs[-50:]:
+        for m in active:
             if isinstance(m, dict):
                 summary.append({
                     "id": m.get("id", ""),
@@ -168,7 +169,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         self._send_json({
             "agent": agent,
             "has_unread": data.get("has_unread", False),
-            "message_count": len(msgs),
+            "total_messages": len(msgs),
+            "active_messages": len(active),
             "messages": summary,
         })
 

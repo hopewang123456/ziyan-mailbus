@@ -289,6 +289,7 @@ async function showAgentDetail(name) {
     modal.classList.add('open');
 
     let html = `<div style="margin-bottom:12px"><h3>${profile.config.name || name}</h3>`;
+    const agentName = profile.config.name || name;
     html += `<span class="badge badge-blue">${profile.config.type || '?'}</span>`;
     if (profile.config.role) html += ` <span style="color:#94a3b8">${profile.config.role}</span>`;
     if (profile.config.models) html += ` <span style="color:#64748b;font-size:11px">${profile.config.models.join(', ')}</span>`;
@@ -309,10 +310,14 @@ async function showAgentDetail(name) {
       html += `</div>`;
     }
 
-    // inbox 消息
-    const pending = (inbox.messages || []).filter(m => m.status === 'pending');
+    // inbox 消息（只显示未归档的）
+    const activeMsgs = inbox.messages || [];
+    const pending = activeMsgs.filter(m => m.status === 'pending');
+    const totalActive = inbox.active_messages || activeMsgs.length;
+    html += `<div style="margin-bottom:6px;color:#94a3b8;font-size:11px">📨 总 ${inbox.total_messages || '?'} 条 · 未归档 ${totalActive} 条 · 待处理 ${pending.length} 条</div>`;
+
     if (pending.length > 0) {
-      html += `<div style="margin-bottom:8px"><strong>📨 待处理消息 (${pending.length})</strong></div>`;
+      html += `<div style="margin-bottom:8px"><strong>⏳ 待处理消息</strong></div>`;
       pending.forEach(m => {
         html += `<div style="background:#0f172a;padding:8px;border-radius:4px;margin-bottom:6px;font-size:12px">
           <div style="color:#94a3b8;font-size:10px">${m.id} · ${m.created_at || ''} · from ${m.from || '?'}</div>
@@ -323,17 +328,19 @@ async function showAgentDetail(name) {
       html += `<div style="color:#64748b;font-size:12px;margin-bottom:8px">📨 无待处理消息</div>`;
     }
 
-    // 全部消息
-    const allMsgs = inbox.messages || [];
-    html += `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:#94a3b8">全部 ${allMsgs.length} 条消息</summary>`;
-    allMsgs.slice(-10).reverse().forEach(m => {
-      html += `<div style="background:#0f172a;padding:6px;border-radius:4px;margin-top:4px;font-size:11px">
-        <span class="badge ${m.status === 'acknowledged' ? 'badge-green' : m.status === 'pending' ? 'badge-yellow' : 'badge-gray'}">${m.status}</span>
-        <span style="color:#64748b">${m.from || '?'} → ${name}</span>
-        <div style="margin-top:2px;color:#94a3b8">${escHtml((m.content_preview || m.content || '').slice(0, 120))}</div>
-      </div>`;
-    });
-    html += `</details>`;
+    // 最近已处理消息（最多 10 条，不含 archived）
+    const recentDone = activeMsgs.filter(m => m.status !== 'pending').slice(-10).reverse();
+    if (recentDone.length > 0) {
+      html += `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:#94a3b8">最近 ${recentDone.length} 条已处理消息</summary>`;
+      recentDone.forEach(m => {
+        html += `<div style="background:#0f172a;padding:6px;border-radius:4px;margin-top:4px;font-size:11px">
+          <span class="badge ${m.status === 'acknowledged' ? 'badge-green' : 'badge-yellow'}">${m.status}</span>
+          <span style="color:#64748b">${m.from || '?'} → ${agentName}</span>
+          <div style="margin-top:2px;color:#94a3b8">${escHtml((m.content_preview || '').slice(0, 120))}</div>
+        </div>`;
+      });
+      html += `</details>`;
+    }
 
     tabs.innerHTML = `<button class="btn btn-sm" onclick="closeRaw()">✕ 关闭</button>`;
     content.innerHTML = html;
