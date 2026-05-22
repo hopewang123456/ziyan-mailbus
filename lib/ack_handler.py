@@ -59,8 +59,22 @@ def process_ack(data_dir: str, agent_name: str, ack_data: dict) -> bool:
                 break
     
     if found:
+        # 检查 forward_chain，自动更新当前 agent 的 hop 状态
+        for m in inbox.messages:
+            if isinstance(m, dict) and m.get("id") == msg_id:
+                fwd_chain = m.get("forward_chain")
+                if fwd_chain and fwd_chain.get("hops"):
+                    for hop in fwd_chain["hops"]:
+                        if hop.get("agent") == agent_name and hop.get("status") != "done":
+                            hop["status"] = "done"
+                            hop["at"] = ts
+                            break
+                    # 检查所有 hop 是否都 done
+                    if all(h.get("status") == "done" for h in fwd_chain["hops"]):
+                        fwd_chain["status"] = "completed"
+                break
         json_write(inbox_file, inbox.to_dict())
-    
+
     return found
 
 
@@ -192,6 +206,43 @@ def scan_ack_files(data_dir: str, agents: dict) -> int:
             json_write(mark_file, [])
     
     return total_processed
+
+
+def scan_error_reports(data_dir: str, agents: dict) -> list:
+    """
+    扫描所有 inbox 中的 error_report 类型消息，更新任务状态。
+
+    返回处理的错误回执列表 [{task_id, error_code, reason}]
+    """
+    paths = resolve_paths(data_dir)
+    reports = []
+
+    for name in agents:
+        inbox_file = f"{paths['inbox']}/{name}/inbox.json"
+        inbox_data = json_read(inbox_file, {})
+        if not inbox_data:
+            continue
+
+        inbox = Inbox.from_dict(inbox_data)
+        for m in inbox.messages:
+            if isinstance(m, dict):
+                msg_type = m.get("type", "")
+                error = m.get("error", {})
+                task_id = m.get("task_id", "")
+            else:
+                msg_type = m.type
+                error = m.error if hasattr(m, 'error') else {}
+                task_id = m.task.get("task_id", "") if hasattr(m, 'task') and m.task else ""
+
+            if msg_type == "error_report" and error and task_id:
+                reports.append({
+                    "task_id": task_id,
+                    "agent": name,
+                    "error_code": error.get("code", "UNKNOWN"),
+                    "reason": error.get("reason", ""),
+                })
+
+    return reports
 
 
 def scan_forward_files(data_dir: str, agents: dict) -> int:

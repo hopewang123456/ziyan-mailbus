@@ -37,8 +37,11 @@ from lib.utils import (
 )
 from lib.scanner import build_queues, update_message_status
 from lib.pusher import push_messages, resolve_cli_chain
-from lib.ack_handler import scan_ack_files, scan_forward_files
+from lib.ack_handler import scan_ack_files, scan_forward_files, scan_error_reports
 from lib.archiver import archive_all
+from lib.tracker import TaskTracker
+from lib.heartbeat import heartbeat_scan, is_online
+from lib.search import scan_and_index, search
 
 
 # ── 配置加载 ──────────────────────────────────────────────────────────
@@ -183,6 +186,17 @@ def cmd_scan(args):
         print(f"   📨 普通: {sum(len(v) for v in normal_queue.values())} 条")
     
     # 3. 先推加急队列
+    # 如果有加急消息，对应的普通消息先跳过（被抢占）
+    preempted = set()
+    if urgent_queue:
+        # 找出既在 urgent 又在 normal 的 agent
+        for agent_name in urgent_queue:
+            if agent_name in normal_queue:
+                preempted.add(agent_name)
+                preempted_count = len(normal_queue[agent_name])
+                print(f"   ⚡ {agent_name}: {preempted_count} 条普通消息被加急抢占")
+                del normal_queue[agent_name]
+
     failed_urgent = _push_queue(data_dir, config, urgent_queue, "加急")
     failed_normal = _push_queue(data_dir, config, normal_queue, "普通")
     
@@ -196,6 +210,100 @@ def cmd_scan(args):
     else:
         print(f"\n✓ 全部推送完成")
     
+    # 4. 错误回执处理
+    reports = scan_error_reports(data_dir, agents)
+    if reports:
+        print(f"\n📕 错误回执: {len(reports)} 条")
+        for r in reports:
+            tracker.update_status(r['task_id'], 'failed',
+                                  {"code": r['error_code'], "reason": r['reason']})
+            print(f"   → {r['task_id']}: [{r['error_code']}] {r['reason'][:60]}")
+
+    # 5. 心跳检测
+    heartbeat_interval = config.get("heartbeat_interval", 300)
+    # 每次 scan 都做心跳太频繁，cron 每1分钟一次，300 秒才需要检测一次
+    # 这里由 heartbeat_scan 自行判断是否该 ping
+    hb_changes = heartbeat_scan(agents, config.get("agent_types", {}), data_dir,
+                                 interval=heartbeat_interval)
+    if hb_changes:
+        for c in hb_changes:
+            icon = "🟢" if c["new_status"] == "online" else "🔴"
+            print(f"   {icon} 心跳 {c['agent']}: {c['old_status']} → {c['new_status']}")
+
+    # 6. 催办检查
+    tracker = TaskTracker(data_dir)
+    reminder_minutes = config.get("reminder_minutes", 5)
+    max_reminders = config.get("max_reminders", 3)
+    escalated = tracker.check_reminders(agents, reminder_minutes, max_reminders)
+    if escalated:
+        print(f"\n⏰ 催办: {len(escalated)} 条任务超时")
+        for e in escalated:
+            print(f"   → {e['task_id']}: {e['summary'][:40]} ({e['reminded_count']}/{max_reminders})")
+            if e['reminded_count'] >= max_reminders:
+                tracker.update_status(e['task_id'], 'timeout',
+                                      {"code": "TIMEOUT", "reason": f"超过{max_reminders}次催办未响应"})
+    
+    # 7. 消息索引
+    scan_and_index(data_dir, agents)
+
+    return 0
+
+
+def cmd_search(args):
+    """消息检索"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+
+    results = search(
+        data_dir,
+        query_str=getattr(args, 'query', ''),
+        from_agent=getattr(args, 'from_agent', ''),
+        to_agent=getattr(args, 'to_agent', ''),
+        msg_type=getattr(args, 'type', ''),
+        status=getattr(args, 'status', ''),
+        limit=getattr(args, 'limit', 20),
+    )
+
+    if not results:
+        print("无匹配消息")
+        return 0
+
+    print(f"\n🔍 找到 {len(results)} 条匹配消息:\n")
+    for r in results:
+        print(f"  [{r['status']}] {r['msg_id']}")
+        print(f"   {r['from']} → {r['to']} ({r['type']})")
+        print(f"   {r['content'][:120]}")
+        print(f"   {r.get('created_at', '')}")
+        print()
+
+    return 0
+
+
+def cmd_heartbeat(args):
+    """心跳检测"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+    agents = config.get("agents", {})
+    agent_types = config.get("agent_types", {})
+
+    if not agents:
+        print("✗ 没有注册的 agent")
+        return 1
+
+    interval = config.get("heartbeat_interval", 300)
+    missed_limit = config.get("heartbeat_missed_limit", 3)
+
+    changes = heartbeat_scan(agents, agent_types, data_dir, interval, missed_limit)
+    if changes:
+        print(f"💓 心跳状态变化: {len(changes)} 条")
+        for c in changes:
+            icon = "🟢" if c["new_status"] == "online" else "🔴"
+            print(f"   {icon} {c['agent']}: {c['old_status']} → {c['new_status']}")
+    else:
+        print("💓 心跳检测完成，无状态变化")
+
     return 0
 
 
@@ -735,6 +843,20 @@ def main():
     _add_data_dir_arg(p_ar)
     p_ar.add_argument("agent", help="agent 名称")
     
+    # heartbeat
+    p_hb = sub.add_parser("heartbeat", help="心跳检测（检测所有 agent 在线状态）")
+    _add_data_dir_arg(p_hb)
+    
+    # search
+    p_sr = sub.add_parser("search", help="消息全文检索")
+    _add_data_dir_arg(p_sr)
+    p_sr.add_argument("--query", default="", help="搜索关键词（FTS5 语法）")
+    p_sr.add_argument("--from", dest="from_agent", default="", help="按发件人过滤")
+    p_sr.add_argument("--to", dest="to_agent", default="", help="按收件人过滤")
+    p_sr.add_argument("--type", default="", help="按消息类型过滤")
+    p_sr.add_argument("--status", default="", help="按状态过滤")
+    p_sr.add_argument("--limit", type=int, default=20, help="最大返回条数")
+    
     args = parser.parse_args()
     
     if not args.command:
@@ -755,6 +877,8 @@ def main():
         "errors": cmd_errors,
         "agent-add": cmd_agent_add,
         "agent-remove": cmd_agent_remove,
+        "heartbeat": cmd_heartbeat,
+        "search": cmd_search,
     }
     
     return cmd_map[args.command](args)
