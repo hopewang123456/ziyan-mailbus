@@ -269,12 +269,82 @@ function renderAgents(a) {
   list.innerHTML = Object.entries(agents).map(([k, v]) => {
     const type = v.type || '?';
     const typeColors = {hermes:'#22d3ee', hermes_profile:'#22d3ee', openclaw:'#34d399', cline:'#a78bfa', opencode:'#fbbf24', none:'#64748b'};
-    return `<div class="agent-card">
+    return `<div class="agent-card" style="cursor:pointer" onclick="showAgentDetail('${k}')">
       <div class="name">${v.name || k}</div>
       <div class="meta"><span style="color:${typeColors[type]||'#94a3b8'}">${type}</span> · ${v.role || '无角色'}</div>
       <div class="models">${(v.models||[]).join(', ') || '无模型配置'}</div>
     </div>`;
   }).join('');
+}
+
+async function showAgentDetail(name) {
+  try {
+    const [profile, inbox] = await Promise.all([
+      fetchJSON('/api/agent-profile/' + name),
+      fetchJSON('/api/inbox/' + name),
+    ]);
+    const modal = document.getElementById('rawModal');
+    const content = document.getElementById('rawContent');
+    const tabs = document.getElementById('rawTabs');
+    modal.classList.add('open');
+
+    let html = `<div style="margin-bottom:12px"><h3>${profile.config.name || name}</h3>`;
+    html += `<span class="badge badge-blue">${profile.config.type || '?'}</span>`;
+    if (profile.config.role) html += ` <span style="color:#94a3b8">${profile.config.role}</span>`;
+    if (profile.config.models) html += ` <span style="color:#64748b;font-size:11px">${profile.config.models.join(', ')}</span>`;
+    html += `</div>`;
+
+    // 身份信息
+    if (profile.identity) {
+      html += `<div style="margin-bottom:8px"><strong>🧬 IDENTITY</strong></div><pre style="background:#0f172a;padding:10px;border-radius:6px;font-size:11px;max-height:150px;overflow:auto;margin-bottom:12px">${escHtml(profile.identity)}</pre>`;
+    }
+    if (profile.soul) {
+      html += `<div style="margin-bottom:8px"><strong>💫 SOUL</strong></div><pre style="background:#0f172a;padding:10px;border-radius:6px;font-size:11px;max-height:150px;overflow:auto;margin-bottom:12px">${escHtml(profile.soul)}</pre>`;
+    }
+
+    // 技能
+    if (profile.skills && profile.skills.length > 0) {
+      html += `<div style="margin-bottom:8px"><strong>🛠 技能 (${profile.skills.length})</strong></div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px">`;
+      profile.skills.forEach(s => { html += `<span class="badge badge-blue">${s}</span>`; });
+      html += `</div>`;
+    }
+
+    // inbox 消息
+    const pending = (inbox.messages || []).filter(m => m.status === 'pending');
+    if (pending.length > 0) {
+      html += `<div style="margin-bottom:8px"><strong>📨 待处理消息 (${pending.length})</strong></div>`;
+      pending.forEach(m => {
+        html += `<div style="background:#0f172a;padding:8px;border-radius:4px;margin-bottom:6px;font-size:12px">
+          <div style="color:#94a3b8;font-size:10px">${m.id} · ${m.created_at || ''} · from ${m.from || '?'}</div>
+          <div style="margin-top:2px">${escHtml(m.content_preview || m.content || '')}</div>
+        </div>`;
+      });
+    } else {
+      html += `<div style="color:#64748b;font-size:12px;margin-bottom:8px">📨 无待处理消息</div>`;
+    }
+
+    // 全部消息
+    const allMsgs = inbox.messages || [];
+    html += `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:#94a3b8">全部 ${allMsgs.length} 条消息</summary>`;
+    allMsgs.slice(-10).reverse().forEach(m => {
+      html += `<div style="background:#0f172a;padding:6px;border-radius:4px;margin-top:4px;font-size:11px">
+        <span class="badge ${m.status === 'acknowledged' ? 'badge-green' : m.status === 'pending' ? 'badge-yellow' : 'badge-gray'}">${m.status}</span>
+        <span style="color:#64748b">${m.from || '?'} → ${name}</span>
+        <div style="margin-top:2px;color:#94a3b8">${escHtml((m.content_preview || m.content || '').slice(0, 120))}</div>
+      </div>`;
+    });
+    html += `</details>`;
+
+    tabs.innerHTML = `<button class="btn btn-sm" onclick="closeRaw()">✕ 关闭</button>`;
+    content.innerHTML = html;
+  } catch(e) {
+    toast('加载 Agent 详情失败: ' + e.message, 'error');
+  }
+}
+
+function escHtml(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function renderTasks(t) {

@@ -46,6 +46,9 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         elif path.startswith("/api/inbox/"):
             agent = path[len("/api/inbox/"):]
             self._handle_inbox(agent)
+        elif path.startswith("/api/agent-profile/"):
+            agent = path[len("/api/agent-profile/"):]
+            self._handle_agent_profile(agent)
         elif path == "/api/config":
             self._handle_config()
         elif path == "/" or path == "":
@@ -198,6 +201,77 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                     "description": cfg.get("description", ""),
                 }
         self._send_json(safe)
+
+    def _handle_agent_profile(self, agent: str):
+        """Agent 详情：身份文件 + 技能文件"""
+        profile = {
+            "agent": agent,
+            "identity": None,
+            "soul": None,
+            "skills": [],
+            "config": self.agents.get(agent, {}),
+        }
+        # 搜索身份文件路径
+        search_paths = [
+            # OpenClaw 空间
+            "/mnt/e/ai_tools/openclaw_space/IDENTITY.md",
+            "/mnt/e/ai_tools/openclaw_space/SOUL.md",
+            "/mnt/e/ai_tools/openclaw_space/agents/" + agent + "/IDENTITY.md",
+            "/mnt/e/ai_tools/openclaw_space/agents/" + agent + "/SOUL.md",
+            # OpenCode
+            "/mnt/e/ai_tools/opencode/AGENTS.md",
+            "/mnt/e/ai_tools/opencode/SOUL.md",
+            # Cline
+            "/mnt/e/ai_tools/lingxiao/SOUL.md",
+            "/mnt/e/ai_tools/lingxiao/IDENTITY.md",
+            # Hermes prefills
+            "/mnt/e/hermes-data/.hermes/prefill/" + agent + ".md",
+            # Aider
+            "/mnt/e/ai_tools/aider/.aider/SOUL.md",
+            "/mnt/e/ai_tools/aider/.aider/IDENTITY.md",
+        ]
+        identities = []
+        for sp in search_paths:
+            try:
+                if os.path.isfile(sp):
+                    with open(sp, "r", encoding="utf-8", errors="replace") as f:
+                        content = f.read(2000)  # 只读前 2000 字符
+                        fname = os.path.basename(sp)
+                        if fname.upper() in ("IDENTITY.MD",):
+                            profile["identity"] = content[:1000]
+                        elif fname.upper() in ("SOUL.MD",):
+                            profile["soul"] = content[:1000]
+                        else:
+                            identities.append({"file": sp, "preview": content[:500]})
+            except (OSError, Exception):
+                pass
+
+        if identities:
+            profile["identity_files"] = identities
+
+        # 搜索 skill 文件
+        skill_dirs = [
+            "/mnt/e/ai_tools/openclaw_space/skills/",
+            "/mnt/e/hermes-data/.hermes/skills/",
+            "/mnt/e/ai_tools/opencode/.opencode/skills/",
+            "/home/administrator/.codex/skills/",
+            "/mnt/e/ai_tools/aider/.aider/skills/",
+        ]
+        all_skills = []
+        for sd in skill_dirs:
+            if os.path.isdir(sd):
+                for root, dirs, files in os.walk(sd):
+                    for f in files:
+                        if f == "SKILL.md":
+                            rel = os.path.relpath(root, sd)
+                            all_skills.append(rel)
+                            if len(all_skills) >= 8:
+                                break
+                    if len(all_skills) >= 8:
+                        break
+        profile["skills"] = all_skills
+
+        self._send_json(profile)
 
     def log_message(self, format, *args):
         # 静默日志
