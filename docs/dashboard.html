@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ziyan-mailbus 看板</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;padding:24px;min-height:100vh}
+h1{font-size:22px;font-weight:700;display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.sub{color:#64748b;font-size:13px;margin-bottom:24px}
+.flex{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.card{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px;min-width:160px;flex:1}
+.card .num{font-size:28px;font-weight:700;margin:4px 0}
+.card .label{font-size:12px;color:#94a3b8}
+
+.btn{background:#334155;border:1px solid #475569;color:#e2e8f0;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px}
+.btn:hover{background:#475569}
+.btn-primary{background:#2563eb;border-color:#3b82f6}
+.btn-primary:hover{background:#3b82f6}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn-danger{background:#dc2626;border-color:#ef4444}
+.btn-danger:hover{background:#ef4444}
+
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+th{text-align:left;color:#94a3b8;font-weight:500;padding:8px 10px;border-bottom:1px solid #334155;font-size:11px;text-transform:uppercase}
+td{padding:8px 10px;border-bottom:1px solid #1e293b}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}
+.badge-green{background:#064e3b;color:#6ee7b7}
+.badge-red{background:#450a0a;color:#fca5a5}
+.badge-yellow{background:#451a03;color:#fdba74}
+.badge-blue{background:#0c1929;color:#93c5fd}
+.badge-gray{background:#1e293b;color:#94a3b8}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.dot-green{background:#22c55e}
+.dot-red{background:#ef4444}
+.dot-yellow{background:#eab308}
+
+.section{margin-bottom:28px}
+.section h2{font-size:15px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.section h2 .count{background:#334155;color:#94a3b8;font-size:11px;padding:1px 8px;border-radius:8px}
+
+.agent-card{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:12px;min-width:180px;flex:1}
+.agent-card .name{font-weight:600;font-size:14px}
+.agent-card .meta{font-size:11px;color:#94a3b8;margin-top:2px}
+.agent-card .models{font-size:10px;color:#64748b;margin-top:4px}
+
+.toolbar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.search-input{background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px;min-width:200px}
+.search-input::placeholder{color:#475569}
+
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;z-index:100}
+.modal.open{display:flex}
+.modal-content{background:#1e293b;border:1px solid #475569;border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:80vh;overflow:auto}
+.modal-content pre{background:#0f172a;padding:12px;border-radius:6px;font-size:12px;overflow:auto;max-height:400px;margin-top:12px}
+.modal-content h3{margin-bottom:8px}
+
+pre.json{background:#0f172a;padding:12px;border-radius:6px;font-size:11px;overflow:auto;max-height:300px;margin-top:8px;font-family:'JetBrains Mono',monospace}
+
+@media(max-width:600px){.agent-card{min-width:100%}}
+</style>
+</head>
+<body>
+
+<h1>📬 ziyan-mailbus 看板</h1>
+<div class="sub">HTTP API: <span id="apiUrl">http://localhost:9812</span></div>
+
+<div class="toolbar">
+  <input class="search-input" id="apiInput" value="http://localhost:9812" placeholder="API 地址">
+  <button class="btn btn-primary" onclick="loadAll()">🔄 刷新</button>
+  <button class="btn" onclick="showRaw()">📄 查看原始 JSON</button>
+</div>
+
+<!-- 概览卡片 -->
+<div class="flex" id="summaryCards"></div>
+
+<!-- Agent 列表 -->
+<div class="section">
+  <h2>🤖 Agent <span class="count" id="agentCount"></span></h2>
+  <div class="flex" id="agentList"></div>
+</div>
+
+<!-- 任务追踪 -->
+<div class="section">
+  <h2>🎯 任务追踪 <span class="count" id="taskCount"></span></h2>
+  <div id="taskTable"></div>
+</div>
+
+<!-- 心跳状态 -->
+<div class="section">
+  <h2>💓 心跳状态</h2>
+  <div id="heartbeatStatus"></div>
+</div>
+
+<!-- 告警 -->
+<div class="section">
+  <h2>🔔 告警 <span class="count" id="alertCount"></span></h2>
+  <div id="alertTable"></div>
+</div>
+
+<!-- 原始 JSON 弹窗 -->
+<div class="modal" id="rawModal">
+  <div class="modal-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h3>📄 原始数据</h3>
+      <button class="btn btn-sm" onclick="closeRaw()">✕ 关闭</button>
+    </div>
+    <div id="rawTabs" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px"></div>
+    <pre id="rawContent" class="json"></pre>
+  </div>
+</div>
+
+<script>
+let rawData = {};
+
+function apiUrl(path) {
+  const base = document.getElementById('apiInput').value.replace(/\/+$/, '');
+  return base + path;
+}
+
+async function fetchJSON(path) {
+  const resp = await fetch(apiUrl(path));
+  return await resp.json();
+}
+
+function statusBadge(s) {
+  if (!s) return '<span class="badge badge-gray">未知</span>';
+  if (s === 'online' || s === 'healthy' || s === 'ok' || s === 'success') return '<span class="badge badge-green">● ' + s + '</span>';
+  if (s === 'offline' || s === 'failed' || s === 'critical' || s === 'unreachable') return '<span class="badge badge-red">● ' + s + '</span>';
+  if (s === 'warn' || s === 'pending' || s === 'running' || s === 'timeout') return '<span class="badge badge-yellow">● ' + s + '</span>';
+  return '<span class="badge badge-blue">● ' + s + '</span>';
+}
+
+async function loadAll() {
+  try {
+    const [status, agents, tasks, hb, alerts] = await Promise.all([
+      fetchJSON('/api/status'),
+      fetchJSON('/api/agents'),
+      fetchJSON('/api/tasks'),
+      fetchJSON('/api/heartbeat'),
+      fetchJSON('/api/alerts'),
+    ]);
+    rawData = { status, agents, tasks, hb, alerts };
+    renderSummary(status);
+    renderAgents(agents);
+    renderTasks(tasks);
+    renderHeartbeat(hb);
+    renderAlerts(alerts);
+  } catch(e) {
+    document.getElementById('summaryCards').innerHTML = `<div class="card" style="text-align:center;padding:40px"><div style="font-size:40px;margin-bottom:12px">⚠️</div><div style="color:#fca5a5">无法连接到 API: ${e.message}</div><div style="color:#64748b;font-size:12px;margin-top:8px">请确认 <code>mailbus serve</code> 已在运行，并且 API 地址正确。</div></div>`;
+  }
+}
+
+function renderSummary(s) {
+  const c = document.getElementById('summaryCards');
+  if (!s) { c.innerHTML = ''; return; }
+  c.innerHTML = `
+    <div class="card"><div class="label">🤖 Agent</div><div class="num">${s.agents || 0}</div></div>
+    <div class="card"><div class="label">📨 总消息</div><div class="num">${s.total_messages || 0}</div></div>
+    <div class="card"><div class="label">⏳ 待处理</div><div class="num">${s.pending_messages || 0}</div></div>
+  `;
+}
+
+function renderAgents(a) {
+  const list = document.getElementById('agentList');
+  const count = document.getElementById('agentCount');
+  if (!a || !a.agents) { list.innerHTML = '<div style="color:#64748b">无 Agent 数据</div>'; count.textContent = ''; return; }
+  const agents = a.agents;
+  count.textContent = Object.keys(agents).length;
+  list.innerHTML = Object.entries(agents).map(([k, v]) => {
+    const type = v.type || '?';
+    const typeColors = {hermes:'#22d3ee', hermes_profile:'#22d3ee', openclaw:'#34d399', cline:'#a78bfa', opencode:'#fbbf24', none:'#64748b'};
+    return `<div class="agent-card">
+      <div class="name">${v.name || k}</div>
+      <div class="meta"><span style="color:${typeColors[type]||'#94a3b8'}">${type}</span> · ${v.role || '无角色'}</div>
+      <div class="models">${(v.models||[]).join(', ') || '无模型配置'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderTasks(t) {
+  const el = document.getElementById('taskTable');
+  const count = document.getElementById('taskCount');
+  if (!t || !t.tasks || t.tasks.length === 0) { el.innerHTML = '<div style="color:#64748b;font-size:13px">暂无活跃任务</div>'; count.textContent = ''; return; }
+  count.textContent = t.count;
+  const rows = t.tasks.map(task => {
+    const hops = (task.chain || []).map(h => `${h.agent}:${h.action}`).join(' → ');
+    return `<tr>
+      <td>${task.task_id}</td>
+      <td>${statusBadge(task.status)}</td>
+      <td>${task.summary || '-'}</td>
+      <td>${task.assignee || '-'}</td>
+      <td style="font-size:11px;color:#64748b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${hops || '-'}</td>
+      <td style="font-size:11px;color:#64748b">${task.reminded_count || 0}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table><thead><tr><th>ID</th><th>状态</th><th>概要</th><th>负责人</th><th>追踪链</th><th>催办</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderHeartbeat(hb) {
+  const el = document.getElementById('heartbeatStatus');
+  if (!hb) { el.innerHTML = '<div style="color:#64748b">无数据</div>'; return; }
+  const agents = hb.agents || {};
+  const health = hb.health || {};
+  const rows = Object.entries(agents).map(([name, state]) => {
+    const s = state.status || 'unknown';
+    const dot = s === 'online' ? '🟢' : s === 'offline' ? '🔴' : '⚪';
+    return `<tr>
+      <td>${dot} ${name}</td>
+      <td>${statusBadge(s)}</td>
+      <td style="font-size:11px;color:#64748b">${state.last_heartbeat || '-'}</td>
+      <td style="font-size:11px;color:#64748b">${state.missed_pings || 0}</td>
+    </tr>`;
+  }).join('');
+  const am = health.agentmemory || {};
+  const disk = health.disk || {};
+  const inboxWarnings = health.inbox_warnings || [];
+  const amStatus = am.status || '未知';
+  const diskStatus = disk.status || 'ok';
+  const diskSize = disk.size_mb ? disk.size_mb + 'MB' : '-';
+  el.innerHTML = `
+    <div style="margin-bottom:12px;font-size:12px;display:flex;gap:16px;flex-wrap:wrap">
+      <span>📦 AgentMemory: ${statusBadge(amStatus)} ${am.detail || ''}</span>
+      <span>💾 磁盘: ${diskSize} ${diskStatus === 'warn' ? '⚠️' : ''}</span>
+      <span>📨 inbox 积压: ${inboxWarnings.length ? inboxWarnings.map(w => w.agent + '(' + w.count + ')').join(', ') : '无'}</span>
+    </div>
+    <table><thead><tr><th>Agent</th><th>状态</th><th>最后心跳</th><th>失联次数</th></tr></thead><tbody>${rows || '<tr><td colspan="4" style="color:#64748b;text-align:center">无 Agent 心跳数据</td></tr>'}</tbody></table>
+  `;
+}
+
+function renderAlerts(a) {
+  const el = document.getElementById('alertTable');
+  const count = document.getElementById('alertCount');
+  if (!a || !a.alerts || a.alerts.length === 0) { el.innerHTML = '<div style="color:#64748b;font-size:13px">无告警</div>'; count.textContent = ''; return; }
+  count.textContent = a.count;
+  const rows = a.alerts.slice().reverse().slice(0, 20).map(alert => {
+    const severityColors = {critical:'#fca5a5', warn:'#fdba74', info:'#93c5fd'};
+    return `<tr>
+      <td><span style="color:${severityColors[alert.severity] || '#94a3b8'}">●</span> ${alert.severity}</td>
+      <td>${alert.type}</td>
+      <td>${alert.agent}</td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${alert.message}</td>
+      <td style="font-size:11px;color:#64748b">${alert.created_at || ''}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table><thead><tr><th>级别</th><th>类型</th><th>Agent</th><th>消息</th><th>时间</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function showRaw() {
+  const modal = document.getElementById('rawModal');
+  const tabs = document.getElementById('rawTabs');
+  const content = document.getElementById('rawContent');
+  modal.classList.add('open');
+  const keys = Object.keys(rawData);
+  if (keys.length === 0) { content.textContent = '暂无数据，请先点击"刷新"'; tabs.innerHTML = ''; return; }
+  tabs.innerHTML = keys.map(k => `<button class="btn btn-sm ${k === 'status' ? 'btn-primary' : ''}" onclick="showRawTab('${k}')">${k}</button>`).join('');
+  showRawTab(keys[0]);
+}
+
+function showRawTab(name) {
+  const content = document.getElementById('rawContent');
+  const tabs = document.getElementById('rawTabs');
+  tabs.querySelectorAll('button').forEach(b => b.classList.remove('btn-primary'));
+  tabs.querySelector(`button[onclick="showRawTab('${name}')"]`)?.classList.add('btn-primary');
+  content.textContent = JSON.stringify(rawData[name] || {}, null, 2);
+}
+
+function closeRaw() {
+  document.getElementById('rawModal').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeRaw(); });
+
+// 自动加载
+loadAll();
+</script>
+</body>
+</html>
