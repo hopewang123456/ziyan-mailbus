@@ -174,9 +174,15 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         safe = {
             "project": "ziyan-mailbus",
             "version": "2.4.0",
+            "dashboard_refresh_seconds": 0,
             "agents": {},
             "agent_types": {},
         }
+        # 从 config.json 读 dashboard_refresh_seconds
+        config_path = os.path.join(self.data_dir, "config.json")
+        raw = json_read(config_path, {})
+        if raw and "dashboard_refresh_seconds" in raw:
+            safe["dashboard_refresh_seconds"] = raw["dashboard_refresh_seconds"]
         for name, cfg in self.agents.items():
             safe["agents"][name] = {
                 "name": cfg.get("name", name),

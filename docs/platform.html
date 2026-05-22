@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ziyan-mailbus 看板</title>
+<title>ziyan-mailbus Platform</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;padding:24px;min-height:100vh}
@@ -72,7 +72,7 @@ pre.json{background:#0f172a;padding:12px;border-radius:6px;font-size:11px;overfl
 
 <div id="toast"></div>
 
-<h1>📬 ziyan-mailbus 看板</h1>
+<h1>📬 ziyan-mailbus Platform</h1>
 <div class="sub">HTTP API: <span id="apiUrl">http://localhost:9812</span></div>
 
 <div class="toolbar">
@@ -135,6 +135,7 @@ pre.json{background:#0f172a;padding:12px;border-radius:6px;font-size:11px;overfl
 
 <script>
 let rawData = {};
+let refreshTimer = null;
 
 function toast(msg, type = 'info') {
   const el = document.createElement('div');
@@ -178,6 +179,19 @@ async function loadAll() {
     renderHeartbeat(hb);
     renderAlerts(alerts);
     toast('全部数据已刷新', 'success');
+    // 自动刷新：从 /api/config 读 refresh_seconds
+    try {
+      const cfg = await fetchJSON('/api/config');
+      const interval = cfg.dashboard_refresh_seconds || 0;
+      if (refreshTimer) clearInterval(refreshTimer);
+      if (interval > 0) {
+        refreshTimer = setInterval(() => {
+          reloadSection('heartbeat');
+          reloadSection('tasks');
+          reloadSection('alerts');
+        }, interval * 1000);
+      }
+    } catch(e) { /* 静默 */ }
   } catch(e) {
     toast('加载失败: ' + e.message, 'error');
     document.getElementById('summaryCards').innerHTML = `<div class="card" style="text-align:center;padding:40px"><div style="font-size:40px;margin-bottom:12px">⚠️</div><div style="color:#fca5a5">无法连接到 API: ${e.message}</div><div style="color:#64748b;font-size:12px;margin-top:8px">请确认 <code>mailbus serve</code> 已在运行，并且 API 地址正确。</div></div>`;
