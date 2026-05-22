@@ -117,11 +117,20 @@ def build_message(
     msg_type: str = MsgType.NOTICE,
     priority: str = Priority.NORMAL,
     attachments: Optional[list] = None,
+    forward_to: Optional[list] = None,
+    task: Optional[dict] = None,
 ) -> Message:
-    """构建一条新消息，自动生成 ID、时间、reply_format"""
+    """构建一条新消息，自动生成 ID、时间、reply_format、action"""
     msg_id = generate_msg_id()
     priority = Priority.URGENT if is_content_urgent(content, priority) else priority
     reply_format = _build_reply_format(to, msg_id)
+
+    # 构建 action
+    action = dict(MsgType.default_action(msg_type))
+    # reply_to = None 表示需要回复发件人，__post_init__ 会自动填
+    if forward_to:
+        action["forward_to"] = forward_to
+
     return Message(
         id=msg_id,
         from_=from_,
@@ -131,6 +140,8 @@ def build_message(
         priority=priority,
         attachments=attachments or [],
         reply_format=reply_format,
+        action=action,
+        task=task,
         status=MsgStatus.PENDING,
         created_at=_now_iso(),
     )

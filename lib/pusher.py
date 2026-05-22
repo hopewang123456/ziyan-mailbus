@@ -105,47 +105,103 @@ def push_messages(
             update_message_status(data_dir, agent_name, mid, MsgStatus.PUSHED)
         return []
     
-    # 2. 构建推送文本（包含明确的操作指令）
+    # 2. 构建推送文本（从 Message.action 结构化字段读取指令）
     text_parts = []
     for m in messages:
-        from_ = m.from_ if hasattr(m, 'from_') else m.get("from", "?")
-        content = m.content if hasattr(m, 'content') else m.get("content", "")
-        msg_id = m.id if hasattr(m, 'id') else m["id"]
-        
+        # 兼容 dict 和 Message 对象
+        if isinstance(m, dict):
+            from_ = m.get("from", "?")
+            content = m.get("content", "")
+            msg_id = m.get("id", "")
+            action = m.get("action", {})
+            msg_type = m.get("type", "notice")
+            task_data = m.get("task")
+            fwd_chain = m.get("forward_chain")
+        else:
+            from_ = m.from_
+            content = m.content
+            msg_id = m.id
+            action = m.action or MsgType.default_action(m.type)
+            msg_type = m.type
+            task_data = m.task
+            fwd_chain = m.forward_chain
+
         # ack 路径
         ack_path = f"/mnt/e/ai_tools/mail/store/inbox/{agent_name}/ack.json"
-        
-        # 判断是否需要回复发件人（mailbus/broadcast/test 等系统消息不需要回复）
-        needs_reply = from_ not in ("mailbus", "broadcast", "system", "manual", "mailbus-test", "test", "")
-        reply_path = f"/mnt/e/ai_tools/mail/store/inbox/{from_}/inbox.json" if needs_reply else ""
 
-        # 预生成回复消息 id，agent 直接使用
-        reply_msg_id = f"reply-{msg_id}"
+        # 构建指令列表
+        instructions = []
+        # 1. ack（总是有）
+        instructions.append(f"""【必须】写 ack 确认已读
+  文件: {ack_path}
+  格式: {{"action":"ack","msg_id":"{msg_id}","agent":"{agent_name}","timestamp":"<当前ISO时间>"}}""")
 
-        reply_section = f"""
-【必须】回复发件人
-请理解消息内容，然后将你的回复写入发件人 inbox:
+        # 2. 回复发件人
+        reply_to = action.get("reply_to", "") if action else ""
+        if reply_to and reply_to not in ("mailbus", "broadcast", "system", "manual", "mailbus-test", "test", ""):
+            reply_path = f"/mnt/e/ai_tools/mail/store/inbox/{reply_to}/inbox.json"
+            reply_msg_id = f"reply-{msg_id}"
+            instructions.append(f"""【必须】回复发件人 {reply_to}
   文件: {reply_path}
   向 messages 数组追加一条新消息，设 has_unread: true，格式:
-  {{"id": "{reply_msg_id}", "from": "{agent_name}", "to": "{from_}", "priority": "normal", "type": "reply", "content": "<你的回复>", "status": "pending", "created_at": "<当前ISO时间>"}}
-""" if needs_reply else ""
+  {{"id": "{reply_msg_id}", "from": "{agent_name}", "to": "{reply_to}", "priority": "normal", "type": "reply", "content": "<你的回复>", "status": "pending", "created_at": "<当前ISO时间>"}}""")
+
+        # 3. 转发
+        forward_to = action.get("forward_to", []) if action else []
+        if forward_to:
+            fwd_lines = []
+            for target in forward_to:
+                if target == agent_name:
+                    continue
+                fwd_path = f"/mnt/e/ai_tools/mail/store/inbox/{target}/inbox.json"
+                fwd_msg_id = f"fwd-{msg_id}-{target}"
+                fwd_lines.append(f"""  目标: {target}
+  文件: {fwd_path}
+  格式: {{"id": "{fwd_msg_id}", "from": "{agent_name}", "to": "{target}", "priority": "normal", "type": "forward", "content": "<你的说明>", "status": "pending", "created_at": "<当前ISO时间>"}}""")
+            instructions.append(f"""【必须】转发给指定 agent
+  转发至: {', '.join(forward_to)}
+{'---'.join(fwd_lines)}""")
+
+            if reply_to:
+                instructions.append(f"【注意】转发完成后，请回复发件人 {reply_to} 告知已转发。")
+
+        # 4. 执行任务
+        execute = action.get("execute", False) if action else False
+        if execute:
+            task_summary = ""
+            if task_data:
+                task_summary = task_data.get("summary", "")
+            exec_text = f"""【必须】执行任务
+  消息内容即为任务描述。请直接执行。"""
+            if task_summary:
+                exec_text += f"\n  任务概要: {task_summary}"
+            if task_data and task_data.get("deliverable"):
+                exec_text += f"\n  交付物: {task_data['deliverable']}"
+            instructions.append(exec_text)
+
+        # 5. 存记忆
+        store_memory = action.get("store_memory", True) if action else True
+        if store_memory:
+            instructions.append("""【建议】存入本地记忆
+  处理完消息后，将关键信息存入你的记忆系统，方便以后检索。""")
+
+        # 6. 追踪链
+        chain_text = ""
+        if fwd_chain and fwd_chain.get("hops"):
+            hops = fwd_chain["hops"]
+            chain_text = "\n".join([f"  {h.get('agent','?')}: {h.get('action','?')}" for h in hops])
+            chain_text = f"\n━━━━ 消息追踪链 ━━━━\n{chain_text}\n【你需在回复后更新此链】"
 
         text_parts.append(f"""📬 你有一条新消息
 
 ━━━━ 消息内容 ━━━━
+类型: {msg_type}
 来自: {from_}
 内容: {content}
-消息ID: {msg_id}
+消息ID: {msg_id}{chain_text}
 
 ━━━━ 请执行以下操作 ━━━━
-【必须】写 ack 确认已读
-  文件: {ack_path}
-  格式: {{"action":"ack","msg_id":"{msg_id}","agent":"{agent_name}","timestamp":"<当前ISO时间>"}}{reply_section}
-【根据消息内容决定其他操作】
-- 需要转发给其他 agent，直接写目标 inbox:
-  /mnt/e/ai_tools/mail/store/inbox/<目标agent名>/inbox.json
-
-- 需要存储到记忆或执行任务，按消息内容处理
+{chr(10).join(instructions)}
 ━━━━━━━━━━━━━━━━""")
     combined_text = "\n---\n".join(text_parts)
     

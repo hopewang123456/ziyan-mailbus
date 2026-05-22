@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>ziyan-mailbus v2.0 架构设计</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#020617;color:#e2e8f0;font-family:'JetBrains Mono',monospace;padding:40px}
+.wrap{max-width:1100px;margin:0 auto}
+h1{font-size:20px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:10px}
+h1 .dot{width:10px;height:10px;border-radius:50%;background:#22d3ee;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.sub{color:#64748b;font-size:11px;margin-bottom:30px}
+svg{width:100%;border:1px solid #1e293b;border-radius:8px;background:#020617}
+.card-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:24px}
+.card{background:#0f172a;border:1px solid #1e293b;border-radius:8px;padding:16px}
+.card h3{font-size:12px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.card .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.card ul{list-style:none;font-size:10px;color:#94a3b8;line-height:1.8}
+.card li{display:flex;align-items:baseline;gap:6px}
+.footer{text-align:center;margin-top:30px;font-size:9px;color:#475569}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1><span class="dot"></span> ziyan-mailbus v2.0 — 消息总线架构规划</h1>
+<div class="sub">新增模块: 任务追踪 · 心跳检测 · 催办 · 错误回执 · 优先级抢占 · 消息检索</div>
+
+<svg viewBox="0 0 1060 820" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#64748b"/>
+    </marker>
+    <marker id="arrow-cyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#22d3ee"/>
+    </marker>
+    <marker id="arrow-rose" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#fb7185"/>
+    </marker>
+    <marker id="arrow-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#fb923c"/>
+    </marker>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Grid -->
+  <rect width="1060" height="820" fill="url(#grid)"/>
+
+  <!-- ===== 原有模块(左) ===== -->
+
+  <!-- 总线核心 -->
+  <rect x="40" y="30" width="200" height="50" rx="6" fill="#0f172a" stroke="#fb923c" stroke-width="1.5"/>
+  <rect x="40" y="30" width="200" height="50" rx="6" fill="rgba(251,146,60,0.2)" stroke="none"/>
+  <text x="140" y="58" text-anchor="middle" fill="#fb923c" font-size="11" font-weight="600">📬 消息总线核心</text>
+
+  <!-- 扫描器 -->
+  <rect x="40" y="100" width="200" height="36" rx="6" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
+  <rect x="40" y="100" width="200" height="36" rx="6" fill="rgba(100,116,139,0.15)" stroke="none"/>
+  <text x="140" y="122" text-anchor="middle" fill="#94a3b8" font-size="10">cron scan (每1分钟)</text>
+  <line x1="140" y1="136" x2="140" y2="155" stroke="#64748b" stroke-width="1" marker-end="url(#arrow)"/>
+
+  <!-- 推送器 -->
+  <rect x="40" y="155" width="200" height="36" rx="6" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
+  <rect x="40" y="155" width="200" height="36" rx="6" fill="rgba(100,116,139,0.15)" stroke="none"/>
+  <text x="140" y="177" text-anchor="middle" fill="#94a3b8" font-size="10">CLI 推送 + ack 等待</text>
+
+  <!-- Agent 类型抽象 -->
+  <rect x="40" y="210" width="200" height="36" rx="6" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
+  <rect x="40" y="210" width="200" height="36" rx="6" fill="rgba(100,116,139,0.15)" stroke="none"/>
+  <text x="140" y="232" text-anchor="middle" fill="#94a3b8" font-size="10">agent_types 模板匹配</text>
+
+  <!-- Agent -->
+  <rect x="40" y="270" width="200" height="60" rx="6" fill="#0f172a" stroke="#22d3ee" stroke-width="1.5"/>
+  <rect x="40" y="270" width="200" height="60" rx="6" fill="rgba(8,51,68,0.4)" stroke="none"/>
+  <text x="140" y="295" text-anchor="middle" fill="#22d3ee" font-size="11" font-weight="600">🤖 Agent 实例</text>
+  <text x="140" y="315" text-anchor="middle" fill="#64748b" font-size="9">Hermes / OpenClaw / Cline / OpenCode</text>
+
+  <!-- 双向 ack -->
+  <line x1="140" y1="246" x2="140" y2="270" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrow-cyan)"/>
+  <line x1="240" y1="300" x2="270" y2="300" stroke="#64748b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="260" y="290" text-anchor="middle" fill="#64748b" font-size="8">ack.json</text>
+
+  <!-- inbox -->
+  <rect x="270" y="275" width="130" height="50" rx="6" fill="#0f172a" stroke="#64748b" stroke-width="1"/>
+  <rect x="270" y="275" width="130" height="50" rx="6" fill="rgba(100,116,139,0.1)" stroke="none"/>
+  <text x="335" y="298" text-anchor="middle" fill="#94a3b8" font-size="9">📁 inbox.json</text>
+  <text x="335" y="314" text-anchor="middle" fill="#64748b" font-size="8">消息存储</text>
+
+  <!-- ===== 新增模块(中+右) ===== -->
+
+  <!-- 模块1: 消息协议层 -->
+  <rect x="290" y="30" width="240" height="140" rx="8" fill="none" stroke="#34d399" stroke-width="1" stroke-dasharray="6,3"/>
+  <text x="410" y="48" text-anchor="middle" fill="#34d399" font-size="10" font-weight="600">📋 消息协议层 (新增)</text>
+
+  <rect x="300" y="58" width="220" height="28" rx="4" fill="#0f172a" stroke="#34d399" stroke-width="1"/>
+  <rect x="300" y="58" width="220" height="28" rx="4" fill="rgba(6,78,59,0.3)" stroke="none"/>
+  <text x="410" y="76" text-anchor="middle" fill="#34d399" font-size="9">type + action 结构化字段</text>
+
+  <rect x="300" y="92" width="220" height="28" rx="4" fill="#0f172a" stroke="#34d399" stroke-width="1"/>
+  <rect x="300" y="92" width="220" height="28" rx="4" fill="rgba(6,78,59,0.3)" stroke="none"/>
+  <text x="410" y="110" text-anchor="middle" fill="#34d399" font-size="9">task 对象 (summary/assignee/status/deliverable)</text>
+
+  <rect x="300" y="126" width="220" height="28" rx="4" fill="#0f172a" stroke="#34d399" stroke-width="1"/>
+  <rect x="300" y="126" width="220" height="28" rx="4" fill="rgba(6,78,59,0.3)" stroke="none"/>
+  <text x="410" y="144" text-anchor="middle" fill="#34d399" font-size="9">forward_chain 追踪链</text>
+
+  <line x1="290" y1="100" x2="240" y2="180" stroke="#34d399" stroke-width="1" stroke-dasharray="4,3"/>
+
+  <!-- 模块2: 任务追踪 + 看板 -->
+  <rect x="290" y="190" width="240" height="140" rx="8" fill="none" stroke="#a78bfa" stroke-width="1" stroke-dasharray="6,3"/>
+  <text x="410" y="208" text-anchor="middle" fill="#a78bfa" font-size="10" font-weight="600">🎯 任务追踪 (新增)</text>
+
+  <rect x="300" y="218" width="220" height="28" rx="4" fill="#0f172a" stroke="#a78bfa" stroke-width="1"/>
+  <rect x="300" y="218" width="220" height="28" rx="4" fill="rgba(76,29,149,0.3)" stroke="none"/>
+  <text x="410" y="236" text-anchor="middle" fill="#a78bfa" font-size="9">看板: pending → running → success/failed</text>
+
+  <rect x="300" y="252" width="220" height="28" rx="4" fill="#0f172a" stroke="#a78bfa" stroke-width="1"/>
+  <rect x="300" y="252" width="220" height="28" rx="4" fill="rgba(76,29,149,0.3)" stroke="none"/>
+  <text x="410" y="270" text-anchor="middle" fill="#a78bfa" font-size="9">错误回执: error_code + reason + trace</text>
+
+  <rect x="300" y="286" width="220" height="28" rx="4" fill="#0f172a" stroke="#a78bfa" stroke-width="1"/>
+  <rect x="300" y="286" width="220" height="28" rx="4" fill="rgba(76,29,149,0.3)" stroke="none"/>
+  <text x="410" y="304" text-anchor="middle" fill="#a78bfa" font-size="9">催办: 超时自动提醒 + 升级通知</text>
+
+  <!-- 模块3: 心跳检测 -->
+  <rect x="290" y="350" width="240" height="95" rx="8" fill="none" stroke="#fb7185" stroke-width="1" stroke-dasharray="6,3"/>
+  <text x="410" y="368" text-anchor="middle" fill="#fb7185" font-size="10" font-weight="600">💓 心跳检测 (新增)</text>
+
+  <rect x="300" y="378" width="220" height="28" rx="4" fill="#0f172a" stroke="#fb7185" stroke-width="1"/>
+  <rect x="300" y="378" width="220" height="28" rx="4" fill="rgba(136,19,55,0.3)" stroke="none"/>
+  <text x="410" y="396" text-anchor="middle" fill="#fb7185" font-size="9">Agent 在线状态探测 (定时 ping)</text>
+
+  <rect x="300" y="410" width="220" height="28" rx="4" fill="#0f172a" stroke="#fb7185" stroke-width="1"/>
+  <rect x="300" y="410" width="220" height="28" rx="4" fill="rgba(136,19,55,0.3)" stroke="none"/>
+  <text x="410" y="428" text-anchor="middle" fill="#fb7185" font-size="9">离线 → 不进重试，直接进错误队列</text>
+
+  <!-- 模块4: 消息检索 -->
+  <rect x="290" y="465" width="240" height="95" rx="8" fill="none" stroke="#fbbf24" stroke-width="1" stroke-dasharray="6,3"/>
+  <text x="410" y="483" text-anchor="middle" fill="#fbbf24" font-size="10" font-weight="600">🔍 消息检索 (新增)</text>
+
+  <rect x="300" y="493" width="220" height="28" rx="4" fill="#0f172a" stroke="#fbbf24" stroke-width="1"/>
+  <rect x="300" y="493" width="220" height="28" rx="4" fill="rgba(120,53,15,0.2)" stroke="none"/>
+  <text x="410" y="511" text-anchor="middle" fill="#fbbf24" font-size="9">SQLite FTS5 全文索引</text>
+
+  <rect x="300" y="525" width="220" height="28" rx="4" fill="#0f172a" stroke="#fbbf24" stroke-width="1"/>
+  <rect x="300" y="525" width="220" height="28" rx="4" fill="rgba(120,53,15,0.2)" stroke="none"/>
+  <text x="410" y="543" text-anchor="middle" fill="#fbbf24" font-size="9">mailbus search —from 灵曦 —content 安全</text>
+
+  <!-- 模块5: Web 看板 -->
+  <rect x="560" y="30" width="240" height="140" rx="8" fill="none" stroke="#22d3ee" stroke-width="1" stroke-dasharray="6,3"/>
+  <text x="680" y="48" text-anchor="middle" fill="#22d3ee" font-size="10" font-weight="600">🖥 Web 看板 (新增)</text>
+
+  <rect x="570" y="58" width="220" height="28" rx="4" fill="#0f172a" stroke="#22d3ee" stroke-width="1"/>
+  <rect x="570" y="58" width="220" height="28" rx="4" fill="rgba(8,51,68,0.3)" stroke="none"/>
+  <text x="680" y="76" text-anchor="middle" fill="#22d3ee" font-size="9">任务状态总览 (pipeline 视图)</text>
+
+  <rect x="570" y="92" width="220" height="28" rx="4" fill="#0f172a" stroke="#22d3ee" stroke-width="1"/>
+  <rect x="570" y="92" width="220" height="28" rx="4" fill="rgba(8,51,68,0.3)" stroke="none"/>
+  <text x="680" y="110" text-anchor="middle" fill="#22d3ee" font-size="9">消息追踪链 (灵曦→小七→一哥)</text>
+
+  <rect x="570" y="126" width="220" height="28" rx="4" fill="#0f172a" stroke="#22d3ee" stroke-width="1"/>
+  <rect x="570" y="126" width="220" height="28" rx="4" fill="rgba(8,51,68,0.3)" stroke="none"/>
+  <text x="680" y="144" text-anchor="middle" fill="#22d3ee" font-size="9">Agent 在线状态指示灯</text>
+
+  <!-- 模块6: 优先级抢占 -->
+  <rect x="560" y="190" width="240" height="90" rx="8" fill="none" stroke="#fb923c" stroke-width="1" stroke-dasharray="6,3"/>
+  <text x="680" y="208" text-anchor="middle" fill="#fb923c" font-size="10" font-weight="600">⚡ 优先级抢占 (新增)</text>
+
+  <rect x="570" y="218" width="220" height="28" rx="4" fill="#0f172a" stroke="#fb923c" stroke-width="1"/>
+  <rect x="570" y="218" width="220" height="28" rx="4" fill="rgba(251,146,60,0.15)" stroke="none"/>
+  <text x="680" y="236" text-anchor="middle" fill="#fb923c" font-size="9">urgent 暂停 normal 任务</text>
+
+  <rect x="570" y="250" width="220" height="24" rx="4" fill="#0f172a" stroke="#fb923c" stroke-width="1"/>
+  <rect x="570" y="250" width="220" height="24" rx="4" fill="rgba(251,146,60,0.1)" stroke="none"/>
+  <text x="680" y="266" text-anchor="middle" fill="#fb923c" font-size="8">恢复后通知被抢占的任务</text>
+
+  <!-- ===== 数据流箭头 ===== -->
+
+  <!-- 总线→扫描→推送→Agent -->
+  <line x1="240" y1="48" x2="290" y2="48" stroke="#fb923c" stroke-width="1.5" marker-end="url(#arrow-orange)"/>
+  <text x="265" y="42" text-anchor="middle" fill="#fb923c" font-size="8">消息写入</text>
+
+  <!-- Agent→inbox 写 ack -->
+  <line x1="240" y1="300" x2="270" y2="300" stroke="#64748b" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+  <!-- 协议层→推送器 -->
+  <line x1="530" y1="80" x2="530" y2="173" stroke="#34d399" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="530" y1="173" x2="240" y2="173" stroke="#34d399" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+  <text x="400" y="168" text-anchor="middle" fill="#34d399" font-size="8">结构化 action 指令</text>
+
+  <!-- 任务追踪→看板 -->
+  <line x1="530" y1="260" x2="560" y2="260" stroke="#a78bfa" stroke-width="1" marker-end="url(#arrow)"/>
+  <text x="545" y="253" text-anchor="middle" fill="#a78bfa" font-size="8">同步状态</text>
+
+  <!-- 心跳→看板 -->
+  <line x1="530" y1="400" x2="560" y2="150" stroke="#fb7185" stroke-width="1" stroke-dasharray="4,3"/>
+  <text x="545" y="200" text-anchor="middle" fill="#fb7185" font-size="8" transform="rotate(-50,545,200)">状态推送</text>
+
+  <!-- 检索模块 -->
+  <line x1="530" y1="510" x2="560" y2="510" stroke="#fbbf24" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+  <!-- 心跳标记线 -->
+  <line x1="140" y1="330" x2="140" y2="350" stroke="#fb7185" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-rose)"/>
+
+  <!-- ===== 图例 ===== -->
+  <rect x="40" y="620" width="980" height="180" rx="8" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+  <text x="60" y="645" fill="#e2e8f0" font-size="11" font-weight="600">图例 / 模块说明</text>
+
+  <rect x="60" y="660" width="12" height="12" rx="2" fill="rgba(251,146,60,0.3)" stroke="#fb923c" stroke-width="1"/>
+  <text x="80" y="670" fill="#94a3b8" font-size="9">消息总线核心 — scan → 推送 → ack 确认</text>
+
+  <rect x="60" y="685" width="12" height="12" rx="2" fill="rgba(6,78,59,0.3)" stroke="#34d399" stroke-width="1"/>
+  <text x="80" y="695" fill="#94a3b8" font-size="9">消息协议层 — type/action 结构化, task 对象, forward_chain 追踪链</text>
+
+  <rect x="60" y="710" width="12" height="12" rx="2" fill="rgba(76,29,149,0.3)" stroke="#a78bfa" stroke-width="1"/>
+  <text x="80" y="720" fill="#94a3b8" font-size="9">任务追踪 — 看板(pending→running→done), 错误回执(error_code/reason), 催办(超时提醒)</text>
+
+  <rect x="60" y="735" width="12" height="12" rx="2" fill="rgba(136,19,55,0.3)" stroke="#fb7185" stroke-width="1"/>
+  <text x="80" y="745" fill="#94a3b8" font-size="9">心跳检测 — Agent 定时 ping, 离线不进重试直接进错误队列</text>
+
+  <rect x="60" y="760" width="12" height="12" rx="2" fill="rgba(120,53,15,0.2)" stroke="#fbbf24" stroke-width="1"/>
+  <text x="80" y="770" fill="#94a3b8" font-size="9">消息检索 — SQLite FTS5 全文索引, mailbus search 命令</text>
+
+  <rect x="560" y="660" width="12" height="12" rx="2" fill="rgba(8,51,68,0.3)" stroke="#22d3ee" stroke-width="1"/>
+  <text x="580" y="670" fill="#94a3b8" font-size="9">Web 看板 — 任务总览(pipeline), 消息追踪链, Agent 在线指示灯</text>
+
+  <rect x="560" y="685" width="12" height="12" rx="2" fill="rgba(251,146,60,0.15)" stroke="#fb923c" stroke-width="1"/>
+  <text x="580" y="695" fill="#94a3b8" font-size="9">优先级抢占 — urgent 暂停 normal, 恢复后通知被抢占任务</text>
+
+  <rect x="560" y="720" width="12" height="12" rx="2" fill="rgba(100,116,139,0.15)" stroke="#64748b" stroke-width="1"/>
+  <text x="580" y="730" fill="#94a3b8" font-size="9">现有模块 — 文件存储, CLI 推送, agent_types 抽象, 多模型 fallback</text>
+
+</svg>
+
+<!-- 说明卡片 -->
+<div class="card-grid">
+  <div class="card">
+    <h3><span class="dot" style="background:#34d399"></span> 消息协议</h3>
+    <ul>
+      <li>• type: notice / task / task_reply / question / forward / broadcast</li>
+      <li>• action: {ack, reply, execute, forward_to, store_memory}</li>
+      <li>• task: {summary, assignee, status, deadline, deliverable}</li>
+      <li>• forward_chain: 多跳追踪（灵曦→小七→一哥）</li>
+      <li>• id 幂等: 重复推送自动去重</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><span class="dot" style="background:#a78bfa"></span> 任务 + 错误回执</h3>
+    <ul>
+      <li>• 看板: pending → running → success / failed / timeout</li>
+      <li>• 错误回执: {error_code, reason, trace, failed_at}</li>
+      <li>• 催办: 超时后自动重推 + 升级通知给调度者</li>
+      <li>• 优先级: urgent 抢占 normal，被抢占者收到暂停通知</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3><span class="dot" style="background:#22d3ee"></span> 运维</h3>
+    <ul>
+      <li>• 心跳: 定时 ping Agent CLI，状态实时更新到看板</li>
+      <li>• 检索: SQLite FTS5，按 from/to/content/time 搜索</li>
+      <li>• 看板: Web 页面，任务链路可视化 + 在线指示灯</li>
+      <li>• mailbus search: CLI 全文搜索命令</li>
+    </ul>
+  </div>
+</div>
+
+<div class="footer">ziyan-mailbus v2.0 架构规划 · 2026-05-22</div>
+</div>
+</body>
+</html>

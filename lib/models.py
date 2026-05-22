@@ -31,12 +31,44 @@ class Priority:
 
 
 class MsgType:
-    """消息类型常量"""
-    TASK     = "task"       # 任务
-    NOTICE   = "notice"     # 通知
-    QUESTION = "question"   # 询问
-    SYSTEM   = "system"     # 系统消息（初始化/告警）
-    ALL = {TASK, NOTICE, QUESTION, SYSTEM}
+    """消息类型常量（标准化枚举）"""
+    # 基础类型
+    NOTICE        = "notice"         # 公告/通知 — ack + 存记忆
+    TASK          = "task"           # 纯任务 — ack + 执行
+    TASK_REPLY    = "task_reply"     # 需回复的任务 — ack + 执行 + 回复发件人
+    QUESTION      = "question"       # 询问 — ack + 回复发件人
+    FORWARD       = "forward"        # 需转发 — ack + 转发给目标
+    FORWARD_REPLY = "forward_reply"  # 需转发+回复 — ack + 转发 + 回复发件人
+    BROADCAST     = "broadcast"      # 全员公告 — ack + 存记忆
+    SYSTEM        = "system"         # 系统消息 — ack
+    ERROR_REPORT  = "error_report"   # 错误回执 — ack + 更新任务状态
+
+    ALL = {NOTICE, TASK, TASK_REPLY, QUESTION, FORWARD, FORWARD_REPLY,
+           BROADCAST, SYSTEM, ERROR_REPORT}
+
+    # 根据 type 推断默认 action
+    @staticmethod
+    def default_action(msg_type: str) -> dict:
+        base = {"ack": True, "store_memory": True}
+        if msg_type == MsgType.NOTICE:
+            return {**base, "reply_to": "", "execute": False, "forward_to": []}
+        elif msg_type == MsgType.TASK:
+            return {**base, "reply_to": "", "execute": True, "forward_to": []}
+        elif msg_type == MsgType.TASK_REPLY:
+            return {**base, "reply_to": None, "execute": True, "forward_to": []}  # reply_to 由发信时填入
+        elif msg_type == MsgType.QUESTION:
+            return {**base, "reply_to": None, "execute": False, "forward_to": []}
+        elif msg_type == MsgType.FORWARD:
+            return {**base, "reply_to": "", "execute": False, "forward_to": []}
+        elif msg_type == MsgType.FORWARD_REPLY:
+            return {**base, "reply_to": None, "execute": False, "forward_to": []}
+        elif msg_type == MsgType.BROADCAST:
+            return {**base, "reply_to": "", "execute": False, "forward_to": []}
+        elif msg_type == MsgType.SYSTEM:
+            return {**base, "store_memory": False, "reply_to": "", "execute": False, "forward_to": []}
+        elif msg_type == MsgType.ERROR_REPORT:
+            return {**base, "reply_to": "", "execute": False, "forward_to": []}
+        return {**base, "reply_to": "", "execute": False, "forward_to": []}
 
 
 class Level:
@@ -100,21 +132,47 @@ class Message:
     pushed_count: int = 0
     created_at: str = ""            # ISO 时间
     acknowledged_at: Optional[str] = None
+    # v2.0 新增字段
+    action: Optional[dict] = None   # {ack, reply_to, execute, forward_to, store_memory}
+    task: Optional[dict] = None     # {summary, assignee, status, deadline, deliverable}
+    forward_chain: Optional[dict] = None  # {root_id, hops: [{agent, action, at}], status}
+
+    def __post_init__(self):
+        # 没配 action 的根据 type 自动推断
+        if self.action is None:
+            self.action = MsgType.default_action(self.type)
+            # reply_to 如果是 None 表示"需要回复发件人"，改为实际发件人
+            if self.action.get("reply_to") is None:
+                self.action["reply_to"] = self.from_
+        # 没配 forward_chain 的自动初始化
+        if self.forward_chain is None and self.action and self.action.get("forward_to"):
+            self.forward_chain = {
+                "root_id": self.id,
+                "hops": [{"agent": self.from_, "action": "发起", "at": self.created_at or ""}],
+                "status": "in_progress",
+            }
 
     def to_dict(self):
         d = asdict(self)
         d["from"] = d.pop("from_")  # from_ → from（JSON 友好）
+        # action 只要有字段就应该保留（字段值可以是空字符串/空列表但是 key 本身有意义）
+        if d.get("action"):
+            # 只清理那些真正没意义的字段（全 null 或全空的不常见）
+            pass
+        if not d.get("task"):
+            d.pop("task", None)
+        if not d.get("forward_chain"):
+            d.pop("forward_chain", None)
         return d
 
     @classmethod
     def from_dict(cls, d: dict):
         d["from_"] = d.pop("from")  # from → from_
-        # 只取 Message 已知字段，忽略额外的字段
         known = {"id", "from_", "to", "priority", "type", "content",
                  "attachments", "reply_format", "status", "pushed_count",
-                 "created_at", "acknowledged_at"}
+                 "created_at", "acknowledged_at", "action", "task", "forward_chain"}
         filtered = {k: v for k, v in d.items() if k in known}
-        # 缺 id 的自动生成一个（防止 Agent 回复格式不规范导致 scan 炸）
+        # 缺 id 的自动生成
         if "id" not in filtered or not filtered["id"]:
             ts = int(datetime.now(timezone.utc).timestamp())
             filtered["id"] = f"auto-{ts}-{hash(d.get('from_', '')) % 10000:04d}"

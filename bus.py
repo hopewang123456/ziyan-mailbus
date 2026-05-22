@@ -256,7 +256,8 @@ def cmd_send(args):
     print(f"  CLI: {' | '.join(cli_cmds[:3]) or '(纯文件通信)'}")
     
     # 构建消息
-    msg = build_message(from_, to, content, msg_type, priority)
+    msg = build_message(from_, to, content, msg_type, priority,
+                        forward_to=getattr(args, 'forward_to', None))
     
     # 写入 inbox
     paths = resolve_paths(data_dir)
@@ -680,7 +681,8 @@ def main():
     p_send.add_argument("--msg", required=True, help="消息内容")
     p_send.add_argument("--from", dest="from_", default="manual", help="发件人")
     p_send.add_argument("--priority", default="normal", choices=["normal", "urgent"])
-    p_send.add_argument("--type", default="notice", choices=["task", "notice", "question", "system"])
+    p_send.add_argument("--type", default="notice", choices=list(MsgType.ALL), help="消息类型")
+    p_send.add_argument("--forward-to", nargs="*", default=[], help="转发目标 agent（可多个）")
     
     # broadcast
     p_bc = sub.add_parser("broadcast", help="发公告板")
