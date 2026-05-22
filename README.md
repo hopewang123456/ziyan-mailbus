@@ -11,6 +11,17 @@
 - **先队列再推送**：加急排队优先，普通排队顺序，同 Agent 批量推送
 - **故障隔离**：推送失败 3 次 → 写错误日志 → 监控 Agent 扫日志找修复方案
 - **Agent 类型抽象**：统一 `agent_types` 配置，支持 Hermes / OpenClaw / Cline / OpenCode 等框架
+- **即插即用**：不入侵 Agent 代码，CLI 是唯一契约
+
+## 前置条件
+
+- **Python ≥ 3.10**（核心运行环境）
+- **各 Agent 的 CLI 工具**（Hermes / OpenClaw / Cline / OpenCode 等，按需安装）
+- **API Key**（通过 `.env` 文件配置，见 `examples/config.example.json` 的说明）
+- **AgentMemory**（可选）— 用于消息持久化记忆，确保 Agent 重启后能检索历史消息
+  - 安装: `npm install -g @agentmemory/agentmemory`
+  - 启动: `agentmemory`（默认监听 http://localhost:3111）
+  - 桥接: mailbus 自动将已 ack 的消息同步到 AgentMemory
 
 ## 快速开始
 
