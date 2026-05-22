@@ -9,6 +9,14 @@
 body{background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;padding:24px;min-height:100vh}
 h1{font-size:22px;font-weight:700;display:flex;align-items:center;gap:10px;margin-bottom:4px}
 .sub{color:#64748b;font-size:13px;margin-bottom:24px}
+
+/* Toast 通知 */
+#toast{position:fixed;top:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:8px}
+.toast{background:#1e293b;border:1px solid #475569;border-radius:8px;padding:10px 16px;font-size:13px;animation:slideIn 0.3s;max-width:350px}
+.toast.success{border-color:#22c55e;color:#6ee7b7}
+.toast.error{border-color:#ef4444;color:#fca5a5}
+.toast.info{border-color:#3b82f6;color:#93c5fd}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
 .flex{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
 .card{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px;min-width:160px;flex:1}
 .card .num{font-size:28px;font-weight:700;margin:4px 0}
@@ -61,6 +69,8 @@ pre.json{background:#0f172a;padding:12px;border-radius:6px;font-size:11px;overfl
 </style>
 </head>
 <body>
+
+<div id="toast"></div>
 
 <h1>📬 ziyan-mailbus 看板</h1>
 <div class="sub">HTTP API: <span id="apiUrl">http://localhost:9812</span></div>
@@ -126,6 +136,14 @@ pre.json{background:#0f172a;padding:12px;border-radius:6px;font-size:11px;overfl
 <script>
 let rawData = {};
 
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
 function apiUrl(path) {
   const base = document.getElementById('apiInput').value.replace(/\/+$/, '');
   return base + path;
@@ -159,12 +177,20 @@ async function loadAll() {
     renderTasks(tasks);
     renderHeartbeat(hb);
     renderAlerts(alerts);
+    toast('全部数据已刷新', 'success');
   } catch(e) {
+    toast('加载失败: ' + e.message, 'error');
     document.getElementById('summaryCards').innerHTML = `<div class="card" style="text-align:center;padding:40px"><div style="font-size:40px;margin-bottom:12px">⚠️</div><div style="color:#fca5a5">无法连接到 API: ${e.message}</div><div style="color:#64748b;font-size:12px;margin-top:8px">请确认 <code>mailbus serve</code> 已在运行，并且 API 地址正确。</div></div>`;
   }
 }
 
 async function reloadSection(name) {
+  const nameMap = {agents:'Agent', tasks:'任务', heartbeat:'心跳', alerts:'告警'};
+  const btn = event.target;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳...';
+
   const endpointMap = {
     agents: '/api/agents',
     tasks: '/api/tasks',
@@ -180,8 +206,13 @@ async function reloadSection(name) {
   try {
     const data = await fetchJSON(endpointMap[name]);
     renderMap[name](data);
+    btn.textContent = '✅';
+    toast(nameMap[name] + ' 已刷新', 'success');
+    setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 1500);
   } catch(e) {
-    console.error('刷新 ' + name + ' 失败:', e);
+    btn.textContent = '❌';
+    toast(nameMap[name] + ' 刷新失败: ' + e.message, 'error');
+    setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2000);
   }
 }
 
@@ -196,9 +227,11 @@ async function triggerHeartbeat() {
     rawData.hb = data;
     renderHeartbeat(data);
     btn.textContent = '✅ 已完成';
+    toast('心跳检测完成', 'success');
     setTimeout(() => { btn.textContent = '💓 触发心跳检测'; btn.disabled = false; }, 2000);
   } catch(e) {
     btn.textContent = '❌ 失败';
+    toast('心跳检测失败: ' + e.message, 'error');
     setTimeout(() => { btn.textContent = '💓 触发心跳检测'; btn.disabled = false; }, 2000);
   }
 }
