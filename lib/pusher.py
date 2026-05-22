@@ -136,46 +136,118 @@ def push_messages(
 ━━━━━━━━━━━━━━━━""")
     combined_text = "\n---\n".join(text_parts)
     
-    # 3. 替换 'MSG' 占位符
-    cmd = cli_cmd.replace("'MSG'", f"'{combined_text}'")
+    # 3. 多模型 fallback 推送
+    # cli_cmd 如果是 list，按顺序试；如果是 str，当单条处理
+    cli_commands = cli_cmd if isinstance(cli_cmd, list) else [cli_cmd]
+    cli_commands = [c for c in cli_commands if c.strip()]
     
-    # 4. CLI 推送
-    success = _invoke_cli(cmd)
-    
-    if success:
-        # 推送成功 → 标记为 pushed（等待 agent 写 ack 确认）
+    if not cli_commands:
         for mid in msg_ids:
             update_message_status(data_dir, agent_name, mid, MsgStatus.PUSHED)
         return []
     
-    # 5. 首次失败 → 重试
-    for attempt in range(1, max_retries + 1):
-        time.sleep(5)
+    used_model = None
+    for cmd_template in cli_commands:
+        cmd = cmd_template.replace("'MSG'", f"'{combined_text}'")
+        
         success = _invoke_cli(cmd)
+        if not success:
+            for attempt in range(1, max_retries + 1):
+                time.sleep(3)
+                success = _invoke_cli(cmd)
+                if success:
+                    break
+        
         if success:
-            for mid in msg_ids:
-                update_message_status(data_dir, agent_name, mid, MsgStatus.PUSHED)
-            return []
+            used_model = cmd_template
+            break
     
-    # 6. 全部失败 → 写错误日志
+    if used_model:
+        for mid in msg_ids:
+            update_message_status(data_dir, agent_name, mid, MsgStatus.PUSHED)
+        return []
+    
     for mid in msg_ids:
         update_message_status(data_dir, agent_name, mid, MsgStatus.FAILED)
         log_error(paths["errors"], mid, agent_name,
-                  f"CLI 推送失败（{max_retries} 次重试均失败）")
+                  f"CLI 推送失败（{len(cli_commands)} 个模型均不可用）")
     
     return msg_ids
 
 
-def resolve_cli(agent_cfg: dict, agent_types: dict) -> str:
-    """根据 agent 配置和类型，解析最终的 CLI 命令"""
+def resolve_cli(agent_cfg: dict, agent_types: dict, model_alias: str = None) -> str:
+    """
+    根据 agent 配置、类型和模型别名，解析最终的 CLI 命令。
+
+    参数:
+        agent_cfg: agent 配置（含 type, profile, agent 等字段）
+        agent_types: agent 类型模板字典
+        model_alias: 使用的模型别名。为 None 时尝试从 agent_cfg.models 取第一个
+
+    返回:
+        CLI 命令字符串（'MSG' 占位符替换由调用方负责）
+    """
     atype = agent_cfg.get("type", "none")
     tmpl = agent_types.get(atype, {}).get("push", "")
     if not tmpl:
         return ""
+
+    # 1. 先替换基础占位符
     cmd = tmpl
     cmd = cmd.replace("PROFILE", agent_cfg.get("profile", ""))
     cmd = cmd.replace("AGENT", agent_cfg.get("agent", ""))
-    return cmd
+
+    # 2. 解析模型参数
+    models_map = agent_types.get("models", {})
+    if not model_alias:
+        agent_models = agent_cfg.get("models", [])
+        model_alias = agent_models[0] if agent_models else None
+
+    model_flag = ""
+    if model_alias and model_alias in models_map:
+        model_flag = models_map[model_alias].get(atype, "")
+
+    # 3. 替换 MODEL 占位符
+    if model_flag:
+        cmd = cmd.replace("MODEL", model_flag)
+        cmd = cmd.replace("--model MODEL", model_flag)
+        cmd = cmd.replace("-m MODEL", model_flag)
+    else:
+        cmd = cmd.replace("--model MODEL", "").replace("-m MODEL", "")
+        cmd = cmd.replace("'MODEL'", "").replace("MODEL", "")
+
+    # 4. 替换 PROVIDER 占位符
+    provider = agent_cfg.get("provider", "")
+    if provider:
+        cmd = cmd.replace("PROVIDER", provider)
+    else:
+        cmd = cmd.replace("--provider PROVIDER", "").replace("PROVIDER", "")
+
+    return cmd.strip()
+
+
+def resolve_cli_chain(agent_cfg: dict, agent_types: dict) -> list:
+    """
+    返回该 agent 的所有备用 CLI 命令列表（按 models 顺序）。
+
+    支持多模型 fallback:
+    1. 遍历 agent_cfg.models
+    2. 每个别名生成一条 CLI 命令
+    3. push_messages 按顺序试，成功就停
+
+    返回: [(cli_cmd, model_alias), ...]
+    """
+    agent_models = agent_cfg.get("models", [])
+    if not agent_models:
+        cmd = resolve_cli(agent_cfg, agent_types)
+        return [(cmd, None)]
+
+    results = []
+    for alias in agent_models:
+        cmd = resolve_cli(agent_cfg, agent_types, model_alias=alias)
+        if cmd:
+            results.append((cmd, alias))
+    return results
 
 
 def _invoke_cli(cmd: str) -> bool:

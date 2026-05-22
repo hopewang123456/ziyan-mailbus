@@ -33,4 +33,20 @@
 - argparse 全局参数不继承到子命令，需每个子命令单独加
 - `ensure_dir` 须早于 `json_write`（原子写入要求父目录存在）
 - Popen 后台推送不要等 CLI 执行完，`start_new_session=True` 后返回即算投递
-- Message 对象 vs dict 兼容：inbox 数据中消息既有 `Message` 对象也有 dict，访问时需双形态兼容
+| - Message 对象 vs dict 兼容：inbox 数据中消息既有 `Message` 对象也有 dict，访问时需双形态兼容
+
+## 1.1.0 (2026-05-22)
+
+### 多模型 Fallback
+- **模型别名系统**：`agent_types.models` 定义模型别名 → CLI 参数的映射，每个 agent 框架可配不同的参数
+- **Agent 级模型配置**：`agents.<name>.models` 数组指定该 agent 可用的模型别名列表
+- **自动 Fallback**：推送时按 models 顺序试，第一个启动成功的模型即用，通了就停
+- **占位符系统增强**：`MODEL` 占位符自动替换为模型别名对应的 CLI 参数，没配模型时自动消除 `--model MODEL` 整段参数
+
+### 修复
+- **大力（OpenCode）不执行任务**：模板中硬编码的 `--model deepseek/deepseek-chat` 改为 `MODEL` 占位符，通过 models 别名配置注入，换模型只需改别名映射
+
+### 配置变更
+- `agent_types` 新增 `models` 字段：模型别名 → 各框架参数映射
+- `agents.<name>` 新增 `models` 数组：该 agent 可用的模型别名（可选，不配则走纯文件通信）
+- `agent_types.<type>.push` 模板中的模型参数改为 `MODEL` 占位符

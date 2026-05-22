@@ -60,7 +60,7 @@ mailbus status --failed
 | `hermes_profile` | `hermes chat -q 'MSG' -Q --profile PROFILE` | Hermes 多 Profile |
 | `openclaw` | `openclaw agent --local --agent AGENT --message 'MSG'` | OpenClaw Gateway |
 | `cline` | `cline 'MSG' --provider openai-compatible` | Cline CLI |
-| `opencode` | `opencode run 'MSG' --dangerously-skip-permissions` | OpenCode |
+| `opencode` | `opencode run 'MSG' --dangerously-skip-permissions MODEL` | OpenCode |
 | `none` | 纯文件通信，无 CLI 推送 | 手动调度 |
 
 ## CLI 命令总览
@@ -109,6 +109,39 @@ mailbus 可以自动将已 ack 的消息同步到 [AgentMemory](https://github.c
 ```
 
 消息以标签格式存入记忆：`[agent:xxx] [from:yyy] [msg_id:zzz] <消息内容>`
+
+## 多模型 Fallback
+
+每个 agent 可以配置多个 LLM 模型别名，总线按顺序试，通了一个就停：
+
+```json
+{
+  "agents": {
+    "dali": {
+      "type": "opencode",
+      "models": ["deepseek-chat", "qwen-max", "zhipu-4"]
+    }
+  },
+  "agent_types": {
+    "models": {
+      "deepseek-chat": {
+        "opencode": "--model deepseek/deepseek-chat",
+        "cline": "--provider openai-compatible"
+      },
+      "qwen-max": {
+        "opencode": "--model qwen/qwen-max",
+        "cline": "--provider openai-compatible"
+      },
+      "zhipu-4": {
+        "opencode": "--model zhipu/glm-4",
+        "cline": "--provider openai-compatible"
+      }
+    }
+  }
+}
+```
+
+CLI 模板中用 `MODEL` 占位符，总线自动根据 agent 的 `models` 列表和类型解析出对应的参数。
 
 ## 配置参考
 

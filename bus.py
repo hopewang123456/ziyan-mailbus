@@ -36,7 +36,7 @@ from lib.utils import (
     build_message, _now_iso, _ensure_dir, file_lock,
 )
 from lib.scanner import build_queues, update_message_status
-from lib.pusher import push_messages, resolve_cli
+from lib.pusher import push_messages, resolve_cli_chain
 from lib.ack_handler import scan_ack_files, scan_forward_files
 from lib.archiver import archive_all
 
@@ -209,14 +209,15 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
             print(f"   ⚠ {agent_name}: 配置不存在，跳过")
             continue
         
-        cli_cmd = resolve_cli(agent_cfg, agent_types)
-        print(f"   → {agent_name} ({label}): {len(messages)} 条")
+        chain = resolve_cli_chain(agent_cfg, agent_types)
+        cli_cmds = [c[0] for c in chain]  # 只取命令，不要别名
+        print(f"   → {agent_name} ({label}): {len(messages)} 条" + (f' [{len(cli_cmds)} models]' if len(cli_cmds) > 1 else ''))
         
         failed = push_messages(
             data_dir=data_dir,
             agent_name=agent_name,
             messages=messages,
-            cli_cmd=cli_cmd,
+            cli_cmd=cli_cmds,
             ack_timeout=config.get("ack_timeout", 30),
             max_retries=config.get("max_retries", 3),
         )
@@ -250,9 +251,9 @@ def cmd_send(args):
         return 1
     
     agent_types = config.get("agent_types", {})
-    cli_cmd = resolve_cli(agents[to], agent_types)
+    cli_cmds = [c[0] for c in resolve_cli_chain(agents[to], agent_types)]
     
-    print(f"  CLI: {cli_cmd or '(纯文件通信)'}")
+    print(f"  CLI: {' | '.join(cli_cmds[:3]) or '(纯文件通信)'}")
     
     # 构建消息
     msg = build_message(from_, to, content, msg_type, priority)
