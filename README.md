@@ -1,17 +1,20 @@
 # ziyan-mailbus
 
-多 Agent 消息总线系统 — 独立、解耦、轻量的**文件级消息中间件**，专为多 Agent 团队设计。
+**打破 Agent 之间的交互壁垒，实现真正的 A2A（Agent-to-Agent）通信。**
+
+ziyan-mailbus 是一个独立、解耦、轻量的**文件级消息中间件**，专为多 Agent 团队设计。不依赖任何 Agent 框架，不入侵 Agent 代码——CLI 是唯一契约，即插即用。
 
 > 不需要 Redis / RabbitMQ / 数据库。消息存 JSON 文件，CLI 推送，Agent 即时回复 ack。
 
 ## 设计哲学
 
-- **文件即通信**：消息存 JSON 文件，零中间件依赖。备份=cp，迁移=scp
-- **双向确认**：CLI 推送 + Agent 主动 ack，不搞"推送即送达"的幻觉
-- **先队列再推送**：加急排队优先，普通排队顺序，同 Agent 批量推送
-- **故障隔离**：推送失败 3 次 → 写错误日志 → 监控 Agent 扫日志找修复方案
-- **Agent 类型抽象**：统一 `agent_types` 配置，支持 Hermes / OpenClaw / Cline / OpenCode 等框架
-- **即插即用**：不入侵 Agent 代码，CLI 是唯一契约
+- **真正的 A2A** — 让不同框架的 Agent 之间可以自由通信，不绑定任何特定的 Agent 实现
+- **文件即通信** — 消息存 JSON 文件，零中间件依赖。备份=cp，迁移=scp
+- **双向确认** — CLI 推送 + Agent 主动 ack，不搞"推送即送达"的幻觉
+- **先队列再推送** — 加急排队优先，普通排队顺序，同 Agent 批量推送
+- **故障隔离** — 推送失败 3 次 → 写错误日志 → 监控 Agent 扫日志找修复方案
+- **Agent 类型抽象** — 统一 `agent_types` 配置，支持 Hermes / OpenClaw / Cline / OpenCode 等框架
+- **即插即用** — 不入侵 Agent 代码，CLI 是唯一契约
 
 ## 前置条件
 
@@ -81,6 +84,8 @@ mailbus status --failed
 | `opencode` | `opencode run 'MSG' --dangerously-skip-permissions MODEL` | OpenCode |
 | `none` | 纯文件通信，无 CLI 推送 | 手动调度 |
 
+> 新增框架只需在 `agent_types` 加一条 CLI 模板，代码零改动。
+
 ## CLI 命令总览
 
 ```bash
@@ -102,27 +107,36 @@ mailbus search                      # 消息全文检索（--query/--from/--to/-
 mailbus serve [--port]              # 启动 HTTP API 服务（默认端口 9812）
 ```
 
-## Web 看板
+## Platform 管理界面
 
-mailbus 自带一个独立 Web 看板，零依赖，打开即用：
+mailbus 自带一个独立 Web 管理界面 **ziyan-mailbus Platform**，零依赖，打开即用：
 
 ```bash
 # 1. 启动 HTTP API
 mailbus serve --port 9812 --data-dir /path/to/store
 
-# 2. 浏览器打开 docs/dashboard.html（或用任意静态服务器托管）
+# 2. 浏览器打开 docs/platform.html（或用任意静态服务器托管）
 #    页面自动从 API 加载数据
 ```
 
-看板功能：
-- **概览** — Agent 数量、消息总数、待处理数
-- **Agent 列表** — 名称、类型、角色、模型配置（动态读取 config.json）
-- **任务追踪** — 状态、追踪链、催办次数
-- **心跳状态** — AgentMemory / 磁盘 / inbox 积压 / 各 Agent 在线状态
-- **告警历史** — 级别、类型、时间
-- **原始 JSON 查看** — 各 API 端点的原始数据
+**功能：**
 
-看板完全独立于 Agent 框架，迁移到其他环境只需改 API 地址即可使用。
+| 区域 | 内容 |
+|------|------|
+| **概览** | Agent 数量、消息总数、待处理数 |
+| **Agent 列表** | 名称、类型、角色、模型配置（动态读取 config.json） |
+| **任务追踪** | 状态、追踪链、催办次数 |
+| **心跳状态** | AgentMemory / 磁盘 / inbox 积压 / 各 Agent 在线状态 |
+| **告警历史** | 级别、类型、时间 |
+| **原始 JSON** | 各 API 端点的原始数据查看 |
+
+**操作：**
+- 🔄 **刷新全部** — 重新加载所有数据
+- 💓 **触发心跳检测** — 手动跑一轮 Agent 在线检测
+- 各区域独立 **🔄 刷新** — 单独刷新某个区块，不用全部重载
+- **自动刷新** — 在 `config.json` 设置 `dashboard_refresh_seconds`（如 15 秒），平台自动定时刷新
+
+Platform 完全独立于 Agent 框架，迁移到其他环境只需改 API 地址即可使用。
 
 ## Agent 回复格式
 
@@ -188,6 +202,8 @@ CLI 模板中用 `MODEL` 占位符，总线自动根据 agent 的 `models` 列�
 
 ## 配置参考
 
+完整的配置示例见 [examples/config.example.json](examples/config.example.json)。
+
 ```json
 {
   "project": "ziyan-mailbus",
@@ -197,11 +213,13 @@ CLI 模板中用 `MODEL` 占位符，总线自动根据 agent 的 `models` 列�
   "max_retries": 3,
   "archive_days": 7,
   "archive_max_messages": 300,
+  "dashboard_refresh_seconds": 15,
   "agents": {
     "agent-a": {
       "name": "Agent A",
       "role": "描述",
       "type": "hermes",
+      "models": ["deepseek-chat"],
       "inbox": "/path/to/your/store/inbox/agent-a/inbox.json"
     }
   },
@@ -209,6 +227,12 @@ CLI 模板中用 `MODEL` 占位符，总线自动根据 agent 的 `models` 列�
     "hermes": {
       "push": "hermes chat -q 'MSG' -Q",
       "description": "Hermes Agent 实例"
+    },
+    "models": {
+      "deepseek-chat": {
+        "opencode": "--model deepseek/deepseek-chat",
+        "cline": "--provider openai-compatible"
+      }
     }
   }
 }
@@ -233,21 +257,10 @@ ziyan-mailbus/
 │   ├── api_server.py             # HTTP API 服务
 │   └── utils.py                  # 文件锁、JSON 读写、消息构建
 ├── mailbus-memory-bridge.py      # AgentMemory 桥接（可选）
-├── store/                        # 运行时数据目录（gitignore）
+├── store/                        # 运行时数据目录（gitignore，不提交）
 ├── tests/                        # 测试套件（10 文件，90+ 用例）
-│   ├── run_all.py
-│   ├── test_scanner.py
-│   ├── test_ack_handler.py
-│   ├── test_archiver.py
-│   ├── test_models.py
-│   ├── test_pusher.py
-│   ├── test_tracker.py
-│   ├── test_heartbeat.py
-│   ├── test_search.py
-│   ├── test_alerter.py
-│   └── test_utils.py
 ├── docs/
-│   ├── dashboard.html            # Web 看板（独立 HTML，零依赖）
+│   ├── platform.html             # Web 管理界面（独立 HTML，零依赖）
 │   ├── architecture-v2.html      # 架构图
 │   ├── quickstart.md
 │   └── message-format.md
@@ -263,6 +276,17 @@ ziyan-mailbus/
 ## 架构
 
 详见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+## 欢迎共建
+
+ziyan-mailbus 的目标是实现真正的 **A2A（Agent-to-Agent）** 通信，打破不同 Agent 框架之间的交互壁垒。
+
+无论你用的是 Hermes、OpenClaw、Cline、OpenCode、Aider 还是其他 AI Agent 框架——mailbus 都能让它们无缝对话。
+
+欢迎各位大佬一起参与：
+- **提 Issue** — 发现 bug、建议新功能
+- **提交 PR** — 修复问题、扩展框架支持
+- **分享案例** — 你是怎么用 mailbus 串联你的 Agent 团队的
 
 ## 协议
 
