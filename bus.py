@@ -42,6 +42,7 @@ from lib.archiver import archive_all
 from lib.tracker import TaskTracker
 from lib.heartbeat import heartbeat_scan, is_online, load_status
 from lib.search import scan_and_index, search
+from lib.api_server import serve as api_serve
 
 
 # ── 配置加载 ──────────────────────────────────────────────────────────
@@ -350,6 +351,23 @@ def cmd_heartbeat(args):
         for c in health_changes:
             print(f"   🔄 AgentMemory: {c['old_status']} → {c['new_status']}")
     
+    return 0
+
+
+def cmd_serve(args):
+    """启动 HTTP API 服务"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+    agents = config.get("agents", {})
+    agent_types = config.get("agent_types", {})
+    port = getattr(args, 'port', 9812)
+
+    if not agents:
+        print("✗ 没有注册的 agent")
+        return 1
+
+    api_serve(data_dir, agents, agent_types, port=port)
     return 0
 
 
@@ -893,6 +911,11 @@ def main():
     p_hb = sub.add_parser("heartbeat", help="心跳检测（检测所有 agent 在线状态）")
     _add_data_dir_arg(p_hb)
     
+    # serve (HTTP API)
+    p_sv = sub.add_parser("serve", help="启动 HTTP API 服务（用于 Web 看板）")
+    _add_data_dir_arg(p_sv)
+    p_sv.add_argument("--port", type=int, default=9812, help="监听端口（默认 9812）")
+    
     # search
     p_sr = sub.add_parser("search", help="消息全文检索")
     _add_data_dir_arg(p_sr)
@@ -924,6 +947,7 @@ def main():
         "agent-add": cmd_agent_add,
         "agent-remove": cmd_agent_remove,
         "heartbeat": cmd_heartbeat,
+        "serve": cmd_serve,
         "search": cmd_search,
     }
     
