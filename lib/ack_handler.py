@@ -28,6 +28,12 @@ def process_ack(data_dir: str, agent_name: str, ack_data: dict) -> bool:
     if not msg_id:
         return False
     
+    # 校验 agent 时间戳 — 如果明显异常（早于2026年），用总线时间覆盖
+    ts_raw = ack_data.get("timestamp", "")
+    ts = ts_raw
+    if ts_raw and ts_raw.startswith("2025"):
+        ts = _now_iso()
+    
     paths = resolve_paths(data_dir)
     inbox_file = f"{paths['inbox']}/{agent_name}/inbox.json"
     
@@ -42,13 +48,13 @@ def process_ack(data_dir: str, agent_name: str, ack_data: dict) -> bool:
         if isinstance(m, dict):
             if m.get("id") == msg_id:
                 m["status"] = MsgStatus.ACKNOWLEDGED
-                m["acknowledged_at"] = ack_data.get("timestamp", _now_iso())
+                m["acknowledged_at"] = ts
                 found = True
                 break
         else:
             if m.id == msg_id:
                 m.status = MsgStatus.ACKNOWLEDGED
-                m.acknowledged_at = ack_data.get("timestamp", _now_iso())
+                m.acknowledged_at = ts
                 found = True
                 break
     

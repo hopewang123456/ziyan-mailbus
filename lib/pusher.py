@@ -8,10 +8,65 @@ import os
 import subprocess
 import time
 from typing import Optional
+from pathlib import Path
 
 from .models import Message, MsgStatus, Priority
 from .utils import json_read, json_write, jsonl_append, log_error, resolve_paths, _now_iso
 from .scanner import mark_as_pushed, update_message_status
+
+# ── API Key 注入 ─────────────────────────────────────────────────────
+# 从 bus.py 所在目录的上级搜索 .env 文件
+_ENV_LOADED = False
+_ENV_VARS = {}
+
+
+def _load_env():
+    """加载 mailbus 项目目录下的 .env 文件，缓存到全局变量"""
+    global _ENV_LOADED, _ENV_VARS
+    if _ENV_LOADED:
+        return
+    _ENV_LOADED = True
+
+    # 搜索路径：先找项目根，再找 ~/.hermes/.env
+    bus_dir = Path(__file__).resolve().parent.parent  # mailbus/lib/ → mailbus/
+    candidates = [
+        bus_dir / ".env",
+        Path("/home/administrator/.hermes/.env"),
+        Path.home() / ".hermes" / ".env",
+    ]
+    for env_path in candidates:
+        if env_path.exists():
+            with open(env_path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, val = line.partition("=")
+                    key = key.strip()
+                    val = val.strip().strip("'\"")
+                    _ENV_VARS[key] = val
+            break  # 找到第一个有效的 .env 就停
+
+
+def get_env_for_cli(cmd: str) -> dict:
+    """给 CLI 命令补充环境变量"""
+    _load_env()
+    # 只注入 CLI 命令相关的 API Key
+    # 通过 cmd 中提到的 provider 名推断
+    extra_env = {}
+    if "deepseek" in cmd.lower() or "openai-compatible" in cmd.lower():
+        if "DEEPSEEK_API_KEY" in _ENV_VARS:
+            extra_env["DEEPSEEK_API_KEY"] = _ENV_VARS["DEEPSEEK_API_KEY"]
+    if "openrouter" in cmd.lower():
+        if "OPENROUTER_API_KEY" in _ENV_VARS:
+            extra_env["OPENROUTER_API_KEY"] = _ENV_VARS["OPENROUTER_API_KEY"]
+    if "anthropic" in cmd.lower() or "claude" in cmd.lower():
+        if "ANTHROPIC_API_KEY" in _ENV_VARS:
+            extra_env["ANTHROPIC_API_KEY"] = _ENV_VARS["ANTHROPIC_API_KEY"]
+    if "openai" in cmd.lower():
+        if "OPENAI_API_KEY" in _ENV_VARS:
+            extra_env["OPENAI_API_KEY"] = _ENV_VARS["OPENAI_API_KEY"]
+    return extra_env
 
 
 def push_messages(
@@ -50,27 +105,35 @@ def push_messages(
             update_message_status(data_dir, agent_name, mid, MsgStatus.PUSHED)
         return []
     
-    # 2. 构建推送文本（支持多条批量推）
-    #    包含消息内容 + 回复格式说明
+    # 2. 构建推送文本（包含明确的操作指令）
     text_parts = []
     for m in messages:
         from_ = m.from_ if hasattr(m, 'from_') else m.get("from", "?")
         content = m.content if hasattr(m, 'content') else m.get("content", "")
         msg_id = m.id if hasattr(m, 'id') else m["id"]
-        reply_fmt = m.reply_format if hasattr(m, 'reply_format') else m.get("reply_format", {})
         
-        # 提取 ack 路径
-        ack_path = ""
-        if isinstance(reply_fmt, dict):
-            ack_info = reply_fmt.get("ack", {})
-            ack_path = ack_info.get("file", "") if isinstance(ack_info, dict) else ""
+        # ack 路径
+        ack_path = f"/mnt/e/ai_tools/mail/store/inbox/{agent_name}/ack.json"
         
-        text_parts.append(
-            f"[来自 {from_}] {content}\n"
-            f"  消息ID: {msg_id}\n"
-            f"  回复ack: {ack_path}\n"
-            f"  格式: {{\"action\":\"ack\",\"msg_id\":\"{msg_id}\",\"agent\":\"{agent_name}\",\"timestamp\":\"<ISO时间>\"}}"
-        )
+        text_parts.append(f"""📬 你有一条新消息
+
+━━━━ 消息内容 ━━━━
+来自: {from_}
+内容: {content}
+消息ID: {msg_id}
+
+━━━━ 请执行以下操作 ━━━━
+【必须】写 ack 确认已读
+  文件: {ack_path}
+  格式: {{"action":"ack","msg_id":"{msg_id}","agent":"{agent_name}","timestamp":"<当前ISO时间>"}}
+
+【根据消息内容决定】
+- 如果需要转发给其他 agent，直接写目标 inbox:
+  /mnt/e/ai_tools/mail/store/inbox/<目标agent名>/inbox.json
+  (追加到 messages 数组，设 has_unread: true)
+
+- 如果需要存储到记忆或执行任务，按消息内容处理
+━━━━━━━━━━━━━━━━""")
     combined_text = "\n---\n".join(text_parts)
     
     # 3. 替换 'MSG' 占位符
@@ -120,21 +183,31 @@ def _invoke_cli(cmd: str) -> bool:
     执行 CLI 命令将消息推送给 agent。
     
     参数 cmd 已替换好 'MSG' 占位符。
-    返回 True 表示 CLI 执行成功（返回码 0）。
+    从 .env 文件自动注入 API Key。
+    返回 True 表示 CLI 启动成功（Popen 不阻塞）。
     """
     if not cmd:
         return True
     
     try:
+        # 获取需要注入的环境变量
+        extra_env = get_env_for_cli(cmd)
+        
+        # 确保子进程有完整的 shell 环境 + API Key
+        env = os.environ.copy()
+        env.update(extra_env)
+        
         # 后台执行 CLI，不阻塞 scan
+        # start_new_session=True + preexec_fn 确保独立进程组
         process = subprocess.Popen(
             cmd,
             shell=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
+            env=env,
+            close_fds=True,
         )
-        # 关闭父进程的文件描述符，让子进程独立运行
         # 不等待完成，直接返回成功（消息已投递）
         return True
     except Exception as e:
