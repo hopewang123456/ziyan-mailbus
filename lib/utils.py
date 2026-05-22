@@ -61,13 +61,32 @@ def file_lock():
 # ── JSON 读写 ─────────────────────────────────────────────────────────
 
 def json_read(filepath: str, default: Any = None) -> Any:
-    """读 JSON 文件（带锁）"""
+    """读 JSON 文件（带锁），遇到损坏 JSON 尝试修复"""
     with file_lock():
         try:
             with open(filepath) as f:
                 return json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
+        except FileNotFoundError:
             return default
+        except json.JSONDecodeError:
+            # JSON 损坏 → 尝试修复（常见问题：content 里有未转义的双引号）
+            try:
+                with open(filepath) as f:
+                    raw = f.read()
+                # 尝试用 strict=False 模式解析
+                import re
+                fixed = json.loads(raw, strict=False)
+                # 修复成功，写回
+                json_write(filepath, fixed)
+                return fixed
+            except (json.JSONDecodeError, Exception):
+                # 修复失败 → 备份损坏文件
+                bak = filepath + f".bak.{int(datetime.now().timestamp())}"
+                try:
+                    shutil.copy2(filepath, bak)
+                except OSError:
+                    pass
+                return default
 
 
 def json_write(filepath: str, data: Any, indent: int = 2):

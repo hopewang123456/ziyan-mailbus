@@ -44,12 +44,19 @@ mailbus status --failed
 | 特性 | 说明 |
 |------|------|
 | **零依赖** | 纯 Python + 文件系统，不需要 Redis / MQ / DB |
-| **双向确认** | 推送 → Agent 写 ack → 总线更新状态，不丢消息 |
-| **优先级队列** | 加急消息优先推送，普通消息排队 |
+| **双向确认** | CLI 推送 → Agent 写 ack → 总线更新状态，不丢消息 |
+| **消息协议** | type + action 结构化字段，Agent 不猜自然语言 |
+| **任务追踪** | pending → running → success/failed/timeout，全链路追踪 |
+| **优先级队列** | 加急消息优先推送，支持抢占 |
 | **Agent 类型抽象** | 统一配置模板，支持 6 种 Agent 框架（见下方） |
+| **多模型 Fallback** | 模型别名系统，按顺序试，不通自动换下一个 |
 | **公告板** | `broadcast` 一键全员推送 |
+| **催办** | 超时自动重推 + 升级通知 |
+| **心跳检测** | 定时 ping Agent，离线不进重试 |
+| **消息检索** | SQLite FTS5 全文索引 |
+| **错误回执** | 标准化 error_code/reason/trace |
 | **错误日志** | 推送失败写 JSONL 日志，按周分文件 |
-| **记忆同步** | 可选桥接 AgentMemory，消息自动持久化（见下方） |
+| **记忆同步** | 可选桥接 AgentMemory，消息自动持久化 |
 | **归档策略** | 已 ack 超 7 天 / 超 300 条自动归档 |
 
 ### 支持的 Agent 框架
@@ -67,8 +74,8 @@ mailbus status --failed
 
 ```bash
 mailbus init                        # 初始化目录结构
-mailbus scan                        # 扫描全员 inbox → 推送未读消息
-mailbus send <agent>                # 手动发消息（--priority urgent --from 发件人）
+mailbus scan                        # 扫描全员 inbox → 推送 + 心跳 + 催办 + 索引
+mailbus send <agent>                # 手动发消息（--priority/--type/--forward-to）
 mailbus broadcast                   # 发公告板（全员推送）
 mailbus ack --msg-id <ID>           # Agent 确认收到
 mailbus mark-read --msg-ids <ID>    # Agent 标记已读
@@ -79,6 +86,8 @@ mailbus archive                     # 手动触发归档
 mailbus errors                      # 查看错误日志
 mailbus agent-add <名>              # 注册新 Agent
 mailbus agent-remove <名>           # 移除 Agent
+mailbus heartbeat                   # 心跳检测（检测所有 Agent 在线状态）
+mailbus search                      # 消息全文检索（--query/--from/--to/--type/--status）
 ```
 
 ## Agent 回复格式

@@ -96,6 +96,26 @@ def push_messages(
     msg_ids = [m.id if hasattr(m, 'id') else m["id"] for m in messages]
     paths = resolve_paths(data_dir)
     
+    # 0. 幂等去重：检查这些消息是否已经被 agent ack 过
+    # 如果已经被 ack，直接返回空（不需要再推）
+    inbox_file = f"{paths['inbox']}/{agent_name}/inbox.json"
+    inbox_data = json_read(inbox_file, {})
+    if inbox_data:
+        from .scanner import _get_acked_ids
+        acked_ids = _get_acked_ids(inbox_data)
+        already_acked = [mid for mid in msg_ids if mid in acked_ids]
+        if already_acked:
+            # 已 ack 的消息直接标记为 acknowledged（不用再推）
+            for mid in already_acked:
+                update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
+            # 过滤掉已 ack 的，只推未处理的
+            remaining = [mid for mid in msg_ids if mid not in acked_ids]
+            if not remaining:
+                return []
+            msg_ids = remaining
+            # 从 messages 中也过滤掉
+            messages = [m for m in messages if (m.id if hasattr(m, 'id') else m["id"]) in msg_ids]
+    
     # 1. 标记为 pushed
     mark_as_pushed(data_dir, agent_name, msg_ids)
     

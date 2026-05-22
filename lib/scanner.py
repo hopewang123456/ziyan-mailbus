@@ -97,6 +97,22 @@ def build_queues(data_dir: str, agents: dict) -> Tuple[dict, dict]:
     return urgent_queue, normal_queue
 
 
+def _get_acked_ids(inbox_data: dict) -> set:
+    """
+    从 inbox 数据中提取已 ack 的消息 ID 集合。
+    用于幂等去重。
+    """
+    acked = set()
+    for m in inbox_data.get("messages", []):
+        if isinstance(m, dict):
+            if m.get("status") == MsgStatus.ACKNOWLEDGED:
+                acked.add(m.get("id", ""))
+        else:
+            if getattr(m, 'status', '') == MsgStatus.ACKNOWLEDGED:
+                acked.add(getattr(m, 'id', ''))
+    return acked
+
+
 def mark_as_pushed(data_dir: str, agent_name: str, msg_ids: list):
     """
     将 agent 的 inbox 中的 pending 消息标记为 pushed。

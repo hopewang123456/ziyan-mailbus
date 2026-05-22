@@ -50,3 +50,71 @@
 - `agent_types` 新增 `models` 字段：模型别名 → 各框架参数映射
 - `agents.<name>` 新增 `models` 数组：该 agent 可用的模型别名（可选，不配则走纯文件通信）
 - `agent_types.<type>.push` 模板中的模型参数改为 `MODEL` 占位符
+
+## 2.0.0 (2026-05-22)
+
+### 消息协议标准化
+- **MsgType 扩展**：新增 5 种类型 `task_reply` / `forward` / `forward_reply` / `broadcast` / `error_report`，共 9 种标准化消息类型
+- **action 结构化字段**：消息的 `action` 字段包含 `ack` / `reply_to` / `execute` / `forward_to` / `store_memory`，自动根据 type 推断默认值
+- **task 对象**：消息携带 `task` 字段（summary / assignee / status / deadline / deliverable）
+- **forward_chain 追踪链**：多跳消息自动生成追踪链（root_id / hops / status）
+- __post_init__ 自动填充默认 action 和 forward_chain
+- **推送文本重构**：不再靠自然语言正则解析转发/回复意图，改为直接读 action 字段生成指令
+
+### bus.py 增强
+- `send` 命令新增 `--type` 完整枚举 + `--forward-to` 参数
+- `build_message` 支持 forward_to / task 参数
+
+### 任务追踪
+- **新增 lib/tracker.py**：TaskTracker 类，管理 `store/tasks/` 目录
+- 任务状态：pending → running → success / failed / timeout
+- 催办逻辑：超时自动催办 + 超限标记 timeout
+- 错误回执框架（error_report 类型处理）
+- 追踪链自动更新（ack 时自动标记 hop 为 done）
+
+### 心跳检测
+- **新增 lib/heartbeat.py**：定时 ping Agent CLI
+- 连续 3 次无响应标记 offline
+- offline Agent 不上重试
+- `mailbus heartbeat` 命令手动触发
+
+### 优先级抢占
+- `scan` 时同 Agent 有 urgent 消息时自动跳过 normal 队列
+
+### 消息检索
+- **新增 lib/search.py**：SQLite FTS5 全文索引
+- `mailbus search --query xxx --from xxx` 命令
+- scan 时自动索引新消息
+
+### scan 流程增强
+- 错误回执处理 → 更新 task 状态为 failed
+- 心跳检测集成（间隔可配）
+- 催办检查集成
+- 消息索引集成
+- 优先级抢占集成
+
+## 2.1.0 (2026-05-22)
+
+### 消息去重（幂等）
+- `push_messages` 推送前检查 msg_id 是否已被 ack
+- 已 ack 的消息直接跳过，不再重复推送
+- 新增 `scanner._get_acked_ids()` 辅助函数
+
+### JSON 损坏保护
+- `json_read` 遇到损坏 JSON 时自动尝试修复（strict=False 模式）
+- 修复失败时自动备份损坏文件为 `.bak.{timestamp}`
+- 防止 Agent 写坏 inbox 导致 scan 崩溃
+
+### 新命令
+| 命令 | 说明 |
+|------|------|
+| `mailbus heartbeat` | 手动触发心跳检测 |
+| `mailbus search` | 消息全文检索（--query/--from/--to/--type/--status/--limit） |
+
+### 配置新增
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `heartbeat_interval` | 300 | 心跳检测间隔（秒） |
+| `heartbeat_missed_limit` | 3 | 连续无响应次数上限 |
+| `reminder_minutes` | 5 | 催办触发时间（分钟） |
+| `max_reminders` | 3 | 最大催办次数 |
