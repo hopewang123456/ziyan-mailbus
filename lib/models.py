@@ -114,6 +114,10 @@ class Message:
                  "attachments", "reply_format", "status", "pushed_count",
                  "created_at", "acknowledged_at"}
         filtered = {k: v for k, v in d.items() if k in known}
+        # 缺 id 的自动生成一个（防止 Agent 回复格式不规范导致 scan 炸）
+        if "id" not in filtered or not filtered["id"]:
+            ts = int(datetime.now(timezone.utc).timestamp())
+            filtered["id"] = f"auto-{ts}-{hash(d.get('from_', '')) % 10000:04d}"
         return cls(**filtered)
 
 

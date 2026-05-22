@@ -115,6 +115,21 @@ def push_messages(
         # ack 路径
         ack_path = f"/mnt/e/ai_tools/mail/store/inbox/{agent_name}/ack.json"
         
+        # 判断是否需要回复发件人（mailbus/broadcast/test 等系统消息不需要回复）
+        needs_reply = from_ not in ("mailbus", "broadcast", "system", "manual", "mailbus-test", "test", "")
+        reply_path = f"/mnt/e/ai_tools/mail/store/inbox/{from_}/inbox.json" if needs_reply else ""
+
+        # 预生成回复消息 id，agent 直接使用
+        reply_msg_id = f"reply-{msg_id}"
+
+        reply_section = f"""
+【必须】回复发件人
+请理解消息内容，然后将你的回复写入发件人 inbox:
+  文件: {reply_path}
+  向 messages 数组追加一条新消息，设 has_unread: true，格式:
+  {{"id": "{reply_msg_id}", "from": "{agent_name}", "to": "{from_}", "priority": "normal", "type": "reply", "content": "<你的回复>", "status": "pending", "created_at": "<当前ISO时间>"}}
+""" if needs_reply else ""
+
         text_parts.append(f"""📬 你有一条新消息
 
 ━━━━ 消息内容 ━━━━
@@ -125,14 +140,12 @@ def push_messages(
 ━━━━ 请执行以下操作 ━━━━
 【必须】写 ack 确认已读
   文件: {ack_path}
-  格式: {{"action":"ack","msg_id":"{msg_id}","agent":"{agent_name}","timestamp":"<当前ISO时间>"}}
-
-【根据消息内容决定】
-- 如果需要转发给其他 agent，直接写目标 inbox:
+  格式: {{"action":"ack","msg_id":"{msg_id}","agent":"{agent_name}","timestamp":"<当前ISO时间>"}}{reply_section}
+【根据消息内容决定其他操作】
+- 需要转发给其他 agent，直接写目标 inbox:
   /mnt/e/ai_tools/mail/store/inbox/<目标agent名>/inbox.json
-  (追加到 messages 数组，设 has_unread: true)
 
-- 如果需要存储到记忆或执行任务，按消息内容处理
+- 需要存储到记忆或执行任务，按消息内容处理
 ━━━━━━━━━━━━━━━━""")
     combined_text = "\n---\n".join(text_parts)
     
