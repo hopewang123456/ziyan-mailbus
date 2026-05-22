@@ -88,7 +88,30 @@ mailbus agent-add <名>              # 注册新 Agent
 mailbus agent-remove <名>           # 移除 Agent
 mailbus heartbeat                   # 心跳检测（检测所有 Agent 在线状态）
 mailbus search                      # 消息全文检索（--query/--from/--to/--type/--status）
+mailbus serve [--port]              # 启动 HTTP API 服务（默认端口 9812）
 ```
+
+## Web 看板
+
+mailbus 自带一个独立 Web 看板，零依赖，打开即用：
+
+```bash
+# 1. 启动 HTTP API
+mailbus serve --port 9812 --data-dir /path/to/store
+
+# 2. 浏览器打开 docs/dashboard.html（或用任意静态服务器托管）
+#    页面自动从 API 加载数据
+```
+
+看板功能：
+- **概览** — Agent 数量、消息总数、待处理数
+- **Agent 列表** — 名称、类型、角色、模型配置（动态读取 config.json）
+- **任务追踪** — 状态、追踪链、催办次数
+- **心跳状态** — AgentMemory / 磁盘 / inbox 积压 / 各 Agent 在线状态
+- **告警历史** — 级别、类型、时间
+- **原始 JSON 查看** — 各 API 端点的原始数据
+
+看板完全独立于 Agent 框架，迁移到其他环境只需改 API 地址即可使用。
 
 ## Agent 回复格式
 
@@ -187,16 +210,39 @@ ziyan-mailbus/
 ├── bus.py                        # 入口脚本（CLI 命令入口）
 ├── lib/
 │   ├── __init__.py
-│   ├── models.py                 # 数据模型
+│   ├── models.py                 # 数据模型（Message / Inbox / MsgType）
 │   ├── scanner.py                # 扫描 inbox → 构建推送队列
-│   ├── pusher.py                 # CLI 推送 + ack 等待 + 重试
-│   ├── ack_handler.py            # 处理 Agent 回复
+│   ├── pusher.py                 # CLI 推送 + 多模型 fallback
+│   ├── ack_handler.py            # 处理 Agent 回复（ack / mark_read / forward）
 │   ├── archiver.py               # 已读消息归档
-│   └── utils.py                  # 文件锁、日志、ID 生成
+│   ├── tracker.py                # 任务追踪 + 催办
+│   ├── heartbeat.py              # 心跳检测 + 健康监控
+│   ├── search.py                 # SQLite FTS5 全文检索
+│   ├── alerter.py                # 告警系统
+│   ├── api_server.py             # HTTP API 服务
+│   └── utils.py                  # 文件锁、JSON 读写、消息构建
 ├── mailbus-memory-bridge.py      # AgentMemory 桥接（可选）
-├── store/                        # 数据目录（运行时生成）
-├── tests/                        # 测试套件
-├── docs/                         # 文档
+├── store/                        # 运行时数据目录（gitignore）
+├── tests/                        # 测试套件（10 文件，90+ 用例）
+│   ├── run_all.py
+│   ├── test_scanner.py
+│   ├── test_ack_handler.py
+│   ├── test_archiver.py
+│   ├── test_models.py
+│   ├── test_pusher.py
+│   ├── test_tracker.py
+│   ├── test_heartbeat.py
+│   ├── test_search.py
+│   ├── test_alerter.py
+│   └── test_utils.py
+├── docs/
+│   ├── dashboard.html            # Web 看板（独立 HTML，零依赖）
+│   ├── architecture-v2.html      # 架构图
+│   ├── quickstart.md
+│   └── message-format.md
+├── examples/
+│   └── config.example.json       # 示例配置（不含私有信息）
+├── ARCHITECTURE.md
 ├── README.md
 ├── CHANGELOG.md
 ├── LICENSE
