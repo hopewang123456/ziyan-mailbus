@@ -1,23 +1,86 @@
 {
   "project": "ziyan-mailbus",
-  "version": "1.0.0",
-  "data_dir": "/path/to/your/mailbus-store",
+  "version": "1.1.0",
+  "data_dir": "/path/to/your/store",
   "ack_timeout": 30,
   "max_retries": 3,
   "archive_days": 7,
   "archive_max_messages": 300,
+  "reminder_minutes": 5,
+  "max_reminders": 3,
+  "heartbeat_interval": 300,
+  "heartbeat_missed_limit": 3,
   "agents": {
     "agent-a": {
-      "name": "agent-a",
-      "role": "你的角色",
-      "cli": "your-cli --message",
-      "inbox": "/path/to/your/mailbus-store/inbox/agent-a/inbox.json"
+      "name": "Agent A",
+      "role": "设计",
+      "type": "hermes",
+      "models": ["deepseek-chat"],
+      "inbox": "/path/to/your/store/inbox/agent-a/inbox.json"
     },
     "agent-b": {
-      "name": "agent-b",
-      "role": "另一个角色",
-      "cli": "another-cli --message",
-      "inbox": "/path/to/your/mailbus-store/inbox/agent-b/inbox.json"
+      "name": "Agent B",
+      "role": "编码",
+      "type": "opencode",
+      "models": ["deepseek-chat", "qwen-max"],
+      "inbox": "/path/to/your/store/inbox/agent-b/inbox.json"
+    },
+    "agent-c": {
+      "name": "Agent C",
+      "role": "调度",
+      "type": "openclaw",
+      "agent": "main",
+      "models": ["deepseek-chat"],
+      "inbox": "/path/to/your/store/inbox/agent-c/inbox.json"
+    }
+  },
+  "agent_types": {
+    "hermes": {
+      "push": "hermes chat -q 'MSG' -Q",
+      "description": "Hermes Agent（无需传模型参数）"
+    },
+    "hermes_profile": {
+      "push": "hermes chat -q 'MSG' -Q --profile PROFILE",
+      "description": "Hermes Profile 实例"
+    },
+    "openclaw": {
+      "push": "openclaw agent --local --agent AGENT --message 'MSG' MODEL --timeout 120",
+      "description": "OpenClaw Gateway agent"
+    },
+    "cline": {
+      "push": "cline 'MSG' PROVIDER --timeout 120",
+      "description": "Cline CLI"
+    },
+    "opencode": {
+      "push": "opencode run 'MSG' --dangerously-skip-permissions MODEL",
+      "description": "OpenCode CLI"
+    },
+    "none": {
+      "push": "",
+      "description": "纯文件通信（无 CLI 推送）"
+    },
+    "models": {
+      "deepseek-chat": {
+        "opencode": "--model deepseek/deepseek-chat",
+        "cline": "--provider openai-compatible",
+        "openclaw": "--model deepseek/deepseek-chat",
+        "hermes": "",
+        "hermes_profile": ""
+      },
+      "qwen-max": {
+        "opencode": "--model qwen/qwen-max",
+        "cline": "--provider openai-compatible",
+        "openclaw": "--model qwen/qwen-max",
+        "hermes": "",
+        "hermes_profile": ""
+      },
+      "zhipu-4": {
+        "opencode": "--model zhipu/glm-4",
+        "cline": "--provider openai-compatible",
+        "openclaw": "--model zhipu/glm-4",
+        "hermes": "",
+        "hermes_profile": ""
+      }
     }
   }
 }
