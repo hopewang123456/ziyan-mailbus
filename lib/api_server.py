@@ -131,7 +131,15 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             except (ValueError, TypeError):
                 pass
         if need_scan:
-            heartbeat_scan(self.agents, self.agent_types, self.data_dir, config={"agents": self.agents, "agent_types": self.agent_types}, interval=0, full_health_interval=0)
+            # 用线程后台执行，不阻塞 API 响应
+            import threading
+            from lib.heartbeat import heartbeat_scan as _hb_scan
+            t = threading.Thread(target=_hb_scan, args=(self.agents, self.agent_types, self.data_dir),
+                                 kwargs={"config": {"agents": self.agents, "agent_types": self.agent_types},
+                                          "interval": 0, "full_health_interval": 0,
+                                          "ping_timeout": 3}, daemon=True)
+            t.start()
+            t.join(timeout=8)  # 最多等 8 秒，超时就返回缓存
         hb = load_heartbeat(self.data_dir)
         self._send_json(hb)
 

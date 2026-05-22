@@ -254,7 +254,8 @@ def heartbeat_scan(agents: dict, agent_types: dict, data_dir: str,
                    config: dict = None,  # 传入完整 config 用于 API Key 检测
                    interval: int = DEFAULT_PING_INTERVAL,
                    missed_limit: int = DEFAULT_MISSED_LIMIT,
-                   full_health_interval: int = 600) -> list:
+                   full_health_interval: int = 600,
+                   ping_timeout: int = DEFAULT_PING_TIMEOUT) -> list:
     """
     执行一轮心跳检测 + 健康检查（健康检查间隔较长）。
 
@@ -284,7 +285,7 @@ def heartbeat_scan(agents: dict, agent_types: dict, data_dir: str,
             except (ValueError, TypeError):
                 pass
 
-        online = ping_agent(cfg, agent_types)
+        online = ping_agent(cfg, agent_types, ping_timeout=ping_timeout)
         agent_state["last_heartbeat"] = now_ts
 
         if online:
