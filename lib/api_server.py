@@ -115,7 +115,23 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         self._send_json({"tasks": tasks, "count": len(tasks)})
 
     def _handle_heartbeat(self):
-        """心跳状态"""
+        """心跳状态（如果距离上次检测超过 30 秒，现场触发一轮）"""
+        from lib.heartbeat import heartbeat_scan, load_status
+        # 检查是否最近检测过
+        hb_status = load_status(self.data_dir)
+        last_check = hb_status.get("health", {}).get("last_check", "")
+        need_scan = True
+        if last_check:
+            try:
+                from datetime import datetime, timezone, timedelta
+                last_dt = datetime.strptime(last_check, "%Y-%m-%dT%H:%M:%S%z")
+                now_dt = datetime.now(timezone(timedelta(hours=8)))
+                if (now_dt - last_dt).total_seconds() < 30:
+                    need_scan = False
+            except (ValueError, TypeError):
+                pass
+        if need_scan:
+            heartbeat_scan(self.agents, self.agent_types, self.data_dir, config={"agents": self.agents, "agent_types": self.agent_types}, interval=0, full_health_interval=0)
         hb = load_heartbeat(self.data_dir)
         self._send_json(hb)
 
