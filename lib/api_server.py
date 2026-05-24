@@ -110,6 +110,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             self._handle_reports()
         elif path == "/api/replies":
             self._handle_replies()
+        elif path == "/api/skill-usage":
+            self._handle_skill_usage()
         elif path == "/" or path == "":
             self._serve_static("/")
         elif path == "/index.html":
@@ -413,6 +415,52 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                     if len(replies) >= 50:
                         break
         self._send_json({"replies": replies, "count": len(replies)})
+
+    def _handle_skill_usage(self):
+        """GET /api/skill-usage → 聚合所有 agent 的 skill 使用情况"""
+        import os, json
+        profiles = {
+            "lingzhao": "/mnt/e/hermes-data/.hermes/skills/.usage.json",
+            "lingxi": "/mnt/e/hermes-data/.hermes/profiles/lingxi/skills/.usage.json",
+        }
+        merged = {}
+        for agent, path in profiles.items():
+            if os.path.isfile(path):
+                try:
+                    with open(path) as f:
+                        data = json.load(f)
+                    for skill, rec in data.items():
+                        if skill not in merged:
+                            merged[skill] = {"agents": {}}
+                        merged[skill]["agents"][agent] = {
+                            "use_count": rec.get("use_count", 0),
+                            "view_count": rec.get("view_count", 0),
+                            "last_used": (rec.get("last_used_at") or "")[:16],
+                            "state": rec.get("state", "active"),
+                        }
+                        # 汇总统计
+                        merged[skill]["total_use"] = sum(
+                            a.get("use_count", 0) for a in merged[skill]["agents"].values()
+                        )
+                        merged[skill]["total_view"] = sum(
+                            a.get("view_count", 0) for a in merged[skill]["agents"].values()
+                        )
+                        merged[skill]["last_used"] = max(
+                            (a.get("last_used", "") for a in merged[skill]["agents"].values()),
+                            default="",
+                        )
+                except Exception:
+                    pass
+        
+        # 按使用次数排序
+        sorted_skills = sorted(
+            merged.items(),
+            key=lambda x: -(x[1].get("total_use", 0) or 0),
+        )
+        self._send_json({
+            "skills": [{"name": n, **d} for n, d in sorted_skills],
+            "total_skills": len(sorted_skills),
+        })
 
     def _handle_config(self):
         """当前配置（去掉敏感路径信息）"""

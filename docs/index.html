@@ -122,6 +122,19 @@ td{padding:8px 10px;border-bottom:1px solid #1e293b}
 .mailbox-item .status-tag.pending{background:#451a03;color:#fdba74}
 .mailbox-item .status-tag.pushed{background:#0c1929;color:#93c5fd}
 
+/* 统计图表 */
+.stat-card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:16px;flex:1;min-width:0}
+.stat-card h3{font-size:12px;color:#94a3b8;margin:0 0 8px;font-weight:400}
+.bar-chart{display:flex;align-items:flex-end;height:80px;gap:6px}
+.bar-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px}
+.bar{width:100%;border-radius:4px 4px 0 0;min-height:4px;transition:height 0.3s}
+.bar-label{font-size:9px;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center}
+.donut{width:100px;height:100px;border-radius:50%;position:relative;margin:0 auto}
+.donut-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:18px;font-weight:600;color:#e2e8f0}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:8px;font-size:11px}
+.legend-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.legend-item{display:flex;align-items:center;color:#94a3b8}
+
 @media(max-width:600px){.agent-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -140,12 +153,23 @@ td{padding:8px 10px;border-bottom:1px solid #1e293b}
 
 <!-- 导航标签 -->
 <div class="tabs" id="mainTabs">
-  <div class="tab active" data-tab="agents" onclick="switchTab('agents')">🤖 Agent <span class="num" id="tabAgentCount"></span></div>
+  <div class="tab active" data-tab="overview" onclick="switchTab('overview')">📊 总览</div>
+  <div class="tab" data-tab="agents" onclick="switchTab('agents')">🤖 Agent <span class="num" id="tabAgentCount"></span></div>
   <div class="tab" data-tab="bulletin" onclick="switchTab('bulletin')">📢 公告栏 <span class="num" id="tabBulletinCount"></span></div>
   <div class="tab" data-tab="tasks" onclick="switchTab('tasks')">🎯 任务追踪</div>
   <div class="tab" data-tab="review" onclick="switchTab('review')">🔍 审查 <span class="num" id="tabReviewCount"></span></div>
   <div class="tab" data-tab="heartbeat" onclick="switchTab('heartbeat')">💓 健康状态</div>
   <div class="tab" data-tab="alerts" onclick="switchTab('alerts')">🔔 告警</div>
+</div>
+
+<!-- Tab: 总览 -->
+<div class="tab-content active" id="tab-overview">
+  <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:13px;color:#94a3b8">平台运行总览 · 消息量 · 类型分布 · 已读状态</span>
+    <button class="btn btn-sm" onclick="loadAll()">🔄 刷新</button>
+  </div>
+  <div id="statsRow" style="display:flex;gap:12px;margin-bottom:16px"></div>
+  <div id="overviewExtra"></div>
 </div>
 
 <!-- Tab: Agent 总览 -->
@@ -326,18 +350,26 @@ function mdToHtml(md) {
 
 async function loadAll() {
   try {
-    const [status, agents, tasks, hb, alerts, bulletin, reports] = await Promise.all([
+    const [status, agents, tasks, hb, alerts, bulletin, reports, replies, skillUsage] = await Promise.all([
       fetchJSON('/api/status'), fetchJSON('/api/agents'), fetchJSON('/api/tasks'),
       fetchJSON('/api/heartbeat'), fetchJSON('/api/alerts'), fetchJSON('/api/bulletin'),
-      fetchJSON('/api/reports'),
+      fetchJSON('/api/reports'), fetchJSON('/api/replies'), fetchJSON('/api/skill-usage'),
     ]);
-    rawData = { status, agents, tasks, hb, alerts, bulletin, reports };
+    rawData = { status, agents, tasks, hb, alerts, bulletin, reports, replies, skillUsage };
     renderAgentTab(status, agents);
     renderBulletinTab(bulletin);
     renderTasks(tasks);
     renderHeartbeat(hb);
     renderAlerts(alerts);
     renderReviewTab(reports);
+    // 总览图表
+    if (agents && agents.agents) {
+      renderStats(agents.agents, (status && status.agent_statuses) || {});
+    }
+    // 总览 skill 使用
+    if (rawData.skillUsage && rawData.skillUsage.skills) {
+      renderSkillUsage(rawData.skillUsage.skills);
+    }
     toast('已刷新', 'success');
     // 加载权限
     try {
@@ -379,7 +411,7 @@ async function reloadData(name) {
       setTimeout(() => c.abort(), 8000);
       return fetch(apiUrl(p), {signal: c.signal}).then(r => r.json());
     }));
-    if (name === 'agents') { rawData.status = results[0]; rawData.agents = results[1]; renderAgentTab(results[0], results[1]); }
+    if (name === 'agents') { rawData.status = results[0]; rawData.agents = results[1]; renderAgentTab(results[0], results[1]); if (results[0] && results[1] && results[1].agents) renderStats(results[1].agents, (results[0].agent_statuses||{})); }
     if (name === 'bulletin') { rawData.bulletin = results[0]; renderBulletinTab(results[0]); }
     if (name === 'review') { rawData.reports = results[0]; renderReviewTab(results[0]); }
     if (name === 'tasks') { rawData.tasks = results[0]; renderTasks(results[0]); }
@@ -698,6 +730,33 @@ async function showAgent(name) {
       html += `</div>`;
     }
 
+    // ── 发出的消息 + 回复 ──
+    const allReplies = (rawData.replies && rawData.replies.replies) || [];
+    const sentMsgs = msgs.filter(m => m.from === name && m.type !== 'system');
+    if (sentMsgs.length > 0 || allReplies.length > 0) {
+      html += `<div class=section-title>📤 发出的消息</div>`;
+      // 按时间倒序，展示最近的 10 条发出消息和对应回复
+      const recent = sentMsgs.slice(-10).reverse();
+      for (const sm of recent) {
+        const smId = sm.id || '';
+        const smContent = (sm.content || '').slice(0, 120);
+        const smTime = (sm.created_at || '').slice(0, 16);
+        // 找对应的回复
+        const reply = allReplies.find(r => (r.msg_ids || []).includes(smId));
+        const replyText = reply ? (reply.reply || '').replace(/\\u001b\[[0-9;]*m/g, '').slice(0, 100) : '';
+        
+        html += `<div class=bulletin-item style=font-size:12px;margin-bottom:6px>
+          <div style=display:flex;justify-content:space-between;color:#94a3b8>
+            <span>📨 给 ${sm.to || '?'}</span>
+            <span style=font-size:10px>${smTime}</span>
+          </div>
+          <div style=color:#e2e8f0;margin:2px 0>${esc(smContent)}</div>
+          ${replyText ? `<div style=color:#22d3ee;font-size:11px;border-left:2px solid #22d3ee;padding-left:8px;margin-top:2px>💬 ${esc(replyText)}</div>` 
+                      : `<div style=color:#475569;font-size:10px;margin-top:2px>⏳ 暂无回复</div>`}
+        </div>`;
+      }
+    }
+
     document.getElementById('agentModalContent').innerHTML = html;
     document.getElementById('agentModal').classList.add('open');
   } catch(e) {
@@ -709,7 +768,134 @@ function closeModal() {
   document.getElementById('agentModal').classList.remove('open');
 }
 
-// ── 邮箱功能：查看指定 agent 的私信 ──
+// ── 统计图表 ──
+
+function renderStats(agents, statuses) {
+  const el = document.getElementById('statsRow');
+  const entries = Object.entries(agents).filter(([k]) => statuses[k]);
+  if (entries.length === 0) { el.innerHTML = ''; return; }
+
+  // 颜色盘
+  const colors = ['#22d3ee','#67e8f9','#34d399','#a78bfa','#fbbf24','#fb923c','#f87171','#e879f9'];
+  
+  // 1. 消息分布柱状图
+  const msgs = entries.map(([k, v]) => ({
+    name: v.name || k,
+    count: statuses[k].active_messages || 0,
+    color: colors[entries.findIndex(([k2]) => k2 === k) % colors.length],
+  }));
+  const maxCount = Math.max(...msgs.map(m => m.count), 1);
+  
+  const barHtml = msgs.map(m => `
+    <div class=bar-item title="${esc(m.name)}: ${m.count}条">
+      <div class=bar style="height:${Math.max(4, (m.count/maxCount)*68)}px;background:${m.color}"></div>
+      <div class=bar-label>${esc(m.name)}</div>
+    </div>
+  `).join('');
+
+  // 2. 类型分布环形图
+  const typeCount = {};
+  entries.forEach(([k, v]) => {
+    const t = v.type || 'unknown';
+    typeCount[t] = (typeCount[t] || 0) + 1;
+  });
+  const typeEntries = Object.entries(typeCount);
+  const typeColors = {hermes:'#22d3ee', hermes_profile:'#67e8f9', openclaw:'#34d399', cline:'#a78bfa', opencode:'#fbbf24', none:'#64748b'};
+  const total = entries.length;
+  
+  // 用 conic-gradient 做环形
+  let conicParts = [];
+  let angle = 0;
+  typeEntries.forEach(([t, c]) => {
+    const pct = c / total;
+    const deg = pct * 360;
+    conicParts.push(`${typeColors[t] || '#64748b'} ${angle}deg ${angle + deg}deg`);
+    angle += deg;
+  });
+  const donutStyle = conicParts.length > 0 ? `background:conic-gradient(${conicParts.join(', ')})` : '';
+
+  // 3. 未读/已读状态
+  let readCount = 0, unreadCount = 0;
+  entries.forEach(([k]) => {
+    if (statuses[k].unread_count > 0) unreadCount++;
+    else readCount++;
+  });
+  const readPct = total > 0 ? Math.round((readCount/total)*100) : 0;
+
+  el.innerHTML = `
+    <div class=stat-card style=flex:2>
+      <h3>📊 消息分布</h3>
+      <div class=bar-chart>${barHtml}</div>
+    </div>
+    <div class=stat-card style=flex:1>
+      <h3>🔮 类型分布</h3>
+      <div class=donut style="${donutStyle}">
+        <div class=donut-center>${total}</div>
+      </div>
+      <div class=legend>${typeEntries.map(([t, c]) => `<span class=legend-item><span class=legend-dot style=background:${typeColors[t]||'#64748b'}></span>${t}(${c})</span>`).join('')}</div>
+    </div>
+    <div class=stat-card style=flex:1>
+      <h3>💌 已读状态</h3>
+      <div class=donut style="background:conic-gradient(#22d3ee ${readPct}turn, #475569 ${readPct}turn)">
+        <div class=donut-center>${readPct}%</div>
+      </div>
+      <div class=legend>
+        <span class=legend-item><span class=legend-dot style=background:#22d3ee></span>已读(${readCount})</span>
+        <span class=legend-item><span class=legend-dot style=background:#475569></span>未读(${unreadCount})</span>
+      </div>
+    </div>
+  `;
+}
+
+// ── Skill 使用排行 ──
+
+function renderSkillUsage(skills) {
+  const el = document.getElementById('overviewExtra');
+  if (!skills || skills.length === 0) { el.innerHTML = ''; return; }
+  
+  const top20 = skills.slice(0, 20);
+  const maxUse = Math.max(...top20.map(s => s.total_use || 0), 1);
+  const colors = ['#22d3ee','#67e8f9','#34d399','#a78bfa','#fbbf24','#fb923c','#f87171','#e879f9'];
+  
+  const rows = top20.map((s, i) => {
+    const pct = Math.round(((s.total_use || 0) / maxUse) * 100);
+    const color = colors[i % colors.length];
+    const agents = Object.entries(s.agents || {}).map(([a, d]) => `${a}(${d.use_count})`).join(', ');
+    return `
+      <tr>
+        <td style="font-size:11px;color:#64748b;width:24px">${i+1}</td>
+        <td style="font-size:12px">${esc(s.name)}</td>
+        <td style="width:120px">
+          <div style="background:#1e293b;border-radius:4px;height:14px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${color};border-radius:4px;transition:width 0.3s"></div>
+          </div>
+        </td>
+        <td style="font-size:11px;color:#e2e8f0;text-align:right;min-width:60px">${s.total_use}次</td>
+        <td style="font-size:10px;color:#64748b;min-width:100px">${agents}</td>
+        <td style="font-size:10px;color:#475569">${(s.last_used||'').slice(0,10)}</td>
+      </tr>
+    `;
+  }).join('');
+  
+  el.innerHTML = `
+    <div class=stat-card>
+      <h3>🛠 Skill 使用排行（Top 20）</h3>
+      <div style="max-height:320px;overflow-y:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr>
+            <th style="font-size:10px;color:#64748b;text-align:left;padding:4px 0">#</th>
+            <th style="font-size:10px;color:#64748b;text-align:left;padding:4px 0">Skill</th>
+            <th style="font-size:10px;color:#64748b;padding:4px 0"></th>
+            <th style="font-size:10px;color:#64748b;text-align:right;padding:4px 0">使用</th>
+            <th style="font-size:10px;color:#64748b;text-align:left;padding:4px 8px">使用者</th>
+            <th style="font-size:10px;color:#64748b;text-align:left;padding:4px 0">最后</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
 
 let _mailboxAgent = '';   // 当前邮箱是哪个 agent
 let _mailboxFilter = '';  // 当前筛选：''=全部 'unread'=未读 'read'=已读
