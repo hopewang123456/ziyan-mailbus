@@ -129,6 +129,16 @@ def scan_all(data_dir: str, agents: dict) -> List[Tuple[str, list, list]]:
     # 技能使用记录消费：扫描 skill-usage-pending 目录，归入 skill-usage.json
     _consume_skill_usage(data_dir)
     
+    # 自动归档：acknowledged 超过 7 天或 inbox 超过 300 条的消息
+    try:
+        from .archiver import archive_all
+        archived = archive_all(data_dir, agents, archive_days=7, max_messages=300)
+        if archived:
+            for name, count in archived.items():
+                print(f"  📦 {name}: {count} 条已归档")
+    except Exception:
+        pass
+    
     return results
 
 
