@@ -175,9 +175,9 @@ def is_content_urgent(content: str, priority: str) -> bool:
     return False
 
 
-def _build_reply_format(to: str, msg_id: str) -> dict:
+def _build_reply_format(to: str, msg_id: str, data_dir: str = None) -> dict:
     """构建消息附带的回复格式说明"""
-    inbox_base = "/mnt/e/ai_tools/mail/store/inbox"
+    inbox_base = data_dir + "/inbox" if data_dir else "/mnt/e/ai_tools/mail/store/inbox"
     return {
         "ack": {
             "file": f"{inbox_base}/{to}/ack.json",

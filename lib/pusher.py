@@ -148,8 +148,8 @@ def push_messages(
             task_data = m.task
             fwd_chain = m.forward_chain
 
-        # ack 路径
-        ack_path = f"/mnt/e/ai_tools/mail/store/inbox/{agent_name}/ack.json"
+        # ack 路径（从 data_dir 推导，确保迁移时路径正确）
+        ack_path = f"{data_dir}/inbox/{agent_name}/ack.json"
 
         # 构建指令列表
         instructions = []
@@ -161,7 +161,7 @@ def push_messages(
         # 2. 回复发件人
         reply_to = action.get("reply_to", "") if action else ""
         if reply_to and reply_to not in ("mailbus", "broadcast", "system", "manual", "mailbus-test", "test", ""):
-            reply_path = f"/mnt/e/ai_tools/mail/store/inbox/{reply_to}/inbox.json"
+            reply_path = f"{data_dir}/inbox/{reply_to}/inbox.json"
             reply_msg_id = f"reply-{msg_id}"
             instructions.append(f"""【必须】回复发件人 {reply_to}
   文件: {reply_path}
@@ -175,7 +175,7 @@ def push_messages(
             for target in forward_to:
                 if target == agent_name:
                     continue
-                fwd_path = f"/mnt/e/ai_tools/mail/store/inbox/{target}/inbox.json"
+                fwd_path = f"{data_dir}/inbox/{target}/inbox.json"
                 fwd_msg_id = f"fwd-{msg_id}-{target}"
                 fwd_lines.append(f"""  目标: {target}
   文件: {fwd_path}
