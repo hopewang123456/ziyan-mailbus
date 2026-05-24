@@ -1017,6 +1017,10 @@ def main():
     p_sv.add_argument("--host", default="0.0.0.0", help="监听地址（默认 0.0.0.0）")
     p_sv.add_argument("--port", type=int, default=9812, help="监听端口（默认 9812）")
     
+    # backup
+    p_bk = sub.add_parser("backup", help="备份 store/ 目录到 backup/（tar.gz，保留最近7个）")
+    _add_data_dir_arg(p_bk)
+    
     # search
     p_sr = sub.add_parser("search", help="消息全文检索")
     _add_data_dir_arg(p_sr)
@@ -1044,6 +1048,7 @@ def main():
         "status": cmd_status,
         "retry": cmd_retry,
         "archive": cmd_archive,
+        "backup": cmd_backup,
         "errors": cmd_errors,
         "agent-add": cmd_agent_add,
         "agent-remove": cmd_agent_remove,
