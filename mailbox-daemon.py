@@ -234,7 +234,7 @@ class MailboxDaemon:
         }
 
     def start(self):
-        self.log.info(f"Mailbox Daemon v0.4 启动 (风险修复: write_json容错 + reply去唤醒) — agent={self.agent_name}")
+        self.log.info(f"Mailbox Daemon v0.5 启动 (任务追踪+去重保护) — agent={self.agent_name}")
         self.log.info(f"  inbox: {self.inbox_path}")
         self.log.info(f"  ack:   {self.ack_path}")
         if not os.path.exists(self.inbox_path):
@@ -457,7 +457,7 @@ class MailboxDaemon:
         inbox = read_json(self.inbox_path)
         if inbox:
             for m in inbox.get("messages", []):
-                if m.get("id") == msg_id and m.get("status") == "pending":
+                if m.get("id") == msg_id and m.get("status") in ("new", "pending"):
                     m["status"] = "acknowledged"
                     m["acknowledged_at"] = ts
                     inbox["has_unread"] = any(
