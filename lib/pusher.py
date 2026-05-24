@@ -214,7 +214,11 @@ def push_messages(
             chain_text = "\n".join([f"  {h.get('agent','?')}: {h.get('action','?')}" for h in hops])
             chain_text = f"\n━━━━ 消息追踪链 ━━━━\n{chain_text}\n【你需在回复后更新此链】"
 
-        text_parts.append(f"""📬 你有一条新消息
+        text_parts.append(f"""╔══════════════════════════════════════════╗
+║        ziyan-mailbus 消息总线           ║
+╚══════════════════════════════════════════╝
+
+📬 你有一条新消息
 
 ━━━━ 消息内容 ━━━━
 类型: {msg_type}
@@ -226,6 +230,20 @@ def push_messages(
 {chr(10).join(instructions)}
 ━━━━━━━━━━━━━━━━""")
     combined_text = "\n---\n".join(text_parts)
+    
+    # 在第一条消息前加上 mailbus 系统上下文（仅首次）
+    system_context = f"""【系统上下文】你正在通过 ziyan-mailbus 消息总线工作。
+
+你的名称: {agent_name}
+你的 inbox: {data_dir}/inbox/{agent_name}/inbox.json
+你的 ack 路径: {data_dir}/inbox/{agent_name}/ack.json
+
+mailbus 通过 CLI 将消息推送给你。你收到的每条消息都包含操作指令，
+请按【必须】标记的步骤执行，最重要的是写 ack 确认已读。
+
+---
+"""
+    combined_text = system_context + combined_text
     
     # 3. 多模型 fallback 推送
     # cli_cmd 如果是 list，按顺序试；如果是 str，当单条处理
