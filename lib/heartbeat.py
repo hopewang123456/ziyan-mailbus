@@ -5,6 +5,7 @@
 
 离线 Agent 不进推送重试，直接写错误队列。"""
 import os
+import json
 import subprocess
 import time
 import shutil
@@ -29,19 +30,49 @@ def get_heartbeat_path(data_dir: str) -> str:
     return os.path.join(data_dir, HEARTBEAT_STATUS_FILE)
 
 
+def _aggregate_daemon_heartbeats(data_dir: str) -> dict:
+    """从 per-agent 心跳文件 (heartbeat.{agent}.json) 聚合 daemon 状态"""
+    agents = {}
+    hb_dir = Path(data_dir)
+    for f in hb_dir.glob("heartbeat.*.json"):
+        try:
+            data = json.loads(f.read_text())
+            agent_name = data.get("agent", "")
+            if agent_name:
+                agents[agent_name] = data
+        except (json.JSONDecodeError, OSError):
+            pass
+    return agents
+
+
 def load_status(data_dir: str) -> dict:
-    return json_read(get_heartbeat_path(data_dir), {"agents": {}, "health": {}})
+    # 从 per-agent 心跳文件聚合 daemon 状态
+    daemon_hb = _aggregate_daemon_heartbeats(data_dir)
+    # 读取 bus 维护的共享心跳（健康检查等）
+    bus_status = json_read(get_heartbeat_path(data_dir), {"agents": {}, "health": {}})
+    # 合并: daemon 状态覆盖 bus 的 agent 状态
+    merged_agents = {**bus_status.get("agents", {}), **daemon_hb}
+    return {
+        "agents": merged_agents,
+        "health": bus_status.get("health", {}),
+    }
 
 
 def load_status_nolock(data_dir: str) -> dict:
     """无锁读取心跳状态（给 API server 用，避免被 cron 的锁阻塞）"""
     path = get_heartbeat_path(data_dir)
     try:
-        import json
         with open(path) as f:
-            return json.load(f)
+            bus_status = json.load(f)
     except (FileNotFoundError, ValueError):
-        return {"agents": {}, "health": {}}
+        bus_status = {"agents": {}, "health": {}}
+    # 同样聚合 per-agent 心跳
+    daemon_hb = _aggregate_daemon_heartbeats(data_dir)
+    merged_agents = {**bus_status.get("agents", {}), **daemon_hb}
+    return {
+        "agents": merged_agents,
+        "health": bus_status.get("health", {}),
+    }
 
 
 def save_status(data_dir: str, status: dict):
@@ -285,6 +316,8 @@ def heartbeat_scan(agents: dict, agent_types: dict, data_dir: str,
             "last_heartbeat": "",
             "missed_pings": 0,
         })
+        # 兼容旧版 heartbeat.json 缺少 missed_pings 的情况
+        agent_state.setdefault("missed_pings", 0)
 
         last_hb = agent_state.get("last_heartbeat", "")
         if last_hb:

@@ -1,0 +1,50 @@
+2026-05-25 00:33:00,774 [INFO] [yige] Mailbox Daemon v0.2 启动 — agent=yige
+2026-05-25 00:33:00,775 [INFO] [yige]   inbox: /mnt/e/ai_tools/mail/store/inbox/yige/inbox.json
+2026-05-25 00:33:00,777 [INFO] [yige]   ack:   /mnt/e/ai_tools/mail/store/inbox/yige/ack.json
+2026-05-25 00:33:00,784 [INFO] [yige] 监听模式: poll (5s)
+2026-05-25 00:33:05,823 [ERROR] [yige] 循环异常: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 121, in start
+    self._heartbeat_tick()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 363, in _heartbeat_tick
+    write_json(self.hb_path, hb)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 25, in write_json
+    os.replace(tmp, path)
+    ~~~~~~~~~~^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+2026-05-25 00:34:05,949 [ERROR] [yige] 循环异常: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 121, in start
+    self._heartbeat_tick()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 363, in _heartbeat_tick
+    write_json(self.hb_path, hb)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 25, in write_json
+    os.replace(tmp, path)
+    ~~~~~~~~~~^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+2026-05-25 00:35:06,008 [ERROR] [yige] 循环异常: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 121, in start
+    self._heartbeat_tick()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 363, in _heartbeat_tick
+    write_json(self.hb_path, hb)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 21, in write_json
+    with open(tmp, "w") as f:
+         ~~~~^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp'
+2026-05-25 00:40:46,373 [INFO] [yige] Mailbox Daemon 已停止
+2026-05-25 00:40:57,619 [INFO] [yige] Mailbox Daemon v0.2 启动 — agent=yige
+2026-05-25 00:40:57,620 [INFO] [yige]   inbox: /mnt/e/ai_tools/mail/store/inbox/yige/inbox.json
+2026-05-25 00:40:57,622 [INFO] [yige]   ack:   /mnt/e/ai_tools/mail/store/inbox/yige/ack.json
+2026-05-25 00:40:57,629 [INFO] [yige] 监听模式: poll (5s)
+2026-05-25 00:44:33,133 [INFO] [yige] Mailbox Daemon 已停止
+2026-05-25 00:44:50,975 [INFO] [yige] Mailbox Daemon v0.2 启动 — agent=yige
+2026-05-25 00:44:50,978 [INFO] [yige]   inbox: /mnt/e/ai_tools/mail/store/inbox/yige/inbox.json
+2026-05-25 00:44:50,980 [INFO] [yige]   ack:   /mnt/e/ai_tools/mail/store/inbox/yige/ack.json
+2026-05-25 00:44:51,002 [INFO] [yige] 监听模式: poll (5s)

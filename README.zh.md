@@ -104,7 +104,7 @@ mailbus agent-add <名>              # 注册新 Agent
 mailbus agent-remove <名>           # 移除 Agent
 mailbus heartbeat                   # 心跳检测（检测所有 Agent 在线状态）
 mailbus search                      # 消息全文检索（--query/--from/--to/--type/--status）
-mailbus serve [--port]              # 启动 HTTP API 服务（默认端口 9812）
+mailbus serve [--host] [--port]      # 启动 HTTP API 服务（默认 127.0.0.1:9812）
 ```
 
 ## Platform 管理界面
@@ -113,7 +113,7 @@ mailbus 自带一个独立 Web 管理界面 **ziyan-mailbus Platform**，零依�
 
 ```bash
 # 1. 启动 HTTP API
-mailbus serve --port 9812 --data-dir /path/to/store
+mailbus serve --host 127.0.0.1 --port 9812 --data-dir /path/to/store
 
 # 2. 浏览器打开 docs/platform.html（或用任意静态服务器托管）
 #    页面自动从 API 加载数据

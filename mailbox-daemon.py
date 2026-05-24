@@ -315,7 +315,7 @@ class MailboxDaemon:
             return
 
         # Step 4: 分流处理
-        if self._needs_agent(msg_type, priority, parsed):
+        if self._needs_agent(msg_type, priority, parsed, from_=from_):
             self.log.info(f"  唤醒 agent (type={msg_type})")
             self._trigger_agent(msg_id, from_, preview)
         else:
@@ -356,9 +356,13 @@ class MailboxDaemon:
 
         self._mark_done(parsed['id'], f"status_ack 处理完毕: {ack_for} → {ack_status}")
 
-    def _needs_agent(self, msg_type, priority, parsed=None):
+    def _needs_agent(self, msg_type, priority, parsed=None, from_=None):
         # urgent 优先级别必唤醒
         if priority == "urgent":
+            return True
+
+        # 重要发件人（灵昭/子言）的消息必唤醒，不被 type 限制
+        if from_ in ("lingzhao", "ziyan", "lingxi"):
             return True
 
         # schema 结构化类型分流

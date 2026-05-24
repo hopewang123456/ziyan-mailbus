@@ -1014,7 +1014,7 @@ def main():
     # serve (HTTP API)
     p_sv = sub.add_parser("serve", help="启动 HTTP API 服务（用于 Web 看板）")
     _add_data_dir_arg(p_sv)
-    p_sv.add_argument("--host", default="0.0.0.0", help="监听地址（默认 0.0.0.0）")
+    p_sv.add_argument("--host", default="127.0.0.1", help="监听地址（默认 127.0.0.1）")
     p_sv.add_argument("--port", type=int, default=9812, help="监听端口（默认 9812）")
     
     # backup

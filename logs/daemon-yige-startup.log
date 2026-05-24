@@ -1,0 +1,4 @@
+2026-05-25 00:44:50,975 [INFO] [yige] Mailbox Daemon v0.2 启动 — agent=yige
+2026-05-25 00:44:50,978 [INFO] [yige]   inbox: /mnt/e/ai_tools/mail/store/inbox/yige/inbox.json
+2026-05-25 00:44:50,980 [INFO] [yige]   ack:   /mnt/e/ai_tools/mail/store/inbox/yige/ack.json
+2026-05-25 00:44:51,002 [INFO] [yige] 监听模式: poll (5s)

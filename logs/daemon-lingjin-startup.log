@@ -1,0 +1,4 @@
+2026-05-25 00:44:50,953 [INFO] [lingjin] Mailbox Daemon v0.2 启动 — agent=lingjin
+2026-05-25 00:44:50,955 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 00:44:50,957 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 00:44:50,980 [INFO] [lingjin] 监听模式: poll (5s)

@@ -122,7 +122,7 @@ mailbus agent-add <name>            # Register a new agent
 mailbus agent-remove <name>         # Remove an agent
 mailbus heartbeat                   # Heartbeat detection (check all agent online status)
 mailbus search                      # Full-text message search
-mailbus serve [--port]              # Start HTTP API server (default port 9812)
+mailbus serve [--host] [--port]      # Start HTTP API server (default 127.0.0.1:9812)
 ```
 
 ## Platform Web UI
@@ -131,7 +131,7 @@ mailbus ships with a standalone web management interface — **ziyan-mailbus Pla
 
 ```bash
 # 1. Start the HTTP API
-mailbus serve --port 9812 --data-dir /path/to/store
+mailbus serve --host 127.0.0.1 --port 9812 --data-dir /path/to/store
 
 # 2. Open docs/platform.html in your browser (or serve with any static server)
 ```

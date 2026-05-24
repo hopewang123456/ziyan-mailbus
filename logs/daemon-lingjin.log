@@ -1,0 +1,50 @@
+2026-05-25 00:33:00,762 [INFO] [lingjin] Mailbox Daemon v0.2 启动 — agent=lingjin
+2026-05-25 00:33:00,764 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 00:33:00,765 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 00:33:00,777 [INFO] [lingjin] 监听模式: poll (5s)
+2026-05-25 00:34:05,949 [ERROR] [lingjin] 循环异常: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 121, in start
+    self._heartbeat_tick()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 363, in _heartbeat_tick
+    write_json(self.hb_path, hb)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 25, in write_json
+    os.replace(tmp, path)
+    ~~~~~~~~~~^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+2026-05-25 00:38:06,279 [ERROR] [lingjin] 循环异常: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 121, in start
+    signal.signal(signal.SIGINT, lambda *_: setattr(self, '_running', False))
+                ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 363, in _heartbeat_tick
+    ts = datetime.now(timezone.utc).isoformat()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 25, in write_json
+    f.flush()
+    ~~~~~~~^^
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+2026-05-25 00:39:06,308 [ERROR] [lingjin] 循环异常: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 121, in start
+    signal.signal(signal.SIGINT, lambda *_: setattr(self, '_running', False))
+                ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 363, in _heartbeat_tick
+    ts = datetime.now(timezone.utc).isoformat()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 25, in write_json
+    f.flush()
+    ~~~~~~~^^
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+2026-05-25 00:40:36,389 [INFO] [lingjin] Mailbox Daemon 已停止
+2026-05-25 00:40:57,609 [INFO] [lingjin] Mailbox Daemon v0.2 启动 — agent=lingjin
+2026-05-25 00:40:57,611 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 00:40:57,612 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 00:40:57,620 [INFO] [lingjin] 监听模式: poll (5s)
+2026-05-25 00:44:23,105 [INFO] [lingjin] Mailbox Daemon 已停止
+2026-05-25 00:44:50,953 [INFO] [lingjin] Mailbox Daemon v0.2 启动 — agent=lingjin
+2026-05-25 00:44:50,955 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 00:44:50,957 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 00:44:50,980 [INFO] [lingjin] 监听模式: poll (5s)

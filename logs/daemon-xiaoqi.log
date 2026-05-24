@@ -1,0 +1,61 @@
+2026-05-25 00:33:00,770 [INFO] [xiaoqi] Mailbox Daemon v0.2 启动 — agent=xiaoqi
+2026-05-25 00:33:00,772 [INFO] [xiaoqi]   inbox: /mnt/e/ai_tools/mail/store/inbox/xiaoqi/inbox.json
+2026-05-25 00:33:00,774 [INFO] [xiaoqi]   ack:   /mnt/e/ai_tools/mail/store/inbox/xiaoqi/ack.json
+2026-05-25 00:33:00,781 [INFO] [xiaoqi] 监听模式: poll (5s)
+2026-05-25 00:33:05,822 [ERROR] [xiaoqi] 循环异常: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 121, in start
+    self._heartbeat_tick()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 363, in _heartbeat_tick
+    write_json(self.hb_path, hb)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 25, in write_json
+    os.replace(tmp, path)
+    ~~~~~~~~~~^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+2026-05-25 00:36:06,090 [ERROR] [xiaoqi] 循环异常: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 121, in start
+    self._heartbeat_tick()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 363, in _heartbeat_tick
+    write_json(self.hb_path, hb)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 25, in write_json
+    os.replace(tmp, path)
+    ~~~~~~~~~~^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+2026-05-25 00:37:06,162 [ERROR] [xiaoqi] 循环异常: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 121, in start
+    self._watcher = FileWatcher(self.inbox_path)
+                ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 363, in _heartbeat_tick
+    return
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 25, in write_json
+    with os.fdopen(fd, "w") as f:
+    ^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+2026-05-25 00:40:06,351 [ERROR] [xiaoqi] 循环异常: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 121, in start
+    signal.signal(signal.SIGINT, lambda *_: setattr(self, '_running', False))
+                ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 363, in _heartbeat_tick
+    ts = datetime.now(timezone.utc).isoformat()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 21, in write_json
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp_", suffix=".json")
+         ^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp'
+2026-05-25 00:40:41,371 [INFO] [xiaoqi] Mailbox Daemon 已停止
+2026-05-25 00:40:57,613 [INFO] [xiaoqi] Mailbox Daemon v0.2 启动 — agent=xiaoqi
+2026-05-25 00:40:57,615 [INFO] [xiaoqi]   inbox: /mnt/e/ai_tools/mail/store/inbox/xiaoqi/inbox.json
+2026-05-25 00:40:57,616 [INFO] [xiaoqi]   ack:   /mnt/e/ai_tools/mail/store/inbox/xiaoqi/ack.json
+2026-05-25 00:40:57,625 [INFO] [xiaoqi] 监听模式: poll (5s)
+2026-05-25 00:44:28,156 [INFO] [xiaoqi] Mailbox Daemon 已停止
+2026-05-25 00:44:50,963 [INFO] [xiaoqi] Mailbox Daemon v0.2 启动 — agent=xiaoqi
+2026-05-25 00:44:50,966 [INFO] [xiaoqi]   inbox: /mnt/e/ai_tools/mail/store/inbox/xiaoqi/inbox.json
+2026-05-25 00:44:50,969 [INFO] [xiaoqi]   ack:   /mnt/e/ai_tools/mail/store/inbox/xiaoqi/ack.json
+2026-05-25 00:44:50,994 [INFO] [xiaoqi] 监听模式: poll (5s)

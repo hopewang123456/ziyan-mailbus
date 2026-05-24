@@ -60,6 +60,19 @@ def file_lock():
 
 # ── JSON 读写 ─────────────────────────────────────────────────────────
 
+def _cleanup_bak_files(filepath: str, max_keep: int = 5):
+    """清理 filepath 对应的 .bak 文件，只保留最新的 max_keep 个"""
+    import glob
+    pattern = filepath + ".bak.*"
+    baks = sorted(glob.glob(pattern), key=os.path.getmtime)
+    while len(baks) > max_keep:
+        old = baks.pop(0)
+        try:
+            os.remove(old)
+        except OSError:
+            pass
+
+
 def json_read(filepath: str, default: Any = None) -> Any:
     """读 JSON 文件（带锁），遇到损坏 JSON 尝试修复"""
     with file_lock():
@@ -80,7 +93,8 @@ def json_read(filepath: str, default: Any = None) -> Any:
                 json_write(filepath, fixed)
                 return fixed
             except (json.JSONDecodeError, Exception):
-                # 修复失败 → 备份损坏文件
+                # 修复失败 → 备份损坏文件（最多保留5个）
+                _cleanup_bak_files(filepath, max_keep=5)
                 bak = filepath + f".bak.{int(datetime.now().timestamp())}"
                 try:
                     shutil.copy2(filepath, bak)

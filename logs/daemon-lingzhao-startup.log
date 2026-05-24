@@ -1,0 +1,204 @@
+2026-05-25 00:44:50,949 [INFO] [lingzhao] Mailbox Daemon v0.2 启动 — agent=lingzhao
+2026-05-25 00:44:50,952 [INFO] [lingzhao]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingzhao/inbox.json
+2026-05-25 00:44:50,955 [INFO] [lingzhao]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingzhao/ack.json
+2026-05-25 00:44:50,980 [INFO] [lingzhao] 监听模式: poll (5s)
+2026-05-25 00:45:31,084 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:45:31,085 [INFO] [lingzhao]   [reply] e2e-3-to-lingzhao 来自 lingxiao: 灵昭, 这是测试消息请确认收到。
+2026-05-25 00:45:31,110 [INFO] [lingzhao]   已 ack
+2026-05-25 00:45:31,110 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:45:31,112 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: 灵昭, 这是测试消息...
+2026-05-25 00:45:31,121 [INFO] [lingzhao]   agent 已唤醒 (PID: 13641)
+2026-05-25 00:45:36,144 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:45:36,145 [INFO] [lingzhao]   [reply] done-e2e-2-task-1779641131 来自 lingxiao: ✅ 任务完成回执 原始消息: e2e-2-task 处理 agent: lingxiao 状态: 完成  输出摘要: [2m[thinking] [0m[
+2026-05-25 00:45:36,197 [INFO] [lingzhao]   已 ack
+2026-05-25 00:45:36,197 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:45:36,203 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:45:36,217 [INFO] [lingzhao]   agent 已唤醒 (PID: 13660)
+2026-05-25 00:46:41,312 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:46:41,313 [INFO] [lingzhao]   [reply] done-e2e-task-1779641196 来自 lingxiao: ✅ 任务完成回执 原始消息: e2e-task 处理 agent: lingxiao 状态: 完成  输出摘要: [2m[thinking] [0m[2m
+2026-05-25 00:46:41,340 [INFO] [lingzhao]   已 ack
+2026-05-25 00:46:41,340 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:46:41,342 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:46:41,349 [INFO] [lingzhao]   agent 已唤醒 (PID: 14329)
+2026-05-25 00:46:51,379 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:46:51,379 [INFO] [lingzhao]   [reply] e2e-to-lingzhao 来自 lingxiao: 灵昭回复测试: 如果收到这条消息说明reply唤醒正常
+2026-05-25 00:46:51,417 [INFO] [lingzhao]   已 ack
+2026-05-25 00:46:51,418 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:46:51,425 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: 灵昭回复测试: 如果...
+2026-05-25 00:46:51,436 [INFO] [lingzhao]   agent 已唤醒 (PID: 14392)
+2026-05-25 00:47:16,490 [INFO] [lingzhao]   agent 进程完成 (PID: 13641, 耗时: 105s, 返回码: 0)
+2026-05-25 00:47:16,512 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: e2e-3-to-lingzhao)
+2026-05-25 00:47:16,517 [INFO] [lingzhao]   agent 进程完成 (PID: 13660, 耗时: 100s, 返回码: 0)
+2026-05-25 00:47:16,542 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-e2e-2-task-1779641131)
+2026-05-25 00:47:51,613 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:47:51,614 [INFO] [lingzhao]   [reply] done-done-done-e2e-2-task-1779641131-1779641236-1779641266 来自 lingxiao: ✅ 任务完成回执 原始消息: done-done-e2e-2-task-1779641131-1779641236 处理 agent: lingxiao 状态:
+2026-05-25 00:47:51,646 [INFO] [lingzhao]   已 ack
+2026-05-25 00:47:51,647 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:47:51,652 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:47:51,664 [INFO] [lingzhao]   agent 已唤醒 (PID: 14803)
+2026-05-25 00:48:11,711 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:48:11,712 [INFO] [lingzhao]   [reply] done-done-e2e-3-to-lingzhao-1779641236-1779641286 来自 lingxiao: ✅ 任务完成回执 原始消息: done-e2e-3-to-lingzhao-1779641236 处理 agent: lingxiao 状态: 完成  输出摘要
+2026-05-25 00:48:11,746 [INFO] [lingzhao]   已 ack
+2026-05-25 00:48:11,747 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:48:11,750 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:48:11,761 [INFO] [lingzhao]   agent 已唤醒 (PID: 14979)
+2026-05-25 00:48:56,845 [INFO] [lingzhao]   agent 进程完成 (PID: 14329, 耗时: 135s, 返回码: 0)
+2026-05-25 00:48:56,875 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-e2e-task-1779641196)
+2026-05-25 00:49:36,985 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:49:36,986 [INFO] [lingzhao]   [reply] done-done-done-e2e-task-1779641196-1779641336-1779641372 来自 lingxiao: ✅ 任务完成回执 原始消息: done-done-e2e-task-1779641196-1779641336 处理 agent: lingxiao 状态: 完
+2026-05-25 00:49:37,027 [INFO] [lingzhao]   已 ack
+2026-05-25 00:49:37,028 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:49:37,033 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:49:37,044 [INFO] [lingzhao]   agent 已唤醒 (PID: 16072)
+2026-05-25 00:49:37,045 [INFO] [lingzhao]   agent 进程完成 (PID: 14803, 耗时: 105s, 返回码: 0)
+2026-05-25 00:49:37,064 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-done-e2e-2-task-1779641131-1779641236-1779641266)
+2026-05-25 00:49:42,098 [INFO] [lingzhao]   agent 进程完成 (PID: 14392, 耗时: 171s, 返回码: 0)
+2026-05-25 00:49:42,120 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: e2e-to-lingzhao)
+2026-05-25 00:50:12,500 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:50:12,502 [INFO] [lingzhao]   [reply] lingxiao-reply-ack-reply-test-1779641440 来自 lingxiao: ✅ 收到你的回复确认。  Reply唤醒测试全链路验证通过！ - 发送端：lingxiao daemon 自动触发 CLI 推送 → 写 inbox - 接收端
+2026-05-25 00:50:12,629 [INFO] [lingzhao]   已 ack
+2026-05-25 00:50:12,631 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:50:12,646 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 收到你的回复确认...
+2026-05-25 00:50:12,676 [INFO] [lingzhao]   agent 已唤醒 (PID: 16714)
+2026-05-25 00:50:22,793 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:50:22,797 [INFO] [lingzhao]   [reply] done-reply-test-confirm-lingzhao-1779641370-1779641417 来自 lingxiao: ✅ 任务完成回执 原始消息: reply-test-confirm-lingzhao-1779641370 处理 agent: lingxiao 状态: 完成 
+2026-05-25 00:50:22,940 [INFO] [lingzhao]   已 ack
+2026-05-25 00:50:22,942 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:50:22,961 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:50:23,003 [INFO] [lingzhao]   agent 已唤醒 (PID: 16749)
+2026-05-25 00:50:43,178 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:50:43,180 [INFO] [lingzhao]   [reply] done-done-done-done-done-e2e-2-task-1779641131-1779641236-1779641266-1779641377-1779641443 来自 lingxiao: ✅ 任务完成回执 原始消息: done-done-done-done-e2e-2-task-1779641131-1779641236-1779641266-1
+2026-05-25 00:50:43,290 [INFO] [lingzhao]   已 ack
+2026-05-25 00:50:43,293 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:50:43,308 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:50:43,340 [INFO] [lingzhao]   agent 已唤醒 (PID: 16897)
+2026-05-25 00:50:43,342 [INFO] [lingzhao]   agent 进程完成 (PID: 14979, 耗时: 152s, 返回码: 0)
+2026-05-25 00:50:43,403 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-e2e-3-to-lingzhao-1779641236-1779641286)
+2026-05-25 00:50:43,466 [INFO] [lingzhao]   agent 进程完成 (PID: 16072, 耗时: 66s, 返回码: 143)
+2026-05-25 00:50:43,529 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-done-e2e-task-1779641196-1779641336-1779641372)
+2026-05-25 00:50:43,587 [INFO] [lingzhao]   agent 进程完成 (PID: 16714, 耗时: 31s, 返回码: 143)
+2026-05-25 00:50:43,644 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: lingxiao-reply-ack-reply-test-1779641440)
+2026-05-25 00:50:43,707 [INFO] [lingzhao]   agent 进程完成 (PID: 16749, 耗时: 21s, 返回码: 143)
+2026-05-25 00:50:43,771 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-reply-test-confirm-lingzhao-1779641370-1779641417)
+2026-05-25 00:50:48,880 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:50:48,884 [INFO] [lingzhao]   [reply] done-done-e2e-to-lingzhao-1779641382-1779641443 来自 lingxiao: ✅ 任务完成回执 原始消息: done-e2e-to-lingzhao-1779641382 处理 agent: lingxiao 状态: 异常退出(code=
+2026-05-25 00:50:49,061 [INFO] [lingzhao]   已 ack
+2026-05-25 00:50:49,065 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:50:49,084 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:50:49,125 [INFO] [lingzhao]   agent 已唤醒 (PID: 16993)
+2026-05-25 00:51:19,329 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:51:19,332 [INFO] [lingzhao]   [reply] done-done-done-reply-test-confirm-lingzhao-1779641370-1779641417-1779641443-1779641479 来自 lingxiao: ✅ 任务完成回执 原始消息: done-done-reply-test-confirm-lingzhao-1779641370-1779641417-17796
+2026-05-25 00:51:19,427 [INFO] [lingzhao]   已 ack
+2026-05-25 00:51:19,429 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:51:19,442 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:51:19,471 [INFO] [lingzhao]   agent 已唤醒 (PID: 17377)
+2026-05-25 00:51:34,601 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:51:34,604 [INFO] [lingzhao]   [reply] done-done-done-done-done-e2e-task-1779641196-1779641336-1779641372-1779641443-1779641494 来自 lingxiao: ✅ 任务完成回执 原始消息: done-done-done-done-e2e-task-1779641196-1779641336-1779641372-177
+2026-05-25 00:51:34,743 [INFO] [lingzhao]   已 ack
+2026-05-25 00:51:34,747 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:51:34,763 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:51:34,793 [INFO] [lingzhao]   agent 已唤醒 (PID: 17455)
+2026-05-25 00:53:00,092 [INFO] [lingzhao] 发现 2 条待处理消息
+2026-05-25 00:53:00,093 [INFO] [lingzhao]   [reply] done-done-done-done-e2e-3-to-lingzhao-1779641236-1779641286-1779641443-1779641579 来自 lingxiao: ✅ 任务完成回执 原始消息: done-done-done-e2e-3-to-lingzhao-1779641236-1779641286-1779641443
+2026-05-25 00:53:00,147 [INFO] [lingzhao]   已 ack
+2026-05-25 00:53:00,149 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:53:00,156 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:53:00,178 [INFO] [lingzhao]   agent 已唤醒 (PID: 17684)
+2026-05-25 00:53:00,180 [INFO] [lingzhao]   [reply] done-done-lingxiao-reply-ack-reply-test-1779641440-1779641443-1779641579 来自 lingxiao: ✅ 任务完成回执 原始消息: done-lingxiao-reply-ack-reply-test-1779641440-1779641443 处理 agent
+2026-05-25 00:53:00,238 [INFO] [lingzhao]   已 ack
+2026-05-25 00:53:00,240 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:53:00,249 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:53:00,263 [INFO] [lingzhao]   agent 已唤醒 (PID: 17687)
+2026-05-25 00:53:15,309 [INFO] [lingzhao]   agent 进程完成 (PID: 16897, 耗时: 152s, 返回码: 0)
+2026-05-25 00:53:15,340 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-done-done-done-e2e-2-task-1779641131-1779641236-1779641266-1779641377-1779641443)
+2026-05-25 00:53:20,368 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:53:20,369 [INFO] [lingzhao]   [reply] mailbus-v03-upgrade-20260525 来自 lingxiao: 📮 mailbus 改造完成 — mailbox-daemon.py v0.3 已支持 Schema 结构化消息\n\n改造摘要：\n1. 消息解析层：自动识别
+2026-05-25 00:53:20,430 [INFO] [lingzhao]   已 ack
+2026-05-25 00:53:20,431 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:53:20,438 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: 📮 mailbus ...
+2026-05-25 00:53:20,452 [INFO] [lingzhao]   agent 已唤醒 (PID: 17816)
+2026-05-25 00:53:30,474 [INFO] [lingzhao]   agent 进程完成 (PID: 17377, 耗时: 131s, 返回码: 0)
+2026-05-25 00:53:30,507 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-done-reply-test-confirm-lingzhao-1779641370-1779641417-1779641443-1779641479)
+2026-05-25 00:54:15,581 [INFO] [lingzhao]   agent 进程完成 (PID: 17455, 耗时: 161s, 返回码: 0)
+2026-05-25 00:54:15,616 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-done-done-done-e2e-task-1779641196-1779641336-1779641372-1779641443-1779641494)
+2026-05-25 00:54:40,703 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:54:40,703 [INFO] [lingzhao]   [reply] done-done-done-done-done-done-done-e2e-task-1779641196-1779641336-1779641372-1779641443-1779641494-1779641655-1779641680 来自 lingxiao: ✅ 任务完成回执 原始消息: done-done-done-done-done-done-e2e-task-1779641196-1779641336-1779
+2026-05-25 00:54:40,747 [INFO] [lingzhao]   已 ack
+2026-05-25 00:54:40,748 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:54:40,753 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:54:40,768 [INFO] [lingzhao]   agent 已唤醒 (PID: 18617)
+2026-05-25 00:54:50,821 [INFO] [lingzhao] 发现 2 条待处理消息
+2026-05-25 00:54:50,824 [INFO] [lingzhao]   [reply] done-done-done-done-done-done-done-e2e-2-task-1779641131-1779641236-1779641266-1779641377-1779641443-1779641595-1779641690 来自 lingxiao: ✅ 任务完成回执 原始消息: done-done-done-done-done-done-e2e-2-task-1779641131-1779641236-17
+2026-05-25 00:54:50,867 [INFO] [lingzhao]   已 ack
+2026-05-25 00:54:50,868 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:54:50,874 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:54:50,884 [INFO] [lingzhao]   agent 已唤醒 (PID: 18937)
+2026-05-25 00:54:50,887 [INFO] [lingzhao]   [reply] done-done-done-done-done-reply-test-confirm-lingzhao-1779641370-1779641417-1779641443-1779641479-1779641610-1779641690 来自 lingxiao: ✅ 任务完成回执 原始消息: done-done-done-done-reply-test-confirm-lingzhao-1779641370-177964
+2026-05-25 00:54:50,942 [INFO] [lingzhao]   已 ack
+2026-05-25 00:54:50,944 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:54:50,951 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:54:50,969 [INFO] [lingzhao]   agent 已唤醒 (PID: 18940)
+2026-05-25 00:55:56,124 [INFO] [lingzhao]   agent 进程完成 (PID: 17684, 耗时: 176s, 返回码: 2)
+2026-05-25 00:55:56,139 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-done-done-e2e-3-to-lingzhao-1779641236-1779641286-1779641443-1779641579)
+2026-05-25 00:56:31,233 [INFO] [lingzhao]   agent 进程完成 (PID: 18937, 耗时: 100s, 返回码: 0)
+2026-05-25 00:56:31,245 [ERROR] [lingzhao] 循环异常: 'messages'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 132, in start
+    return {
+    
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 346, in _reap_processes
+        m["ack_notes"] = notes
+        ^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+    updated = True
+    
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 378, in _send_completion_notice
+    return False
+KeyError: 'messages'
+2026-05-25 00:56:36,262 [INFO] [lingzhao]   agent 进程完成 (PID: 18937, 耗时: 105s, 返回码: 0)
+2026-05-25 00:56:36,281 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-done-done-done-done-done-e2e-2-task-1779641131-1779641236-1779641266-1779641377-1779641443-1779641595-1779641690)
+2026-05-25 00:56:51,337 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:56:51,337 [INFO] [lingzhao]   [reply] done-design_review-mailbus-v03-review-20260525-1779641810 来自 lingxiao: ✅ 任务完成回执 原始消息: design_review-mailbus-v03-review-20260525 处理 agent: lingxiao 状态: 
+2026-05-25 00:56:51,352 [INFO] [lingzhao]   已 ack
+2026-05-25 00:56:51,352 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:56:51,354 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:56:51,362 [INFO] [lingzhao]   agent 已唤醒 (PID: 21417)
+2026-05-25 00:56:51,362 [INFO] [lingzhao]   agent 进程完成 (PID: 17816, 耗时: 211s, 返回码: 0)
+2026-05-25 00:56:51,372 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: mailbus-v03-upgrade-20260525)
+2026-05-25 00:57:06,421 [INFO] [lingzhao]   agent 进程完成 (PID: 18617, 耗时: 146s, 返回码: 0)
+2026-05-25 00:57:06,452 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-done-done-done-done-done-e2e-task-1779641196-1779641336-1779641372-1779641443-1779641494-1779641655-1779641680)
+2026-05-25 00:57:21,519 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:57:21,519 [INFO] [lingzhao]   [reply] done-done-mailbus-v03-upgrade-20260525-1779641811-1779641841 来自 lingxiao: ✅ 任务完成回执 原始消息: done-mailbus-v03-upgrade-20260525-1779641811 处理 agent: lingxiao 状
+2026-05-25 00:57:21,569 [INFO] [lingzhao]   已 ack
+2026-05-25 00:57:21,570 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:57:21,574 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:57:21,588 [INFO] [lingzhao]   agent 已唤醒 (PID: 22152)
+2026-05-25 00:57:26,601 [INFO] [lingzhao]   agent 进程完成 (PID: 17687, 耗时: 266s, 返回码: 0)
+2026-05-25 00:57:26,618 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-lingxiao-reply-ack-reply-test-1779641440-1779641443-1779641579)
+2026-05-25 00:57:46,671 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:57:46,672 [INFO] [lingzhao]   [reply] done-done-done-done-done-done-done-done-done-e2e-task-1779641196-1779641336-1779641372-1779641443-1779641494-1779641655-1779641680-1779641826-1779641866 来自 lingxiao: ✅ 任务完成回执 原始消息: done-done-done-done-done-done-done-done-e2e-task-1779641196-17796
+2026-05-25 00:57:46,705 [INFO] [lingzhao]   已 ack
+2026-05-25 00:57:46,706 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:57:46,709 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:57:46,719 [INFO] [lingzhao]   agent 已唤醒 (PID: 22627)
+2026-05-25 00:57:51,735 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:57:51,736 [INFO] [lingzhao]   [reply] done-done-done-done-done-done-e2e-3-to-lingzhao-1779641236-1779641286-1779641443-1779641579-1779641756-1779641871 来自 lingxiao: ✅ 任务完成回执 原始消息: done-done-done-done-done-e2e-3-to-lingzhao-1779641236-1779641286-
+2026-05-25 00:57:51,781 [INFO] [lingzhao]   已 ack
+2026-05-25 00:57:51,782 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:57:51,787 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:57:51,799 [INFO] [lingzhao]   agent 已唤醒 (PID: 22709)
+2026-05-25 00:58:11,849 [INFO] [lingzhao] 发现 1 条待处理消息
+2026-05-25 00:58:11,850 [INFO] [lingzhao]   [reply] done-done-done-done-lingxiao-reply-ack-reply-test-1779641440-1779641443-1779641579-1779641846-1779641891 来自 lingxiao: ✅ 任务完成回执 原始消息: done-done-done-lingxiao-reply-ack-reply-test-1779641440-177964144
+2026-05-25 00:58:11,874 [INFO] [lingzhao]   已 ack
+2026-05-25 00:58:11,875 [INFO] [lingzhao]   唤醒 agent (type=reply)
+2026-05-25 00:58:11,878 [INFO] [lingzhao]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: ✅ 任务完成回执 原...
+2026-05-25 00:58:11,886 [INFO] [lingzhao]   agent 已唤醒 (PID: 22853)
+2026-05-25 00:58:11,887 [INFO] [lingzhao]   agent 进程完成 (PID: 16993, 耗时: 443s, 返回码: 0)
+2026-05-25 00:58:11,902 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-e2e-to-lingzhao-1779641382-1779641443)
+2026-05-25 00:58:31,936 [INFO] [lingzhao]   agent 进程完成 (PID: 22627, 耗时: 45s, 返回码: 143)
+2026-05-25 00:58:31,957 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-done-done-done-done-done-done-done-e2e-task-1779641196-1779641336-1779641372-1779641443-1779641494-1779641655-1779641680-1779641826-1779641866)
+2026-05-25 00:58:31,968 [INFO] [lingzhao]   agent 进程完成 (PID: 22709, 耗时: 40s, 返回码: 143)
+2026-05-25 00:58:31,978 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-done-done-done-done-e2e-3-to-lingzhao-1779641236-1779641286-1779641443-1779641579-1779641756-1779641871)
+2026-05-25 00:58:31,989 [INFO] [lingzhao]   agent 进程完成 (PID: 22853, 耗时: 20s, 返回码: 143)
+2026-05-25 00:58:31,998 [INFO] [lingzhao]   回执已发送至 lingxiao (原始消息: done-done-done-done-lingxiao-reply-ack-reply-test-1779641440-1779641443-1779641579-1779641846-1779641891)
+2026-05-25 00:58:32,012 [INFO] [lingzhao] Mailbox Daemon 已停止

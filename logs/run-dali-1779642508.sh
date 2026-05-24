@@ -1,0 +1,2 @@
+#!/bin/bash
+cd /mnt/e/ai_tools/opencode && opencode run '你有新的任务消息: 大力，mailbox-daemon 已经到 v0.4 了，灵霄那边自测和共测都通过了。现在想请你试用一下。 你只需要在终端跑一条命令： python3 ' --dangerously-skip-permissions --model deepseek/deepseek-chat
