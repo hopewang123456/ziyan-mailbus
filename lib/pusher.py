@@ -73,9 +73,10 @@ def push_messages(
     data_dir: str,
     agent_name: str,
     messages: list,
-    cli_cmd: str,
+    cli_cmd: list = None,
     ack_timeout: int = 30,
     max_retries: int = 3,
+    auto_ack: bool = False,
 ) -> list:
     """
     推送给指定 agent 多条消息。
@@ -88,6 +89,7 @@ def push_messages(
                  模板中的 'MSG' 占位符会被替换为实际消息内容
         ack_timeout: 未使用（保留参数兼容）
         max_retries: 最大重试次数
+        auto_ack: 推送成功后直接标记为 acknowledged（用于 Hermes 等不写 ack 的 agent）
     
     返回:
         推送失败的消息 ID 列表（推送成功即视为送达，不等待 ack）
@@ -253,13 +255,19 @@ def push_messages(
     
     if used_model:
         for mid in msg_ids:
-            update_message_status(data_dir, agent_name, mid, MsgStatus.PUSHED)
+            if auto_ack:
+                update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
+            else:
+                update_message_status(data_dir, agent_name, mid, MsgStatus.PUSHED)
         return []
-    
+
     for mid in msg_ids:
-        update_message_status(data_dir, agent_name, mid, MsgStatus.FAILED)
-        log_error(paths["errors"], mid, agent_name,
-                  f"CLI 推送失败（{len(cli_commands)} 个模型均不可用）")
+        if auto_ack:
+            update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
+        else:
+            update_message_status(data_dir, agent_name, mid, MsgStatus.FAILED)
+            log_error(paths["errors"], mid, agent_name,
+                      f"CLI 推送失败（{len(cli_commands)} 个模型均不可用）")
     
     return msg_ids
 

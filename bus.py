@@ -394,6 +394,7 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
             cli_cmd=cli_cmds,
             ack_timeout=config.get("ack_timeout", 30),
             max_retries=config.get("max_retries", 3),
+            auto_ack=agent_cfg.get("type") in ("hermes", "hermes_profile"),
         )
         all_failed.extend(failed)
         
