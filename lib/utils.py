@@ -150,7 +150,24 @@ def build_message(
     if forward_to:
         action["forward_to"] = forward_to
 
-    return Message(
+    # 自动生成 actions 清单（task 类型）
+    actions_list = []
+    if task and task.get("summary"):
+        # 从 task.summary 拆解步骤（按换行或序号）
+        summary = task["summary"]
+        import re
+        # 尝试按序号拆分（1. xxx / 2. xxx）
+        steps = re.findall(r'(?:^|\n)\s*(?:\d+[\.\、])\s*([^\n]+)', summary)
+        if not steps:
+            # 尝试按换行拆分
+            steps = [s.strip() for s in summary.split("\n") if s.strip()]
+        if not steps:
+            # 整段作为一个步骤
+            steps = [summary[:80]]
+        for step in steps:
+            actions_list.append({"step": step.strip()[:100], "status": "pending"})
+    
+    msg = Message(
         id=msg_id,
         from_=from_,
         to=to,
@@ -164,6 +181,9 @@ def build_message(
         status=MsgStatus.PENDING,
         created_at=_now_iso(),
     )
+    if actions_list:
+        msg.actions = actions_list
+    return msg
 
 
 def is_content_urgent(content: str, priority: str) -> bool:

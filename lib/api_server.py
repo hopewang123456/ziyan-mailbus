@@ -141,6 +141,13 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             self._handle_permission()
         elif path == "/api/skill-use":
             self._handle_skill_use()
+        elif path.startswith("/api/actions/update/"):
+            # /api/actions/update/<agent>/<msg_id>
+            parts = path.split("/")
+            if len(parts) >= 5:
+                self._handle_actions_update(parts[3], parts[4])
+            else:
+                self._send_json({"error": "bad_path"}, 400)
         elif path.startswith("/api/mark-read/"):
             agent = path[len("/api/mark-read/"):]
             self._handle_mark_read(agent)
@@ -555,6 +562,55 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         data[skill][agent]["last_used"] = ts
         json_write(bus_file, data)
         self._send_json({"status": "ok", "skill": skill, "agent": agent, "total": data[skill][agent]["use_count"]})
+
+    def _handle_actions_update(self, agent: str, msg_id: str):
+        """POST /api/actions/update/<agent>/<msg_id> → 更新 actions 进度"""
+        body = self._read_post_body()
+        step_index = body.get("step_index")
+        step_status = body.get("status", "done")
+
+        inbox_file = os.path.join(self.data_dir, "inbox", agent, "inbox.json")
+        data = json_read(inbox_file, {})
+        if not data:
+            self._send_json({"error": "inbox_not_found"}, 404)
+            return
+
+        inbox = Inbox.from_dict(data)
+        found = False
+        for m in inbox.messages:
+            mid = m.id if not isinstance(m, dict) else m.get("id", "")
+            if mid == msg_id:
+                if isinstance(m, dict):
+                    actions = m.get("actions", [])
+                else:
+                    actions = list(m.actions or [])
+                
+                if step_index is not None and 0 <= step_index < len(actions):
+                    ts = _now_iso()
+                    if isinstance(actions[step_index], dict):
+                        actions[step_index]["status"] = step_status
+                    if isinstance(m, dict):
+                        m["actions"] = actions
+                    else:
+                        m.actions = actions
+                    found = True
+                elif step_index is None and actions:
+                    # 没指定 index → 全部完成
+                    for a in actions:
+                        if isinstance(a, dict):
+                            a["status"] = step_status
+                    if isinstance(m, dict):
+                        m["actions"] = actions
+                    else:
+                        m.actions = actions
+                    found = True
+                break
+
+        if found:
+            json_write(inbox_file, inbox.to_dict())
+            self._send_json({"status": "ok", "agent": agent, "msg_id": msg_id})
+        else:
+            self._send_json({"error": "not_found"}, 404)
 
     def _handle_config(self):
         """当前配置（去掉敏感路径信息）"""
