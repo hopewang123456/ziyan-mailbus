@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>ziyan-mailbus Platform v2.0.1</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;padding:24px;min-height:100vh}
+h1{font-size:22px;font-weight:700;margin-bottom:4px}
+.sub{color:#64748b;font-size:13px;margin-bottom:20px}
+
+#toast{position:fixed;top:20px;right:20px;z-index:200;display:flex;flex-direction:column;gap:8px}
+.toast{background:#1e293b;border:1px solid #475569;border-radius:8px;padding:10px 16px;font-size:13px;animation:slideIn .3s;max-width:350px}
+.toast.success{border-color:#22c55e;color:#6ee7b7}
+.toast.error{border-color:#ef4444;color:#fca5a5}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+
+/* 导航标签 */
+.tabs{display:flex;gap:0;margin-bottom:20px;border-bottom:1px solid #334155}
+.tab{padding:10px 20px;cursor:pointer;font-size:13px;color:#64748b;border-bottom:2px solid transparent;transition:.2s}
+.tab:hover{color:#e2e8f0}
+.tab.active{color:#22d3ee;border-bottom-color:#22d3ee;font-weight:600}
+.tab .num{background:#334155;color:#94a3b8;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:4px}
+.tab.active .num{background:#164e63;color:#22d3ee}
+
+.toolbar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.search-input{background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:8px 12px;border-radius:6px;font-size:13px;min-width:200px}
+.btn{background:#334155;border:1px solid #475569;color:#e2e8f0;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px}
+.btn:hover{background:#475569}
+.btn-primary{background:#2563eb;border-color:#3b82f6}
+.btn-primary:hover{background:#3b82f6}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn-danger{background:#dc2626;border-color:#ef4444}
+
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* Agent 概览卡片（tab 1） */
+.agent-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.agent-card{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;cursor:pointer;transition:.2s}
+.agent-card:hover{border-color:#475569;background:#1f3147}
+.agent-card .top{display:flex;justify-content:space-between;align-items:start}
+.agent-card .name{font-weight:600;font-size:14px}
+.agent-card .type-badge{font-size:10px;padding:2px 8px;border-radius:8px;background:#0c1929;color:#93c5fd}
+.agent-card .role{font-size:11px;color:#94a3b8;margin:2px 0 6px}
+.agent-card .stats{display:flex;gap:12px;font-size:11px;color:#64748b;margin-top:6px;padding-top:6px;border-top:1px solid #1e293b}
+.agent-card .stats span{display:flex;align-items:center;gap:4px}
+
+/* 消息列表（tab 2 & 3） */
+.msg-list{display:flex;flex-direction:column;gap:6px}
+.msg-item{background:#1e293b;border:1px solid #334155;border-radius:8px;padding:10px 12px}
+.msg-item .head{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#64748b;margin-bottom:4px}
+.msg-item .body{font-size:13px;line-height:1.5}
+.msg-item .from-to{font-size:11px;color:#475569;margin-top:4px}
+.msg-item.unread{border-left:3px solid #22d3ee}
+.msg-item .read-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;flex-shrink:0}
+.msg-item .read-dot.unread{background:#22d3ee}
+.msg-item .read-dot.read{background:transparent}
+
+/* 公告板 */
+.bulletin-item{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:14px;margin-bottom:8px}
+.bulletin-item .meta{font-size:11px;color:#64748b;margin-bottom:6px}
+.bulletin-item .title{font-size:15px;font-weight:600;color:#fbbf24;margin-bottom:4px}
+.bulletin-item .body{font-size:13px;line-height:1.6;white-space:pre-wrap}
+
+/* 邮箱入口按钮 */
+.mailbox-btn{background:#0c1929;border:1px solid #334155;color:#22d3ee;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;transition:.2s}
+.mailbox-btn:hover{background:#164e63;border-color:#22d3ee}
+.mailbox-btn.has-unread{border-color:#22d3ee;box-shadow:0 0 6px rgba(34,211,238,0.3)}
+
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:#94a3b8;font-weight:500;padding:8px 10px;border-bottom:1px solid #334155;font-size:11px}
+td{padding:8px 10px;border-bottom:1px solid #1e293b}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}
+.badge-green{background:#064e3b;color:#6ee7b7}
+.badge-red{background:#450a0a;color:#fca5a5}
+.badge-yellow{background:#451a03;color:#fdba74}
+.badge-blue{background:#0c1929;color:#93c5fd}
+.badge-gray{background:#1e293b;color:#94a3b8}
+
+/* 弹窗 */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:100;overflow:auto;padding:40px 20px}
+.modal.open{display:block}
+.modal-inner{background:#1e293b;border:1px solid #475569;border-radius:12px;max-width:700px;margin:0 auto;padding:24px;max-height:85vh;overflow:auto}
+.modal-inner .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.modal-inner .header h2{font-size:18px}
+.modal-inner .section-title{font-size:12px;font-weight:600;color:#94a3b8;margin:14px 0 8px;text-transform:uppercase;letter-spacing:.5px}
+.modal-inner .info-block{background:#0f172a;border-radius:8px;padding:12px;font-size:12px;line-height:1.6;max-height:160px;overflow:auto;margin-bottom:4px}
+.modal-inner .skill-tag{display:inline-block;background:#0c1929;color:#93c5fd;padding:3px 10px;border-radius:12px;font-size:11px;margin:2px}
+.modal-inner .msg-block{background:#0f172a;border-radius:6px;padding:10px;margin-bottom:6px}
+.modal-inner .msg-block .meta{font-size:10px;color:#475569}
+.modal-inner .msg-block .text{font-size:12px;margin-top:2px}
+
+/* 邮箱样式 */
+.mailbox-header{position:sticky;top:-24px;z-index:10;background:#1e293b;margin:0 -24px;padding:0 24px 12px;border-bottom:1px solid #334155}
+.mailbox-header .header{display:flex;justify-content:space-between;align-items:center;padding:0 0 6px}
+.mailbox-header .header h2{font-size:18px}
+.mailbox-stats{display:flex;gap:8px;font-size:12px;padding-top:6px}
+.mailbox-stats .stat{cursor:pointer;display:flex;align-items:center;gap:4px;padding:5px 12px;border-radius:6px;background:#0f172a;transition:.2s;border:1px solid transparent}
+.mailbox-stats .stat:hover{border-color:#475569}
+.mailbox-stats .stat.active{color:#22d3ee;background:#0c1929;border-color:rgba(34,211,238,0.2)}
+.mailbox-stats .stat.read{color:#64748b}
+.mailbox-day{font-size:12px;font-weight:600;color:#94a3b8;padding:10px 0 6px;margin-top:8px;border-top:1px solid #1e293b}
+.mailbox-day:first-child{border-top:none;margin-top:0}
+.mailbox-item{display:flex;gap:12px;padding:10px 12px;background:#0f172a;border-radius:8px;margin-bottom:6px;border:1px solid transparent;transition:.2s}
+.mailbox-item:hover{border-color:#334155}
+.mailbox-item.unread{border-color:rgba(34,211,238,0.15);background:#0c1929}
+.mailbox-item .status-dot{flex-shrink:0;width:8px;height:8px;border-radius:50%;margin-top:5px}
+.mailbox-item .status-dot.unread{background:#22d3ee;box-shadow:0 0 6px rgba(34,211,238,0.4)}
+.mailbox-item .status-dot.read{background:#334155}
+.mailbox-item .body{flex:1;min-width:0}
+.mailbox-item .meta{font-size:11px;color:#475569;margin-bottom:2px}
+.mailbox-item .meta .from{color:#94a3b8;font-weight:500}
+.mailbox-item .meta .time{float:right}
+.mailbox-item .text{font-size:13px;line-height:1.5;color:#e2e8f0}
+.mailbox-item .status-tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;margin-top:3px}
+.mailbox-item .status-tag.read{background:#064e3b;color:#6ee7b7}
+.mailbox-item .status-tag.pending{background:#451a03;color:#fdba74}
+.mailbox-item .status-tag.pushed{background:#0c1929;color:#93c5fd}
+
+@media(max-width:600px){.agent-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<h1>📬 ziyan-mailbus Platform <span style="font-size:12px;color:#64748b;font-weight:400">v2.1.0</span></h1>
+<div class="sub">HTTP API: <span id="apiUrl">http://localhost:9812</span></div>
+
+<div class="toolbar">
+  <input class="search-input" id="apiInput" value="http://localhost:9812" placeholder="API 地址">
+  <button class="btn btn-primary" onclick="loadAll()">🔄 刷新全部</button>
+  <button class="btn" onclick="triggerHeartbeat()">💓 触发心跳</button>
+</div>
+
+<!-- 导航标签 -->
+<div class="tabs" id="mainTabs">
+  <div class="tab active" data-tab="agents" onclick="switchTab('agents')">🤖 Agent <span class="num" id="tabAgentCount"></span></div>
+  <div class="tab" data-tab="bulletin" onclick="switchTab('bulletin')">📢 公告栏 <span class="num" id="tabBulletinCount"></span></div>
+  <div class="tab" data-tab="tasks" onclick="switchTab('tasks')">🎯 任务追踪</div>
+  <div class="tab" data-tab="heartbeat" onclick="switchTab('heartbeat')">💓 健康状态</div>
+  <div class="tab" data-tab="alerts" onclick="switchTab('alerts')">🔔 告警</div>
+</div>
+
+<!-- Tab: Agent 总览 -->
+<div class="tab-content active" id="tab-agents">
+  <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:13px;color:#94a3b8">点击卡片查看详情 · 点击 ▶ 启动 CLI 窗口</span>
+    <div style=display:flex;gap:6px>
+      <button class="btn btn-sm" onclick="openPermPanel()">🔐 权限</button>
+      <button class="btn btn-sm" onclick="reloadData('agents')">🔄 刷新</button>
+    </div>
+  </div>
+  <div class="agent-grid" id="agentGrid"></div>
+</div>
+
+<!-- Tab: 公告栏 -->
+<div class="tab-content" id="tab-bulletin">
+  <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:13px;color:#94a3b8" id="bulletinSummary"></span>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-sm" onclick="openPostBulletin()" id="btnPostBulletin" style="display:none">✏️ 发布公告</button>
+      <button class="btn btn-sm" onclick="openPermitManager()" id="btnPermitManager" style="display:none">👥 权限设置</button>
+      <button class="btn btn-sm" onclick="reloadData('bulletin')">🔄 刷新</button>
+    </div>
+  </div>
+  <div id="bulletinList"></div>
+</div>
+
+<!-- Tab: 任务追踪 -->
+<div class="tab-content" id="tab-tasks">
+  <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:13px;color:#94a3b8"><span id="taskCount"></span> 个活跃任务</span>
+    <button class="btn btn-sm" onclick="reloadData('tasks')">🔄 刷新</button>
+  </div>
+  <div id="taskTable"></div>
+</div>
+
+<!-- Tab: 健康状态 -->
+<div class="tab-content" id="tab-heartbeat">
+  <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:13px;color:#94a3b8">Agent 在线状态 · AgentMemory · 磁盘</span>
+    <button class="btn btn-sm" onclick="reloadData('heartbeat')">🔄 刷新</button>
+  </div>
+  <div id="heartbeatContent"></div>
+</div>
+
+<!-- Tab: 告警 -->
+<div class="tab-content" id="tab-alerts">
+  <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:13px;color:#94a3b8"><span id="alertCount"></span> 条告警</span>
+    <button class="btn btn-sm" onclick="reloadData('alerts')">🔄 刷新</button>
+  </div>
+  <div id="alertTable"></div>
+</div>
+
+<!-- Agent 详情弹窗 -->
+<div class="modal" id="agentModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal-inner" id="agentModalContent"></div>
+</div>
+
+<!-- 发布公告弹窗 -->
+<div class="modal" id="postModal" onclick="if(event.target===this)closePostModal()">
+  <div class="modal-inner" style="max-width:500px">
+    <div class="header">
+      <h2>📢 发布公告</h2>
+      <button class="btn btn-sm" onclick="closePostModal()">✕</button>
+    </div>
+    <div class="section-title">标题</div>
+    <input id="bulletinTitle" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 10px;border-radius:6px;font-size:13px;margin-bottom:8px" placeholder="公告标题">
+    <div class="section-title">内容</div>
+    <textarea id="bulletinContent" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 10px;border-radius:6px;font-size:13px;min-height:120px;resize:vertical" placeholder="公告内容..."></textarea>
+    <div style="text-align:right;margin-top:12px">
+      <button class="btn btn-sm" onclick="closePostModal()" style="margin-right:6px">取消</button>
+      <button class="btn btn-primary" onclick="submitBulletin()">发布</button>
+    </div>
+  </div>
+</div>
+
+<!-- 公告权限设置弹窗 -->
+<div class="modal" id="permitModal" onclick="if(event.target===this)closePermitModal()">
+  <div class="modal-inner" style="max-width:460px">
+    <div class="header">
+      <h2>👥 公告发布权限</h2>
+      <button class="btn btn-sm" onclick="closePermitModal()">✕</button>
+    </div>
+    <div style="font-size:12px;color:#64748b;margin-bottom:12px">勾选有权限发布公告的 agent</div>
+    <div id="permitCheckboxList"></div>
+    <div style="text-align:right;margin-top:16px">
+      <button class="btn btn-sm" onclick="closePermitModal()" style="margin-right:6px">取消</button>
+      <button class="btn btn-primary" onclick="savePermit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let rawData = {};
+let refreshTimer = null;
+let bulletinPermit = [];
+let permissions = {};
+
+function toast(msg, type) {
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type || 'info');
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function apiUrl(p) {
+  const b = document.getElementById('apiInput').value.replace(/\/+$/, '');
+  const sep = p.includes('?') ? '&' : '?';
+  return b + p + sep + '_t=' + Date.now();
+}
+
+async function fetchJSON(p) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const r = await fetch(apiUrl(p), {signal: controller.signal});
+    clearTimeout(timer);
+    return await r.json();
+  } catch(e) {
+    clearTimeout(timer);
+    throw e;
+  }
+}
+
+function statusBadge(s) {
+  if (!s) return '<span class="badge badge-gray">未知</span>';
+  if (s === 'online' || s === 'healthy' || s === 'ok' || s === 'success') return '<span class="badge badge-green">● ' + s + '</span>';
+  if (s === 'offline' || s === 'failed' || s === 'unreachable') return '<span class="badge badge-red">● ' + s + '</span>';
+  if (s === 'warn' || s === 'running' || s === 'timeout') return '<span class="badge badge-yellow">● ' + s + '</span>';
+  if (s === 'pending') return '<span class="badge badge-yellow">⏳ 待处理</span>';
+  return '<span class="badge badge-blue">● ' + s + '</span>';
+}
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.tab[data-tab="${name}"]`).classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ── 简单 markdown → HTML ──
+
+function mdToHtml(md) {
+  if (!md) return '';
+  let h = esc(md);
+  // 标题: ## text → <h4>text</h4>   ### text → <h5>text</h5>
+  h = h.replace(/^### (.+)$/gm, '<h5 style=margin:8px 0 4px;color:#fbbf24>$1</h5>');
+  h = h.replace(/^## (.+)$/gm, '<h4 style=margin:10px 0 4px;color:#fbbf24>$1</h4>');
+  // 粗体: **text** → <strong>text</strong>
+  h = h.replace(/\*\*(.+?)\*\*/g, '<strong style=color:#e2e8f0>$1</strong>');
+  // 行内代码: `text` → <code>text</code>
+  h = h.replace(/`([^`]+)`/g, '<code style=background:#0c1929;color:#93c5fd;padding:1px 5px;border-radius:3px;font-size:12px>$1</code>');
+  // 无序列表: - text → 缩进 bullet
+  h = h.replace(/^- (.+)$/gm, '<span style=display:block;padding-left:12px>• $1</span>');
+  // 换行
+  h = h.replace(/\n\n/g, '</p><p style=margin:6px 0>');
+  h = h.replace(/\n/g, '<br>');
+  return '<p style=margin:4px 0>' + h + '</p>';
+}
+
+// ── 主加载 ──
+
+async function loadAll() {
+  try {
+    const [status, agents, tasks, hb, alerts, bulletin] = await Promise.all([
+      fetchJSON('/api/status'), fetchJSON('/api/agents'), fetchJSON('/api/tasks'),
+      fetchJSON('/api/heartbeat'), fetchJSON('/api/alerts'), fetchJSON('/api/bulletin'),
+    ]);
+    rawData = { status, agents, tasks, hb, alerts, bulletin };
+    renderAgentTab(status, agents);
+    renderBulletinTab(bulletin);
+    renderTasks(tasks);
+    renderHeartbeat(hb);
+    renderAlerts(alerts);
+    toast('已刷新', 'success');
+    // 加载权限
+    try {
+      const p = await fetchJSON('/api/bulletin/permit');
+      bulletinPermit = p.permit || [];
+      document.getElementById('btnPostBulletin').style.display = bulletinPermit.length > 0 ? '' : 'none';
+      document.getElementById('btnPermitManager').style.display = bulletinPermit.length > 0 ? '' : 'none';
+    } catch(e) {}
+    // 加载 agent 权限
+    try {
+      const permData = await fetchJSON('/api/permission');
+      permissions = permData.permissions || {};
+    } catch(e) {}
+    try {
+      const cfg = await fetchJSON('/api/config');
+      const interval = cfg.dashboard_refresh_seconds || 0;
+      if (refreshTimer) clearInterval(refreshTimer);
+      if (interval > 0) refreshTimer = setInterval(() => {
+        reloadData('heartbeat'); reloadData('tasks'); reloadData('alerts');
+      }, interval * 1000);
+    } catch(e) {}
+  } catch(e) {
+    toast('加载失败: ' + e.message, 'error');
+  }
+}
+
+async function reloadData(name) {
+  const map = {
+    agents: ['/api/status', '/api/agents'],
+    bulletin: ['/api/bulletin'],
+    tasks: ['/api/tasks'],
+    heartbeat: ['/api/heartbeat'],
+    alerts: ['/api/alerts'],
+  };
+  try {
+    const results = await Promise.all(map[name].map(p => {
+      const c = new AbortController();
+      setTimeout(() => c.abort(), 8000);
+      return fetch(apiUrl(p), {signal: c.signal}).then(r => r.json());
+    }));
+    if (name === 'agents') { rawData.status = results[0]; rawData.agents = results[1]; renderAgentTab(results[0], results[1]); }
+    if (name === 'bulletin') { rawData.bulletin = results[0]; renderBulletinTab(results[0]); }
+    if (name === 'tasks') { rawData.tasks = results[0]; renderTasks(results[0]); }
+    if (name === 'heartbeat') { rawData.hb = results[0]; renderHeartbeat(results[0]); }
+    if (name === 'alerts') { rawData.alerts = results[0]; renderAlerts(results[0]); }
+    toast(name + ' 已刷新', 'success');
+  } catch(e) { toast('刷新失败', 'error'); }
+}
+
+// ── 启动 agent ──
+
+// 卡片上的按钮调用
+async function launchAgent(name, mode) {
+  mode = mode || 'browser';
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  try {
+    const r = await fetch(apiUrl('/api/launch'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({agent: name, mode: mode}),
+    });
+    const data = await r.json();
+    if (data.status === 'ok') {
+      toast('已启动 ' + name + ' (' + mode + ')', 'success');
+    } else {
+      toast('启动失败: ' + (data.error || 'unknown'), 'error');
+    }
+  } catch(e) {
+    toast('启动失败: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = mode === 'browser' ? '🌐' : '💻';
+}
+
+// 弹窗中的按钮调用
+async function launchAgentFromModal(name, mode) {
+  toast('正在启动 ' + name + ' (' + mode + ')...', 'info');
+  try {
+    const r = await fetch(apiUrl('/api/launch'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({agent: name, mode: mode}),
+    });
+    const data = await r.json();
+    if (data.status === 'ok') {
+      toast('已启动 ' + name + ' (' + mode + ')', 'success');
+    } else {
+      toast('启动失败: ' + (data.error || 'unknown'), 'error');
+    }
+  } catch(e) {
+    toast('启动失败: ' + e.message, 'error');
+  }
+}
+
+// ── Tab 1: Agent 概览 ──
+
+function renderAgentTab(status, agentsData) {
+  const grid = document.getElementById('agentGrid');
+  const countEl = document.getElementById('tabAgentCount');
+  if (!agentsData || !agentsData.agents) { grid.innerHTML = '<div style=color:#64748b>无数据</div>'; return; }
+  const agents = agentsData.agents;
+  const statuses = (status && status.agent_statuses) || {};
+  countEl.textContent = Object.keys(agents).length;
+  grid.innerHTML = Object.entries(agents).map(([k, v]) => {
+    const st = statuses[k] || {};
+    const active = st.active_messages || 0;
+    const unread = st.unread_count || 0;
+    const typeColors = {hermes:'#22d3ee', hermes_profile:'#67e8f9', openclaw:'#34d399', cline:'#a78bfa', opencode:'#fbbf24', none:'#64748b'};
+    const typeIcons = {hermes:'🪷', hermes_profile:'🪷', openclaw:'🦞', cline:'🎯', opencode:'🤖', aider:'💪', none:'⚙️'};
+    return `<div class=agent-card>
+      <div class=top style=cursor:pointer onclick="showAgent('${k}')">
+        <div class=name>${typeIcons[v.type]||'🤖'} ${v.name || k}</div>
+        <span class=type-badge style=color:${typeColors[v.type]||'#93c5fd'}>${v.type}</span>
+      </div>
+      <div class=role style=cursor:pointer onclick="showAgent('${k}')">${v.role || '—'}</div>
+      <div style=font-size:10px;color:#475569>${(v.models||[]).join(', ') || ''}</div>
+      <div class=stats>
+        <span>📨 ${active}</span>
+        <span>📬 ${unread > 0 ? '<strong style=color:#22d3ee>'+unread+'</strong>' : 0}</span>
+      </div>
+      <div style=display:flex;gap:6px;margin-top:8px>
+        ${v.has_browser !== false && getPerm(k,'browser') ? `<button class="btn btn-sm" onclick="launchAgent('${k}','browser')" title=浏览器打开 style=flex:1>🌐 浏览器</button>` : ''}
+        ${getPerm(k,'cli') ? `<button class="btn btn-sm" onclick="launchAgent('${k}','cli')" title="CLI 终端窗口" style=flex:1>💻 CLI</button>` : ''}
+        ${getPerm(k,'mailbox') ? `<button class="mailbox-btn ${unread > 0 ? 'has-unread' : ''}" onclick="event.stopPropagation();openMailbox('${k}')" title=查看邮箱>📬 ${unread > 0 ? unread : ''}</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Tab 2: 公告栏 ──
+
+function renderBulletinTab(bulletin) {
+  const list = document.getElementById('bulletinList');
+  const summary = document.getElementById('bulletinSummary');
+  const items = (bulletin && bulletin.bulletins) || [];
+  const countEl = document.getElementById('tabBulletinCount');
+  countEl.textContent = items.length;
+  summary.textContent = items.length + ' 条公告';
+  if (items.length === 0) { list.innerHTML = '<div style=color:#64748b;font-size:13px>暂无公告</div>'; return; }
+  list.innerHTML = items.map(b => `
+    <div class=bulletin-item>
+      <div class=meta>📢 ${esc(b.from_name || b.from)} · ${b.created_at || ''} ${b.id ? '· #' + b.id.slice(-6) : ''}</div>
+      <div class=title>${esc(b.title)}</div>
+      <div class=body>${esc(b.content)}</div>
+    </div>
+  `).join('');
+}
+
+// ── 发布公告 ──
+
+function openPostBulletin() {
+  document.getElementById('postModal').classList.add('open');
+  document.getElementById('bulletinTitle').value = '';
+  document.getElementById('bulletinContent').value = '';
+}
+function closePostModal() {
+  document.getElementById('postModal').classList.remove('open');
+}
+async function submitBulletin() {
+  const title = document.getElementById('bulletinTitle').value.trim();
+  const content = document.getElementById('bulletinContent').value.trim();
+  if (!content) { toast('公告内容不能为空', 'error'); return; }
+  try {
+    const r = await fetch(apiUrl('/api/bulletin/post'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({from: 'ziyan', title: title, content: content}),
+    });
+    const data = await r.json();
+    if (data.status === 'ok') {
+      toast('公告已发布', 'success');
+      closePostModal();
+      reloadData('bulletin');
+    } else {
+      toast('发布失败: ' + (data.error || ''), 'error');
+    }
+  } catch(e) { toast('发布失败: ' + e.message, 'error'); }
+}
+
+// ── Agent 权限管理（批量） ──
+
+function getPerm(agent, key) {
+  const p = permissions[agent];
+  if (p === undefined || p === null) return true;
+  return p[key] !== false;
+}
+
+async function openPermPanel() {
+  const agents = (rawData.agents && rawData.agents.agents) || {};
+  const typeIcons = {hermes:'🪷', hermes_profile:'🪷', openclaw:'🦞', cline:'🎯', opencode:'🤖', aider:'💪', none:'⚙️'};
+
+  const permKeys = [
+    {key: 'browser', label: '🌐 浏览器'},
+    {key: 'cli', label: '💻 CLI'},
+    {key: 'mailbox', label: '📬 邮箱'},
+    {key: 'bulletin', label: '📢 公告'},
+  ];
+
+  let html = `<div class=header>
+    <h2>🔐 权限管理</h2>
+    <button class="btn btn-sm" onclick="closeModal()">✕</button>
+  </div>
+  <div style=overflow-x:auto>
+  <table style=font-size:12px>
+    <thead><tr>
+      <th style=position:sticky;left:0;background:#1e293b>Agent</th>
+      ${permKeys.map(k => `<th style=text-align:center;min-width:70px>${k.label}</th>`).join('')}
+    </tr></thead>
+    <tbody>
+  `;
+
+  Object.entries(agents).forEach(([k, v]) => {
+    const icon = typeIcons[v.type] || '🤖';
+    const name = v.name || k;
+    const perm = permissions[k] || {};
+    html += `<tr>
+      <td style=position:sticky;left:0;background:#0f172a;font-weight:500;white-space:nowrap>${icon} ${esc(name)}</td>
+      ${permKeys.map(pk => {
+        const checked = perm[pk.key] !== false;
+        return `<td style=text-align:center>
+          <input type=checkbox class=perm-cb data-agent="${k}" data-key="${pk.key}" ${checked ? 'checked' : ''} style=accent-color:#22d3ee;width:16px;height:16px;cursor:pointer>
+        </td>`;
+      }).join('')}
+    </tr>`;
+  });
+
+  html += `</tbody></table></div>
+  <div style=text-align:right;margin-top:16px>
+    <button class="btn btn-sm" onclick="closeModal()" style=margin-right:6px>取消</button>
+    <button class="btn btn-primary" onclick="saveAllPerm()">💾 保存权限</button>
+  </div>`;
+
+  document.getElementById('agentModalContent').innerHTML = html;
+  document.getElementById('agentModal').classList.add('open');
+}
+
+async function saveAllPerm() {
+  // 从所有 checkbox 重建 permissions
+  const newPerms = {};
+  document.querySelectorAll('.perm-cb').forEach(cb => {
+    const agent = cb.dataset.agent;
+    const key = cb.dataset.key;
+    if (!newPerms[agent]) newPerms[agent] = {};
+    newPerms[agent][key] = cb.checked;
+  });
+
+  try {
+    const r = await fetch(apiUrl('/api/permission'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({permissions: newPerms}),
+    });
+    const data = await r.json();
+    if (data.status === 'ok') {
+      permissions = newPerms;
+      toast('权限已更新', 'success');
+      closeModal();
+      setTimeout(() => loadAll().catch(() => {}), 200);
+    } else {
+      toast('保存失败: ' + (data.error || ''), 'error');
+    }
+  } catch(e) { toast('保存失败: ' + e.message, 'error'); }
+}
+
+// ── 公告权限管理 ──
+
+function openPermitManager() {
+  const agents = (rawData.agents && rawData.agents.agents) || {};
+  const list = document.getElementById('permitCheckboxList');
+  list.innerHTML = Object.entries(agents).map(([k, v]) => `
+    <label style=display:flex;align-items:center;gap:8px;padding:8px 10px;background:#0f172a;border-radius:6px;margin-bottom:4px;cursor:pointer>
+      <input type=checkbox value="${k}" ${bulletinPermit.includes(k) ? 'checked' : ''} style=accent-color:#22d3ee>
+      <span style=font-size:13px>${v.name || k}</span>
+      <span style=font-size:11px;color:#64748b;margin-left:auto>${v.type || ''}</span>
+    </label>
+  `).join('');
+  document.getElementById('permitModal').classList.add('open');
+}
+function closePermitModal() {
+  document.getElementById('permitModal').classList.remove('open');
+}
+async function savePermit() {
+  const checked = [];
+  document.querySelectorAll('#permitCheckboxList input[type=checkbox]:checked').forEach(cb => {
+    checked.push(cb.value);
+  });
+  try {
+    const r = await fetch(apiUrl('/api/bulletin/permit'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({permit: checked}),
+    });
+    const data = await r.json();
+    if (data.status === 'ok') {
+      bulletinPermit = data.permit;
+      toast('权限已更新: ' + (data.permit.length || 0) + ' 人可发公告', 'success');
+      closePermitModal();
+    } else {
+      toast('保存失败: ' + (data.error || ''), 'error');
+    }
+  } catch(e) { toast('保存失败: ' + e.message, 'error'); }
+}
+
+// ── Agent 详情弹窗 ──
+
+async function showAgent(name) {
+  try {
+    const [profile, inbox] = await Promise.all([
+      fetchJSON('/api/agent-profile/' + name),
+      fetchJSON('/api/inbox/' + name),
+    ]);
+    const cfg = profile.config || {};
+    const agentName = cfg.name || name;
+    const msgs = inbox.messages || [];
+    const privateMsgs = msgs.filter(m => m.type !== 'system');
+    const unreadPrivate = privateMsgs.filter(m => !m.read);
+    const pending = msgs.filter(m => m.status === 'pending');
+
+    let html = `<div class=header>
+      <h2>${esc(agentName)} <span style=font-size:12px;color:#64748b;font-weight:400>${cfg.type || ''}</span></h2>
+      <div>
+        <button class="btn btn-sm" onclick="launchAgentFromModal('${name}','browser')" title=浏览器打开 style="${getPerm(name,'browser') ? '' : 'display:none'}">🌐 浏览器</button>
+        <button class="btn btn-sm" onclick="launchAgentFromModal('${name}','cli')" title="CLI 终端窗口" style="margin-left:4px;${getPerm(name,'cli') ? '' : 'display:none'}">💻 CLI</button>
+        <button class="btn btn-sm" onclick="openPermPanel('${name}')" style=margin-left:4px title=权限设置>🔐</button>
+        <button class="btn btn-sm" onclick="closeModal()" style=margin-left:4px>✕</button>
+      </div>
+    </div>`;
+
+    // 基础信息 + 统计
+    html += `<div style=display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px>`;
+    if (cfg.type) html += `<span class="badge badge-blue">${cfg.type}</span>`;
+    if (cfg.role) html += `<span style=color:#94a3b8;font-size:12px>${cfg.role}</span>`;
+    if (cfg.models) html += `<span style=color:#475569;font-size:11px>${cfg.models.join(', ')}</span>`;
+    html += `</div>`;
+
+    html += `<div style=display:flex;gap:16px;font-size:11px;color:#64748b;margin:8px 0 4px>
+      <span>📨 总计 <strong style=color:#e2e8f0>${inbox.total_messages || 0}</strong></span>
+      <span>📬 私信 <strong style=color:#22d3ee>${privateMsgs.length}</strong></span>
+      <span>💌 未读 <strong style=color:#22d3ee>${unreadPrivate.length}</strong></span>
+    </div>`;
+
+    // ── 身份（markdown 渲染）──
+    if (profile.identity) {
+      html += `<div class=section-title>🧬 身份</div><div class=info-block style=max-height:none;font-size:13px;line-height:1.7>${mdToHtml(profile.identity)}</div>`;
+    }
+    if (profile.soul) {
+      html += `<div class=section-title>💫 人设</div><div class=info-block style=max-height:none;font-size:13px;line-height:1.7>${mdToHtml(profile.soul)}</div>`;
+    }
+
+    // 技能
+    if (profile.skills && profile.skills.length > 0) {
+      html += `<div class=section-title>🛠 技能 (${profile.skills.length})</div><div>`;
+      profile.skills.forEach(s => { html += `<span class=skill-tag>${s}</span>`; });
+      html += `</div>`;
+    }
+
+    document.getElementById('agentModalContent').innerHTML = html;
+    document.getElementById('agentModal').classList.add('open');
+  } catch(e) {
+    toast('加载失败: ' + e.message, 'error');
+  }
+}
+
+function closeModal() {
+  document.getElementById('agentModal').classList.remove('open');
+}
+
+// ── 邮箱功能：查看指定 agent 的私信 ──
+
+let _mailboxAgent = '';   // 当前邮箱是哪个 agent
+let _mailboxFilter = '';  // 当前筛选：''=全部 'unread'=未读 'read'=已读
+
+function renderMailboxHTML(msgs) {
+  if (!msgs || msgs.length === 0) {
+    return '<div style=color:#64748b;font-size:13px;padding:20px;text-align:center>📭 暂无私信</div>';
+  }
+
+  // 按筛选条件过滤
+  let filtered;
+  if (_mailboxFilter === 'unread') {
+    filtered = msgs.filter(m => m.status !== 'acknowledged');
+  } else if (_mailboxFilter === 'read') {
+    filtered = msgs.filter(m => m.status === 'acknowledged');
+  } else {
+    filtered = msgs;
+  }
+
+  if (filtered.length === 0) {
+    return '<div style=color:#64748b;font-size:13px;padding:20px;text-align:center>📭 该分类下暂无信件</div>';
+  }
+
+  // 对不写 ack 的 agent 类型做提示
+  let hint = '';
+  const agentCfg = rawData.agents && rawData.agents.agents && rawData.agents.agents[_mailboxAgent];
+  const noAckTypes = ['opencode', 'none', 'aider'];
+  if (agentCfg && noAckTypes.includes(agentCfg.type)) {
+    const totalUnread = msgs.filter(m => m.status !== 'acknowledged' && m.type !== 'system').length;
+    if (totalUnread > 10) {
+      hint = `<div style=font-size:11px;color:#64748b;background:#0f172a;border-radius:6px;padding:8px 12px;margin-bottom:8px>
+        ⚡ 该 agent 类型 (${agentCfg.type}) 暂不支持自动回执，消息始终显示为未读。
+        可点击"全部已读"手动标记，或查看<a href=# onclick="switchMailboxTab('read');return false" style=color:#22d3ee>已读 tab</a>查看已归档的信件。
+      </div>`;
+    }
+  }
+
+  // 只展示最近 100 条
+  const display = filtered.slice(-100);
+  // 按天分组（倒序：最新在前）
+  const sorted = display.slice().reverse();
+  const groups = {};
+  sorted.forEach(m => {
+    const dateStr = (m.created_at || '').slice(0, 10);
+    if (!groups[dateStr]) groups[dateStr] = [];
+    groups[dateStr].push(m);
+  });
+
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+
+  let html = '';
+  Object.entries(groups).forEach(([dateStr, dayMsgs]) => {
+    let label = dateStr;
+    if (dateStr === todayStr) label = '📌 今天';
+    else if (dateStr === yesterdayStr) label = '📌 昨天';
+    else label = '📅 ' + dateStr;
+
+    html += `<div class=mailbox-day>${label}</div>`;
+    dayMsgs.forEach(m => {
+      const isRead = m.status === 'acknowledged';
+      const fromName = m.from || '?';
+      const timeOnly = (m.created_at || '').slice(11, 16);
+      const contentPreview = m.content_preview || m.content || '';
+      const shortId = m.id ? '#' + m.id.slice(-6) : '';
+
+      html += `<div class="mailbox-item ${isRead ? '' : 'unread'}">
+        <div class="status-dot ${isRead ? 'read' : 'unread'}"></div>
+        <div class=body>
+          <div class=meta>
+            <span class=from>${esc(fromName)}</span>
+            <span class=time>${timeOnly}</span>
+          </div>
+          <div class=text>${esc(contentPreview)}</div>
+          <div>
+            <span class="status-tag ${isRead ? 'read' : 'pending'}">${isRead ? '✓ 已读' : '○ 未读'}</span>
+            <span style=font-size:10px;color:#475569;margin-left:6px>${m.type} · ${shortId}</span>
+          </div>
+        </div>
+      </div>`;
+    });
+  });
+  return hint + html;
+}
+
+function switchMailboxTab(filter) {
+  _mailboxFilter = filter;
+  const [allTab, unreadTab, readTab] = document.querySelectorAll('.mailbox-stats .stat');
+  allTab.classList.toggle('active', filter === '');
+  unreadTab.classList.toggle('active', filter === 'unread');
+  readTab.classList.toggle('active', filter === 'read');
+  // 重新渲染邮件列表（保留 header）
+  const container = document.getElementById('mailboxListContainer');
+  if (!container) return;
+  const inbox = rawData._mailboxInbox || [];
+  const privateMsgs = inbox.filter(m => m.type !== 'system');
+  container.innerHTML = renderMailboxHTML(privateMsgs);
+  // 更新 header 的 scroll 位置
+  const header = document.querySelector('.mailbox-header');
+  if (header) {
+    const modalInner = header.closest('.modal-inner');
+    if (modalInner) modalInner.scrollTop = 0;
+  }
+}
+
+async function openMailbox(name) {
+  try {
+    const inbox = await fetchJSON('/api/inbox/' + name);
+    const msgs = inbox.messages || [];
+    rawData._mailboxInbox = msgs; // 缓存给 tab 切换用
+    const cfg = (rawData.agents && rawData.agents.agents && rawData.agents.agents[name]) || {};
+    const agentName = cfg.name || name;
+    const privateMsgs = msgs.filter(m => m.type !== 'system');
+    const unreadCount = privateMsgs.filter(m => m.status !== 'acknowledged').length;
+    const readCount = privateMsgs.length - unreadCount;
+
+    _mailboxAgent = name;
+    _mailboxFilter = '';
+
+    let html = `<div class=mailbox-header>
+      <div class=header>
+        <h2>📬 ${esc(agentName)}</h2>
+        <div>
+          ${unreadCount > 0 ? `<button class="btn btn-sm" onclick="markRead('${name}')" style=margin-right:4px>✅ 全部已读</button>` : ''}
+          <button class="btn btn-sm" onclick="closeModal()">✕</button>
+        </div>
+      </div>
+      <div class=mailbox-stats>
+        <span class="stat active" onclick="switchMailboxTab('')">📬 全部 (${privateMsgs.length})</span>
+        <span class="stat" style="${unreadCount > 0 ? 'color:#22d3ee' : 'color:#64748b'}" onclick="switchMailboxTab('unread')">○ 未读 (${unreadCount})</span>
+        <span class="stat read" onclick="switchMailboxTab('read')">✓ 已读 (${readCount})</span>
+      </div>
+    </div>
+    <div id=mailboxListContainer>${renderMailboxHTML(privateMsgs)}</div>`;
+
+    document.getElementById('agentModalContent').innerHTML = html;
+    document.getElementById('agentModal').classList.add('open');
+  } catch(e) {
+    toast('加载邮箱失败: ' + e.message, 'error');
+  }
+}
+
+async function markRead(name) {
+  try {
+    const r = await fetch(apiUrl('/api/mark-read/' + name), {method: 'POST'});
+    const data = await r.json();
+    if (data.status === 'ok') {
+      toast('已标记 ' + data.marked + ' 条为已读', 'success');
+      // 刷新详情页或邮箱
+      const modalContent = document.getElementById('agentModalContent');
+      if (modalContent && modalContent.innerHTML.includes('邮箱')) {
+        openMailbox(name);
+      }
+      // 后台刷新概览
+      setTimeout(() => loadAll().catch(() => {}), 500);
+    } else {
+      toast('标记失败', 'error');
+    }
+  } catch(e) {
+    toast('标记失败: ' + e.message, 'error');
+  }
+}
+
+// ── Tab 4: 任务追踪 ──
+
+function renderTasks(t) {
+  const el = document.getElementById('taskTable');
+  const count = document.getElementById('taskCount');
+  if (!t || !t.tasks || t.tasks.length === 0) { el.innerHTML = '<div style="color:#64748b;font-size:13px">暂无活跃任务</div>'; count.textContent = ''; return; }
+  count.textContent = t.count;
+  const rows = t.tasks.map(task => {
+    const hops = (task.chain || []).map(h => `${h.agent}:${h.action}`).join(' → ');
+    const creator = (task.chain && task.chain[0]) ? task.chain[0].agent : '-';
+    return `<tr>
+      <td style="font-size:11px;color:#64748b">${task.task_id}</td>
+      <td>${statusBadge(task.status)}</td>
+      <td>${task.summary || '-'}</td>
+      <td>${creator}</td>
+      <td>${task.assignee || '-'}</td>
+      <td style="font-size:11px;color:#64748b;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${hops || '-'}</td>
+      <td style="font-size:11px;color:#64748b">${task.reminded_count || 0}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table><thead><tr><th>ID</th><th>状态</th><th>概要</th><th>发起人</th><th>负责人</th><th>追踪链</th><th>催办</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ── Ping/reconnect agent ──
+
+async function pingAgent(name, evt) {
+  // 找到触发事件的按钮
+  let btn = null;
+  if (evt && evt.target) {
+    btn = evt.target.closest('.ping-btn');
+  }
+  if (!btn) {
+    btn = document.querySelector(`.ping-btn[data-agent="${name}"]`);
+  }
+  if (!btn) return;
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = '⏳';
+  try {
+    const r = await fetch(apiUrl('/api/ping/' + name));
+    const data = await r.json();
+    if (data.status === 'online') {
+      toast('✅ ' + name + ' 已恢复在线' + (data.detail ? ' · ' + data.detail : ''), 'success');
+    } else if (data.status === 'gateway_down') {
+      toast('❌ Gateway 启动失败: ' + (data.detail || ''), 'error');
+    } else {
+      toast('⏸ ' + name + ' 仍离线' + (data.detail ? ' · ' + data.detail : ''), 'error');
+    }
+  } catch(e) {
+    toast('重连失败: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = oldText;
+  // 后台刷新数据（不阻塞 toast）
+  setTimeout(() => loadAll().catch(() => {}), 500);
+}
+
+async function restartAgentMemory() {
+  const btn = document.getElementById('btnRestartAM');
+  if (!btn) return;
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = '⏳ 重启中...';
+  btn.style.background = '#f59e0b';
+  try {
+    const r = await fetch('/api/ping/agentmemory');
+    const data = await r.json();
+    if (data.status === 'healthy') {
+      toast('✅ AgentMemory 已重启成功', 'success');
+    } else {
+      toast('❌ 重启失败: ' + (data.detail || data.status), 'error');
+    }
+    // 刷新数据
+    setTimeout(() => loadAll().catch(() => {}), 500);
+  } catch(e) {
+    toast('❌ 重启请求失败: ' + e.message, 'error');
+  }
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.textContent = '🔄 重启 AM';
+    btn.style.background = '';
+  }, 3000);
+}
+
+// ── Tab 5: 健康状态 ──
+
+function renderHeartbeat(hb) {
+  const el = document.getElementById('heartbeatContent');
+  if (!hb) { el.innerHTML = '<div style="color:#64748b">无数据</div>'; return; }
+  const agents = hb.agents || {};
+  const health = hb.health || {};
+  const am = health.agentmemory || {};
+  const disk = health.disk || {};
+  const inboxWarnings = health.inbox_warnings || [];
+
+  // AgentMemory 状态行 + 重连按钮
+  const amStatus = am.status || 'unknown';
+  const amDot = amStatus === 'healthy' ? '🟢' : amStatus === 'unreachable' ? '🔴' : '⚪';
+  const amLabel = amStatus === 'healthy' ? '正常' : amStatus === 'unreachable' ? '断联' : '未知';
+
+const rows = Object.entries(agents).map(([name, state]) => {
+    const dot = state.status === 'online' ? '🟢' : state.status === 'offline' ? '🔴' : '⚪';
+    const btnId = 'ping-' + name.replace(/[^a-z0-9]/g, '');
+    return `<tr>
+      <td>${dot} ${name}</td>
+      <td>${statusBadge(state.status)}</td>
+      <td style="font-size:11px;color:#64748b">${state.last_heartbeat || '-'}</td>
+      <td style="font-size:11px;color:#64748b">${state.missed_pings || 0}</td>
+      <td>${state.status === 'offline' ? `<button class="btn btn-sm ping-btn" data-agent="${name}" id="${btnId}" title="重连">🔄 重连</button>` : ''}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="display:flex;gap:16px;font-size:12px;margin-bottom:12px;padding:12px;background:#1e293b;border-radius:8px;align-items:center">
+      <span>📦 AgentMemory: <span id="amStatusDot">${amDot}</span> ${amLabel}</span>
+      <button class="btn btn-sm" id="btnRestartAM" onclick="restartAgentMemory()" title="先 kill 旧进程再重启 AgentMemory" style="background:${amStatus === 'unreachable' ? '#ef4444' : '#334155'};color:white">${amStatus === 'unreachable' ? '🔴 重启 AM' : '🔄 重启 AM'}</button>
+      <span>💾 磁盘: ${disk.size_mb ? disk.size_mb + 'MB' : '-'}</span>
+      <span>📨 积压: ${inboxWarnings.length ? inboxWarnings.map(w => w.agent+'('+w.count+')').join(', ') : '无'}</span>
+    </div>
+    <table><thead><tr><th>Agent</th><th>状态</th><th>最后心跳</th><th>失联</th><th>操作</th></tr></thead><tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:#64748b">无数据</td></tr>'}</tbody></table>
+  `;
+}
+
+// ── Tab 6: 告警 ──
+
+function renderAlerts(a) {
+  const el = document.getElementById('alertTable');
+  const count = document.getElementById('alertCount');
+  if (!a || !a.alerts || a.alerts.length === 0) { el.innerHTML = '<div style="color:#64748b;font-size:13px">无告警</div>'; count.textContent = ''; return; }
+  count.textContent = a.count;
+  const rows = a.alerts.slice().reverse().slice(0, 30).map(alert => {
+    const sc = {critical:'#fca5a5', warn:'#fdba74', info:'#93c5fd'};
+    return `<tr>
+      <td><span style="color:${sc[alert.severity]||'#94a3b8'}">●</span> ${alert.severity}</td>
+      <td>${alert.type}</td>
+      <td>${alert.agent}</td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${alert.message}</td>
+      <td style="font-size:11px;color:#64748b">${alert.created_at || ''}</td>
+    </tr>`;
+  }).join('');
+  el.innerHTML = `<table><thead><tr><th>级别</th><th>类型</th><th>Agent</th><th>消息</th><th>时间</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ── 心跳触发 ──
+
+async function triggerHeartbeat() {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = '⏳...';
+  try {
+    const data = await fetchJSON('/api/heartbeat?force=1');
+    rawData.hb = data; renderHeartbeat(data);
+    btn.textContent = '✅';
+    setTimeout(() => { btn.textContent = '💓 触发心跳'; btn.disabled = false; }, 2000);
+  } catch(e) {
+    btn.textContent = '❌';
+    setTimeout(() => { btn.textContent = '💓 触发心跳'; btn.disabled = false; }, 2000);
+  }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// 事件委托：心跳重连按钮（避免 onclick 字符串拼接的问题）
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.ping-btn');
+  if (!btn) return;
+  const agent = btn.dataset.agent;
+  if (!agent) return;
+  pingAgent(agent, e);
+});
+
+loadAll();
+
+// 兜底：根据 API 返回的 has_browser 隐藏没有 Web 界面的按钮
+async function fixBrowserButtons() {
+  try {
+    const c = new AbortController();
+    setTimeout(() => c.abort(), 5000);
+    const r = await fetch(apiUrl('/api/launch'), {signal: c.signal});
+    const data = await r.json();
+    if (!data.agents) return;
+    Object.entries(data.agents).forEach(([name, info]) => {
+      if (info.has_browser === false) {
+        // 找到该 agent 卡片中所有 browser 按钮并隐藏
+        document.querySelectorAll('.agent-card').forEach(card => {
+          const nameEl = card.querySelector('.name');
+          if (nameEl && nameEl.textContent.includes(info.name || name)) {
+            const btns = card.querySelectorAll('button');
+            btns.forEach(btn => {
+              if (btn.textContent.includes('🌐')) {
+                btn.style.display = 'none';
+              }
+            });
+          }
+        });
+      }
+    });
+  } catch(e) {}
+}
+setTimeout(fixBrowserButtons, 1000);
+</script>
+</body>
+</html>

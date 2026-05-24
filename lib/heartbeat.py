@@ -33,6 +33,17 @@ def load_status(data_dir: str) -> dict:
     return json_read(get_heartbeat_path(data_dir), {"agents": {}, "health": {}})
 
 
+def load_status_nolock(data_dir: str) -> dict:
+    """无锁读取心跳状态（给 API server 用，避免被 cron 的锁阻塞）"""
+    path = get_heartbeat_path(data_dir)
+    try:
+        import json
+        with open(path) as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError):
+        return {"agents": {}, "health": {}}
+
+
 def save_status(data_dir: str, status: dict):
     json_write(get_heartbeat_path(data_dir), status)
 

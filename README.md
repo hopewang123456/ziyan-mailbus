@@ -86,6 +86,24 @@ mailbus status --failed
 
 > Adding a new framework? Just add one CLI template to `agent_types`. Zero code changes.
 
+### Registered Agents (v1.2.0)
+
+| Agent | Name | Role | Framework |
+|-------|------|------|-----------|
+| `lingzhao` | 🪷 灵昭 | Solution Design | Hermes |
+| `lingjin` | 🦋 灵瑾 | Network Security | Hermes Profile |
+| `lingxi` | 🔭 灵犀 | Tech Radar | Hermes Profile |
+| `xiaoqi` | 🦞 小七 | Dispatch | OpenClaw |
+| `yige` | 👨‍🔧 一哥 | Operations | OpenClaw |
+| `lingxiao` | 🦅 灵霄 | Tech Lead | Cline CLI |
+| `dali` | 🤖 大力 | Coding | OpenCode |
+| `dazhuang` | 💪 大壮 | Code Review | File-only |
+
+### Changelog
+
+- **v1.2.0** (2026-05-22) — 🦋 灵曦 renamed to 灵瑾; 🔭 灵犀 (Tech Radar) joined as Hermes Profile
+- **v1.1.0** (2026-05-21) — Multi-model fallback, heartbeat, alerting, Platform v2 UI (tabs + cards)
+
 ## CLI Commands
 
 ```bash

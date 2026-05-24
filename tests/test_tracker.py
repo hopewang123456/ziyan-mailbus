@@ -53,12 +53,12 @@ def test_update_status_with_error():
 def test_add_hop():
     with tempfile.TemporaryDirectory() as td:
         t = TaskTracker(td)
-        t.create("task-hop-001", chain_hops=[{"agent": "灵曦", "action": "发起"}])
+        t.create("task-hop-001", chain_hops=[{"agent": "灵瑾", "action": "发起"}])
         t.add_hop("task-hop-001", "小七", "转发给一哥")
         t.add_hop("task-hop-001", "一哥", "执行并回复")
         task = t.get("task-hop-001")
         assert len(task["chain"]) == 3
-        assert task["chain"][0]["agent"] == "灵曦"
+        assert task["chain"][0]["agent"] == "灵瑾"
         assert task["chain"][1]["agent"] == "小七"
         assert task["chain"][2]["agent"] == "一哥"
     print("  ✓ test_add_hop")

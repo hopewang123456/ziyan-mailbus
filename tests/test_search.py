@@ -28,12 +28,12 @@ def test_index_and_search():
 def test_search_by_from():
     """按发件人过滤"""
     with tempfile.TemporaryDirectory() as td:
-        index_message(td, {"id": "m1", "from": "灵曦", "to": "小七",
+        index_message(td, {"id": "m1", "from": "灵瑾", "to": "小七",
                           "type": "task", "content": "测试", "status": "pending"})
         index_message(td, {"id": "m2", "from": "灵昭", "to": "灵霄",
                           "type": "notice", "content": "测试2", "status": "pending"})
 
-        results = search(td, from_agent="灵曦")
+        results = search(td, from_agent="灵瑾")
         assert len(results) == 1
         assert results[0]["msg_id"] == "m1"
 
@@ -74,16 +74,16 @@ def test_search_by_status():
 def test_search_combined():
     """多条件组合过滤"""
     with tempfile.TemporaryDirectory() as td:
-        index_message(td, {"id": "m1", "from": "灵曦", "to": "小七",
+        index_message(td, {"id": "m1", "from": "灵瑾", "to": "小七",
                           "type": "task", "content": "检查安全", "status": "pending"})
-        index_message(td, {"id": "m2", "from": "灵曦", "to": "一哥",
+        index_message(td, {"id": "m2", "from": "灵瑾", "to": "一哥",
                           "type": "notice", "content": "通知", "status": "pending"})
 
-        results = search(td, from_agent="灵曦", to_agent="小七")
+        results = search(td, from_agent="灵瑾", to_agent="小七")
         assert len(results) == 1
         assert results[0]["msg_id"] == "m1"
 
-        results2 = search(td, from_agent="灵曦", msg_type="notice")
+        results2 = search(td, from_agent="灵瑾", msg_type="notice")
         assert len(results2) == 1
         assert results2[0]["msg_id"] == "m2"
     print("  ✓ test_search_combined")

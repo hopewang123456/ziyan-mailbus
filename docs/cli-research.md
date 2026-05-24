@@ -1,12 +1,12 @@
 # 各 Agent CLI 非交互模式调研
 
-## Hermes Agent（灵昭、灵曦）
+## Hermes Agent（灵昭、灵瑾）
 - **命令**: `hermes chat -q "<消息>" -Q`
 - **说明**: `-q/--query` 为非交互单次查询模式，`-Q` 静默模式（不要 banner/动画）
 - **带 profile**: `hermes chat -q "<消息>" -Q --profile <name>`
 - **带 skill**: `hermes chat -q "<消息>" -Q -s <skill>`
 - **特点**: 原生支持，返回码 0 表示成功，可通过 stdout 获取回复
-- **✅ 可用** — 灵昭、灵曦都能用
+- **✅ 可用** — 灵昭、灵瑾都能用
 
 ## OpenClaw（小七、一哥）
 - **命令**: `openclaw agent --local --message "<消息>" --json`

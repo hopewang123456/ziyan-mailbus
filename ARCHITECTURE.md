@@ -448,12 +448,7 @@ JSON Lines（`.jsonl`），每行一条完整消息 JSON，按周分文件：
       "cli": "hermes run --profile lingzhao --message",
       "inbox": "/mnt/e/ai_tools/mail/store/inbox/lingzhao/inbox.json"
     },
-    "lingxi": {
-      "name": "灵曦",
-      "role": "网络安全",
-      "cli": "hermes run --profile lingxi --message",
-      "inbox": "/mnt/e/ai_tools/mail/store/inbox/lingxi/inbox.json"
-    },
+    "lingjin": {\n      "name": "灵瑾",\n      "role": "网络安全",\n      "cli": "hermes run --profile lingjin --message",\n      "inbox": "/mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json"\n    },\n    "lingxi": {\n      "name": "灵犀",\n      "role": "技术雷达",\n      "cli": "hermes run --profile lingxi --message",\n      "inbox": "/mnt/e/ai_tools/mail/store/inbox/lingxi/inbox.json"\n    },
     "xiaoqi": {
       "name": "小七",
       "role": "调度",

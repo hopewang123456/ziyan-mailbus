@@ -4,10 +4,11 @@
 import os
 import json
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from typing import Optional
 
 from .models import Inbox
-from .utils import json_read, resolve_paths, _now_iso
+from .utils import json_read, json_write, resolve_paths, _now_iso
 from .tracker import TaskTracker
 from .heartbeat import load_status as load_heartbeat
 from .alerter import get_recent_alerts
@@ -30,6 +31,48 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     def _read_path(self):
         return self.path.split("?")[0].rstrip("/")
 
+    def _serve_static(self, path: str) -> bool:
+        """尝试返回 docs/ 目录下的静态文件"""
+        # 安全：只允许 docs/ 下的文件，防路径穿越
+        if ".." in path or "~" in path:
+            return False
+        docs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "docs")
+        if path in ("", "/"):
+            filename = "index.html"
+        else:
+            filename = path.lstrip("/")
+        abs_path = os.path.normpath(os.path.join(docs_dir, filename))
+        if not abs_path.startswith(os.path.normpath(docs_dir)):
+            return False
+        if not os.path.isfile(abs_path):
+            return False
+        try:
+            with open(abs_path, "rb") as f:
+                content = f.read()
+            content_type = "text/html" if filename.endswith(".html") else \
+                           "application/javascript" if filename.endswith(".js") else \
+                           "text/css" if filename.endswith(".css") else \
+                           "application/octet-stream"
+            self.send_response(200)
+            self.send_header("Content-Type", f"{content_type}; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            # 对 HTML 注入 cache buster
+            if filename.endswith(".html"):
+                import time
+                buster = str(int(time.time()))
+                content = content.replace(
+                    b'loadAll();',
+                    b'// cb=' + buster.encode() + b'\nloadAll();',
+                )
+            self.end_headers()
+            self.wfile.write(content)
+            return True
+        except Exception:
+            return False
+
     def do_GET(self):
         path = self._read_path()
 
@@ -49,24 +92,78 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         elif path.startswith("/api/agent-profile/"):
             agent = path[len("/api/agent-profile/"):]
             self._handle_agent_profile(agent)
+        elif path.startswith("/api/ping/"):
+            agent = path[len("/api/ping/"):]
+            self._handle_ping(agent)
         elif path == "/api/config":
             self._handle_config()
+        elif path == "/api/launch":
+            # GET → 显示可启动的 agent 列表
+            self._list_launchable()
+        elif path == "/api/bulletin":
+            self._handle_bulletin()
+        elif path == "/api/bulletin/permit":
+            self._send_json({"permit": self.bulletin_permit})
+        elif path == "/api/permission":
+            self._handle_permission()
         elif path == "/" or path == "":
-            self._send_json({
-                "service": "ziyan-mailbus",
-                "version": "2.4.0",
-                "endpoints": [
-                    "GET /api/status      — 总线概要状态",
-                    "GET /api/agents       — Agent 列表",
-                    "GET /api/tasks        — 任务追踪",
-                    "GET /api/heartbeat    — 心跳状态",
-                    "GET /api/alerts       — 告警历史",
-                    "GET /api/inbox/<name> — 指定 Agent 的 inbox",
-                    "GET /api/config       — 当前配置",
-                ]
-            })
+            self._serve_static("/")
+        elif path == "/index.html":
+            self._serve_static("/")
+        elif path == "/ping-test":
+            # 调试端点：确认版本
+            self._send_json({"version": "v2.0.0", "file_size": os.path.getsize(
+                os.path.join(os.path.dirname(os.path.dirname(__file__)), "docs", "platform.html")
+            ), "agents": len(self.agents)})
         else:
-            self._send_json({"error": "not_found", "path": path}, 404)
+            # 尝试返回静态文件
+            if not self._serve_static(path):
+                self._send_json({"error": "not_found", "path": path}, 404)
+
+    def do_POST(self):
+        path = self._read_path()
+
+        if path == "/api/launch":
+            self._handle_launch()
+        elif path == "/api/bulletin/post":
+            self._handle_bulletin_post()
+        elif path == "/api/bulletin/permit":
+            self._handle_bulletin_permit()
+        elif path == "/api/permission":
+            self._handle_permission()
+        elif path.startswith("/api/mark-read/"):
+            agent = path[len("/api/mark-read/"):]
+            self._handle_mark_read(agent)
+        else:
+            self._send_json({"error": "not_found"}, 404)
+
+    # ── 公告板配置 ──
+    bulletin_permit = []      # 有权限发公告的 agent name 列表
+    bulletin_authors = {}     # 作者显示名映射
+    bulletin_file = ""        # bulletin.json 路径，由 serve() 设置
+    permission_file = ""      # permission.json 路径，由 serve() 设置
+
+    def _load_bulletin(self) -> dict:
+        """读取公告板"""
+        try:
+            return json_read(self.bulletin_file, {"bulletins": []})
+        except Exception:
+            return {"bulletins": []}
+
+    def _save_bulletin(self, data: dict):
+        """写入公告板"""
+        json_write(self.bulletin_file, data)
+
+    def _read_post_body(self):
+        "读取 POST 请求体"
+        content_length = int(self.headers.get("Content-Length", 0))
+        if content_length > 0:
+            body = self.rfile.read(content_length)
+            try:
+                return json.loads(body.decode("utf-8"))
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return {}
+        return {}
 
     def _handle_status(self):
         """总线概要状态"""
@@ -87,6 +184,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             agent_statuses[name] = {
                 "active_messages": len([m for m in data.get("messages", []) if isinstance(m, dict) and m.get("status") != "archived"]) if data else 0,
                 "has_unread": data.get("has_unread", False) if data else False,
+                "unread_count": len([m for m in data.get("messages", []) if isinstance(m, dict) and m.get("status") != "acknowledged" and m.get("status") != "archived" and m.get("type") != "system"]) if data else 0,
+                "pending_count": len([m for m in data.get("messages", []) if isinstance(m, dict) and m.get("status") == "pending"]) if data else 0,
                 "type": self.agents[name].get("type", "?"),
                 "role": self.agents[name].get("role", ""),
             }
@@ -119,7 +218,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
 
     def _handle_heartbeat(self):
         """心跳状态（仅返回缓存，?force=1 时触发一轮检测）"""
-        from lib.heartbeat import load_status, heartbeat_scan as _hb_scan
+        from lib.heartbeat import load_status_nolock, heartbeat_scan as _hb_scan
         from urllib.parse import urlparse, parse_qs
 
         qs = parse_qs(urlparse(self.path).query)
@@ -133,7 +232,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             t.start()
             t.join(timeout=15)
 
-        hb = load_status(self.data_dir)
+        hb = load_status_nolock(self.data_dir)
         self._send_json(hb)
 
     def _handle_alerts(self):
@@ -161,9 +260,11 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                 summary.append({
                     "id": m.get("id", ""),
                     "from": m.get("from", ""),
+                    "to": m.get("to", ""),
                     "type": m.get("type", ""),
                     "content_preview": m.get("content", "")[:100],
                     "status": m.get("status", ""),
+                    "read": m.get("read", False),
                     "created_at": m.get("created_at", ""),
                 })
         self._send_json({
@@ -173,6 +274,94 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "active_messages": len(active),
             "messages": summary,
         })
+
+    def _handle_bulletin(self):
+        """GET /api/bulletin → 返回公告列表"""
+        b = self._load_bulletin()
+        self._send_json(b)
+
+    def _handle_bulletin_post(self):
+        """POST /api/bulletin/post → 发公告（需权限）"""
+        body = self._read_post_body()
+        sender = body.get("from", "")
+        content = body.get("content", "").strip()
+        title = body.get("title", "").strip()
+
+        if sender not in self.bulletin_permit:
+            self._send_json({"error": f"'{sender}' 无发布公告权限"}, 403)
+            return
+        if not content:
+            self._send_json({"error": "公告内容不能为空"}, 400)
+            return
+
+        bulletin = {
+            "id": f"b{int(__import__('time').time() * 1000)}{sender[:3]}",
+            "from": sender,
+            "from_name": self.bulletin_authors.get(sender) or self.agents.get(sender, {}).get("name", sender),
+            "title": title or "公告",
+            "content": content,
+            "created_at": _now_iso(),
+        }
+        b = self._load_bulletin()
+        b.setdefault("bulletins", []).insert(0, bulletin)
+        self._save_bulletin(b)
+        self._send_json({"status": "ok", "bulletin": bulletin})
+
+    def _handle_bulletin_permit(self):
+        """POST /api/bulletin/permit → 更新公告权限列表"""
+        body = self._read_post_body()
+        permit = body.get("permit", [])
+        if not isinstance(permit, list):
+            self._send_json({"error": "permit 必须是数组"}, 400)
+            return
+        # 写入 config.json
+        config_path = os.path.join(self.data_dir, "config.json")
+        raw = json_read(config_path, {})
+        raw["bulletin_permit"] = permit
+        json_write(config_path, raw)
+        self.bulletin_permit = permit
+        self._send_json({"status": "ok", "permit": permit})
+
+    def _handle_mark_read(self, agent: str):
+        """POST /api/mark-read/<agent> → 标记指定 agent 的 inbox 全部已读"""
+        if agent not in self.agents:
+            self._send_json({"error": f"agent '{agent}' not found"}, 404)
+            return
+        paths = resolve_paths(self.data_dir)
+        inbox_file = f"{paths['inbox']}/{agent}/inbox.json"
+        data = json_read(inbox_file, {})
+        if not data:
+            self._send_json({"status": "ok", "marked": 0})
+            return
+        # 标记所有非 system 消息为 acknowledged（agent 已读）
+        changed = 0
+        for m in data.get("messages", []):
+            if isinstance(m, dict) and m.get("type") != "system" and m.get("status") != "acknowledged" and m.get("status") != "archived":
+                m["status"] = "acknowledged"
+                m["read_at"] = _now_iso()
+                changed += 1
+        data["has_unread"] = any(
+            isinstance(m, dict) and m.get("type") != "system" and m.get("status") != "acknowledged" and m.get("status") != "archived"
+            for m in data.get("messages", [])
+        )
+        json_write(inbox_file, data)
+        self._send_json({"status": "ok", "agent": agent, "marked": changed})
+
+    def _handle_permission(self):
+        """GET /api/permission → 返回权限配置"""
+        if self.command == "GET":
+            perm = json_read(self.permission_file, {})
+            self._send_json({"permissions": perm})
+        elif self.command == "POST":
+            body = self._read_post_body()
+            permissions = body.get("permissions", {})
+            if not isinstance(permissions, dict):
+                self._send_json({"error": "permissions 必须是对象"}, 400)
+                return
+            json_write(self.permission_file, permissions)
+            # 保存一份到 self 供前端实时使用
+            self.permissions = permissions
+            self._send_json({"status": "ok", "permissions": permissions})
 
     def _handle_config(self):
         """当前配置（去掉敏感路径信息）"""
@@ -251,9 +440,247 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
 
         self._send_json(profile)
 
+    def _list_launchable(self):
+        """返回所有可启动的 agent 列表，含支持的模式"""
+        agents = {}
+        for name, cfg in self.agents.items():
+            atype = cfg.get("type", "none")
+            # 所有 agent 都支持 browser 和 cli 两种模式
+            launch_modes = ["browser", "cli"]
+            has_browser = cfg.get("launch", {}).get("has_browser", True)
+            agents[name] = {
+                "name": cfg.get("name", name),
+                "type": atype,
+                "launch_modes": launch_modes,
+                "has_browser": has_browser,
+                "models": cfg.get("models", []),
+            }
+        self._send_json({"agents": agents})
+
+    def _handle_launch(self):
+        """POST /api/launch → 启动指定 agent 的 CLI/浏览器窗口
+           body: {"agent": "<name>", "mode": "browser"|"cli"}
+        """
+        body = self._read_post_body()
+        agent = body.get("agent", "")
+        mode = body.get("mode", "browser")
+
+        if not agent or agent not in self.agents:
+            self._send_json({"error": f"agent '{agent}' not found"}, 404)
+            return
+
+        cfg = self.agents[agent]
+        atype = cfg.get("type", "none")
+        agent_name = cfg.get("name", agent)
+
+        # 调用 launch-agent.sh（第二个参数传 mode）
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "launch-agent.sh")
+        if not os.path.isfile(script_path):
+            self._send_json({"error": "launch script not found"}, 500)
+            return
+
+        import subprocess, shlex
+        try:
+            result = subprocess.run(
+                ["bash", script_path, agent, mode],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode == 0:
+                self._send_json({"status": "ok", "agent": agent, "message": f"Launched {agent_name}"})
+            else:
+                self._send_json({"status": "error", "agent": agent,
+                                 "error": result.stderr.strip() or result.stdout.strip()}, 500)
+        except subprocess.TimeoutExpired:
+            self._send_json({"status": "timeout", "agent": agent}, 500)
+        except Exception as e:
+            self._send_json({"status": "error", "error": str(e)}, 500)
+
+    def _update_heartbeat_cache(self, agent: str, status: str):
+        """更新心跳缓存"""
+        try:
+            from .heartbeat import load_status_nolock, save_status
+            hb_cache = load_status_nolock(self.data_dir)
+            agent_state = hb_cache.setdefault("agents", {}).setdefault(agent, {})
+            agent_state["status"] = status
+            agent_state["last_heartbeat"] = __import__("datetime").datetime.now(
+                __import__("datetime").timezone(__import__("datetime").timedelta(hours=8))
+            ).isoformat()
+            if status == "online":
+                agent_state["missed_pings"] = 0
+            save_status(self.data_dir, hb_cache)
+        except Exception:
+            pass
+
+    def _handle_ping(self, agent: str):
+        """GET /api/ping/<agent> → 对 agent 做一次即时 ping 检测，unreachable 时尝试重启"""
+        from urllib.parse import urlparse, parse_qs
+
+        # 特殊处理：AgentMemory
+        if agent == "agentmemory":
+            from .heartbeat import check_agentmemory
+            import subprocess, time, os, shutil
+
+            # 先找到 agentmemory 命令
+            am_cmd = shutil.which("agentmemory") or os.path.expanduser("~/.npm-global/bin/agentmemory")
+            if not os.path.isfile(am_cmd):
+                self._send_json({"agent": "agentmemory", "status": "error", "detail": "agentmemory 命令未找到"}, 500)
+                return
+
+            # 先 kill 旧的 agentmemory 进程
+            subprocess.Popen(["pkill", "-f", "agentmemory"], start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.Popen(["pkill", "-f", "iii.*engine"], start_new_session=True,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(2)
+
+            # 重新启动
+            try:
+                logfile = "/tmp/agentmemory-restart.log"
+                subprocess.Popen(
+                    ["bash", "-c", f"cd ~ && nohup {am_cmd} >{logfile} 2>&1 &"],
+                    start_new_session=True,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                # 等待端口就绪（最多 15 秒）
+                for i in range(15):
+                    time.sleep(1)
+                    result = check_agentmemory()
+                    if result["status"] == "healthy":
+                        # 强制更新心跳缓存
+                        try:
+                            from .heartbeat import load_status_nolock, save_status
+                            hb_cache = load_status_nolock(self.data_dir)
+                            hb_cache.setdefault("health", {})
+                            hb_cache["health"]["agentmemory"] = result
+                            hb_cache["health"]["last_check"] = __import__("datetime").datetime.now(
+                                __import__("datetime").timezone(__import__("datetime").timedelta(hours=8))
+                            ).isoformat()
+                            save_status(self.data_dir, hb_cache)
+                        except Exception:
+                            pass
+                        self._send_json({
+                            "agent": "agentmemory",
+                            "status": "healthy",
+                            "detail": f"重启成功（第{i+1}秒响应）",
+                        })
+                        return
+                # 超时
+                result = check_agentmemory()
+                self._send_json({
+                    "agent": "agentmemory",
+                    "status": result["status"],
+                    "detail": f"启动超时，请检查 /tmp/agentmemory-restart.log",
+                })
+            except Exception as e:
+                self._send_json({"agent": "agentmemory", "status": "error", "detail": str(e)[:80]}, 500)
+            return
+
+        # 普通 agent
+        if agent not in self.agents:
+            self._send_json({"error": f"agent '{agent}' not found"}, 404)
+            return
+
+        cfg = self.agents[agent]
+        atype = cfg.get("type", "none")
+
+        # OpenClaw 类型：先检测 gateway，gateway 挂了就不需要 ping agent 了
+        if atype == "openclaw":
+            import subprocess, time
+
+            # 从 agent 配置获取 gateway port（默认 18789）
+            gw_config = cfg.get("launch", {}).get("browser", {})
+            gw_port = gw_config.get("gateway_port", 18789)
+            gw_url = f"http://localhost:{gw_port}"
+
+            # 开启 gateway 的命令
+            gw_cmd = gw_config.get("start_command", "")
+            if not gw_cmd:
+                gw_cmd = f"export PATH=$HOME/.npm-global/bin:$HOME/.local/bin:$PATH && openclaw gateway run --auth none --port {gw_port} --force"
+
+            gw_ok = subprocess.run(
+                ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", gw_url],
+                capture_output=True, text=True, timeout=5,
+            )
+            if gw_ok.stdout.strip() != "200":
+                # 尝试启动 gateway
+                try:
+                    subprocess.Popen(
+                        ["bash", "-c", f"{gw_cmd} >/tmp/openclaw-gw-{agent}.log 2>&1 &"],
+                        start_new_session=True,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    )
+                    # 等几秒看 gateway 能不能起来
+                    for i in range(10):
+                        time.sleep(1)
+                        r = subprocess.run(
+                            ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", gw_url],
+                            capture_output=True, text=True, timeout=3,
+                        )
+                        if r.stdout.strip() == "200":
+                            # 更新心跳缓存：gateway 已启动
+                            self._update_heartbeat_cache(agent, "online")
+                            self._send_json({
+                                "agent": agent,
+                                "status": "online",
+                                "detail": f"Gateway 启动成功（第{i+1}秒响应），agent 已恢复",
+                            })
+                            return
+                    # gateway 启动超时
+                    try:
+                        log_content = open(f"/tmp/openclaw-gw-{agent}.log").read()[-300:]
+                    except Exception:
+                        log_content = "无日志"
+                    self._send_json({
+                        "agent": agent,
+                        "status": "gateway_down",
+                        "detail": f"OpenClaw Gateway ({gw_url}) 启动失败。日志: {log_content}",
+                    }, 500)
+                    return
+                except Exception as e:
+                    self._send_json({
+                        "agent": agent,
+                        "status": "gateway_down",
+                        "detail": f"Gateway 启动异常: {str(e)[:80]}",
+                    }, 500)
+                    return
+
+        from .heartbeat import ping_agent
+        online = ping_agent(cfg, self.agent_types, ping_timeout=10)
+
+        if not online:
+            # 离线 → 尝试重启
+            try:
+                script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "launch-agent.sh")
+                if os.path.isfile(script_path):
+                    import subprocess
+                    subprocess.Popen(
+                        ["bash", script_path, agent],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    )
+                    # 等几秒再检测一次
+                    import time
+                    time.sleep(5)
+                    online = ping_agent(cfg, self.agent_types, ping_timeout=10)
+            except Exception:
+                pass
+
+        # 无论在线离线，都强制更新心跳缓存（让页面刷新后不再显示旧状态）
+        self._update_heartbeat_cache(agent, "online" if online else "offline")
+
+        self._send_json({
+            "agent": agent,
+            "status": "online" if online else "offline",
+            "detail": "",
+        })
+
     def log_message(self, format, *args):
         # 静默日志
         pass
+
+
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    """多线程 HTTPServer — 每个请求在独立线程处理，不阻塞其他请求"""
+    daemon_threads = True
 
 
 def serve(data_dir: str, agents: dict, agent_types: dict,
@@ -263,9 +690,19 @@ def serve(data_dir: str, agents: dict, agent_types: dict,
     MailbusAPIHandler.agents = agents
     MailbusAPIHandler.agent_types = agent_types
 
-    server = HTTPServer((host, port), MailbusAPIHandler)
+    # 读取公告板配置
+    config_path = os.path.join(data_dir, "config.json")
+    raw = json_read(config_path, {})
+    MailbusAPIHandler.bulletin_permit = raw.get("bulletin_permit", [])
+    MailbusAPIHandler.bulletin_authors = raw.get("bulletin_authors", {})
+    MailbusAPIHandler.bulletin_file = os.path.join(data_dir, "bulletin.json")
+    MailbusAPIHandler.permission_file = os.path.join(data_dir, "permission.json")
+    MailbusAPIHandler.permissions = json_read(MailbusAPIHandler.permission_file, {})
+
+    server = ThreadingHTTPServer((host, port), MailbusAPIHandler)
     print(f"📡 mailbus API 服务已启动: http://{host}:{port}")
     print(f"   端点: /api/status /api/agents /api/tasks /api/heartbeat /api/alerts /api/inbox/<name>")
+    print(f"   公告板: {len(MailbusAPIHandler.bulletin_permit)} 人可发公告")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -38,7 +38,7 @@ def test_build_message_basic():
 
 
 def test_build_message_with_forward():
-    msg = build_message("灵曦", "小七", "转发给一哥",
+    msg = build_message("灵瑾", "小七", "转发给一哥",
                         MsgType.FORWARD_REPLY, forward_to=["yige"])
     assert msg.action["forward_to"] == ["yige"]
     assert msg.type == "forward_reply"
@@ -46,7 +46,7 @@ def test_build_message_with_forward():
 
 
 def test_build_message_with_task():
-    msg = build_message("灵曦", "一哥", "请整理安全规范",
+    msg = build_message("灵瑾", "一哥", "请整理安全规范",
                         MsgType.TASK_REPLY,
                         task={"summary": "安全规范", "assignee": "一哥"})
     assert msg.task["summary"] == "安全规范"

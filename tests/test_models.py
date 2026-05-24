@@ -90,9 +90,9 @@ def test_message_basic():
 
 def test_message_action_set_from_type():
     """type 为 forward_reply 时 action 自动推断"""
-    msg = Message(id="msg-test-002", from_="灵曦", to="小七",
+    msg = Message(id="msg-test-002", from_="灵瑾", to="小七",
                   type=MsgType.FORWARD_REPLY, content="转发给一哥")
-    assert msg.action["reply_to"] == "灵曦"  # __post_init__ 填充
+    assert msg.action["reply_to"] == "灵瑾"  # __post_init__ 填充
     assert msg.action["forward_to"] == []
     assert msg.forward_chain is None  # 没有 forward_to 时不创建
     print("  ✓ test_message_action_set_from_type")
@@ -100,7 +100,7 @@ def test_message_action_set_from_type():
 
 def test_message_forward_chain_auto():
     """forward_to 不为空时自动创建 forward_chain"""
-    msg = Message(id="msg-test-003", from_="灵曦", to="小七",
+    msg = Message(id="msg-test-003", from_="灵瑾", to="小七",
                   type=MsgType.FORWARD_REPLY, content="转发给一哥")
     msg.action["forward_to"] = ["yige"]
     # 手动触发 __post_init__（在创建后修改 action 需要手动设置 forward_chain）
@@ -113,7 +113,7 @@ def test_message_forward_chain_auto():
     assert msg.forward_chain is not None
     assert msg.forward_chain["root_id"] == "msg-test-003"
     assert len(msg.forward_chain["hops"]) == 1
-    assert msg.forward_chain["hops"][0]["agent"] == "灵曦"
+    assert msg.forward_chain["hops"][0]["agent"] == "灵瑾"
     print("  ✓ test_message_forward_chain_auto")
 
 

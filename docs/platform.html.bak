@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ziyan-mailbus Platform</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>ziyan-mailbus Platform v2.0.1</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#0f172a;color:#e2e8f0;font-family:system-ui,-apple-system,sans-serif;padding:24px;min-height:100vh}
@@ -84,7 +87,7 @@ td{padding:8px 10px;border-bottom:1px solid #1e293b}
 
 <div id="toast"></div>
 
-<h1>📬 ziyan-mailbus Platform</h1>
+<h1>📬 ziyan-mailbus Platform <span style="font-size:12px;color:#64748b;font-weight:400">v2.0.0</span></h1>
 <div class="sub">HTTP API: <span id="apiUrl">http://localhost:9812</span></div>
 
 <div class="toolbar">
@@ -106,7 +109,7 @@ td{padding:8px 10px;border-bottom:1px solid #1e293b}
 <!-- Tab: Agent 总览 -->
 <div class="tab-content active" id="tab-agents">
   <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
-    <span style="font-size:13px;color:#94a3b8">点击卡片查看详情 · 身份 · 技能 · 消息</span>
+    <span style="font-size:13px;color:#94a3b8">点击卡片查看详情 · 点击 ▶ 启动 CLI 窗口</span>
     <button class="btn btn-sm" onclick="reloadData('agents')">🔄 刷新</button>
   </div>
   <div class="agent-grid" id="agentGrid"></div>
@@ -176,12 +179,21 @@ function toast(msg, type) {
 
 function apiUrl(p) {
   const b = document.getElementById('apiInput').value.replace(/\/+$/, '');
-  return b + p;
+  const sep = p.includes('?') ? '&' : '?';
+  return b + p + sep + '_t=' + Date.now();
 }
 
 async function fetchJSON(p) {
-  const r = await fetch(apiUrl(p));
-  return await r.json();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
+  try {
+    const r = await fetch(apiUrl(p), {signal: controller.signal});
+    clearTimeout(timer);
+    return await r.json();
+  } catch(e) {
+    clearTimeout(timer);
+    throw e;
+  }
 }
 
 function statusBadge(s) {
@@ -244,7 +256,11 @@ async function reloadData(name) {
     alerts: ['/api/alerts'],
   };
   try {
-    const results = await Promise.all(map[name].map(p => fetchJSON(p)));
+    const results = await Promise.all(map[name].map(p => {
+      const c = new AbortController();
+      setTimeout(() => c.abort(), 8000);
+      return fetch(apiUrl(p), {signal: c.signal}).then(r => r.json());
+    }));
     if (name === 'agents') { rawData.status = results[0]; rawData.agents = results[1]; renderAgentTab(results[0], results[1]); }
     if (name === 'messages') { rawData.status = results[0]; renderMessagesTab(results[0]); }
     if (name === 'pending') { rawData.status = results[0]; renderPendingTab(results[0]); }
@@ -253,6 +269,53 @@ async function reloadData(name) {
     if (name === 'alerts') { rawData.alerts = results[0]; renderAlerts(results[0]); }
     toast(name + ' 已刷新', 'success');
   } catch(e) { toast('刷新失败', 'error'); }
+}
+
+// ── 启动 agent ──
+
+// 卡片上的按钮调用
+async function launchAgent(name, mode) {
+  mode = mode || 'browser';
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  try {
+    const r = await fetch(apiUrl('/api/launch'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({agent: name, mode: mode}),
+    });
+    const data = await r.json();
+    if (data.status === 'ok') {
+      toast('已启动 ' + name + ' (' + mode + ')', 'success');
+    } else {
+      toast('启动失败: ' + (data.error || 'unknown'), 'error');
+    }
+  } catch(e) {
+    toast('启动失败: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = mode === 'browser' ? '🌐' : '💻';
+}
+
+// 弹窗中的按钮调用
+async function launchAgentFromModal(name, mode) {
+  toast('正在启动 ' + name + ' (' + mode + ')...', 'info');
+  try {
+    const r = await fetch(apiUrl('/api/launch'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({agent: name, mode: mode}),
+    });
+    const data = await r.json();
+    if (data.status === 'ok') {
+      toast('已启动 ' + name + ' (' + mode + ')', 'success');
+    } else {
+      toast('启动失败: ' + (data.error || 'unknown'), 'error');
+    }
+  } catch(e) {
+    toast('启动失败: ' + e.message, 'error');
+  }
 }
 
 // ── Tab 1: Agent 概览 ──
@@ -269,16 +332,21 @@ function renderAgentTab(status, agentsData) {
     const active = st.active_messages || 0;
     const pending = st.pending_count || 0;
     const typeColors = {hermes:'#22d3ee', hermes_profile:'#67e8f9', openclaw:'#34d399', cline:'#a78bfa', opencode:'#fbbf24', none:'#64748b'};
-    return `<div class="agent-card" onclick="showAgent('${k}')">
-      <div class="top">
-        <div class="name">${v.name || k}</div>
+    const typeIcons = {hermes:'🪷', hermes_profile:'🪷', openclaw:'🦞', cline:'🎯', opencode:'🤖', aider:'💪', none:'⚙️'};
+    return `<div class="agent-card">
+      <div class="top" style="cursor:pointer" onclick="showAgent('${k}')">
+        <div class="name">${typeIcons[v.type]||'🤖'} ${v.name || k}</div>
         <span class="type-badge" style="color:${typeColors[v.type]||'#93c5fd'}">${v.type}</span>
       </div>
-      <div class="role">${v.role || '—'}</div>
+      <div class="role" style="cursor:pointer" onclick="showAgent('${k}')">${v.role || '—'}</div>
       <div style="font-size:10px;color:#475569">${(v.models||[]).join(', ') || ''}</div>
       <div class="stats">
         <span>📨 ${active}</span>
-        <span>⏳ ${statusData => pending}</span>
+        <span>⏳ ${pending}</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        ${v.has_browser !== false ? `<button class="btn btn-sm" onclick="launchAgent('${k}','browser')" title="浏览器打开" style="flex:1">🌐 浏览器</button>` : ''}
+        <button class="btn btn-sm" onclick="launchAgent('${k}','cli')" title="CLI 终端窗口" style="flex:1">💻 CLI</button>
       </div>
     </div>`;
   }).join('');
@@ -294,13 +362,16 @@ async function renderMessagesTab(status) {
   const entries = Object.entries(status.agent_statuses);
   let totalActive = 0;
   let html = '';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
   for (const [name, st] of entries) {
     const count = st.active_messages || 0;
     totalActive += count;
     if (count === 0) continue;
     try {
-      const inbox = await fetchJSON('/api/inbox/' + name);
-      const msgs = inbox.messages || [];
+      const inbox = await fetch(apiUrl('/api/inbox/' + name), {signal: controller.signal});
+      const inboxData = await inbox.json();
+      const msgs = inboxData.messages || [];
       html += `<div style="margin:8px 0 4px;font-size:12px;color:#94a3b8;font-weight:600">${st.type || name} (${count})</div>`;
       msgs.forEach(m => {
         html += `<div class="msg-item">
@@ -329,10 +400,13 @@ async function renderPendingTab(status) {
   const entries = Object.entries(status.agent_statuses);
   let totalPending = 0;
   let html = '';
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
   for (const [name, st] of entries) {
     try {
-      const inbox = await fetchJSON('/api/inbox/' + name);
-      const pendings = (inbox.messages || []).filter(m => m.status === 'pending');
+      const inbox = await fetch(apiUrl('/api/inbox/' + name), {signal: controller.signal});
+      const inboxData = await inbox.json();
+      const pendings = (inboxData.messages || []).filter(m => m.status === 'pending');
       if (pendings.length === 0) continue;
       totalPending += pendings.length;
       html += `<div style="margin:8px 0 4px;font-size:12px;color:#fdba74;font-weight:600">${st.type || name} (${pendings.length})</div>`;
@@ -369,7 +443,11 @@ async function showAgent(name) {
 
     let html = `<div class="header">
       <h2>${esc(agentName)} <span style="font-size:12px;color:#64748b;font-weight:400">${cfg.type || ''}</span></h2>
-      <button class="btn btn-sm" onclick="closeModal()">✕</button>
+      <div>
+        <button class="btn btn-sm" onclick="launchAgentFromModal('${name}','browser')" title="浏览器打开">🌐 浏览器</button>
+        <button class="btn btn-sm" onclick="launchAgentFromModal('${name}','cli')" title="CLI 终端窗口" style="margin-left:4px">💻 CLI</button>
+        <button class="btn btn-sm" onclick="closeModal()" style="margin-left:4px">✕</button>
+      </div>
     </div>`;
 
     // 基础信息
@@ -458,6 +536,67 @@ function renderTasks(t) {
   el.innerHTML = `<table><thead><tr><th>ID</th><th>状态</th><th>概要</th><th>发起人</th><th>负责人</th><th>追踪链</th><th>催办</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+// ── Ping/reconnect agent ──
+
+async function pingAgent(name, evt) {
+  // 找到触发事件的按钮
+  let btn = null;
+  if (evt && evt.target) {
+    btn = evt.target.closest('.ping-btn');
+  }
+  if (!btn) {
+    btn = document.querySelector(`.ping-btn[data-agent="${name}"]`);
+  }
+  if (!btn) return;
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = '⏳';
+  try {
+    const r = await fetch(apiUrl('/api/ping/' + name));
+    const data = await r.json();
+    if (data.status === 'online') {
+      toast('✅ ' + name + ' 已恢复在线' + (data.detail ? ' · ' + data.detail : ''), 'success');
+    } else if (data.status === 'gateway_down') {
+      toast('❌ Gateway 启动失败: ' + (data.detail || ''), 'error');
+    } else {
+      toast('⏸ ' + name + ' 仍离线' + (data.detail ? ' · ' + data.detail : ''), 'error');
+    }
+  } catch(e) {
+    toast('重连失败: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = oldText;
+  // 后台刷新数据（不阻塞 toast）
+  setTimeout(() => loadAll().catch(() => {}), 500);
+}
+
+async function restartAgentMemory() {
+  const btn = document.getElementById('btnRestartAM');
+  if (!btn) return;
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = '⏳ 重启中...';
+  btn.style.background = '#f59e0b';
+  try {
+    const r = await fetch('/api/ping/agentmemory');
+    const data = await r.json();
+    if (data.status === 'healthy') {
+      toast('✅ AgentMemory 已重启成功', 'success');
+    } else {
+      toast('❌ 重启失败: ' + (data.detail || data.status), 'error');
+    }
+    // 刷新数据
+    setTimeout(() => loadAll().catch(() => {}), 500);
+  } catch(e) {
+    toast('❌ 重启请求失败: ' + e.message, 'error');
+  }
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.textContent = '🔄 重启 AM';
+    btn.style.background = '';
+  }, 3000);
+}
+
 // ── Tab 5: 健康状态 ──
 
 function renderHeartbeat(hb) {
@@ -468,22 +607,32 @@ function renderHeartbeat(hb) {
   const am = health.agentmemory || {};
   const disk = health.disk || {};
   const inboxWarnings = health.inbox_warnings || [];
-  const rows = Object.entries(agents).map(([name, state]) => {
+
+  // AgentMemory 状态行 + 重连按钮
+  const amStatus = am.status || 'unknown';
+  const amDot = amStatus === 'healthy' ? '🟢' : amStatus === 'unreachable' ? '🔴' : '⚪';
+  const amLabel = amStatus === 'healthy' ? '正常' : amStatus === 'unreachable' ? '断联' : '未知';
+
+const rows = Object.entries(agents).map(([name, state]) => {
     const dot = state.status === 'online' ? '🟢' : state.status === 'offline' ? '🔴' : '⚪';
+    const btnId = 'ping-' + name.replace(/[^a-z0-9]/g, '');
     return `<tr>
       <td>${dot} ${name}</td>
       <td>${statusBadge(state.status)}</td>
       <td style="font-size:11px;color:#64748b">${state.last_heartbeat || '-'}</td>
       <td style="font-size:11px;color:#64748b">${state.missed_pings || 0}</td>
+      <td>${state.status === 'offline' ? `<button class="btn btn-sm ping-btn" data-agent="${name}" id="${btnId}" title="重连">🔄 重连</button>` : ''}</td>
     </tr>`;
   }).join('');
+
   el.innerHTML = `
-    <div style="display:flex;gap:16px;font-size:12px;margin-bottom:12px;padding:12px;background:#1e293b;border-radius:8px">
-      <span>📦 AgentMemory: ${statusBadge(am.status)}</span>
+    <div style="display:flex;gap:16px;font-size:12px;margin-bottom:12px;padding:12px;background:#1e293b;border-radius:8px;align-items:center">
+      <span>📦 AgentMemory: <span id="amStatusDot">${amDot}</span> ${amLabel}</span>
+      <button class="btn btn-sm" id="btnRestartAM" onclick="restartAgentMemory()" title="先 kill 旧进程再重启 AgentMemory" style="background:${amStatus === 'unreachable' ? '#ef4444' : '#334155'};color:white">${amStatus === 'unreachable' ? '🔴 重启 AM' : '🔄 重启 AM'}</button>
       <span>💾 磁盘: ${disk.size_mb ? disk.size_mb + 'MB' : '-'}</span>
       <span>📨 积压: ${inboxWarnings.length ? inboxWarnings.map(w => w.agent+'('+w.count+')').join(', ') : '无'}</span>
     </div>
-    <table><thead><tr><th>Agent</th><th>状态</th><th>最后心跳</th><th>失联</th></tr></thead><tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:#64748b">无数据</td></tr>'}</tbody></table>
+    <table><thead><tr><th>Agent</th><th>状态</th><th>最后心跳</th><th>失联</th><th>操作</th></tr></thead><tbody>${rows || '<tr><td colspan="5" style="text-align:center;color:#64748b">无数据</td></tr>'}</tbody></table>
   `;
 }
 
@@ -525,7 +674,44 @@ async function triggerHeartbeat() {
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
+// 事件委托：心跳重连按钮（避免 onclick 字符串拼接的问题）
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.ping-btn');
+  if (!btn) return;
+  const agent = btn.dataset.agent;
+  if (!agent) return;
+  pingAgent(agent, e);
+});
+
 loadAll();
+
+// 兜底：根据 API 返回的 has_browser 隐藏没有 Web 界面的按钮
+async function fixBrowserButtons() {
+  try {
+    const c = new AbortController();
+    setTimeout(() => c.abort(), 5000);
+    const r = await fetch(apiUrl('/api/launch'), {signal: c.signal});
+    const data = await r.json();
+    if (!data.agents) return;
+    Object.entries(data.agents).forEach(([name, info]) => {
+      if (info.has_browser === false) {
+        // 找到该 agent 卡片中所有 browser 按钮并隐藏
+        document.querySelectorAll('.agent-card').forEach(card => {
+          const nameEl = card.querySelector('.name');
+          if (nameEl && nameEl.textContent.includes(info.name || name)) {
+            const btns = card.querySelectorAll('button');
+            btns.forEach(btn => {
+              if (btn.textContent.includes('🌐')) {
+                btn.style.display = 'none';
+              }
+            });
+          }
+        });
+      }
+    });
+  } catch(e) {}
+}
+setTimeout(fixBrowserButtons, 1000);
 </script>
 </body>
 </html>

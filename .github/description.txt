@@ -1,0 +1,1 @@
+description: A lightweight, file-based A2A (Agent-to-Agent) message bus for multi-agent teams. Zero middleware dependency — CLI push, bidirectional ACK, task tracking, heartbeat monitoring, full-text search, and a standalone web dashboard. Framework-agnostic: works with Hermes, OpenClaw, Cline, OpenCode, and any CLI-capable agent.
