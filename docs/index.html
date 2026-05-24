@@ -580,6 +580,7 @@ async function loadAll() {
     renderTasks(tasks);
     renderHeartbeat(hb);
     renderAlerts(alerts);
+    rawData.alerts = alerts; // 存起来给超时计数用
     renderReviewTab(reports);
     // 总览图表
     if (agents && agents.agents) {
@@ -588,6 +589,28 @@ async function loadAll() {
     // 总览 skill 使用
     if (rawData.skillUsage && rawData.skillUsage.skills) {
       renderSkillUsage(rawData.skillUsage.skills);
+    }
+    // 总览超时计数（从 alerts 中统计）
+    if (rawData.alerts && rawData.alerts.alerts) {
+      const timeoutCount = rawData.alerts.alerts.filter(a => a.type === 'timeout').length;
+      const timeoutEl = document.getElementById('tabAlertCount');
+      if (timeoutEl) timeoutEl.textContent = timeoutCount > 0 ? timeoutCount : '';
+      // 更新 stats 中的超时数
+      const statsRow = document.getElementById('statsRow');
+      if (statsRow) {
+        // 在图表行下加超时提醒（如果有）
+        let existing = statsRow.nextElementSibling;
+        if (existing && existing.id === 'timeoutBanner') {
+          existing.remove();
+        }
+        if (timeoutCount > 0) {
+          const banner = document.createElement('div');
+          banner.id = 'timeoutBanner';
+          banner.style.cssText = 'margin-top:8px;background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.3);border-radius:8px;padding:8px 12px;font-size:12px;color:#fdba74;display:flex;align-items:center;gap:8px';
+          banner.innerHTML = `⏰ <span style=font-weight:500>${timeoutCount}</span> 条超时未处理 <button class=\"btn btn-sm\" onclick=\"switchTab('alerts')\">查看 →</button>`;
+          statsRow.parentNode.insertBefore(banner, statsRow.nextSibling);
+        }
+      }
     }
     toast('已刷新', 'success');
     // 加载权限

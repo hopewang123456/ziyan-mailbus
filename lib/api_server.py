@@ -253,9 +253,34 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         self._send_json(hb)
 
     def _handle_alerts(self):
-        """告警历史"""
+        """告警历史（含系统告警 + inbox 催办消息）"""
         alerts = get_recent_alerts(self.data_dir, limit=50)
-        self._send_json({"alerts": alerts, "count": len(alerts)})
+        
+        # 扫描所有 agent 的 inbox，找催办消息
+        import os
+        remind_alerts = []
+        for name, cfg in self.agents.items():
+            inbox_path = os.path.join(self.data_dir, "inbox", name, "inbox.json")
+            if not os.path.isfile(inbox_path):
+                continue
+            data = json_read(inbox_path, {})
+            if not data:
+                continue
+            for m in data.get("messages", []):
+                if isinstance(m, dict) and m.get("from") == "mailbus":
+                    content = m.get("content", "")
+                    if "超时提醒" in content or "超时催办" in content:
+                        remind_alerts.append({
+                            "severity": "warn",
+                            "type": "timeout",
+                            "agent": name,
+                            "message": content[:120],
+                            "created_at": m.get("created_at", ""),
+                        })
+        
+        all_alerts = remind_alerts + alerts
+        all_alerts.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        self._send_json({"alerts": all_alerts[:50], "count": len(all_alerts)})
 
     def _handle_inbox(self, agent: str):
         """指定 Agent 的 inbox 内容（排除已归档消息）"""
