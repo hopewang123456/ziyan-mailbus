@@ -273,6 +273,7 @@ ziyan-mailbus/
 │   ├── alerter.py                # Alert system
 │   ├── api_server.py             # HTTP API server
 │   └── utils.py                  # File lock, JSON I/O, message builder
+├── mailbox-daemon.py             # Agent-side daemon (v0.5: task tracking + batch + dedup)
 ├── mailbus-memory-bridge.py      # AgentMemory bridge (optional)
 ├── store/                        # Runtime data (gitignored)
 ├── tests/                        # Test suite (10 files, 90+ tests)

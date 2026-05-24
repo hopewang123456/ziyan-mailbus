@@ -256,6 +256,7 @@ ziyan-mailbus/
 │   ├── alerter.py                # 告警系统
 │   ├── api_server.py             # HTTP API 服务
 │   └── utils.py                  # 文件锁、JSON 读写、消息构建
+├── mailbox-daemon.py             # Agent 侧守护进程（v0.5: 任务追踪+批量处理+去重）
 ├── mailbus-memory-bridge.py      # AgentMemory 桥接（可选）
 ├── store/                        # 运行时数据目录（gitignore，不提交）
 ├── tests/                        # 测试套件（10 文件，90+ 用例）
