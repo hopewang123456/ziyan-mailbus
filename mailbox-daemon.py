@@ -281,8 +281,8 @@ class MailboxDaemon:
             and m.get("id") not in acked_ids
             and m.get("id") not in self._processing_ids   # 内存去重：正在被 agent 处理的跳过
             and (
-                # 新消息：还未处理
-                (m.get("status") == "pending")
+                # 新消息：还未处理（兼容 "new" 和 "pending" 两种状态）
+                (m.get("status") in ("new", "pending"))
                 or
                 # 崩溃恢复：已 ack 但未完成（daemon 在 ack 后、处理完前挂了）
                 (m.get("status") == "acknowledged" and m.get("state") != "done")
