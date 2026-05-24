@@ -4,7 +4,7 @@ import os, sys, json, time, signal, logging, argparse, subprocess, tempfile
 from datetime import datetime, timezone, timedelta
 
 DEFAULT_DATA_DIR = "/mnt/e/ai_tools/mail/store"
-POLL_INTERVAL = 5
+POLL_INTERVAL = 15
 HEARTBEAT_INTERVAL = 60
 LOG_DIR = "/mnt/e/ai_tools/mail/logs"
 TZ_CST = timezone(timedelta(hours=8))
@@ -96,6 +96,7 @@ class MailboxDaemon:
         self.hb_path = os.path.join(data_dir, f"heartbeat.{agent_name}.json")
         self._running = True
         self._last_hb = 0
+        self._last_archive = 0
         self._watcher = None
         # {pid: {msg_id, sender, summary, proc, started_at}}
         self._running_procs = {}
@@ -251,6 +252,7 @@ class MailboxDaemon:
                         self._process_inbox()
                     self._reap_processes()
                     self._heartbeat_tick()
+                    self._archive_tick()
                 except Exception as e:
                     self.log.error(f"循环异常: {e}", exc_info=True)
         finally:
@@ -522,11 +524,17 @@ class MailboxDaemon:
                 finished.append(pid)
                 elapsed = time.time() - info["started_at"]
                 self.log.info(f"  agent 进程完成 (PID: {pid}, 耗时: {elapsed:.0f}s, 返回码: {ret})")
-                # 收集 stdout
+                # 收集 stdout（过滤 ANSI 转义 + [thinking] 痕迹，截短防 token 浪费）
                 stdout = ""
                 try:
+                    import re
                     out, _ = proc.communicate(timeout=5)
-                    stdout = out.decode("utf-8", errors="replace").strip()[:500]
+                    raw = out.decode("utf-8", errors="replace")
+                    # Step 1: 剥离 ANSI 转义码（如 \x1b[2m 包裹的 [thinking] 痕迹）
+                    raw = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', raw)
+                    # Step 2: 过滤掉 [thinking] 行（AI 内部思考过程，对收件人无意义）
+                    lines = [l for l in raw.split("\n") if "[thinking]" not in l and "[/thinking]" not in l]
+                    stdout = "\n".join(lines).strip()[:100]
                 except Exception:
                     pass
                 # 发完成回执给原始发件人
@@ -557,7 +565,7 @@ class MailboxDaemon:
                 f"原始消息: {original_msg_id}\n"
                 f"处理 agent: {self.agent_name}\n"
                 f"状态: {status}\n"
-                + (f"\n输出摘要:\n{detail[:300]}" if detail else "")
+                + (f"\n输出摘要:\n{detail[:100]}" if detail else "")
             ),
             "created_at": ts,
         }
@@ -586,6 +594,26 @@ class MailboxDaemon:
         }
         write_json(self.hb_path, hb)
         self.log.debug(f"心跳已更新 (进行中任务: {len(self._running_procs)})")
+
+    # ── 归档 ──
+
+    ARCHIVE_INTERVAL = 600  # 每 10 分钟归档一次
+
+    def _archive_tick(self):
+        now = time.time()
+        if now - self._last_archive < self.ARCHIVE_INTERVAL:
+            return
+        self._last_archive = now
+        try:
+            from lib.archiver import archive_agent
+            cfg = read_json(os.path.join(self.data_dir, "config.json"), {})
+            archive_days = cfg.get("archive_days", 7)
+            max_msgs = cfg.get("archive_max_messages", 300)
+            count = archive_agent(self.data_dir, self.agent_name, archive_days, max_msgs)
+            if count > 0:
+                self.log.info(f"归档完成: 已归档 {count} 条消息")
+        except Exception as e:
+            self.log.debug(f"归档检查: {e}")
 
 
 # ── CLI ──

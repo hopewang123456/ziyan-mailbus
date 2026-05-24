@@ -198,74 +198,30 @@ def check_disk_space(data_dir: str, warn_mb: int = DEFAULT_DISK_WARN_MB) -> Opti
         return {"status": "error", "detail": str(e)[:80]}
 
 
-def ping_agent(agent_cfg: dict, agent_types: dict, ping_timeout: int = DEFAULT_PING_TIMEOUT) -> bool:
-    """对单个 agent 执行心跳 ping，返回 True 表示在线"""
-    cmd = _build_ping_cmd(agent_cfg, agent_types)
-    if not cmd:
-        return False
+def ping_agent(agent_cfg: dict, agent_types: dict, ping_timeout: int = DEFAULT_PING_TIMEOUT,
+               data_dir: str = None) -> bool:
+    """对单个 agent 执行心跳检测 — 文件探活（零 token 成本）"""
+    agent_name = agent_cfg.get("profile", "") or agent_cfg.get("agent", "") or ""
+    if not agent_name:
+        return True  # 未知 agent 默认在线
+    hb_dir = data_dir or "/mnt/e/ai_tools/mail/store"
+    hb_file = os.path.join(hb_dir, f"heartbeat.{agent_name}.json")
     try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=ping_timeout)
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, Exception):
+        mtime = os.path.getmtime(hb_file)
+        return (time.time() - mtime) < ping_timeout * 3  # 30s 内有心跳即视为在线
+    except OSError:
         return False
 
 
 def ping_agent_with_report(agent_cfg: dict, agent_types: dict, ping_timeout: int = DEFAULT_PING_TIMEOUT) -> dict:
-    """
-    对单个 agent 执行心跳 ping，并尝试获取自检报告。
-
-    如果 agent 支持自检上报，stdout/stderr 中会包含 JSON 格式的状态报告。
-    返回: {"online": bool, "report": dict | None}
-    """
-    cmd = _build_ping_cmd(agent_cfg, agent_types)
-    if not cmd:
-        return {"online": False, "report": None}
-    try:
-        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=ping_timeout)
-        online = result.returncode == 0
-        # 尝试从 stdout 或 stderr 中提取 JSON 自检报告
-        report = None
-        for output in [result.stdout, result.stderr]:
-            if not output:
-                continue
-            # 查找 {...} 格式的 JSON
-            for line in output.split("\n"):
-                line = line.strip()
-                if line.startswith("{") and line.endswith("}"):
-                    try:
-                        import json as _json
-                        parsed = _json.loads(line)
-                        if isinstance(parsed, dict) and "status" in parsed:
-                            report = parsed
-                            break
-                    except (json.JSONDecodeError, ValueError):
-                        continue
-            if report:
-                break
-        return {"online": online, "report": report}
-    except (subprocess.TimeoutExpired, Exception):
-        return {"online": False, "report": None}
+    """文件探活（无 CLI 调用），返回 online 状态"""
+    online = ping_agent(agent_cfg, agent_types, ping_timeout)
+    return {"online": online, "report": None}
 
 
 def _build_ping_cmd(agent_cfg: dict, agent_types: dict) -> str:
-    """构建 ping 命令"""
-    atype = agent_cfg.get("type", "none")
-    tmpl = agent_types.get(atype, {}).get("heartbeat", "")
-    if not tmpl:
-        push_tmpl = agent_types.get(atype, {}).get("push", "")
-        if not push_tmpl:
-            return ""
-        ping_cmd = push_tmpl
-        ping_cmd = ping_cmd.replace("PROFILE", agent_cfg.get("profile", ""))
-        ping_cmd = ping_cmd.replace("AGENT", agent_cfg.get("agent", ""))
-        ping_cmd = ping_cmd.replace("MODEL", "")
-        ping_cmd = ping_cmd.replace("--model MODEL", "").replace("-m MODEL", "")
-        ping_cmd = ping_cmd.replace("'MSG'", "'ping'")
-        ping_cmd = ping_cmd.strip()
-    else:
-        ping_cmd = tmpl
-        ping_cmd = ping_cmd.replace("PROFILE", agent_cfg.get("profile", ""))
-    return ping_cmd
+    """构建 ping 命令（已弃用，保留兼容）"""
+    return ""
 
 
 # ── 主检测流程 ─────────────────────────────────────────────────────
