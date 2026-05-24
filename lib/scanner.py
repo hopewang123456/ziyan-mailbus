@@ -139,6 +139,13 @@ def scan_all(data_dir: str, agents: dict) -> List[Tuple[str, list, list]]:
     except Exception:
         pass
     
+    # 自动索引：扫描所有 inbox 更新搜索索引
+    try:
+        from .search import scan_and_index
+        scan_and_index(data_dir, agents)
+    except Exception:
+        pass
+    
     return results
 
 

@@ -114,6 +114,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             self._handle_skill_usage()
         elif path == "/api/skill-use":
             self._handle_skill_use()
+        elif path.startswith("/api/search"):
+            self._handle_search()
         elif path == "/" or path == "":
             self._serve_static("/")
         elif path == "/index.html":
@@ -637,6 +639,20 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             self._send_json({"status": "ok", "agent": agent, "msg_id": msg_id})
         else:
             self._send_json({"error": "not_found"}, 404)
+
+    def _handle_search(self):
+        """GET /api/search?q=xxx&from=xxx&limit=20 → 搜索消息"""
+        from urllib.parse import urlparse, parse_qs
+        qs = parse_qs(urlparse(self.path).query)
+        query_str = qs.get("q", [""])[0]
+        from_agent = qs.get("from", [""])[0]
+        msg_type = qs.get("type", [""])[0]
+        limit = int(qs.get("limit", ["20"])[0])
+        
+        from .search import search as search_msgs
+        results = search_msgs(self.data_dir, query_str=query_str, from_agent=from_agent,
+                              msg_type=msg_type, limit=limit)
+        self._send_json({"results": results, "count": len(results)})
 
     def _handle_config(self):
         """当前配置（去掉敏感路径信息）"""
