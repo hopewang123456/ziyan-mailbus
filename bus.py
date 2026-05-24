@@ -697,6 +697,43 @@ def cmd_archive(args):
     return 0
 
 
+def cmd_backup(args):
+    """备份 store/ 目录到 backup/"""
+    import shutil, datetime
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+    
+    backup_dir = os.path.join(os.path.dirname(data_dir), "backup")
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    archive_name = f"store-backup-{ts}.tar.gz"
+    archive_path = os.path.join(backup_dir, archive_name)
+    
+    os.makedirs(backup_dir, exist_ok=True)
+    
+    # 用 tar 压缩，排除大的临时文件
+    import subprocess
+    result = subprocess.run(
+        ["tar", "-czf", archive_path, "-C", os.path.dirname(data_dir), "store",
+         "--exclude=store/search.db", "--exclude=store/heartbeat.json"],
+        capture_output=True, text=True, timeout=60
+    )
+    
+    if result.returncode == 0:
+        size_mb = os.path.getsize(archive_path) / 1024 / 1024
+        print(f"✅ 备份完成: {archive_name} ({size_mb:.1f} MB)")
+        # 保留最近 7 个备份，删除更早的
+        backups = sorted([f for f in os.listdir(backup_dir) if f.startswith("store-backup-")])
+        while len(backups) > 7:
+            old = backups.pop(0)
+            os.remove(os.path.join(backup_dir, old))
+            print(f"  删除旧备份: {old}")
+        return 0
+    else:
+        print(f"❌ 备份失败: {result.stderr}")
+        return 1
+
+
 def cmd_errors(args):
     """查看错误日志"""
     config_path = _find_config(args)
