@@ -232,6 +232,17 @@ mailbus 会将你的回复视为已读确认。
 mailbus 通过 CLI 将消息推送给你。你收到的每条消息都包含操作指令，
 请按【必须】标记的步骤执行，最重要的是写 ack 确认已读。
 
+【Skill 使用记录】
+如果你在本次任务中调用了任何 skill，请额外写一条记录文件：
+  写文件到: {data_dir}/skill-usage-pending/{agent_name}-{msg_id}.json
+  格式:
+  ```json
+  {{"skill": "<skill名称>", "agent": "{agent_name}", "timestamp": "<ISO时间>"}}
+  ```
+  示例: {{"skill": "scrapling-skill", "agent": "{agent_name}", "timestamp": "2026-05-24T12:00:00+08:00"}}
+
+mailbus scan 会自动收集这些记录，展示在总览页的 skill 使用统计中。
+
 ---
 """
     combined_text = system_context + combined_text

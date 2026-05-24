@@ -126,7 +126,50 @@ def scan_all(data_dir: str, agents: dict) -> List[Tuple[str, list, list]]:
     # 超时检测：检查所有 agent 的 inbox，超时未处理的消息自动催办
     _check_timeouts(data_dir, agents, inbox_path.rsplit("/inbox/", 1)[0] + "/inbox" if "inbox_path" in dir() else data_dir + "/inbox", paths)
     
+    # 技能使用记录消费：扫描 skill-usage-pending 目录，归入 skill-usage.json
+    _consume_skill_usage(data_dir)
+    
     return results
+
+
+def _consume_skill_usage(data_dir: str):
+    """扫描 skill-usage-pending/ 目录，消费待处理的 skill 使用记录"""
+    pending_dir = os.path.join(data_dir, "skill-usage-pending")
+    target_file = os.path.join(data_dir, "skill-usage.json")
+    if not os.path.isdir(pending_dir):
+        return
+    
+    consumed = 0
+    target_data = json_read(target_file, {})
+    
+    for fname in os.listdir(pending_dir):
+        if not fname.endswith(".json"):
+            continue
+        fpath = os.path.join(pending_dir, fname)
+        try:
+            with open(fpath) as f:
+                record = json.load(f)
+            skill = record.get("skill", "")
+            agent = record.get("agent", "")
+            ts = record.get("timestamp", "")
+            if not skill or not agent:
+                continue
+            
+            if skill not in target_data:
+                target_data[skill] = {}
+            if agent not in target_data[skill]:
+                target_data[skill][agent] = {"use_count": 0, "view_count": 0, "last_used": ""}
+            target_data[skill][agent]["use_count"] = target_data[skill][agent].get("use_count", 0) + 1
+            if ts:
+                target_data[skill][agent]["last_used"] = ts
+            
+            os.remove(fpath)
+            consumed += 1
+        except Exception:
+            pass
+    
+    if consumed > 0:
+        json_write(target_file, target_data)
 
 
 def _check_timeouts(data_dir: str, agents: dict, inbox_base: str, paths: dict):
