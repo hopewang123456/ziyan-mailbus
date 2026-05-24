@@ -283,6 +283,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                     "status": m.get("status", ""),
                     "state": m.get("state", ""),
                     "state_history": m.get("state_history", []),
+                    "actions": m.get("actions", []),
                     "read": m.get("read", False),
                     "created_at": m.get("created_at", ""),
                 })

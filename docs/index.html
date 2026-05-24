@@ -967,6 +967,37 @@ async function showAgent(name) {
       }
     }
 
+    // ── 📋 任务进度 ──
+    // 从 inbox 数据中找有 actions 的消息
+    const inboxMsgs = msgs.filter(m => m.actions && m.actions.length > 0).slice(0, 5);
+    if (inboxMsgs.length > 0) {
+      html += `<div class=section-title>📋 任务进度</div>`;
+      for (const im of inboxMsgs) {
+        const actions = im.actions || [];
+        const done = actions.filter(a => a.status === 'done').length;
+        const total = actions.length;
+        const pct = Math.round((done / total) * 100);
+        html += `<div style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px;margin-bottom:6px">
+          <div style=display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;margin-bottom:4px>
+            <span>📨 ${esc(im.id || '').slice(0, 24)}</span>
+            <span>${done}/${total} · ${pct}%</span>
+          </div>
+          <div style="background:#1e293b;border-radius:4px;height:4px;overflow:hidden;margin-bottom:6px">
+            <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#22d3ee,#06b6d4);border-radius:4px;transition:width .3s"></div>
+          </div>
+          ${actions.map((a, i) => {
+            const statusIcon = a.status === 'done' ? '✅' : a.status === 'processing' ? '🔄' : '⬜';
+            const statusColor = a.status === 'done' ? '#6ee7b7' : a.status === 'processing' ? '#fbbf24' : '#475569';
+            return `<div style=display:flex;align-items:center;gap:6px;font-size:11px;padding:2px 0>
+              <span>${statusIcon}</span>
+              <span style=flex:1;color:${statusColor}>${esc(a.step)}</span>
+              <span style=font-size:9px;color:#475569>${a.status}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+      }
+    }
+
     document.getElementById('agentModalContent').innerHTML = html;
     document.getElementById('agentModal').classList.add('open');
   } catch(e) {
