@@ -1301,17 +1301,20 @@ function renderMailboxHTML(msgs) {
       const shortId = m.id ? '#' + m.id.slice(-6) : '';
 
       html += `<div class="mailbox-item ${isRead ? '' : 'unread'}">
-        <div class="status-dot ${isRead ? 'read' : 'unread'}"></div>
-        <div class=body>
-          <div class=meta>
+        <input type=checkbox class=batch-chk data-msg-id="${esc(m.id||'')}" style="position:absolute;left:6px;top:14px;width:14px;height:14px;accent-color:#22d3ee">
+        <div style=margin-left:22px>
+        <div class="status-dot ${isRead ? 'read' : 'unread'}" style=display:inline-block></div>
+        <div class=body style=display:inline;margin-left:4px>
+          <div class=meta style=display:inline>
             <span class=from>${esc(fromName)}</span>
             <span class=time>${timeOnly}</span>
           </div>
-          <div class=text>${esc(contentPreview)}</div>
+          <div class=text style=margin-top:2px>${esc(contentPreview)}</div>
           <div>
             <span class="status-tag ${isRead ? 'read' : 'pending'}">${isRead ? '✓ 已读' : '○ 未读'}</span>
             <span style=font-size:10px;color:#475569;margin-left:6px>${m.type} · ${shortId}</span>
           </div>
+        </div>
         </div>
       </div>`;
     });
@@ -1357,7 +1360,8 @@ async function openMailbox(name) {
       <div class=header>
         <h2>📬 ${esc(agentName)}</h2>
         <div>
-          ${unreadCount > 0 ? `<button class="btn btn-sm" onclick="markRead('${name}')" style=margin-right:4px>✅ 全部已读</button>` : ''}
+          ${unreadCount > 0 ? '<button class="btn btn-sm" onclick="markRead(' + name + ')" style=margin-right:4px>✅ 全部已读</button>' : ''}
+          <button class="btn btn-sm" onclick="batchMarkRead(' + name + ')" style=margin-right:4px;display:none id=batchMarkReadBtn>✅ 批量已读</button>
           <button class="btn btn-sm" onclick="closeModal()">✕</button>
         </div>
       </div>
@@ -1396,6 +1400,38 @@ async function markRead(name) {
     toast('标记失败: ' + e.message, 'error');
   }
 }
+
+// ── 批量操作 ──
+
+function batchMarkRead(name) {
+  const chks = document.querySelectorAll('.batch-chk:checked');
+  const ids = Array.from(chks).map(c => c.dataset.msgId).filter(Boolean);
+  if (ids.length === 0) { toast('请先勾选消息', 'error'); return; }
+  
+  // 逐个调用 mark-read API
+  Promise.all(ids.map(id => 
+    fetch(apiUrl('/api/mark-read/' + name), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({msg_id: id})
+    }).then(r => r.json())
+  )).then(results => {
+    const ok = results.filter(r => r.status === 'ok').length;
+    toast('✅ ' + ok + '/' + ids.length + ' 条已标记已读', 'success');
+    openMailbox(name); // 刷新
+  }).catch(e => {
+    toast('批量操作失败: ' + e.message, 'error');
+  });
+}
+
+// 复选框变化时显示/隐藏批量按钮
+document.addEventListener('change', function(e) {
+  if (e.target && e.target.classList.contains('batch-chk')) {
+    const checked = document.querySelectorAll('.batch-chk:checked').length;
+    const btn = document.getElementById('batchMarkReadBtn');
+    if (btn) btn.style.display = checked > 0 ? 'inline-block' : 'none';
+  }
+});
 
 // ── Tab 4: 任务追踪 ──
 
