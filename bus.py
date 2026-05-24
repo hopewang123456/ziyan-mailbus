@@ -20,12 +20,14 @@ ziyan-mailbus — 多 Agent 消息总线系统
 配置: data_dir (默认 /mnt/e/ai_tools/mail/store) 中的 config.json
 """
 
-import sys
 import os
+import sys
 import json
 import argparse
-
-# 确保 lib 在路径中
+import time
+import shutil
+from pathlib import Path
+from datetime import datetime, timezone, timedelta
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from lib.models import (
@@ -804,6 +806,57 @@ def cmd_agent_remove(args):
     return 0
 
 
+def cmd_review(args):
+    """代码审查：运行 review.py 审查代码变更"""
+    import subprocess
+
+    review_script = "/mnt/e/ai_tools/pr-agent/review.py"
+    if not os.path.isfile(review_script):
+        print(f"✗ review.py 未找到: {review_script}")
+        return 1
+
+    workdir = args.workdir or os.getcwd()
+    if not os.path.isdir(workdir):
+        print(f"✗ 目录不存在: {workdir}")
+        return 1
+
+    cmd = [sys.executable, review_script]
+    if args.commit:
+        cmd += ["--commit", args.commit]
+    if args.semgrep:
+        cmd += ["--semgrep"]
+    if args.output:
+        cmd += ["--output", args.output]
+    if args.target:
+        cmd += ["--target-dir", args.target]
+
+    print(f"🔍 代码审查开始: {workdir}")
+    env = os.environ.copy()
+    env["DEEPSEEK_API_KEY"] = env.get("DEEPSEEK_API_KEY", "")
+    if not env["DEEPSEEK_API_KEY"]:
+        print("⚠ DEEPSEEK_API_KEY 未设置，尝试从 .env 读取...")
+        env_path = os.path.expanduser("~/.hermes/.env")
+        if os.path.isfile(env_path):
+            with open(env_path) as f:
+                for line in f:
+                    if line.startswith("DEEPSEEK_API_KEY="):
+                        env["DEEPSEEK_API_KEY"] = line.strip().split("=", 1)[1].strip("'\"")
+                        break
+
+    try:
+        r = subprocess.run(cmd, cwd=workdir, env=env, capture_output=True, text=True, timeout=180)
+        print(r.stdout)
+        if r.stderr:
+            print(f"⚠ stderr: {r.stderr[:300]}")
+        return r.returncode
+    except subprocess.TimeoutExpired:
+        print("✗ 审查超时（180秒）")
+        return 1
+    except Exception as e:
+        print(f"✗ 审查失败: {e}")
+        return 1
+
+
 # ── 辅助函数 ──────────────────────────────────────────────────────────
 
 def _find_config(args) -> str:
@@ -893,6 +946,15 @@ def main():
     p_er = sub.add_parser("errors", help="查看错误日志")
     _add_data_dir_arg(p_er)
     
+    # review
+    p_rv = sub.add_parser("review", help="运行代码审查（review.py）")
+    _add_data_dir_arg(p_rv)
+    p_rv.add_argument("--workdir", default="", help="工作目录（默认当前目录）")
+    p_rv.add_argument("--commit", default="", help="审查指定 commit（如 HEAD）")
+    p_rv.add_argument("--semgrep", action="store_true", help="同时跑 Semgrep 扫描")
+    p_rv.add_argument("--output", default="", help="输出报告路径")
+    p_rv.add_argument("--target", default=".", help="Semgrep 目标目录")
+    
     # agent-add
     p_aa = sub.add_parser("agent-add", help="注册新 agent")
     _add_data_dir_arg(p_aa)
@@ -950,6 +1012,7 @@ def main():
         "heartbeat": cmd_heartbeat,
         "serve": cmd_serve,
         "search": cmd_search,
+        "review": cmd_review,
     }
     
     return cmd_map[args.command](args)

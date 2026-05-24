@@ -143,6 +143,7 @@ td{padding:8px 10px;border-bottom:1px solid #1e293b}
   <div class="tab active" data-tab="agents" onclick="switchTab('agents')">🤖 Agent <span class="num" id="tabAgentCount"></span></div>
   <div class="tab" data-tab="bulletin" onclick="switchTab('bulletin')">📢 公告栏 <span class="num" id="tabBulletinCount"></span></div>
   <div class="tab" data-tab="tasks" onclick="switchTab('tasks')">🎯 任务追踪</div>
+  <div class="tab" data-tab="review" onclick="switchTab('review')">🔍 审查 <span class="num" id="tabReviewCount"></span></div>
   <div class="tab" data-tab="heartbeat" onclick="switchTab('heartbeat')">💓 健康状态</div>
   <div class="tab" data-tab="alerts" onclick="switchTab('alerts')">🔔 告警</div>
 </div>
@@ -197,6 +198,15 @@ td{padding:8px 10px;border-bottom:1px solid #1e293b}
     <button class="btn btn-sm" onclick="reloadData('alerts')">🔄 刷新</button>
   </div>
   <div id="alertTable"></div>
+</div>
+
+<!-- Tab: 审查报告 -->
+<div class="tab-content" id="tab-review">
+  <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:13px;color:#94a3b8"><span id="reviewCount"></span> 份审查报告</span>
+    <button class="btn btn-sm" onclick="reloadData('review')">🔄 刷新</button>
+  </div>
+  <div id="reviewList"></div>
 </div>
 
 <!-- Agent 详情弹窗 -->
@@ -316,16 +326,18 @@ function mdToHtml(md) {
 
 async function loadAll() {
   try {
-    const [status, agents, tasks, hb, alerts, bulletin] = await Promise.all([
+    const [status, agents, tasks, hb, alerts, bulletin, reports] = await Promise.all([
       fetchJSON('/api/status'), fetchJSON('/api/agents'), fetchJSON('/api/tasks'),
       fetchJSON('/api/heartbeat'), fetchJSON('/api/alerts'), fetchJSON('/api/bulletin'),
+      fetchJSON('/api/reports'),
     ]);
-    rawData = { status, agents, tasks, hb, alerts, bulletin };
+    rawData = { status, agents, tasks, hb, alerts, bulletin, reports };
     renderAgentTab(status, agents);
     renderBulletinTab(bulletin);
     renderTasks(tasks);
     renderHeartbeat(hb);
     renderAlerts(alerts);
+    renderReviewTab(reports);
     toast('已刷新', 'success');
     // 加载权限
     try {
@@ -356,6 +368,7 @@ async function reloadData(name) {
   const map = {
     agents: ['/api/status', '/api/agents'],
     bulletin: ['/api/bulletin'],
+    review: ['/api/reports'],
     tasks: ['/api/tasks'],
     heartbeat: ['/api/heartbeat'],
     alerts: ['/api/alerts'],
@@ -368,6 +381,7 @@ async function reloadData(name) {
     }));
     if (name === 'agents') { rawData.status = results[0]; rawData.agents = results[1]; renderAgentTab(results[0], results[1]); }
     if (name === 'bulletin') { rawData.bulletin = results[0]; renderBulletinTab(results[0]); }
+    if (name === 'review') { rawData.reports = results[0]; renderReviewTab(results[0]); }
     if (name === 'tasks') { rawData.tasks = results[0]; renderTasks(results[0]); }
     if (name === 'heartbeat') { rawData.hb = results[0]; renderHeartbeat(results[0]); }
     if (name === 'alerts') { rawData.alerts = results[0]; renderAlerts(results[0]); }
@@ -881,6 +895,39 @@ function renderTasks(t) {
     </tr>`;
   }).join('');
   el.innerHTML = `<table><thead><tr><th>ID</th><th>状态</th><th>概要</th><th>发起人</th><th>负责人</th><th>追踪链</th><th>催办</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ── Tab 5: 审查报告 ──
+
+function renderReviewTab(reports) {
+  const el = document.getElementById('reviewList');
+  const count = document.getElementById('reviewCount');
+  const items = (reports && reports.reports) || [];
+  count.textContent = items.length;
+  if (items.length === 0) { el.innerHTML = '<div style=color:#64748b;font-size:13px>暂无审查报告</div>'; return; }
+
+  el.innerHTML = items.map((r, idx) => `
+    <div class="bulletin-item" style="cursor:pointer" onclick="showReviewDetail(${idx})">
+      <div style=display:flex;justify-content:space-between;align-items:center;margin-bottom:6px>
+        <span style=font-size:13px;font-weight:500>🔍 ${esc(r.file)}</span>
+        <span style=font-size:11px;color:#64748b>${r.time} · ${(r.size/1024).toFixed(1)}KB</span>
+      </div>
+      <div style=font-size:12px;color:#94a3b8;line-height:1.5;max-height:60px;overflow:hidden>${esc((r.content||'').slice(0,200))}</div>
+    </div>
+  `).join('');
+}
+
+function showReviewDetail(idx) {
+  const reports = rawData.reports && rawData.reports.reports;
+  if (!reports || !reports[idx]) return;
+  const r = reports[idx];
+  let html = `<div class=header>
+    <h2>📄 ${esc(r.file)}</h2>
+    <button class="btn btn-sm" onclick="closeModal()">✕</button>
+  </div>
+  <div style=font-size:13px;line-height:1.7;white-space:pre-wrap;background:#0f172a;border-radius:8px;padding:16px;max-height:70vh;overflow:auto>${esc(r.content||'')}</div>`;
+  document.getElementById('agentModalContent').innerHTML = html;
+  document.getElementById('agentModal').classList.add('open');
 }
 
 // ── Ping/reconnect agent ──

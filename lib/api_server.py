@@ -106,6 +106,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             self._send_json({"permit": self.bulletin_permit})
         elif path == "/api/permission":
             self._handle_permission()
+        elif path == "/api/reports":
+            self._handle_reports()
         elif path == "/" or path == "":
             self._serve_static("/")
         elif path == "/index.html":
@@ -362,6 +364,35 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             # 保存一份到 self 供前端实时使用
             self.permissions = permissions
             self._send_json({"status": "ok", "permissions": permissions})
+
+    def _handle_reports(self):
+        """GET /api/reports → 返回审查报告列表"""
+        reports_dir = os.path.join(self.data_dir, "reports")
+        reports = []
+        if os.path.isdir(reports_dir):
+            for fname in sorted(os.listdir(reports_dir), reverse=True):
+                if fname.endswith(".md"):
+                    fpath = os.path.join(reports_dir, fname)
+                    try:
+                        size = os.path.getsize(fpath)
+                        mtime = os.path.getmtime(fpath)
+                        import datetime
+                        mtime_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+                        # 取报告前 200 字作为摘要
+                        preview = ""
+                        with open(fpath, encoding="utf-8") as f:
+                            preview = f.read()[:300]
+                        reports.append({
+                            "file": fname,
+                            "size": size,
+                            "time": mtime_str,
+                            "content": preview,
+                        })
+                    except Exception:
+                        pass
+                    if len(reports) >= 30:
+                        break
+        self._send_json({"reports": reports, "count": len(reports)})
 
     def _handle_config(self):
         """当前配置（去掉敏感路径信息）"""
