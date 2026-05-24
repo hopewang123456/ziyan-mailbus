@@ -371,6 +371,7 @@ td{padding:8px 10px;border-bottom:1px solid #1e293b}
     <input type=checkbox id="autoRefreshChk" onchange="toggleAutoRefresh()" checked>
     自动刷新 (30s)
   </label>
+  <button class="btn" onclick="openSendMsg()">✉️ 发消息</button>
   <button class="btn" onclick="triggerHeartbeat()">💓 触发心跳</button>
 </div>
 
@@ -491,6 +492,37 @@ td{padding:8px 10px;border-bottom:1px solid #1e293b}
     <div style="text-align:right;margin-top:16px">
       <button class="btn btn-sm" onclick="closePermitModal()" style="margin-right:6px">取消</button>
       <button class="btn btn-primary" onclick="savePermit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 发消息弹窗 -->
+<div class="modal" id="sendMsgModal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal-inner" style="max-width:600px">
+    <div class="header">
+      <h2>✉️ 发消息</h2>
+      <button class="btn btn-sm" onclick="document.getElementById('sendMsgModal').classList.remove('open')">✕</button>
+    </div>
+    <div class="section-title">选择模板</div>
+    <div id="msgTemplates" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px"></div>
+    <div class="section-title">收件人</div>
+    <select id="msgTo" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 10px;border-radius:6px;font-size:13px;margin-bottom:8px"></select>
+    <div class="section-title">消息类型</div>
+    <select id="msgType" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 10px;border-radius:6px;font-size:13px;margin-bottom:8px">
+      <option value="notice">通知</option>
+      <option value="task_reply">任务</option>
+      <option value="reply">回复</option>
+      <option value="normal">普通</option>
+    </select>
+    <div id="msgTopicGroup" style="display:none">
+      <div class="section-title" id="msgTopicLabel">主题</div>
+      <input id="msgTopic" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 10px;border-radius:6px;font-size:13px;margin-bottom:8px" placeholder="填写变量值">
+    </div>
+    <div class="section-title">消息内容</div>
+    <textarea id="msgContent" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;padding:8px 10px;border-radius:6px;font-size:13px;min-height:120px;resize:vertical" placeholder="消息内容..."></textarea>
+    <div style="text-align:right;margin-top:12px">
+      <button class="btn btn-sm" onclick="document.getElementById('sendMsgModal').classList.remove('open')" style=margin-right:6px>取消</button>
+      <button class="btn btn-primary" onclick="sendMsg()">发送</button>
     </div>
   </div>
 </div>
@@ -801,6 +833,105 @@ function openPostBulletin() {
   document.getElementById('postModal').classList.add('open');
   document.getElementById('bulletinTitle').value = '';
   document.getElementById('bulletinContent').value = '';
+}
+
+// ── 发消息弹窗 ──
+
+let _msgTemplates = [];
+
+async function openSendMsg() {
+  const modal = document.getElementById('sendMsgModal');
+  if (!modal) return;
+  modal.classList.add('open');
+  
+  // 加载模板
+  try {
+    const data = await fetchJSON('/api/templates');
+    _msgTemplates = data.templates || [];
+  } catch(e) {
+    _msgTemplates = [];
+  }
+  
+  // 渲染模板选择
+  const tmplHtml = _msgTemplates.map(t => 
+    `<div class="tab" onclick="applyMsgTemplate('${t.id}')" style="cursor:pointer;padding:6px 12px;font-size:12px;margin:2px">${t.name}</div>`
+  ).join('');
+  document.getElementById('msgTemplates').innerHTML = tmplHtml;
+  
+  // 渲染收件人
+  const agents = (rawData.agents && rawData.agents.agents) || {};
+  const agentNames = {"lingzhao":"灵昭","lingjin":"灵瑾","lingxi":"灵犀","xiaoqi":"小七","yige":"一哥","lingxiao":"灵霄","dali":"大力"};
+  const optHtml = Object.entries(agents).map(([k, v]) =>
+    `<option value="${k}">${agentNames[k] || v.name || k}</option>`
+  ).join('');
+  document.getElementById('msgTo').innerHTML = optHtml;
+  
+  // 清除表单
+  document.getElementById('msgContent').value = '';
+  document.getElementById('msgTopic').value = '';
+  document.getElementById('msgTopicGroup').style.display = 'none';
+}
+
+function applyMsgTemplate(tmplId) {
+  const t = _msgTemplates.find(x => x.id === tmplId);
+  if (!t) return;
+  document.getElementById('msgContent').value = t.content;
+  document.getElementById('msgType').value = t.type;
+  
+  // 显示变量字段
+  const hasVars = t.content.includes('{topic}') || t.content.includes('{description}') || t.content.includes('{message}') || t.content.includes('{question}');
+  const topicGroup = document.getElementById('msgTopicGroup');
+  const topicLabel = document.getElementById('msgTopicLabel');
+  if (t.content.includes('{topic}')) { topicGroup.style.display = ''; topicLabel.textContent = '调研主题:'; }
+  else if (t.content.includes('{description}')) { topicGroup.style.display = ''; topicLabel.textContent = '代码描述:'; }
+  else if (t.content.includes('{message}')) { topicGroup.style.display = ''; topicLabel.textContent = '通知内容:'; }
+  else if (t.content.includes('{question}')) { topicGroup.style.display = ''; topicLabel.textContent = '问题:'; }
+  else { topicGroup.style.display = 'none'; }
+}
+
+async function sendMsg() {
+  const to = document.getElementById('msgTo').value;
+  const type = document.getElementById('msgType').value;
+  let content = document.getElementById('msgContent').value;
+  const topic = document.getElementById('msgTopic').value;
+  
+  if (!to || !content) { toast('请选择收件人并填写内容', 'error'); return; }
+  
+  // 替换变量
+  if (topic) {
+    content = content.replace('{topic}', topic).replace('{description}', topic).replace('{message}', topic).replace('{question}', topic);
+  }
+  
+  try {
+    // 发消息 = 写目标 inbox
+    const msg = {
+      id: 'manual-' + Date.now() + '-' + Math.random().toString(36).slice(2,6),
+      from: 'lingzhao',
+      to: to,
+      type: type || 'notice',
+      priority: 'normal',
+      content: content,
+      created_at: new Date().toISOString(),
+    };
+    
+    const writeR = await fetch(apiUrl('/api/send-msg'), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({to: to, msg: msg})
+    });
+    const writeData = await writeR.json();
+    
+    if (writeData.status === 'sent') {
+      toast('✅ 消息已发送给 ' + to, 'success');
+      document.getElementById('sendMsgModal').classList.remove('open');
+      loadAll();
+    } else {
+      // fallback: 直接显示需要手动操作
+      toast('⚠️ 消息可能需要手动确认，请检查日志', 'warn');
+    }
+  } catch(e) {
+    toast('发送失败: ' + e.message, 'error');
+  }
 }
 function closePostModal() {
   document.getElementById('postModal').classList.remove('open');

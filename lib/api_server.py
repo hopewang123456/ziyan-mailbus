@@ -116,6 +116,10 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             self._handle_skill_use()
         elif path.startswith("/api/search"):
             self._handle_search()
+        elif path == "/api/templates":
+            self._handle_templates()
+        elif path == "/api/send-msg":
+            self._handle_send_msg()
         elif path == "/" or path == "":
             self._serve_static("/")
         elif path == "/index.html":
@@ -143,6 +147,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             self._handle_permission()
         elif path == "/api/skill-use":
             self._handle_skill_use()
+        elif path == "/api/send-msg":
+            self._handle_send_msg()
         elif path.startswith("/api/actions/update/"):
             # /api/actions/update/<agent>/<msg_id>
             parts = path.split("/")
@@ -393,6 +399,25 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         )
         json_write(inbox_file, data)
         self._send_json({"status": "ok", "agent": agent, "marked": changed})
+
+    def _handle_send_msg(self):
+        """POST /api/send-msg → 发一条消息到目标 agent 的 inbox"""
+        body = self._read_post_body()
+        to = body.get("to", "")
+        msg = body.get("msg", {})
+        if not to or not msg:
+            self._send_json({"error": "need to and msg"}, 400)
+            return
+        paths = resolve_paths(self.data_dir)
+        inbox_file = f"{paths['inbox']}/{to}/inbox.json"
+        data = json_read(inbox_file, {})
+        if not data:
+            data = {"agent": to, "has_unread": True, "messages": []}
+        msg["status"] = "pending"
+        data.setdefault("messages", []).append(msg)
+        data["has_unread"] = True
+        json_write(inbox_file, data)
+        self._send_json({"status": "sent", "to": to})
 
     def _handle_permission(self):
         """GET /api/permission → 返回权限配置"""
@@ -653,6 +678,25 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         results = search_msgs(self.data_dir, query_str=query_str, from_agent=from_agent,
                               msg_type=msg_type, limit=limit)
         self._send_json({"results": results, "count": len(results)})
+
+    def _handle_templates(self):
+        """GET /api/templates → 返回消息模板列表"""
+        templates = [
+            {"id": "research", "name": "🔬 调研", "type": "task_reply",
+             "content": "请调研一下 {topic}，包括：\n1. 功能概览\n2. 与现有方案的对比\n3. 可落地性评估\n4. 风险点",
+             "task_summary": "1. 调研 {topic} 功能\n2. 对比现有方案\n3. 写报告回复"},
+            {"id": "review", "name": "🔍 代码审查", "type": "task_reply",
+             "content": "请审查以下代码变更：\n{description}\n关注点：\n1. 业务逻辑正确性\n2. 安全隐患\n3. 代码规范",
+             "task_summary": "1. 审查代码变更\n2. 写审查报告\n3. 回复结果"},
+            {"id": "coding", "name": "💻 编码任务", "type": "task_reply",
+             "content": "请完成以下编码任务：\n{description}\n\n验收标准：\n1. 功能正常\n2. 通过单元测试\n3. 代码风格符合规范",
+             "task_summary": "1. 分析需求\n2. 编码实现\n3. 自测通过\n4. 回复结果"},
+            {"id": "notice", "name": "📢 通知", "type": "notice",
+             "content": "{message}", "task_summary": ""},
+            {"id": "question", "name": "❓ 提问", "type": "reply",
+             "content": "{question}", "task_summary": ""},
+        ]
+        self._send_json({"templates": templates})
 
     def _handle_config(self):
         """当前配置（去掉敏感路径信息）"""
