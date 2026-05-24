@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mailbox-daemon.py — Agent 侧邮箱守护进程 v0.4 (风险修复)"""
+"""mailbox-daemon.py — Agent 侧邮箱守护进程 v0.5 (任务追踪+去重保护)"""
 import os, sys, json, time, signal, logging, argparse, subprocess, tempfile
 from datetime import datetime, timezone, timedelta
 
@@ -98,8 +98,10 @@ class MailboxDaemon:
         self._last_hb = 0
         self._last_archive = 0
         self._watcher = None
-        # {pid: {msg_id, sender, summary, proc, started_at}}
+        # {pid: {msg_ids, senders, summary, proc, started_at}}
         self._running_procs = {}
+        # 内存级去重：正在处理的消息 ID 集合（防止重复 poll）
+        self._processing_ids = set()
         self._setup_logging()
 
     def _setup_logging(self):
@@ -273,56 +275,74 @@ class MailboxDaemon:
         for e in ack_data:
             if isinstance(e, dict) and e.get("action") == "ack":
                 acked_ids.add(e.get("msg_id"))
-        pending = [
+        pending_raw = [
             m for m in inbox.get("messages", [])
             if isinstance(m, dict)
-            and m.get("status") == "pending"
             and m.get("id") not in acked_ids
+            and m.get("id") not in self._processing_ids   # 内存去重：正在被 agent 处理的跳过
+            and (
+                # 新消息：还未处理
+                (m.get("status") == "pending")
+                or
+                # 崩溃恢复：已 ack 但未完成（daemon 在 ack 后、处理完前挂了）
+                (m.get("status") == "acknowledged" and m.get("state") != "done")
+            )
         ]
-        if not pending:
+        if not pending_raw:
             return
-        self.log.info(f"发现 {len(pending)} 条待处理消息")
-        for msg in pending:
-            self._handle_message(msg)
+        self.log.info(f"发现 {len(pending_raw)} 条待处理消息 (含崩溃恢复)")
 
-    def _handle_message(self, msg):
-        # 统一解析（兼容新旧格式）
-        parsed = self._parse_message(msg)
-        msg_id = parsed['id']
-        msg_type = parsed['type']
-        priority = parsed['priority']
-        from_ = parsed['from']
-        preview = parsed['preview']
-        body = parsed['body']
-        self.log.info(f"  [{msg_type}] {msg_id} 来自 {from_}: {preview}")
+        # ── 合并处理：先 ack 所有消息，再按需一次唤醒 agent ──
+        agent_entries = []  # [{msg_id, sender, preview, parsed, raw_msg}, ...]
 
-        # Step 1: 自动 ack（告诉 mailbus "收到了, 正在处理"）
-        self._auto_ack(msg_id)
-        self.log.info(f"  已 ack")
+        for msg in pending_raw:
+            parsed = self._parse_message(msg)
+            msg_id = parsed['id']
+            msg_type = parsed['type']
+            priority = parsed['priority']
+            from_ = parsed['from']
+            preview = parsed['preview']
+            body = parsed['body']
 
-        # Step 2: 处理 status_ack（回执确认，不唤醒 agent）
-        if msg_type == 'status_ack':
-            self._handle_status_ack(parsed)
-            return
+            self.log.info(f"  [{msg_type}] {msg_id} 来自 {from_}: {preview}")
 
-        # Step 3: 检测完成回执风暴 — 不触发 agent 递归
-        body_text = ''
-        if isinstance(body, dict):
-            body_text = body.get('content', '') or str(body)
-        elif isinstance(body, str):
-            body_text = body
-        if isinstance(body_text, str) and body_text.startswith("✅ 任务完成回执"):
-            self.log.info(f"  完成回执，无需再唤醒 agent，标记 done")
-            self._mark_done(msg_id, "完成回执，不递归")
-            return
+            # Step 1: auto ack（每条都 ack）
+            self._auto_ack(msg_id)
+            self.log.info(f"  已 ack")
 
-        # Step 4: 分流处理
-        if self._needs_agent(msg_type, priority, parsed, from_=from_):
-            self.log.info(f"  唤醒 agent (type={msg_type})")
-            self._trigger_agent(msg_id, from_, preview)
-        else:
-            self.log.info(f"  无需唤醒 (type={msg_type})")
-            self._mark_done(msg_id, "无需处理")
+            # Step 2: status_ack 单独处理
+            if msg_type == 'status_ack':
+                self._handle_status_ack(parsed)
+                self._mark_done(msg_id, "status_ack 处理完毕")
+                continue
+
+            # Step 3: 完成回执风暴检测
+            body_text = ''
+            if isinstance(body, dict):
+                body_text = body.get('content', '') or str(body)
+            elif isinstance(body, str):
+                body_text = body
+            if isinstance(body_text, str) and body_text.startswith("✅ 任务完成回执"):
+                self.log.info(f"  完成回执，无需再唤醒 agent，标记 done")
+                self._mark_done(msg_id, "完成回执，不递归")
+                continue
+
+            # Step 4: 判断是否需要唤醒 agent
+            if self._needs_agent(msg_type, priority, parsed, from_=from_):
+                agent_entries.append({
+                    "msg_id": msg_id,
+                    "sender": from_,
+                    "preview": preview,
+                    "parsed": parsed,
+                    "raw_msg": msg,  # 保留原始消息全文，用于构建回复指令
+                })
+            else:
+                self.log.info(f"  无需唤醒 (type={msg_type})")
+                self._mark_done(msg_id, "无需处理")
+
+        # Step 5: 合并唤醒 — 一次 spawn agent 处理所有消息
+        if agent_entries:
+            self._trigger_agent_batch(agent_entries)
 
     def _handle_status_ack(self, parsed: dict):
         """处理 status_ack 类型消息：记录 ack 状态到对应消息"""
@@ -385,6 +405,42 @@ class MailboxDaemon:
             return False
         return True
 
+    # ── 任务追踪 ──
+
+    def _track_task(self, msg_id, summary, sender):
+        """创建或更新任务追踪记录"""
+        try:
+            from lib.tracker import TaskTracker
+            tracker = TaskTracker(self.data_dir)
+            task = tracker.get(msg_id)
+            if not task:
+                tracker.create(
+                    task_id=msg_id,
+                    summary=summary[:200],
+                    assignee=self.agent_name,
+                    chain_hops=[{"agent": sender, "action": "发起任务"}],
+                )
+                self.log.info(f"  任务已创建: {msg_id}")
+            tracker.update_status(msg_id, "running")
+            tracker.add_hop(msg_id, self.agent_name, "开始处理")
+        except Exception as e:
+            self.log.warning(f"  任务追踪异常: {e}")
+
+    def _complete_task(self, msg_id, status, detail=None):
+        """标记任务完成"""
+        try:
+            from lib.tracker import TaskTracker
+            tracker = TaskTracker(self.data_dir)
+            task = tracker.get(msg_id)
+            if task:
+                ts = "success" if status == "完成" else "failed"
+                tracker.update_status(msg_id, ts)
+                tracker.add_hop(msg_id, self.agent_name, f"处理完成: {status}")
+                if detail:
+                    tracker.update_status(msg_id, ts, {"detail": detail[:200]})
+        except Exception as e:
+            self.log.warning(f"  任务完成追踪异常: {e}")
+
     # ── Ack ──
 
     def _auto_ack(self, msg_id):
@@ -429,22 +485,91 @@ class MailboxDaemon:
 
     # ── CLI 唤醒 + 完成追踪 ──
 
-    def _trigger_agent(self, msg_id, sender, summary):
+    def _trigger_agent_batch(self, entries):
+        """批量唤醒：合并多条消息为一次 agent 调用"""
+        if not entries:
+            return
+
+        # 构建合并数据
+        all_msg_ids = []
+        all_senders = {}
+        for e in entries:
+            self._track_task(e["msg_id"], e["preview"], e["sender"])
+            all_msg_ids.append(e["msg_id"])
+            all_senders[e["msg_id"]] = e["sender"]
+            # 加入处理中集合，防重复 poll
+            self._processing_ids.add(e["msg_id"])
+
+        if len(entries) == 1:
+            # 单条消息：直接用 preview 做摘要（不走 _trigger_agent 避免递归）
+            e = entries[0]
+            summary = e["preview"]
+        else:
+            # 多条消息：构建合并摘要
+            self.log.info(f"  合并唤醒 agent: {len(entries)} 条消息（来自 {len(set(e['sender'] for e in entries))} 个发件人）")
+            summary = self._build_combined_message(entries)
+
         config = read_json(os.path.join(self.data_dir, "config.json"), {})
         agent_cfg = config.get("agents", {}).get(self.agent_name, {})
         atype = agent_cfg.get("type", "none")
         tmpl = config.get("agent_types", {}).get(atype, {}).get("push", "")
         if not tmpl:
             self.log.warning("未找到 CLI 模板, 跳过唤醒")
-            self._mark_done(msg_id, "CLI 模板未配置")
+            for mid in all_msg_ids:
+                self._mark_done(mid, "CLI 模板未配置")
             return
 
+        cmd = self._build_agent_cmd(tmpl, agent_cfg, config, summary)
+        self.log.info(f"  CLI: {cmd[:150]}...（{len(entries)} 条消息）")
+        self._spawn_agent_process(cmd, all_msg_ids, all_senders, summary)
+
+    def _build_combined_message(self, entries):
+        """为多条消息构建合并摘要，每条包含内容 + 回复指令"""
+        msg_blocks = []
+        for i, e in enumerate(entries, 1):
+            sender = e["sender"]
+            raw = e["raw_msg"]
+            content = raw.get("content", "")
+            msg_type = raw.get("type", "notice")
+            priority = raw.get("priority", "normal")
+            reply_path = f"{self.data_dir}/inbox/{sender}/inbox.json"
+            reply_msg_id = f"reply-{e['msg_id']}"
+
+            block = (
+                f"╔══ 消息 {i} ═══════════════════════════╗\n"
+                f"  类型: {msg_type}\n"
+                f"  来自: {sender}\n"
+                f"  消息ID: {e['msg_id']}\n"
+                f"  优先级: {priority}\n"
+                f"  内容: {content[:500]}\n"
+                f"╚════════════════════════════════════╝\n"
+                f"\n"
+                f"▶ 回复给 {sender}\n"
+                f"  写文件到: {reply_path}\n"
+                f"  在 messages 数组末尾追加一条，设 has_unread=true：\n"
+                f"  ```json\n"
+                f"  {{\"id\":\"{reply_msg_id}\",\"from\":\"{self.agent_name}\",\"to\":\"{sender}\",\"type\":\"reply\",\"priority\":\"normal\",\"status\":\"pending\",\"content\":\"<你的回复>\",\"created_at\":\"<ISO时间>\"}}\n"
+                f"  ```\n"
+            )
+            msg_blocks.append(block)
+
+        return (
+            f"你有 {len(entries)} 条待处理消息，来自不同的发件人。\n"
+            f"请逐条处理，每条消息的回复请对应发给各自的发件人。\n"
+            f"\n"
+            f"{'─' * 50}\n"
+            f"\n"
+            f"{chr(10).join(msg_blocks)}"
+        )
+
+    def _build_agent_cmd(self, tmpl, agent_cfg, config, summary_text):
+        """构建 agent CLI 命令（模板替换）"""
         cmd = tmpl.replace("PROFILE", agent_cfg.get("profile", "") or self.agent_name)
         cmd = cmd.replace("AGENT", agent_cfg.get("agent", "") or self.agent_name)
         models_map = config.get("agent_types", {}).get("models", {})
         agent_models = agent_cfg.get("models", [])
         if agent_models and agent_models[0] in models_map:
-            mf = models_map[agent_models[0]].get(atype, "")
+            mf = models_map[agent_models[0]].get(agent_cfg.get("type", "none"), "")
             if mf:
                 cmd = cmd.replace("MODEL", mf)
                 cmd = cmd.replace("--model MODEL", f"--model {mf}")
@@ -457,24 +582,24 @@ class MailboxDaemon:
             cmd = cmd.replace("PROVIDER", provider)
         else:
             cmd = cmd.replace("--provider PROVIDER", "").replace("PROVIDER", "")
-        cmd = cmd.replace("MSG", f"你有新的任务消息: {summary}")
+        cmd = cmd.replace("MSG", f"你有新的任务消息: {summary_text}")
         cmd = " ".join(cmd.split())
-        self.log.info(f"  CLI: {cmd[:150]}...")
+        return cmd
 
-        # 构建环境变量 — 确保所有 CLI 在 PATH 中
+    def _spawn_agent_process(self, cmd, msg_ids, senders, summary_text):
+        """spawn agent 子进程，记录到 _running_procs"""
         env = os.environ.copy()
         home = os.path.expanduser("~")
         extra_paths = [
             "/usr/local/bin", "/usr/bin", "/bin",
             f"{home}/.local/bin",
             f"{home}/.npm-global/bin",
-            "/mnt/e/hermes-data/.hermes/hermes-agent/venv/bin",  # hermes
-            "/mnt/e/ai_tools/opencode",                          # opencode
+            "/mnt/e/hermes-data/.hermes/hermes-agent/venv/bin",
+            "/mnt/e/ai_tools/opencode",
         ]
         existing_path = env.get("PATH", "")
         env["PATH"] = ":".join(p for p in extra_paths if os.path.isdir(p)) + ":" + existing_path
 
-        # 从 .env 补充 API Key 等
         for ep in [f"{home}/.hermes/.env",
                    os.path.join(os.path.dirname(self.data_dir), "..", ".env")]:
             if os.path.exists(ep):
@@ -486,7 +611,6 @@ class MailboxDaemon:
                             env[k.strip()] = v.strip().strip("'\"")
                 break
 
-        # 写临时脚本, 用 bash 执行（避免引号嵌套问题）
         script_content = "#!/bin/bash\n" + cmd
         script_path = os.path.join(LOG_DIR, f"run-{self.agent_name}-{int(time.time())}.sh")
         with open(script_path, "w") as f:
@@ -501,21 +625,35 @@ class MailboxDaemon:
                                     stderr=subprocess.STDOUT, start_new_session=True,
                                     env=env, close_fds=True)
             self._running_procs[proc.pid] = {
-                "msg_id": msg_id,
-                "sender": sender,
-                "summary": summary,
+                "msg_ids": msg_ids,        # 改为列表，支持多条
+                "senders": senders,         # {msg_id: sender}
+                "summary": summary_text,
                 "proc": proc,
                 "started_at": time.time(),
             }
-            self.log.info(f"  agent 已唤醒 (PID: {proc.pid})")
+            self.log.info(f"  agent 已唤醒 (PID: {proc.pid}, 消息数: {len(msg_ids)})")
         except Exception as e:
             self.log.error(f"  唤醒失败: {e}")
-            self._send_completion_notice(msg_id, sender, "失败", f"Agent 唤醒失败: {e}")
+            # 所有消息都发失败回执 + 移出处理中集合
+            for mid in msg_ids:
+                s = senders.get(mid, "unknown")
+                self._send_completion_notice(mid, s, "失败", f"Agent 唤醒失败: {e}")
+                self._processing_ids.discard(mid)
+
+    def _trigger_agent(self, msg_id, sender, summary):
+        """单条消息唤醒（原有逻辑，委托给 batch 方法）"""
+        self._trigger_agent_batch([{
+            "msg_id": msg_id,
+            "sender": sender,
+            "preview": summary,
+            "parsed": {},
+            "raw_msg": {"content": summary, "type": "task", "priority": "normal"},
+        }])
 
     # ── 进程收割 + 完成回执 ──
 
     def _reap_processes(self):
-        """检查已完成的 agent 进程, 发回执"""
+        """检查已完成的 agent 进程, 发回执（支持 msg_ids 批量）"""
         finished = []
         for pid, info in self._running_procs.items():
             proc = info["proc"]
@@ -530,20 +668,25 @@ class MailboxDaemon:
                     import re
                     out, _ = proc.communicate(timeout=5)
                     raw = out.decode("utf-8", errors="replace")
-                    # Step 1: 剥离 ANSI 转义码（如 \x1b[2m 包裹的 [thinking] 痕迹）
                     raw = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', raw)
-                    # Step 2: 过滤掉 [thinking] 行（AI 内部思考过程，对收件人无意义）
                     lines = [l for l in raw.split("\n") if "[thinking]" not in l and "[/thinking]" not in l]
                     stdout = "\n".join(lines).strip()[:100]
                 except Exception:
                     pass
-                # 发完成回执给原始发件人
                 status = "完成" if ret == 0 else f"异常退出(code={ret})"
-                self._send_completion_notice(
-                    info["msg_id"], info["sender"],
-                    status, stdout or None
-                )
-                self._mark_done(info["msg_id"], f"agent 已处理({status})")
+
+                # 兼容新旧格式：msg_ids（列表）或 msg_id（字符串）
+                msg_ids = info.get("msg_ids") or [info.get("msg_id")]
+                senders = info.get("senders") or {info.get("msg_id", ""): info.get("sender", "")}
+
+                # 给每条原始消息发回执 + mark_done + 更新追踪
+                for mid in msg_ids:
+                    sender = senders.get(mid, "unknown")
+                    self._send_completion_notice(mid, sender, status, stdout or None)
+                    self._mark_done(mid, f"agent 已处理({status})")
+                    self._complete_task(mid, status, stdout)
+                    # 从处理中集合移除，允许崩溃恢复重新处理
+                    self._processing_ids.discard(mid)
         for pid in finished:
             del self._running_procs[pid]
 
