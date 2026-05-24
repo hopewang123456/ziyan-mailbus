@@ -171,21 +171,17 @@ def push_messages(
 
 📬 你有一条新消息
 
+━━━━ 回复确认说明 ━━━━
+
+你收到此消息后，只需正常回复文字即可。
+mailbus 会将你的回复视为已读确认。
+不需要写 ack 文件。
+
 ━━━━ 消息内容 ━━━━
 类型: {msg_type}
 来自: {from_}
 消息ID: {msg_id}
-内容: {content}{chain_text}
-
-━━━━ 回复格式说明（请严格按此格式回复）━━━━
-
-▶ 【必须】写 ACK 确认已读
-
-写文件到: {ack_path}
-写入以下 JSON：
-```json
-{{"action":"ack","msg_id":"{msg_id}","agent":"{agent_name}","timestamp":"<ISO时间格式 如2026-01-01T12:00:00+08:00>"}}
-```"""
+内容: {content}{chain_text}"""
 
         reply_to = action.get("reply_to", "") if action else ""
         if reply_to and reply_to not in ("mailbus", "broadcast", "system", "manual", "mailbus-test", "test", ""):

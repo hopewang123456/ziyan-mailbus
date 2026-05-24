@@ -33,6 +33,48 @@ def scan_all(data_dir: str, agents: dict) -> List[Tuple[str, list, list]]:
         
         inbox = Inbox.from_dict(inbox_data)
         
+        # 检测该 agent 是否有回复消息（来自 agent 自己的回复）
+        # 如果有，说明 agent 已经读了前面的消息，自动标为 acknowledged
+        replied_ids = set()
+        for m_raw in inbox.messages:
+            if isinstance(m_raw, dict):
+                msg_type = m_raw.get("type", "")
+                msg_from = m_raw.get("from", "")
+                original_msg_id = m_raw.get("original_msg_id") or m_raw.get("id", "")
+            else:
+                msg_type = m_raw.type
+                msg_from = m_raw.from_
+                original_msg_id = getattr(m_raw, 'original_msg_id', '') or m_raw.id
+            
+            # 如果 agent 发了 reply/forward 类型的消息，说明它已经读了
+            if msg_type in ("reply", "forward") and msg_from == name:
+                replied_ids.add(original_msg_id)
+                # 也匹配 parent id
+                if isinstance(m_raw, dict):
+                    msg_id = m_raw.get("id", "")
+                else:
+                    msg_id = m_raw.id
+                if msg_id != original_msg_id:
+                    replied_ids.add(msg_id)
+        
+        # 如果有回复，找到对应的 pending 消息并标为 acknowledged
+        if replied_ids:
+            for m_raw in inbox.messages:
+                if isinstance(m_raw, dict):
+                    mid = m_raw.get("id", "")
+                else:
+                    mid = m_raw.id
+                if mid in replied_ids and m_raw.get("status") if isinstance(m_raw, dict) else m_raw.status:
+                    mstatus = m_raw.get("status") if isinstance(m_raw, dict) else m_raw.status
+                    if mstatus == MsgStatus.PENDING or mstatus == MsgStatus.PUSHED:
+                        if isinstance(m_raw, dict):
+                            m_raw["status"] = MsgStatus.ACKNOWLEDGED
+                            m_raw["acknowledged_at"] = __import__('datetime').datetime.now().isoformat()
+                        else:
+                            m_raw.status = MsgStatus.ACKNOWLEDGED
+                            m_raw.acknowledged_at = __import__('datetime').datetime.now().isoformat()
+            json_write(inbox_path, inbox.to_dict())
+        
         # 只处理未读且 pending 状态的消息
         urgent_msgs = []
         normal_msgs = []

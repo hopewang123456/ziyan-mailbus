@@ -38,8 +38,7 @@
 | Skill | 角色 | 原因 |
 |:------|:----:|:------|
 | 🚀 multi-agent-team-workflow | P | 团队协作架构，灵昭是总指挥 |
-| 📖 writing-plans | P | 出方案文档 |
-| 📄 plan | S | 方案模式 |
+| 📖 writing-plans | P | 出方案文档（含 Plan Mode） |
 | 📘 notebooklm-py | S | 设计方案转宣讲材料 |
 | 🎨 huashu-design | S | 方案出高保真原型 |
 | 📚 ai-engineering-from-scratch | P | 决策需要理论支撑 |
@@ -90,25 +89,23 @@
 | 🔧 oh-my-pi（参考） | S | hash-edits 机制 |
 | 🖥️ cua-computer-use | S | agent 沙箱自动化测试 |
 | 📘 notebooklm-py | S | 技术文档转思维导图 |
-| 🗂️ github-pr-workflow | S | PR 流程 |
+| 🗂️ github-workflow | S | PR 流程 |
 
 ---
 
-## 🐻 大壮 — 代码审查 / QA
+## 🤖 审查流程（原大壮退役，由 review.py + Semgrep 替代）
 
-**定位：** 代码审查、质量把控
-**上限：** 8 个 skill
+**定位：** 代码自动审查、质量门、安全扫描
+**归属：** review.py + Semgrep 自动化流程
+**上限：** 不占用角色 skill 配额
 
 | Skill | 角色 | 原因 |
 |:------|:----:|:------|
 | 🔍 codegraph | P | 审查时查调用链/变更影响 ⭐ |
-| ✅ requesting-code-review | P | PR 审查核心流程 |
+| ✅ requesting-code-review | P | PR 审查核心流程（含 GitHub PR + Issue + 代码统计） |
 | 🛡️ ai-security-tool-evaluation | P | 安全评估 |
-| 🔬 semgrep（之前调研的） | P | SAST 安全扫描 |
-| 📚 ai-engineering-from-scratch | S | Phase 14 安全对齐 |
-| 🗂️ github-code-review | S | GitHub PR review |
-| 🧹 codebase-inspection | S | 代码库健康检查 |
-| 📊 lm-evaluation-harness | S | 模型评估 |
+| 🔬 semgrep | P | SAST 安全扫描 ⭐ |
+| 📚 ai-engineering-from-scratch | S | 安全对齐 |
 
 ---
 
@@ -146,9 +143,8 @@
 | 📊 linear | S | 项目管理 |
 | 📄 obsidian | S | 文档维护 |
 | 🔄 webhook-subscriptions | S | 事件驱动 |
-| 🗂️ github-repo-management | S | 仓库管理 |
+| 🗂️ github-workflow | S | GitHub 操作 |
 | 🔧 cli-anything | S | 工具接入管道 |
-| 🌐 native-mcp | S | MCP 服务管理 |
 
 ---
 
@@ -160,7 +156,7 @@
 | 🪷 灵昭 | 10 | 决策→分配→把控 |
 | 🚀 灵霄 | 12 | 架构→技术落地 |
 | 💪 大力 | 10 | 编码→实现 |
-| 🐻 大壮 | 8 | 审查→质量 |
+| 🤖 审查流程 | 6 | 自动审查→质量门 |
 | 🦅 一哥 | 8 | 运营→分发 |
 | 🐱 小七 | 10 | 调度→运维 |
 
