@@ -69,10 +69,15 @@ def process_ack(data_dir: str, agent_name: str, ack_data: dict) -> bool:
                             hop["status"] = "done"
                             hop["at"] = ts
                             break
-                    # 检查所有 hop 是否都 done
                     if all(h.get("status") == "done" for h in fwd_chain["hops"]):
                         fwd_chain["status"] = "completed"
                 break
+        # 更新 has_unread
+        inbox.has_unread = any(
+            (isinstance(m, dict) and m.get("status") not in ("acknowledged", "archived"))
+            or (not isinstance(m, dict) and m.status not in ("acknowledged", "archived"))
+            for m in inbox.messages
+        )
         json_write(inbox_file, inbox.to_dict())
 
     return found
@@ -115,6 +120,12 @@ def process_mark_read(data_dir: str, agent_name: str, mark_data: dict) -> bool:
                 changed = True
     
     if changed:
+        # 更新 has_unread
+        inbox.has_unread = any(
+            (isinstance(m, dict) and m.get("status") not in ("acknowledged", "archived"))
+            or (not isinstance(m, dict) and m.status not in ("acknowledged", "archived"))
+            for m in inbox.messages
+        )
         json_write(inbox_file, inbox.to_dict())
     
     return changed

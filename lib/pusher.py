@@ -307,8 +307,11 @@ def resolve_cli(agent_cfg: dict, agent_types: dict, model_alias: str = None) -> 
 
     # 4. 替换 PROVIDER 占位符
     provider = agent_cfg.get("provider", "")
+    if not provider and model_alias and model_alias in models_map:
+        provider = models_map[model_alias].get(atype, "")
     if provider:
         cmd = cmd.replace("PROVIDER", provider)
+        cmd = cmd.replace("--provider PROVIDER", provider)
     else:
         cmd = cmd.replace("--provider PROVIDER", "").replace("PROVIDER", "")
 
