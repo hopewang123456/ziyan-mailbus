@@ -108,6 +108,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             self._handle_permission()
         elif path == "/api/reports":
             self._handle_reports()
+        elif path == "/api/replies":
+            self._handle_replies()
         elif path == "/" or path == "":
             self._serve_static("/")
         elif path == "/index.html":
@@ -393,6 +395,24 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                     if len(reports) >= 30:
                         break
         self._send_json({"reports": reports, "count": len(reports)})
+
+    def _handle_replies(self):
+        """GET /api/replies → 返回所有 agent 的回复记录"""
+        replies_dir = os.path.join(self.data_dir, "replies")
+        replies = []
+        if os.path.isdir(replies_dir):
+            for fname in sorted(os.listdir(replies_dir), reverse=True):
+                if fname.endswith(".json"):
+                    fpath = os.path.join(replies_dir, fname)
+                    try:
+                        with open(fpath, encoding="utf-8") as f:
+                            data = json.load(f)
+                        replies.append(data)
+                    except Exception:
+                        pass
+                    if len(replies) >= 50:
+                        break
+        self._send_json({"replies": replies, "count": len(replies)})
 
     def _handle_config(self):
         """当前配置（去掉敏感路径信息）"""

@@ -42,9 +42,9 @@
 | 📘 notebooklm-py | S | 设计方案转宣讲材料 |
 | 🎨 huashu-design | S | 方案出高保真原型 |
 | 📚 ai-engineering-from-scratch | P | 决策需要理论支撑 |
-| 🐻 requesting-code-review | S | 审查流程把控 |
+| ✅ requesting-code-review | S | 审查流程把控 |
 | 🔧 hermes-agent | S | Agent 系统配置 |
-| 🗂️ github-issues | S | 任务分配 |
+| 🗂️ github-workflow | S | GitHub 操作（含 Issue/PR/Repo） |
 | 📊 linear | S | 项目管理 |
 
 ---
@@ -57,6 +57,7 @@
 | Skill | 角色 | 原因 |
 |:------|:----:|:------|
 | 🔍 codegraph | P | 架构分析核心工具 ⭐ |
+| 🗺️ understand-anything | P | 交互式代码可视化分析 ⭐ |
 | 🔧 cli-anything | P | 工具 CLI 化对接架构 ⭐ |
 | 🎨 huashu-design | S | 架构图可视化 |
 | 📚 ai-engineering-from-scratch | P | 看 Infra/Agent 架构 |

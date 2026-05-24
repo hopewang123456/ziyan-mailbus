@@ -250,11 +250,13 @@ mailbus 通过 CLI 将消息推送给你。你收到的每条消息都包含操�
     for cmd_template in cli_commands:
         cmd = cmd_template.replace("'MSG'", f"'{combined_text}'")
         
-        success = _invoke_cli(cmd)
+        reply_dir = f"{data_dir}/replies" if data_dir else ""
+        
+        success = _invoke_cli(cmd, agent_name=agent_name, msg_ids=msg_ids, reply_dir=reply_dir)
         if not success:
             for attempt in range(1, max_retries + 1):
                 time.sleep(3)
-                success = _invoke_cli(cmd)
+                success = _invoke_cli(cmd, agent_name=agent_name, msg_ids=msg_ids, reply_dir=reply_dir)
                 if success:
                     break
         
@@ -359,12 +361,13 @@ def resolve_cli_chain(agent_cfg: dict, agent_types: dict) -> list:
     return results
 
 
-def _invoke_cli(cmd: str) -> bool:
+def _invoke_cli(cmd: str, agent_name: str = "", msg_ids: list = None, reply_dir: str = "") -> bool:
     """
     执行 CLI 命令将消息推送给 agent。
     
     参数 cmd 已替换好 'MSG' 占位符。
     从 .env 文件自动注入 API Key。
+    将 agent 的回复 stdout 保存到 reply_dir/{agent_name}.json。
     返回 True 表示 CLI 启动成功（Popen 不阻塞）。
     """
     if not cmd:
@@ -378,18 +381,48 @@ def _invoke_cli(cmd: str) -> bool:
         env = os.environ.copy()
         env.update(extra_env)
         
-        # 后台执行 CLI，不阻塞 scan
-        # start_new_session=True + preexec_fn 确保独立进程组
+        # 将 agent 的回复保存到文件
+        reply_file = ""
+        if reply_dir and agent_name:
+            import json, time
+            reply_file = f"{reply_dir}/{agent_name}.json"
+        
+        # 后台执行 CLI，不阻塞 scan，同时捕获回复
         process = subprocess.Popen(
             cmd,
             shell=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             start_new_session=True,
             env=env,
             close_fds=True,
         )
-        # 不等待完成，直接返回成功（消息已投递）
+        
+        # 异步读取回复并保存
+        if reply_file and agent_name:
+            def _save_reply(proc, fpath, a_name, mids):
+                try:
+                    stdout, _ = proc.communicate(timeout=120)
+                    reply_text = stdout.decode("utf-8", errors="replace").strip()
+                    if reply_text and len(reply_text) > 5:
+                        from datetime import datetime, timezone, timedelta
+                        ts = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%dT%H:%M:%S+0800")
+                        reply_data = {
+                            "agent": a_name,
+                            "msg_ids": mids or [],
+                            "reply": reply_text[:2000],
+                            "timestamp": ts,
+                        }
+                        import json
+                        os.makedirs(os.path.dirname(fpath), exist_ok=True)
+                        with open(fpath, "w") as f:
+                            json.dump(reply_data, f, ensure_ascii=False, indent=2)
+                except Exception:
+                    pass
+            import threading
+            t = threading.Thread(target=_save_reply, args=(process, reply_file, agent_name, msg_ids), daemon=True)
+            t.start()
+        
         return True
     except Exception as e:
         print(f"[pusher] CLI 后台启动失败: {e}", file=sys.stderr)
