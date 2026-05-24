@@ -122,7 +122,108 @@ def scan_all(data_dir: str, agents: dict) -> List[Tuple[str, list, list]]:
     
     # 排序：有加急的 agent 排前面
     results.sort(key=lambda x: -len(x[1]))
+    
+    # 超时检测：检查所有 agent 的 inbox，超时未处理的消息自动催办
+    _check_timeouts(data_dir, agents, inbox_path.rsplit("/inbox/", 1)[0] + "/inbox" if "inbox_path" in dir() else data_dir + "/inbox", paths)
+    
     return results
+
+
+def _check_timeouts(data_dir: str, agents: dict, inbox_base: str, paths: dict):
+    """扫描所有 inbox，检测超时未处理的消息并催办"""
+    from datetime import datetime, timezone, timedelta
+    
+    for name in agents:
+        inbox_file = f"{paths['inbox']}/{name}/inbox.json"
+        if not os.path.exists(inbox_file):
+            continue
+        
+        inbox_data = json_read(inbox_file, {})
+        if not inbox_data:
+            continue
+        
+        inbox = Inbox.from_dict(inbox_data)
+        now = datetime.now(timezone.utc)
+        reminded = []
+        
+        for m_raw in inbox.messages:
+            if isinstance(m_raw, dict):
+                msg = Message.from_dict(m_raw)
+            else:
+                msg = m_raw
+            
+            timeout_min = msg.timeout_minutes
+            if not timeout_min or timeout_min <= 0:
+                continue
+            if msg.state in (MsgStatus.DONE, MsgStatus.CLOSED, MsgStatus.REJECTED):
+                continue
+            
+            # 计算已过去的时间
+            created = None
+            if msg.received_at:
+                try:
+                    created = datetime.fromisoformat(msg.received_at)
+                except (ValueError, TypeError):
+                    pass
+            if not created and msg.created_at:
+                try:
+                    created = datetime.fromisoformat(msg.created_at)
+                except (ValueError, TypeError):
+                    pass
+            if not created:
+                continue
+            
+            elapsed_min = (now - created).total_seconds() / 60
+            if elapsed_min < timeout_min:
+                continue
+            
+            # 超时了，检查是否已经催办过（至少隔 timeout_min/2 才再次催办）
+            if msg.reminded_count > 0:
+                last_reminded = None
+                if msg.last_reminded_at:
+                    try:
+                        last_reminded = datetime.fromisoformat(msg.last_reminded_at)
+                    except (ValueError, TypeError):
+                        pass
+                if last_reminded and (now - last_reminded).total_seconds() / 60 < timeout_min / 2:
+                    continue
+            
+            # 发催办通知
+            escalate = msg.escalate_to or msg.from_
+            if escalate and escalate not in ("mailbus", "broadcast", ""):
+                escalate_file = f"{paths['inbox']}/{escalate}/inbox.json"
+                if os.path.exists(os.path.dirname(escalate_file)):
+                    try:
+                        e_data = json_read(escalate_file, {})
+                        e_inbox = Inbox.from_dict(e_data) if e_data else Inbox(agent=escalate)
+                        import time as _time
+                        remind_msg = {
+                            "id": f"remind-{int(_time.time())}-{name}",
+                            "from": "mailbus",
+                            "to": escalate,
+                            "type": "notice",
+                            "priority": "urgent",
+                            "status": MsgStatus.PENDING,
+                            "content": f"⚠️ 超时提醒：{name} 有一条消息已超过 {int(timeout_min)} 分钟未处理。\n消息ID: {msg.id}\n请关注。",
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                        e_inbox.messages.append(remind_msg)
+                        e_inbox.has_unread = True
+                        json_write(escalate_file, e_inbox.to_dict())
+                        
+                        # 更新原消息的催办记录
+                        if isinstance(m_raw, dict):
+                            m_raw["reminded_count"] = (m_raw.get("reminded_count", 0) or 0) + 1
+                            m_raw["last_reminded_at"] = datetime.now(timezone.utc).isoformat()
+                        else:
+                            m_raw.reminded_count = (m_raw.reminded_count or 0) + 1
+                            m_raw.last_reminded_at = datetime.now(timezone.utc).isoformat()
+                        reminded.append(name)
+                    except Exception:
+                        pass
+        
+        if reminded:
+            json_write(inbox_file, inbox.to_dict())
 
 
 def push_to_queue(data_dir: str, agent_name: str, messages: list, is_urgent: bool):

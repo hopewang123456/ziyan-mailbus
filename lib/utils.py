@@ -127,8 +127,6 @@ def log_error(errors_dir: str, msg_id: str, to: str, error: str, level: str = Le
     jsonl_append(filepath, entry)
 
 
-# ── 消息构建 ──────────────────────────────────────────────────────────
-
 def build_message(
     from_: str,
     to: str,
@@ -138,6 +136,8 @@ def build_message(
     attachments: Optional[list] = None,
     forward_to: Optional[list] = None,
     task: Optional[dict] = None,
+    timeout_minutes: Optional[int] = None,
+    escalate_to: Optional[str] = None,
 ) -> Message:
     """构建一条新消息，自动生成 ID、时间、reply_format、action"""
     msg_id = generate_msg_id()
@@ -180,6 +180,8 @@ def build_message(
         task=task,
         status=MsgStatus.PENDING,
         created_at=_now_iso(),
+        timeout_minutes=timeout_minutes,
+        escalate_to=escalate_to,
     )
     if actions_list:
         msg.actions = actions_list

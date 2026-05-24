@@ -150,6 +150,11 @@ class Message:
     actions: list = field(default_factory=list)  # [{step, status, at}, ...]
     received_at: Optional[str] = None
     done_at: Optional[str] = None
+    # v3.0 超时催办字段
+    timeout_minutes: Optional[int] = None  # 超时分钟数
+    escalate_to: Optional[str] = None      # 超时后通知谁（默认发件人）
+    reminded_count: int = 0                # 已催办次数
+    last_reminded_at: Optional[str] = None # 上次催办时间
 
     def __post_init__(self):
         # 没配 action 的根据 type 自动推断
@@ -170,7 +175,8 @@ class Message:
         d = asdict(self)
         d["from"] = d.pop("from_")  # from_ → from（JSON 友好）
         # 清理空字段保持 JSON 干净
-        for drop_key in ["state", "state_history", "actions", "received_at", "done_at"]:
+        for drop_key in ["state", "state_history", "actions", "received_at", "done_at",
+                          "timeout_minutes", "escalate_to", "reminded_count", "last_reminded_at"]:
             if drop_key in d and not d[drop_key]:
                 if drop_key in ("state_history", "actions"):
                     if not d[drop_key]:
@@ -192,7 +198,8 @@ class Message:
         known = {"id", "from_", "to", "priority", "type", "content",
                  "attachments", "reply_format", "status", "pushed_count",
                  "created_at", "acknowledged_at", "action", "task", "forward_chain",
-                 "state", "state_history", "actions", "received_at", "done_at"}
+                 "state", "state_history", "actions", "received_at", "done_at",
+                 "timeout_minutes", "escalate_to", "reminded_count", "last_reminded_at"}
         filtered = {k: v for k, v in d.items() if k in known}
         # 缺 id 的自动生成
         if "id" not in filtered or not filtered["id"]:
