@@ -112,6 +112,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             self._handle_replies()
         elif path == "/api/skill-usage":
             self._handle_skill_usage()
+        elif path == "/api/skill-use":
+            self._handle_skill_use()
         elif path == "/" or path == "":
             self._serve_static("/")
         elif path == "/index.html":
@@ -137,6 +139,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             self._handle_bulletin_permit()
         elif path == "/api/permission":
             self._handle_permission()
+        elif path == "/api/skill-use":
+            self._handle_skill_use()
         elif path.startswith("/api/mark-read/"):
             agent = path[len("/api/mark-read/"):]
             self._handle_mark_read(agent)
@@ -270,6 +274,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                     "type": m.get("type", ""),
                     "content_preview": m.get("content", "")[:100],
                     "status": m.get("status", ""),
+                    "state": m.get("state", ""),
+                    "state_history": m.get("state_history", []),
                     "read": m.get("read", False),
                     "created_at": m.get("created_at", ""),
                 })
@@ -418,13 +424,43 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
 
     def _handle_skill_usage(self):
         """GET /api/skill-usage → 聚合所有 agent 的 skill 使用情况"""
-        import os, json
-        profiles = {
+        import os, json, glob
+        
+        # 0. mailbus 统一 skill 使用记录（最优先）
+        bus_usage_file = os.path.join(self.data_dir, "skill-usage.json")
+        merged = {}
+        if os.path.isfile(bus_usage_file):
+            try:
+                with open(bus_usage_file) as f:
+                    bus_data = json.load(f)
+                for skill, agent_data in bus_data.items():
+                    merged[skill] = {"agents": {}}
+                    for agent, rec in agent_data.items():
+                        merged[skill]["agents"][agent] = {
+                            "use_count": rec.get("use_count", 0),
+                            "view_count": rec.get("view_count", 0),
+                            "last_used": (rec.get("last_used") or "")[:16],
+                            "state": "active",
+                        }
+                    merged[skill]["total_use"] = sum(
+                        a.get("use_count", 0) for a in merged[skill]["agents"].values()
+                    )
+                    merged[skill]["total_view"] = sum(
+                        a.get("view_count", 0) for a in merged[skill]["agents"].values()
+                    )
+                    merged[skill]["last_used"] = max(
+                        (a.get("last_used", "") for a in merged[skill]["agents"].values()),
+                        default="",
+                    )
+            except Exception:
+                pass
+        
+        # 1. Hermes usage.json（补充有使用次数但不在 bus 记录中的 skill）
+        hermes_profiles = {
             "lingzhao": "/mnt/e/hermes-data/.hermes/skills/.usage.json",
             "lingxi": "/mnt/e/hermes-data/.hermes/profiles/lingxi/skills/.usage.json",
         }
-        merged = {}
-        for agent, path in profiles.items():
+        for agent, path in hermes_profiles.items():
             if os.path.isfile(path):
                 try:
                     with open(path) as f:
@@ -438,7 +474,6 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                             "last_used": (rec.get("last_used_at") or "")[:16],
                             "state": rec.get("state", "active"),
                         }
-                        # 汇总统计
                         merged[skill]["total_use"] = sum(
                             a.get("use_count", 0) for a in merged[skill]["agents"].values()
                         )
@@ -452,6 +487,41 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
         
+        # 2. CLI 框架 skill 目录扫描（只有名称，没有使用次数）
+        cli_skills = {
+            "lingxiao": "/home/administrator/.codex/skills",
+            "xiaoqi": "/mnt/e/ai_tools/openclaw_space/skills",
+            "yige": "/mnt/e/ai_tools/openclaw_space/skills",
+            "dali": "/mnt/e/ai_tools/opencode/.opencode/skills",
+            "lingjin": "/mnt/e/hermes-data/.hermes/profiles/lingjin/skills",
+        }
+        cli_extra = {}
+        for agent, skill_dir in cli_skills.items():
+            if os.path.isdir(skill_dir):
+                for root, dirs, files in os.walk(skill_dir):
+                    # 找 SKILL.md 或 .md 文件
+                    for f in files:
+                        if f == "SKILL.md" or f.endswith("-skill.md"):
+                            skill_name = os.path.basename(root) if f == "SKILL.md" else f.replace("-skill.md", "").replace(".md", "")
+                            if skill_name and skill_name not in merged:
+                                merged[skill_name] = {"agents": {}}
+                            if skill_name not in merged:
+                                merged[skill_name] = {"agents": {}}
+                            if agent not in merged[skill_name]["agents"]:
+                                merged[skill_name]["agents"][agent] = {
+                                    "use_count": 0,
+                                    "view_count": 0,
+                                    "last_used": "",
+                                    "state": "installed",
+                                }
+                            merged[skill_name]["total_use"] = sum(
+                                a.get("use_count", 0) for a in merged[skill_name]["agents"].values()
+                            )
+                            merged[skill_name]["last_used"] = max(
+                                (a.get("last_used", "") for a in merged[skill_name]["agents"].values()),
+                                default="",
+                            )
+        
         # 按使用次数排序
         sorted_skills = sorted(
             merged.items(),
@@ -461,6 +531,30 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "skills": [{"name": n, **d} for n, d in sorted_skills],
             "total_skills": len(sorted_skills),
         })
+
+    def _handle_skill_use(self):
+        """POST /api/skill-use → 记录一次 skill 使用"""
+        body = self._read_post_body()
+        skill = body.get("skill", "")
+        agent = body.get("agent", "")
+        if not skill or not agent:
+            self._send_json({"status": "error", "error": "需要 skill 和 agent 参数"}, 400)
+            return
+        
+        import os, json
+        from datetime import datetime, timezone, timedelta
+        ts = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%dT%H:%M:%S+0800")
+        
+        bus_file = os.path.join(self.data_dir, "skill-usage.json")
+        data = json_read(bus_file, {})
+        if skill not in data:
+            data[skill] = {}
+        if agent not in data[skill]:
+            data[skill][agent] = {"use_count": 0, "view_count": 0, "last_used": ""}
+        data[skill][agent]["use_count"] = data[skill][agent].get("use_count", 0) + 1
+        data[skill][agent]["last_used"] = ts
+        json_write(bus_file, data)
+        self._send_json({"status": "ok", "skill": skill, "agent": agent, "total": data[skill][agent]["use_count"]})
 
     def _handle_config(self):
         """当前配置（去掉敏感路径信息）"""

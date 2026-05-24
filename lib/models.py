@@ -19,8 +19,16 @@ class MsgStatus:
     FAILED       = "failed"        # 3 次重试均无 ack
     RESENDING    = "resending"     # 人工重推中（附带断线说明）
     ARCHIVED     = "archived"      # 已归档
+    
+    # v3.0 任务状态（替代 status 在 task 类型消息中的使用）
+    RECEIVED     = "received"      # agent 已收到并 ack
+    PROCESSING   = "processing"    # 正在处理中
+    DONE         = "done"          # 处理完成
+    CLOSED       = "closed"        # 已关闭归档
+    REJECTED     = "rejected"      # 无法处理退回
 
-    ALL = {PENDING, PUSHED, ACKNOWLEDGED, FAILED, RESENDING, ARCHIVED}
+    ALL = {PENDING, PUSHED, ACKNOWLEDGED, FAILED, RESENDING, ARCHIVED,
+           RECEIVED, PROCESSING, DONE, CLOSED, REJECTED}
 
 
 class Priority:
@@ -136,6 +144,12 @@ class Message:
     action: Optional[dict] = None   # {ack, reply_to, execute, forward_to, store_memory}
     task: Optional[dict] = None     # {summary, assignee, status, deadline, deliverable}
     forward_chain: Optional[dict] = None  # {root_id, hops: [{agent, action, at}], status}
+    # v3.0 任务状态机字段
+    state: str = ""                 # 任务流转状态：received/processing/done/closed/rejected
+    state_history: list = field(default_factory=list)  # [{state, at}, ...]
+    actions: list = field(default_factory=list)  # [{step, status, at}, ...]
+    received_at: Optional[str] = None
+    done_at: Optional[str] = None
 
     def __post_init__(self):
         # 没配 action 的根据 type 自动推断
@@ -155,7 +169,14 @@ class Message:
     def to_dict(self):
         d = asdict(self)
         d["from"] = d.pop("from_")  # from_ → from（JSON 友好）
-        # action 只要有字段就应该保留（字段值可以是空字符串/空列表但是 key 本身有意义）
+        # 清理空字段保持 JSON 干净
+        for drop_key in ["state", "state_history", "actions", "received_at", "done_at"]:
+            if drop_key in d and not d[drop_key]:
+                if drop_key in ("state_history", "actions"):
+                    if not d[drop_key]:
+                        d.pop(drop_key, None)
+                else:
+                    d.pop(drop_key, None)
         if d.get("action"):
             # 只清理那些真正没意义的字段（全 null 或全空的不常见）
             pass
@@ -170,7 +191,8 @@ class Message:
         d["from_"] = d.pop("from")  # from → from_
         known = {"id", "from_", "to", "priority", "type", "content",
                  "attachments", "reply_format", "status", "pushed_count",
-                 "created_at", "acknowledged_at", "action", "task", "forward_chain"}
+                 "created_at", "acknowledged_at", "action", "task", "forward_chain",
+                 "state", "state_history", "actions", "received_at", "done_at"}
         filtered = {k: v for k, v in d.items() if k in known}
         # 缺 id 的自动生成
         if "id" not in filtered or not filtered["id"]:

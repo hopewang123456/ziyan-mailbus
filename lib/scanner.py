@@ -67,12 +67,36 @@ def scan_all(data_dir: str, agents: dict) -> List[Tuple[str, list, list]]:
                 if mid in replied_ids and m_raw.get("status") if isinstance(m_raw, dict) else m_raw.status:
                     mstatus = m_raw.get("status") if isinstance(m_raw, dict) else m_raw.status
                     if mstatus == MsgStatus.PENDING or mstatus == MsgStatus.PUSHED:
+                        ts = __import__('datetime').datetime.now().isoformat()
                         if isinstance(m_raw, dict):
                             m_raw["status"] = MsgStatus.ACKNOWLEDGED
-                            m_raw["acknowledged_at"] = __import__('datetime').datetime.now().isoformat()
+                            m_raw["acknowledged_at"] = ts
+                            # v3.0 状态机流转
+                            if not m_raw.get("state"):
+                                m_raw["state"] = MsgStatus.RECEIVED
+                                history = m_raw.get("state_history", [])
+                                if not isinstance(history, list): history = []
+                                history.append({"state": MsgStatus.RECEIVED, "at": ts})
+                                m_raw["state_history"] = history
+                                m_raw["received_at"] = ts
+                            # 如果 type 不是 task，直接 done
+                            if m_raw.get("type") not in ("task", "task_reply"):
+                                m_raw["state"] = MsgStatus.DONE
+                                m_raw["state_history"].append({"state": MsgStatus.DONE, "at": ts})
+                                m_raw["done_at"] = ts
                         else:
                             m_raw.status = MsgStatus.ACKNOWLEDGED
-                            m_raw.acknowledged_at = __import__('datetime').datetime.now().isoformat()
+                            m_raw.acknowledged_at = ts
+                            if not m_raw.state:
+                                m_raw.state = MsgStatus.RECEIVED
+                                history = list(m_raw.state_history or [])
+                                history.append({"state": MsgStatus.RECEIVED, "at": ts})
+                                m_raw.state_history = history
+                                m_raw.received_at = ts
+                            if m_raw.type not in ("task", "task_reply"):
+                                m_raw.state = MsgStatus.DONE
+                                m_raw.state_history.append({"state": MsgStatus.DONE, "at": ts})
+                                m_raw.done_at = ts
             json_write(inbox_path, inbox.to_dict())
         
         # 只处理未读且 pending 状态的消息

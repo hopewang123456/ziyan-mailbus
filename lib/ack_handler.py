@@ -49,12 +49,28 @@ def process_ack(data_dir: str, agent_name: str, ack_data: dict) -> bool:
             if m.get("id") == msg_id:
                 m["status"] = MsgStatus.ACKNOWLEDGED
                 m["acknowledged_at"] = ts
+                # v3.0 状态机：ack → received
+                if not m.get("state"):
+                    m["state"] = MsgStatus.RECEIVED
+                    history = m.get("state_history", [])
+                    if not isinstance(history, list):
+                        history = []
+                    history.append({"state": MsgStatus.RECEIVED, "at": ts})
+                    m["state_history"] = history
+                    m["received_at"] = ts
                 found = True
                 break
         else:
             if m.id == msg_id:
                 m.status = MsgStatus.ACKNOWLEDGED
                 m.acknowledged_at = ts
+                # v3.0 状态机
+                if not m.state:
+                    m.state = MsgStatus.RECEIVED
+                    history = list(m.state_history or [])
+                    history.append({"state": MsgStatus.RECEIVED, "at": ts})
+                    m.state_history = history
+                    m.received_at = ts
                 found = True
                 break
     
