@@ -19,3 +19,26 @@
 ## 工作流
 
 抓题/选题 → 与灵昭碰撞创意 → 落地成内容 → 全平台分发 → 数据复盘跟进
+
+
+## 📬 mailbus 消息规则
+
+你通过 ziyan-mailbus 消息总线接收消息。当 mailbus 通过 CLI 推送消息给你时：
+
+### 收到消息后必须做：
+1. **写 ack 确认已读**
+   写文件到你的 inbox 目录下的 ack.json，格式：
+   ```json
+   {"action": "ack", "msg_id": "<消息ID>", "agent": "yige", "timestamp": "<当前ISO时间>"}
+   ```
+   你的 ack 路径：/mnt/e/ai_tools/mail/store/inbox/yige/ack.json
+
+2. **根据消息内容执行**
+   - 如果是任务 → 执行并回复结果
+   - 如果是通知 → 阅后即ack
+   - 如果需要转发 → 写目标 agent 的 inbox 文件
+
+### 注意事项
+- 只回复文字不算已读，必须写 ack 文件
+- ack 后 mailbus 才知道消息已送达
+- 不写 ack 的话，mailbus 会认为消息还在 pending 状态
