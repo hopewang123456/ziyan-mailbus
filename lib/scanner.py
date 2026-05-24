@@ -129,6 +129,9 @@ def scan_all(data_dir: str, agents: dict) -> List[Tuple[str, list, list]]:
     # 技能使用记录消费：扫描 skill-usage-pending 目录，归入 skill-usage.json
     _consume_skill_usage(data_dir)
     
+    # agent 离线检测：检查所有 agent 心跳，离线超过 3 次 ping 的发送通知
+    _check_offline_agents(data_dir, agents, paths)
+    
     # 自动归档：acknowledged 超过 7 天或 inbox 超过 300 条的消息
     try:
         from .archiver import archive_all
@@ -402,3 +405,58 @@ def update_message_status(data_dir: str, agent_name: str, msg_id: str, new_statu
         json_write(inbox_file, inbox.to_dict())
     
     return found
+
+
+def _check_offline_agents(data_dir: str, agents: dict, paths: dict):
+    """检测离线 agent，给对应发件人发通知"""
+    from datetime import datetime, timezone, timedelta
+    
+    hb_file = f"{data_dir}/heartbeat.json"
+    hb_data = json_read(hb_file, {})
+    agent_statuses = hb_data.get("agents", {})
+    now = datetime.now(timezone.utc)
+    
+    for name in agents:
+        status_info = agent_statuses.get(name, {})
+        if status_info.get("status") == "offline":
+            missed = status_info.get("missed_pings", 0)
+            if missed >= 3:
+                # 检查是否已经发过离线通知
+                notified_file = f"{data_dir}/notified_offline.json"
+                notified = json_read(notified_file, {})
+                last_notified = notified.get(name, "")
+                if last_notified:
+                    try:
+                        last = datetime.fromisoformat(last_notified)
+                        if (now - last).total_seconds() < 3600:  # 1小时内不再重复通知
+                            continue
+                    except (ValueError, TypeError):
+                        pass
+                
+                # 发通知给发件人
+                escalate_to = "lingzhao"  # 默认通知灵昭
+                escalate_file = f"{paths['inbox']}/{escalate_to}/inbox.json"
+                if os.path.exists(os.path.dirname(escalate_file)):
+                    try:
+                        e_data = json_read(escalate_file, {})
+                        e_inbox = Inbox.from_dict(e_data) if e_data else Inbox(agent=escalate_to)
+                        import time as _time
+                        warn_msg = {
+                            "id": f"offline-{int(_time.time())}-{name}",
+                            "from": "mailbus",
+                            "to": escalate_to,
+                            "type": "notice",
+                            "priority": "urgent",
+                            "status": MsgStatus.PENDING,
+                            "content": f"⚠️ Agent 离线通知：{name} 已离线，连续 {missed} 次心跳未响应。",
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                        e_inbox.messages.append(warn_msg)
+                        e_inbox.has_unread = True
+                        json_write(escalate_file, e_inbox.to_dict())
+                        
+                        # 更新已通知记录
+                        notified[name] = datetime.now(timezone.utc).isoformat()
+                        json_write(notified_file, notified)
+                    except Exception:
+                        pass
