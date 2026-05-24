@@ -367,6 +367,10 @@ td{padding:8px 10px;border-bottom:1px solid #1e293b}
 <div class="toolbar">
   <input class="search-input" id="apiInput" value="http://localhost:9812" placeholder="API 地址">
   <button class="btn btn-primary" onclick="loadAll()">🔄 刷新全部</button>
+  <label style=display:flex;align-items:center;gap:4px;font-size:12px;color:#64748b;margin-left:8px>
+    <input type=checkbox id="autoRefreshChk" onchange="toggleAutoRefresh()" checked>
+    自动刷新 (30s)
+  </label>
   <button class="btn" onclick="triggerHeartbeat()">💓 触发心跳</button>
 </div>
 
@@ -493,6 +497,7 @@ td{padding:8px 10px;border-bottom:1px solid #1e293b}
 
 <script>
 let rawData = {};
+let _autoRefreshTimer = null;
 let refreshTimer = null;
 let bulletinPermit = [];
 let permissions = {};
@@ -633,8 +638,34 @@ async function loadAll() {
         reloadData('heartbeat'); reloadData('tasks'); reloadData('alerts');
       }, interval * 1000);
     } catch(e) {}
+    
+    // 启动自动刷新（默认 30 秒）
+    startAutoRefresh();
+    
   } catch(e) {
     toast('加载失败: ' + e.message, 'error');
+  }
+}
+
+function startAutoRefresh() {
+  if (_autoRefreshTimer) return;
+  _autoRefreshTimer = setInterval(() => {
+    const chk = document.getElementById('autoRefreshChk');
+    if (chk && chk.checked) {
+      loadAll().catch(() => {});
+    }
+  }, 30000);
+}
+
+function toggleAutoRefresh() {
+  const chk = document.getElementById('autoRefreshChk');
+  if (chk && chk.checked) {
+    startAutoRefresh();
+  } else {
+    if (_autoRefreshTimer) {
+      clearInterval(_autoRefreshTimer);
+      _autoRefreshTimer = null;
+    }
   }
 }
 
