@@ -158,63 +158,14 @@ def push_messages(
   文件: {ack_path}
   格式: {{"action":"ack","msg_id":"{msg_id}","agent":"{agent_name}","timestamp":"<当前ISO时间>"}}""")
 
-        # 2. 回复发件人
-        reply_to = action.get("reply_to", "") if action else ""
-        if reply_to and reply_to not in ("mailbus", "broadcast", "system", "manual", "mailbus-test", "test", ""):
-            reply_path = f"{data_dir}/inbox/{reply_to}/inbox.json"
-            reply_msg_id = f"reply-{msg_id}"
-            instructions.append(f"""【必须】回复发件人 {reply_to}
-  文件: {reply_path}
-  向 messages 数组追加一条新消息，设 has_unread: true，格式:
-  {{"id": "{reply_msg_id}", "from": "{agent_name}", "to": "{reply_to}", "priority": "normal", "type": "reply", "content": "<你的回复>", "status": "pending", "created_at": "<当前ISO时间>"}}""")
-
-        # 3. 转发
-        forward_to = action.get("forward_to", []) if action else []
-        if forward_to:
-            fwd_lines = []
-            for target in forward_to:
-                if target == agent_name:
-                    continue
-                fwd_path = f"{data_dir}/inbox/{target}/inbox.json"
-                fwd_msg_id = f"fwd-{msg_id}-{target}"
-                fwd_lines.append(f"""  目标: {target}
-  文件: {fwd_path}
-  格式: {{"id": "{fwd_msg_id}", "from": "{agent_name}", "to": "{target}", "priority": "normal", "type": "forward", "content": "<你的说明>", "status": "pending", "created_at": "<当前ISO时间>"}}""")
-            instructions.append(f"""【必须】转发给指定 agent
-  转发至: {', '.join(forward_to)}
-{'---'.join(fwd_lines)}""")
-
-            if reply_to:
-                instructions.append(f"【注意】转发完成后，请回复发件人 {reply_to} 告知已转发。")
-
-        # 4. 执行任务
-        execute = action.get("execute", False) if action else False
-        if execute:
-            task_summary = ""
-            if task_data:
-                task_summary = task_data.get("summary", "")
-            exec_text = f"""【必须】执行任务
-  消息内容即为任务描述。请直接执行。"""
-            if task_summary:
-                exec_text += f"\n  任务概要: {task_summary}"
-            if task_data and task_data.get("deliverable"):
-                exec_text += f"\n  交付物: {task_data['deliverable']}"
-            instructions.append(exec_text)
-
-        # 5. 存记忆
-        store_memory = action.get("store_memory", True) if action else True
-        if store_memory:
-            instructions.append("""【建议】存入本地记忆
-  处理完消息后，将关键信息存入你的记忆系统，方便以后检索。""")
-
-        # 6. 追踪链
+        # 构建消息体
         chain_text = ""
         if fwd_chain and fwd_chain.get("hops"):
             hops = fwd_chain["hops"]
             chain_text = "\n".join([f"  {h.get('agent','?')}: {h.get('action','?')}" for h in hops])
-            chain_text = f"\n━━━━ 消息追踪链 ━━━━\n{chain_text}\n【你需在回复后更新此链】"
+            chain_text = f"\n追踪链:\n{chain_text}"
 
-        text_parts.append(f"""╔══════════════════════════════════════════╗
+        msg_body = f"""╔══════════════════════════════════════════╗
 ║        ziyan-mailbus 消息总线           ║
 ╚══════════════════════════════════════════╝
 
@@ -223,12 +174,56 @@ def push_messages(
 ━━━━ 消息内容 ━━━━
 类型: {msg_type}
 来自: {from_}
-内容: {content}
-消息ID: {msg_id}{chain_text}
+消息ID: {msg_id}
+内容: {content}{chain_text}
 
-━━━━ 请执行以下操作 ━━━━
-{chr(10).join(instructions)}
-━━━━━━━━━━━━━━━━""")
+━━━━ 回复格式说明（请严格按此格式回复）━━━━
+
+▶ 【必须】写 ACK 确认已读
+
+写文件到: {ack_path}
+写入以下 JSON：
+```json
+{{"action":"ack","msg_id":"{msg_id}","agent":"{agent_name}","timestamp":"<ISO时间格式 如2026-01-01T12:00:00+08:00>"}}
+```"""
+
+        reply_to = action.get("reply_to", "") if action else ""
+        if reply_to and reply_to not in ("mailbus", "broadcast", "system", "manual", "mailbus-test", "test", ""):
+            reply_path = f"{data_dir}/inbox/{reply_to}/inbox.json"
+            reply_msg_id = f"reply-{msg_id}"
+            msg_body += f"""
+
+▶ 【必须】回复发件人 {reply_to}
+
+写文件到: {reply_path}
+在 messages 数组末尾追加一条，设 has_unread=true：
+```json
+{{"id":"{reply_msg_id}","from":"{agent_name}","to":"{reply_to}","type":"reply","priority":"normal","status":"pending","content":"<你的回复>","created_at":"<ISO时间>"}}
+```"""
+
+        forward_to = action.get("forward_to", []) if action else []
+        if forward_to:
+            targets = [t for t in forward_to if t != agent_name]
+            if targets:
+                msg_body += f"""
+
+▶ 【必须】转发给指定 agent: {', '.join(targets)}"""
+                for target in targets:
+                    fwd_path = f"{data_dir}/inbox/{target}/inbox.json"
+                    fwd_msg_id = f"fwd-{msg_id}-{target}"
+                    msg_body += f"""
+
+  → 转发至 {target}:
+    文件: {fwd_path}
+    写入:
+    ```json
+    {{"id":"{fwd_msg_id}","from":"{agent_name}","to":"{target}","type":"forward","priority":"normal","status":"pending","content":"<转发说明>","created_at":"<ISO时间>"}}
+    ```"""
+
+        msg_body += """
+
+━━━━━━━━━━━━━━━━"""
+        text_parts.append(msg_body)
     combined_text = "\n---\n".join(text_parts)
     
     # 在第一条消息前加上 mailbus 系统上下文（仅首次）
