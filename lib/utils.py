@@ -43,13 +43,29 @@ def resolve_paths(data_dir: str) -> dict:
 
 # ── 文件锁 ────────────────────────────────────────────────────────────
 
-LOCK_FILE = "/tmp/ziyan-mailbus.lock"
+import hashlib
+
+GLOBAL_LOCK_FILE = "/tmp/ziyan-mailbus.lock"
+
+
+def _lock_path(path: str = "") -> str:
+    """生成锁文件路径：有 path 用 per-file 锁，否则用全局锁"""
+    if path:
+        h = hashlib.sha256(path.encode()).hexdigest()[:16]
+        return f"/tmp/ziyan-mailbus-{h}.lock"
+    return GLOBAL_LOCK_FILE
 
 
 @contextlib.contextmanager
-def file_lock(timeout: float = 10.0):
-    """文件锁 — 防止多个进程同时写同一份文件（带超时，防死锁）"""
-    lock_fd = open(LOCK_FILE, "w")
+def file_lock(timeout: float = 10.0, path: str = ""):
+    """文件锁 — 防止多个进程同时写同一份文件（带超时，防死锁）
+    
+    Args:
+        timeout: 获取锁超时秒数
+        path: 目标文件路径，传此参数会用 per-file 锁；不传用全局锁
+    """
+    lock_file = _lock_path(path)
+    lock_fd = open(lock_file, "w")
     deadline = time.time() + timeout
     acquired = False
     try:
@@ -61,7 +77,21 @@ def file_lock(timeout: float = 10.0):
             except BlockingIOError:
                 time.sleep(0.1)
         if not acquired:
-            raise TimeoutError(f"无法获取文件锁 (timeout={timeout}s)")
+            # 超时后降级为全局锁（兼容旧行为）
+            fallback = GLOBAL_LOCK_FILE
+            if lock_file != fallback:
+                lock_fd.close()
+                lock_fd = open(fallback, "w")
+                deadline2 = time.time() + 5.0
+                while time.time() < deadline2:
+                    try:
+                        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        acquired = True
+                        break
+                    except BlockingIOError:
+                        time.sleep(0.1)
+            if not acquired:
+                raise TimeoutError(f"无法获取文件锁 (path={path}, timeout={timeout}s)")
         yield
     except Exception:
         raise
@@ -108,7 +138,7 @@ def json_read(filepath: str, default: Any = None, ttl: float = 5.0) -> Any:
             # 返回 deep-copy，避免调用方修改缓存数据（如 Inbox.from_dict 会 pop 'from'）
             return copy.deepcopy(data)
 
-    with file_lock():
+    with file_lock(path=filepath):
         try:
             with open(filepath) as f:
                 data = json.load(f)
@@ -142,7 +172,7 @@ def json_read(filepath: str, default: Any = None, ttl: float = 5.0) -> Any:
 def json_write(filepath: str, data: Any, indent: int = 2):
     """写 JSON 文件（带锁，原子写入）"""
     tmp = filepath + ".tmp"
-    with file_lock():
+    with file_lock(path=filepath):
         with open(tmp, "w") as f:
             json.dump(data, f, ensure_ascii=False, indent=indent)
             f.flush()
@@ -157,7 +187,7 @@ def jsonl_append(filepath: str, entry: dict):
     dirname = os.path.dirname(filepath)
     if dirname:
         os.makedirs(dirname, exist_ok=True)
-    with file_lock():
+    with file_lock(path=filepath):
         with open(filepath, "a") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
             f.flush()
