@@ -53,9 +53,25 @@ def archive_agent(data_dir: str, agent_name: str, archive_days: int = 7, max_mes
     
     for m in inbox.messages:
         if _is_acked(m):
-            to_archive.append(m)
+            if _is_old(m, archive_days):
+                # 超过时间限制 → 归档
+                to_archive.append(m)
+            else:
+                keep.append(m)
         else:
             keep.append(m)
+    
+    # 如果按时间触发的归档后，inbox 仍然太多 → 按 ack 时间从旧到新再归档一批
+    if should_archive_by_count and len(keep) >= max_messages:
+        extra_keep = []
+        from datetime import datetime, timezone
+        keep.sort(key=lambda m: m.get("acknowledged_at", "") if isinstance(m, dict) else (m.acknowledged_at or ""))
+        for i, m in enumerate(keep):
+            if i < max_messages // 2:
+                extra_keep.append(m)
+            else:
+                to_archive.append(m)
+        keep = extra_keep
     
     if not to_archive:
         return 0
