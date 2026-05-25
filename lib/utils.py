@@ -8,6 +8,7 @@ import json
 import os
 import fcntl
 import shutil
+import time
 import contextlib
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Any
@@ -45,16 +46,27 @@ LOCK_FILE = "/tmp/ziyan-mailbus.lock"
 
 
 @contextlib.contextmanager
-def file_lock():
-    """文件锁 — 防止多个 cron 进程同时写同一份文件"""
+def file_lock(timeout: float = 10.0):
+    """文件锁 — 防止多个进程同时写同一份文件（带超时，防死锁）"""
     lock_fd = open(LOCK_FILE, "w")
+    deadline = time.time() + timeout
+    acquired = False
     try:
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        while time.time() < deadline:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+                break
+            except BlockingIOError:
+                time.sleep(0.1)
+        if not acquired:
+            raise TimeoutError(f"无法获取文件锁 (timeout={timeout}s)")
         yield
     except Exception:
         raise
     finally:
-        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        if acquired:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
         lock_fd.close()
 
 
