@@ -159,8 +159,24 @@ case "$cmd" in
             done
         fi
         ;;
+    install-cron)
+        echo "📦 安装 daemon 自守护 crontab..."
+        SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+        CRON_JOB="* * * * * cd ${SCRIPT_DIR} && bash daemon-manager.sh watchdog > /dev/null 2>&1"
+        (crontab -l 2>/dev/null | grep -v "daemon-manager.sh" ; echo "$CRON_JOB") | crontab -
+        echo "  ✅ crontab 已安装: 每分钟检查 daemon 存活"
+        ;;
+    watchdog)
+        # 供 crontab 每分钟调用：检测所有 daemon，挂了自动重启
+        for agent in $(get_agents); do
+            if ! is_running "$agent"; then
+                echo "[$(date)] 🔴 $agent daemon 已停止, 自动重启..." >&2
+                start_one "$agent"
+            fi
+        done
+        ;;
     *)
-        echo "用法: $0 {start|stop|status|restart} [agent]"
+        echo "用法: $0 {start|stop|status|restart|install-cron} [agent]"
         echo ""
         echo "  agent 可选, 不指定则操作所有"
         echo ""

@@ -182,15 +182,120 @@ class MailboxDaemon:
             },
         }
 
+    # ── Checkpoint 持久化 ──
+
+    CHECKPOINT_FILE = "checkpoint.json"  # 存放在 data_dir 下
+
+    def _save_checkpoint(self):
+        """将当前运行中的任务状态写入 checkpoint，供崩溃恢复"""
+        procs_data = []
+        for pid, info in self._running_procs.items():
+            proc = info["proc"]
+            ret = proc.poll()
+            if ret is not None:
+                continue  # 已完成的进程不保存
+            procs_data.append({
+                "pid": pid,
+                "msg_ids": info.get("msg_ids", []),
+                "senders": info.get("senders", {}),
+                "summary": info.get("summary", ""),
+                "cmd": info.get("cmd", ""),
+                "started_at": info.get("started_at", 0),
+            })
+        if procs_data:
+            ckpt = {
+                "agent": self.agent_name,
+                "timestamp": now_iso(),
+                "running_procs": procs_data,
+                "processing_ids": list(self._processing_ids),
+                "retry_map": getattr(self, '_retry_map', {}),
+            }
+            write_json(os.path.join(self.data_dir, self.CHECKPOINT_FILE), ckpt)
+            self.log.debug(f"checkpoint 已保存: {len(procs_data)} 个运行中任务")
+
+    def _load_checkpoint(self):
+        """从 checkpoint 恢复运行中任务的状态追踪"""
+        ckpt_path = os.path.join(self.data_dir, self.CHECKPOINT_FILE)
+        ckpt = read_json(ckpt_path)
+        if not ckpt:
+            return
+        self.log.info(f"发现 checkpoint: agent={ckpt.get('agent')}, "
+                      f"运行中任务={len(ckpt.get('running_procs', []))}")
+        # 恢复 processing_ids 和 retry_map
+        for mid in ckpt.get("processing_ids", []):
+            self._processing_ids.add(mid)
+        self._retry_map = ckpt.get("retry_map", {})
+        # 恢复任务状态（进程已死，标记为需要重试）
+        for pd in ckpt.get("running_procs", []):
+            for mid in pd.get("msg_ids", []):
+                self.log.warning(f"  ⚠️ checkpoint 恢复: 消息 {mid} 上次运行被中断，标记待重试")
+                # 通知发件人任务被中断
+                sender = pd.get("senders", {}).get(mid, "unknown")
+                self._send_completion_notice(
+                    mid, sender, "中断",
+                    "Daemon 重启恢复: 上次 session 被信号终止，请重新派发"
+                )
+                self._mark_done(mid, "daemon 重启恢复: 被中断")
+        # 清理 checkpoint 文件（避免重复恢复）
+        try:
+            os.remove(ckpt_path)
+        except OSError:
+            pass
+        self.log.info("checkpoint 恢复完成，历史运行中任务已标记中断")
+
+    # ── Graceful Shutdown ──
+
+    def _handle_shutdown(self, signum, frame):
+        """优雅关闭：先等待子进程，再退出"""
+        sig_name = self._signal_name(signum) if signum <= 128 else self._signal_name(signum + 128) or f"SIGNAL({signum})"
+        self.log.warning(f"收到关闭信号 {sig_name}({signum})，开始优雅关闭...")
+
+        # 保存 checkpoint
+        self._save_checkpoint()
+
+        # 标记停止，主循环会退出
+        self._running = False
+
+        # 给子进程最多 10 秒完成
+        deadline = time.time() + 10
+        for pid, info in list(self._running_procs.items()):
+            proc = info["proc"]
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+            try:
+                proc.wait(timeout=remaining)
+                self.log.info(f"  子进程 (PID: {pid}) 已正常退出")
+            except subprocess.TimeoutExpired:
+                self.log.warning(f"  子进程 (PID: {pid}) 超时未退出，发送 SIGTERM")
+                try:
+                    proc.terminate()
+                    proc.wait(timeout=3)
+                except Exception:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass
+
+        self.log.info("优雅关闭完成")
+
     def start(self):
-        self.log.info(f"Mailbox Daemon v0.5 启动 (任务追踪+去重保护) — agent={self.agent_name}")
+        self.log.info(f"Mailbox Daemon v0.5 启动 (任务追踪+去重保护+checkpoint) — agent={self.agent_name}")
         self.log.info(f"  inbox: {self.inbox_path}")
         self.log.info(f"  ack:   {self.ack_path}")
         if not os.path.exists(self.inbox_path):
             self.log.warning("inbox 尚不存在, 等待创建...")
         self._watcher = FileWatcher(self.inbox_path)
-        signal.signal(signal.SIGTERM, lambda *_: setattr(self, '_running', False))
-        signal.signal(signal.SIGINT, lambda *_: setattr(self, '_running', False))
+
+        # ── Signal 处理：优雅关闭 ──
+        signal.signal(signal.SIGTERM, self._handle_shutdown)
+        signal.signal(signal.SIGINT, self._handle_shutdown)
+        # 忽略 SIGPIPE（防止写管道时意外退出）
+        signal.signal(signal.SIGPIPE, signal.SIG_IGN)
+
+        # ── 从 checkpoint 恢复 ──
+        self._load_checkpoint()
+
         # ── 清理上一轮孤儿进程 ──
         self._cleanup_orphans()
         # 清理上一轮的临时脚本
@@ -206,9 +311,13 @@ class MailboxDaemon:
                     self._reap_processes()
                     self._heartbeat_tick()
                     self._archive_tick()
+                    # 每 60 秒保存一次 checkpoint
+                    if int(time.time()) % 60 < 5:
+                        self._save_checkpoint()
                 except Exception as e:
                     self.log.error(f"循环异常: {e}", exc_info=True)
         finally:
+            self._save_checkpoint()  # 退出前保存最后一次 checkpoint
             self._watcher.close()
             self.log.info("Mailbox Daemon 已停止")
 
@@ -589,6 +698,7 @@ class MailboxDaemon:
                 "summary": summary_text,
                 "proc": proc,
                 "started_at": time.time(),
+                "cmd": cmd,                # 保存完整命令，供信号退出重试使用
             }
             self.log.info(f"  agent 已唤醒 (PID: {proc.pid}, 消息数: {len(msg_ids)})")
             return True
@@ -635,17 +745,34 @@ class MailboxDaemon:
         except Exception:
             pass
 
+    def _signal_name(self, retcode: int) -> str:
+        """将退出码转换为信号名称（如 137 → 'SIGKILL', 139 → 'SIGSEGV'）"""
+        if retcode < 0:
+            sig_num = -retcode
+        elif retcode >= 128:
+            sig_num = retcode - 128
+        else:
+            return ""
+        import signal as _sig
+        name_map = {getattr(_sig, n): n for n in dir(_sig) if n.startswith('SIG') and not n.startswith('SIG_')}
+        return name_map.get(sig_num, f"信号({sig_num})")
+
     def _reap_processes(self):
-        """检查已完成的 agent 进程, 发回执（支持 msg_ids 批量）；超时进程自动 kill"""
+        """检查已完成的 agent 进程, 发回执（支持 msg_ids 批量）；超时进程自动 kill；信号退出自动重试"""
         now = time.time()
         finished = []
+        # 重试追踪：{mid: retry_count}
+        retry_map = getattr(self, '_retry_map', {})
         for pid, info in list(self._running_procs.items()):
             proc = info["proc"]
             ret = proc.poll()
             elapsed = now - info["started_at"]
+            msg_ids = info.get("msg_ids") or [info.get("msg_id")]
+            senders = info.get("senders") or {info.get("msg_id", ""): info.get("sender", "")}
 
             # ── 超时保护：运行超过 MAX_AGENT_RUNTIME 的进程强制 kill ──
             if ret is None and elapsed > MAX_AGENT_RUNTIME:
+                sig_name = "SIGKILL(超时)"
                 self.log.warning(f"  agent 超时 ({elapsed:.0f}s > {MAX_AGENT_RUNTIME}s), 强制终止 (PID: {pid})")
                 try:
                     proc.kill()
@@ -660,11 +787,39 @@ class MailboxDaemon:
 
             if ret is not None:
                 finished.append(pid)
-                self.log.info(f"  agent 进程完成 (PID: {pid}, 耗时: {elapsed:.0f}s, 返回码: {ret})")
+                sig_name = self._signal_name(ret)
+                sig_detail = f" → 信号终止: {sig_name}" if sig_name else ""
+
+                # ── 信号退出检测与自动重试 ──
+                is_signal_exit = bool(sig_name) or ret != 0
+                do_retry = False
+                if is_signal_exit and ret != 0:
+                    # 检查是否已重试过
+                    all_retried = all(
+                        retry_map.get(mid, 0) < 2 for mid in msg_ids
+                    )
+                    if all_retried and elapsed < MAX_AGENT_RUNTIME * 0.5:
+                        # 记录重试
+                        for mid in msg_ids:
+                            retry_map[mid] = retry_map.get(mid, 0) + 1
+                            self.log.warning(f"  ⚠️ 消息 {mid}: 信号退出(ret={ret}{sig_detail}), 发起第 {retry_map[mid]} 次重试")
+                        do_retry = True
+
+                if do_retry:
+                    # 重新 spawn 进程
+                    self._spawn_agent_process(
+                        info.get("cmd", ""),
+                        msg_ids,
+                        senders,
+                        info.get("summary", ""),
+                    )
+                    continue
+
+                # ── 正常完成 → 发回执 ──
+                self.log.info(f"  agent 进程完成 (PID: {pid}, 耗时: {elapsed:.0f}s, 返回码: {ret}{sig_detail})")
                 # 收集 stdout（过滤 ANSI 转义 + [thinking] 痕迹，截短防 token 浪费）
                 stdout = ""
                 try:
-                    import re
                     out, _ = proc.communicate(timeout=5)
                     raw = out.decode("utf-8", errors="replace")
                     raw = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', raw)
@@ -672,11 +827,11 @@ class MailboxDaemon:
                     stdout = "\n".join(lines).strip()[:100]
                 except Exception:
                     pass
-                status = "完成" if ret == 0 else f"异常退出(code={ret})"
 
-                # 兼容新旧格式：msg_ids（列表）或 msg_id（字符串）
-                msg_ids = info.get("msg_ids") or [info.get("msg_id")]
-                senders = info.get("senders") or {info.get("msg_id", ""): info.get("sender", "")}
+                if sig_name:
+                    status = f"信号终止(code={ret}, {sig_name})"
+                else:
+                    status = "完成" if ret == 0 else f"异常退出(code={ret})"
 
                 # 给每条原始消息发回执 + mark_done + 更新追踪
                 for mid in msg_ids:
@@ -684,10 +839,14 @@ class MailboxDaemon:
                     self._send_completion_notice(mid, sender, status, stdout or None)
                     self._mark_done(mid, f"agent 已处理({status})")
                     self._complete_task(mid, status, stdout)
-                    # 从处理中集合移除，允许崩溃恢复重新处理
+                    # 从处理中集合移除
                     self._processing_ids.discard(mid)
+                    retry_map.pop(mid, None)
+
         for pid in finished:
             del self._running_procs[pid]
+
+        self._retry_map = retry_map
 
     def _send_completion_notice(self, original_msg_id, sender, status, detail=None):
         """任务完成后, 写一条回执到发件人的 inbox"""
