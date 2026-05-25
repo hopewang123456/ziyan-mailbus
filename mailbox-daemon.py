@@ -2,11 +2,12 @@
 """mailbox-daemon.py — Agent 侧邮箱守护进程 v0.5 (任务追踪+去重保护)"""
 import os, sys, json, time, signal, logging, argparse, subprocess, tempfile
 from datetime import datetime, timezone, timedelta
+from lib.constants import DEFAULT_DATA_DIR as _DD, DEFAULT_LOG_DIR as _LD, DEFAULT_POLL_INTERVAL, DEFAULT_HEARTBEAT_INTERVAL
 
-DEFAULT_DATA_DIR = "/mnt/e/ai_tools/mail/store"
-POLL_INTERVAL = 15
-HEARTBEAT_INTERVAL = 60
-LOG_DIR = "/mnt/e/ai_tools/mail/logs"
+DEFAULT_DATA_DIR = _DD
+POLL_INTERVAL = DEFAULT_POLL_INTERVAL
+HEARTBEAT_INTERVAL = DEFAULT_HEARTBEAT_INTERVAL
+LOG_DIR = _LD
 TZ_CST = timezone(timedelta(hours=8))
 
 def read_json(path, default=None):
@@ -114,41 +115,13 @@ class MailboxDaemon:
         )
         self.log = logging.getLogger(self.agent_name)
 
-    # ── 消息解析（兼容新旧格式） ──
+    # ── 消息解析（统一使用邮件格式） ──
 
     def _parse_message(self, msg: dict) -> dict:
         """
-        统一解析新旧格式消息，返回规范化字典。
-        新格式: {mailbus: {msg_id, envelope: {from, to, cc, priority, ...}}, payload: {type, version, body}}
-        旧格式: {id, from, to, type, content, ...}
+        解析消息为规范化字典。
+        统一使用平铺格式: {id, from, to, type, content, ...}
         """
-        if 'mailbus' in msg and isinstance(msg['mailbus'], dict):
-            return self._parse_envelope(msg)
-        return self._parse_legacy(msg)
-
-    def _parse_envelope(self, msg: dict) -> dict:
-        mb = msg['mailbus']
-        env = mb.get('envelope', {})
-        payload = msg.get('payload', {})
-        body = payload.get('body', {})
-        # 提取预览文本（从 body 中智能提取）
-        preview = self._extract_preview(payload.get('type', 'notice'), body)
-        return {
-            'id': mb.get('msg_id', ''),
-            'from': env.get('from', ''),
-            'to': env.get('to', ''),
-            'cc': env.get('cc', []),
-            'priority': env.get('priority', 'normal'),
-            'type': payload.get('type', 'notice'),
-            'version': payload.get('version', '1.0'),
-            'body': body,
-            'preview': preview,
-            'created_at': env.get('created_at', ''),
-            'thread_id': env.get('thread_id', ''),
-            'reply_to': env.get('reply_to', ''),
-        }
-
-    def _parse_legacy(self, msg: dict) -> dict:
         content = msg.get('content', '')
         return {
             'id': msg.get('id', ''),
@@ -164,31 +137,6 @@ class MailboxDaemon:
             'thread_id': '',
             'reply_to': '',
         }
-
-    @staticmethod
-    def _extract_preview(payload_type: str, body: dict) -> str:
-        """根据 payload 类型从 body 提取有意义的预览文本"""
-        if payload_type == 'design_review':
-            t = body.get('title', '')
-            s = body.get('status', '')
-            return f"[设计评审] {t} (状态: {s})"[:120]
-        elif payload_type == 'task_status':
-            t = body.get('title', '')
-            s = body.get('status', '')
-            a = body.get('assignee', '?')
-            return f"[任务] {t} → {a} (状态: {s})"[:120]
-        elif payload_type == 'code_review':
-            pu = body.get('pr_url', '')
-            f = body.get('change_summary', {}).get('files_changed', '?')
-            return f"[Code Review] PR: {pu} ({f} 文件变更)"[:120]
-        elif payload_type == 'status_ack':
-            ack_for = body.get('ack_for_msg_id', '')
-            ack_st = body.get('ack_status', '')
-            return f"[回执] 确认 {ack_for}: {ack_st}"[:120]
-        # 兜底：从 body 取内容或返回空
-        if isinstance(body, dict):
-            return str(body.get('content', str(body)))[:80].replace('\n', ' ')
-        return str(body)[:80].replace('\n', ' ')
 
     # ── 工具方法 ──
 
@@ -767,9 +715,10 @@ def main():
     parser.add_argument("--agent", required=True, help="Agent 名称")
     parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR, help="mailbus store 目录")
     parser.add_argument("--daemon", action="store_true", help="后台运行")
-    parser.add_argument("--log-dir", default="/mnt/e/ai_tools/mail/logs", help="日志目录")
+    parser.add_argument("--log-dir", default=None, help="日志目录（默认: lib/constants.py 的 DEFAULT_LOG_DIR）")
     args = parser.parse_args()
-    LOG_DIR = args.log_dir
+    if args.log_dir:
+        LOG_DIR = args.log_dir
     if args.daemon:
         pid = os.fork()
         if pid > 0:

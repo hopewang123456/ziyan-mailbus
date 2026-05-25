@@ -42,43 +42,26 @@ def process_ack(data_dir: str, agent_name: str, ack_data: dict) -> bool:
         return False
     
     inbox = Inbox.from_dict(inbox_data)
-    found = False
-    
-    for m in inbox.messages:
-        if isinstance(m, dict):
-            if m.get("id") == msg_id:
-                m["status"] = MsgStatus.ACKNOWLEDGED
-                m["acknowledged_at"] = ts
-                # v3.0 状态机：ack → received
-                if not m.get("state"):
-                    m["state"] = MsgStatus.RECEIVED
-                    history = m.get("state_history", [])
-                    if not isinstance(history, list):
-                        history = []
-                    history.append({"state": MsgStatus.RECEIVED, "at": ts})
-                    m["state_history"] = history
-                    m["received_at"] = ts
-                found = True
-                break
-        else:
-            if m.id == msg_id:
-                m.status = MsgStatus.ACKNOWLEDGED
-                m.acknowledged_at = ts
-                # v3.0 状态机
-                if not m.state:
-                    m.state = MsgStatus.RECEIVED
-                    history = list(m.state_history or [])
-                    history.append({"state": MsgStatus.RECEIVED, "at": ts})
-                    m.state_history = history
-                    m.received_at = ts
-                found = True
-                break
+    found = inbox.set_msg_status(msg_id, MsgStatus.ACKNOWLEDGED, acknowledged_at=ts)
     
     if found:
+        # v3.0 状态机：ack → received（使用统一访问器）
+        msg = inbox.get_msg(msg_id)
+        if msg and not inbox.msg_field(msg, 'state'):
+            inbox.set_msg_status(msg_id, MsgStatus.ACKNOWLEDGED,
+                                 state=MsgStatus.RECEIVED,
+                                 received_at=ts)
+            # 非 task 类型直接 done
+            mtype = inbox.msg_field(msg, 'type', '')
+            if mtype not in ("task", "task_reply"):
+                inbox.set_msg_status(msg_id, MsgStatus.ACKNOWLEDGED,
+                                     state=MsgStatus.DONE,
+                                     done_at=ts)
+        
         # 检查 forward_chain，自动更新当前 agent 的 hop 状态
         for m in inbox.messages:
-            if isinstance(m, dict) and m.get("id") == msg_id:
-                fwd_chain = m.get("forward_chain")
+            if inbox.msg_field(m, 'id') == msg_id:
+                fwd_chain = inbox.msg_field(m, 'forward_chain')
                 if fwd_chain and fwd_chain.get("hops"):
                     for hop in fwd_chain["hops"]:
                         if hop.get("agent") == agent_name and hop.get("status") != "done":
@@ -88,12 +71,8 @@ def process_ack(data_dir: str, agent_name: str, ack_data: dict) -> bool:
                     if all(h.get("status") == "done" for h in fwd_chain["hops"]):
                         fwd_chain["status"] = "completed"
                 break
-        # 更新 has_unread
-        inbox.has_unread = any(
-            (isinstance(m, dict) and m.get("status") not in ("acknowledged", "archived"))
-            or (not isinstance(m, dict) and m.status not in ("acknowledged", "archived"))
-            for m in inbox.messages
-        )
+        
+        inbox.has_unread = inbox.has_unread_messages()
         json_write(inbox_file, inbox.to_dict())
 
     return found
@@ -123,25 +102,12 @@ def process_mark_read(data_dir: str, agent_name: str, mark_data: dict) -> bool:
     changed = False
     timestamp = mark_data.get("timestamp", _now_iso())
     
-    for m in inbox.messages:
-        if isinstance(m, dict):
-            if m.get("id") in msg_ids:
-                m["status"] = MsgStatus.ACKNOWLEDGED
-                m["acknowledged_at"] = timestamp
-                changed = True
-        else:
-            if m.id in msg_ids:
-                m.status = MsgStatus.ACKNOWLEDGED
-                m.acknowledged_at = timestamp
-                changed = True
+    for msg_id in msg_ids:
+        if inbox.set_msg_status(msg_id, MsgStatus.ACKNOWLEDGED, acknowledged_at=timestamp):
+            changed = True
     
     if changed:
-        # 更新 has_unread
-        inbox.has_unread = any(
-            (isinstance(m, dict) and m.get("status") not in ("acknowledged", "archived"))
-            or (not isinstance(m, dict) and m.status not in ("acknowledged", "archived"))
-            for m in inbox.messages
-        )
+        inbox.has_unread = inbox.has_unread_messages()
         json_write(inbox_file, inbox.to_dict())
     
     return changed
@@ -252,14 +218,9 @@ def scan_error_reports(data_dir: str, agents: dict) -> list:
 
         inbox = Inbox.from_dict(inbox_data)
         for m in inbox.messages:
-            if isinstance(m, dict):
-                msg_type = m.get("type", "")
-                error = m.get("error", {})
-                task_id = m.get("task_id", "")
-            else:
-                msg_type = m.type
-                error = m.error if hasattr(m, 'error') else {}
-                task_id = m.task.get("task_id", "") if hasattr(m, 'task') and m.task else ""
+            msg_type = inbox.msg_field(m, 'type', '')
+            task_id = inbox.msg_field(m, 'task_id', '')
+            error = inbox.msg_field(m, 'error', {})
 
             if msg_type == "error_report" and error and task_id:
                 reports.append({

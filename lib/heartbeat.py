@@ -201,10 +201,11 @@ def check_disk_space(data_dir: str, warn_mb: int = DEFAULT_DISK_WARN_MB) -> Opti
 def ping_agent(agent_cfg: dict, agent_types: dict, ping_timeout: int = DEFAULT_PING_TIMEOUT,
                data_dir: str = None) -> bool:
     """对单个 agent 执行心跳检测 — 文件探活（零 token 成本）"""
+    from .constants import DEFAULT_DATA_DIR
     agent_name = agent_cfg.get("profile", "") or agent_cfg.get("agent", "") or ""
     if not agent_name:
         return True  # 未知 agent 默认在线
-    hb_dir = data_dir or "/mnt/e/ai_tools/mail/store"
+    hb_dir = data_dir or DEFAULT_DATA_DIR
     hb_file = os.path.join(hb_dir, f"heartbeat.{agent_name}.json")
     try:
         mtime = os.path.getmtime(hb_file)

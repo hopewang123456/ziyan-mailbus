@@ -9,7 +9,7 @@ import json
 from typing import List, Tuple
 
 from .models import Message, MsgStatus, Priority, Inbox
-from .utils import json_read, json_write, resolve_paths
+from .utils import json_read, json_write, resolve_paths, _now_iso
 
 
 def scan_all(data_dir: str, agents: dict) -> List[Tuple[str, list, list]]:
@@ -37,66 +37,34 @@ def scan_all(data_dir: str, agents: dict) -> List[Tuple[str, list, list]]:
         # 如果有，说明 agent 已经读了前面的消息，自动标为 acknowledged
         replied_ids = set()
         for m_raw in inbox.messages:
-            if isinstance(m_raw, dict):
-                msg_type = m_raw.get("type", "")
-                msg_from = m_raw.get("from", "")
-                original_msg_id = m_raw.get("original_msg_id") or m_raw.get("id", "")
-            else:
-                msg_type = m_raw.type
-                msg_from = m_raw.from_
-                original_msg_id = getattr(m_raw, 'original_msg_id', '') or m_raw.id
+            msg_type = inbox.msg_field(m_raw, 'type', '')
+            msg_from = inbox.msg_field(m_raw, 'from', '')
+            msg_id = inbox.msg_field(m_raw, 'id', '')
+            original_msg_id = inbox.msg_field(m_raw, 'original_msg_id', '') or msg_id
             
             # 如果 agent 发了 reply/forward 类型的消息，说明它已经读了
             if msg_type in ("reply", "forward") and msg_from == name:
                 replied_ids.add(original_msg_id)
-                # 也匹配 parent id
-                if isinstance(m_raw, dict):
-                    msg_id = m_raw.get("id", "")
-                else:
-                    msg_id = m_raw.id
                 if msg_id != original_msg_id:
                     replied_ids.add(msg_id)
         
         # 如果有回复，找到对应的 pending 消息并标为 acknowledged
         if replied_ids:
+            from datetime import datetime
+            ts = datetime.now().isoformat()
             for m_raw in inbox.messages:
-                if isinstance(m_raw, dict):
-                    mid = m_raw.get("id", "")
-                else:
-                    mid = m_raw.id
-                if mid in replied_ids and m_raw.get("status") if isinstance(m_raw, dict) else m_raw.status:
-                    mstatus = m_raw.get("status") if isinstance(m_raw, dict) else m_raw.status
-                    if mstatus == MsgStatus.PENDING or mstatus == MsgStatus.PUSHED:
-                        ts = __import__('datetime').datetime.now().isoformat()
-                        if isinstance(m_raw, dict):
-                            m_raw["status"] = MsgStatus.ACKNOWLEDGED
-                            m_raw["acknowledged_at"] = ts
-                            # v3.0 状态机流转
-                            if not m_raw.get("state"):
-                                m_raw["state"] = MsgStatus.RECEIVED
-                                history = m_raw.get("state_history", [])
-                                if not isinstance(history, list): history = []
-                                history.append({"state": MsgStatus.RECEIVED, "at": ts})
-                                m_raw["state_history"] = history
-                                m_raw["received_at"] = ts
-                            # 如果 type 不是 task，直接 done
-                            if m_raw.get("type") not in ("task", "task_reply"):
-                                m_raw["state"] = MsgStatus.DONE
-                                m_raw["state_history"].append({"state": MsgStatus.DONE, "at": ts})
-                                m_raw["done_at"] = ts
-                        else:
-                            m_raw.status = MsgStatus.ACKNOWLEDGED
-                            m_raw.acknowledged_at = ts
-                            if not m_raw.state:
-                                m_raw.state = MsgStatus.RECEIVED
-                                history = list(m_raw.state_history or [])
-                                history.append({"state": MsgStatus.RECEIVED, "at": ts})
-                                m_raw.state_history = history
-                                m_raw.received_at = ts
-                            if m_raw.type not in ("task", "task_reply"):
-                                m_raw.state = MsgStatus.DONE
-                                m_raw.state_history.append({"state": MsgStatus.DONE, "at": ts})
-                                m_raw.done_at = ts
+                mid = inbox.msg_field(m_raw, 'id', '')
+                if mid in replied_ids:
+                    mstatus = inbox.msg_field(m_raw, 'status', '')
+                    if mstatus in (MsgStatus.PENDING, MsgStatus.PUSHED):
+                        inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, acknowledged_at=ts)
+                        mtype = inbox.msg_field(m_raw, 'type', '')
+                        if not inbox.msg_field(m_raw, 'state'):
+                            inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED,
+                                                 state=MsgStatus.RECEIVED, received_at=ts)
+                            if mtype not in ("task", "task_reply"):
+                                inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED,
+                                                     state=MsgStatus.DONE, done_at=ts)
             json_write(inbox_path, inbox.to_dict())
         
         # 只处理未读且 pending 状态的消息
@@ -105,10 +73,7 @@ def scan_all(data_dir: str, agents: dict) -> List[Tuple[str, list, list]]:
         has_pending = False
         
         for m_raw in inbox.messages:
-            if isinstance(m_raw, dict):
-                msg = Message.from_dict(m_raw)
-            else:
-                msg = m_raw
+            msg = Message.from_dict(m_raw) if isinstance(m_raw, dict) else m_raw
             
             if msg.status == MsgStatus.PENDING:
                 has_pending = True
@@ -123,15 +88,32 @@ def scan_all(data_dir: str, agents: dict) -> List[Tuple[str, list, list]]:
     # 排序：有加急的 agent 排前面
     results.sort(key=lambda x: -len(x[1]))
     
+    return results
+
+
+def run_housekeeping(data_dir: str, agents: dict):
+    """
+    执行邮件系统的运维任务（非扫描核心职责）。
+    由 bus.py 的 scan 命令在 build_queues 之后主动调用。
+
+    包括：
+    - 超时催办检测
+    - skill 使用记录消费
+    - agent 离线检测
+    - 自动归档
+    - 索引更新
+    """
+    paths = resolve_paths(data_dir)
+
     # 超时检测：检查所有 agent 的 inbox，超时未处理的消息自动催办
-    _check_timeouts(data_dir, agents, inbox_path.rsplit("/inbox/", 1)[0] + "/inbox" if "inbox_path" in dir() else data_dir + "/inbox", paths)
-    
+    _check_timeouts(data_dir, agents, paths['inbox'], paths)
+
     # 技能使用记录消费：扫描 skill-usage-pending 目录，归入 skill-usage.json
     _consume_skill_usage(data_dir)
-    
+
     # agent 离线检测：检查所有 agent 心跳，离线超过 3 次 ping 的发送通知
     _check_offline_agents(data_dir, agents, paths)
-    
+
     # 自动归档：acknowledged 超过 7 天或 inbox 超过 300 条的消息
     try:
         from .archiver import archive_all
@@ -141,15 +123,13 @@ def scan_all(data_dir: str, agents: dict) -> List[Tuple[str, list, list]]:
                 print(f"  📦 {name}: {count} 条已归档")
     except Exception:
         pass
-    
+
     # 自动索引：扫描所有 inbox 更新搜索索引
     try:
         from .search import scan_and_index
         scan_and_index(data_dir, agents)
     except Exception:
         pass
-    
-    return results
 
 
 def _consume_skill_usage(data_dir: str):
@@ -210,10 +190,7 @@ def _check_timeouts(data_dir: str, agents: dict, inbox_base: str, paths: dict):
         reminded = []
         
         for m_raw in inbox.messages:
-            if isinstance(m_raw, dict):
-                msg = Message.from_dict(m_raw)
-            else:
-                msg = m_raw
+            msg = Message.from_dict(m_raw) if isinstance(m_raw, dict) else m_raw
             
             timeout_min = msg.timeout_minutes
             if not timeout_min or timeout_min <= 0:
@@ -274,13 +251,10 @@ def _check_timeouts(data_dir: str, agents: dict, inbox_base: str, paths: dict):
                         e_inbox.has_unread = True
                         json_write(escalate_file, e_inbox.to_dict())
                         
-                        # 更新原消息的催办记录
-                        if isinstance(m_raw, dict):
-                            m_raw["reminded_count"] = (m_raw.get("reminded_count", 0) or 0) + 1
-                            m_raw["last_reminded_at"] = datetime.now(timezone.utc).isoformat()
-                        else:
-                            m_raw.reminded_count = (m_raw.reminded_count or 0) + 1
-                            m_raw.last_reminded_at = datetime.now(timezone.utc).isoformat()
+                        # 更新原消息的催办记录（使用 Inbox 统一访问器）
+                        inbox.set_msg_status(msg.id, inbox.msg_field(m_raw, 'state', ''),
+                                             reminded_count=(inbox.msg_field(m_raw, 'reminded_count', 0) or 0) + 1,
+                                             last_reminded_at=datetime.now(timezone.utc).isoformat())
                         reminded.append(name)
                     except Exception:
                         pass
@@ -332,15 +306,18 @@ def _get_acked_ids(inbox_data: dict) -> set:
     从 inbox 数据中提取已 ack 的消息 ID 集合。
     用于幂等去重。
     """
-    acked = set()
-    for m in inbox_data.get("messages", []):
-        if isinstance(m, dict):
-            if m.get("status") == MsgStatus.ACKNOWLEDGED:
-                acked.add(m.get("id", ""))
-        else:
-            if getattr(m, 'status', '') == MsgStatus.ACKNOWLEDGED:
-                acked.add(getattr(m, 'id', ''))
-    return acked
+    inbox = Inbox.from_dict(inbox_data) if "agent" in inbox_data else None
+    if not inbox:
+        # 原始 dict 无法构造 Inbox，手动遍历
+        acked = set()
+        for m in inbox_data.get("messages", []):
+            status = m.get("status") if isinstance(m, dict) else getattr(m, 'status', '')
+            mid = m.get("id") if isinstance(m, dict) else getattr(m, 'id', '')
+            if status == MsgStatus.ACKNOWLEDGED:
+                acked.add(mid)
+        return acked
+    return {inbox.msg_field(m, 'id', '') for m in inbox.messages
+            if inbox.msg_field(m, 'status', '') == MsgStatus.ACKNOWLEDGED}
 
 
 def mark_as_pushed(data_dir: str, agent_name: str, msg_ids: list):
@@ -357,14 +334,8 @@ def mark_as_pushed(data_dir: str, agent_name: str, msg_ids: list):
     inbox = Inbox.from_dict(inbox_data)
     changed = False
     
-    for m in inbox.messages:
-        mid = m.id if hasattr(m, 'id') else (m.get("id") if isinstance(m, dict) else None)
-        mstatus = m.status if hasattr(m, 'status') else (m.get("status") if isinstance(m, dict) else None)
-        if mid in msg_ids and mstatus == MsgStatus.PENDING:
-            if hasattr(m, 'status'):
-                m.status = MsgStatus.PUSHED
-            else:
-                m["status"] = MsgStatus.PUSHED
+    for mid in msg_ids:
+        if inbox.set_msg_status(mid, MsgStatus.PUSHED):
             changed = True
     
     if changed:
@@ -383,23 +354,11 @@ def update_message_status(data_dir: str, agent_name: str, msg_id: str, new_statu
         return False
     
     inbox = Inbox.from_dict(inbox_data)
-    found = False
+    extra = {}
+    if new_status == MsgStatus.ACKNOWLEDGED:
+        extra["acknowledged_at"] = _now_iso()
     
-    for m in inbox.messages:
-        mid = m.id if hasattr(m, 'id') else (m.get("id") if isinstance(m, dict) else None)
-        if mid == msg_id:
-            if hasattr(m, 'status'):
-                m.status = new_status
-                if new_status == MsgStatus.ACKNOWLEDGED:
-                    from .utils import _now_iso
-                    m.acknowledged_at = _now_iso()
-            else:
-                m["status"] = new_status
-                if new_status == MsgStatus.ACKNOWLEDGED:
-                    from .utils import _now_iso
-                    m["acknowledged_at"] = _now_iso()
-            found = True
-            break
+    found = inbox.set_msg_status(msg_id, new_status, **extra)
     
     if found:
         json_write(inbox_file, inbox.to_dict())

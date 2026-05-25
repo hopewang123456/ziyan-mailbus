@@ -8,6 +8,7 @@ import json
 import os
 import fcntl
 import shutil
+import copy
 import time
 import contextlib
 from datetime import datetime, timezone, timedelta
@@ -72,6 +73,17 @@ def file_lock(timeout: float = 10.0):
 
 # ── JSON 读写 ─────────────────────────────────────────────────────────
 
+# 内存缓存：{filepath: (data, expiry_timestamp)}
+# 用于 json_read 高频调用场景，TTL=5秒
+# 注意：缓存的 data 必须是 deep-copy，因为调用方可能会修改返回的 dict
+_JSON_CACHE: dict = {}
+
+
+def clear_json_cache():
+    """清空 json_read 的内存缓存（主要用于测试场景）"""
+    _JSON_CACHE.clear()
+
+
 def _cleanup_bak_files(filepath: str, max_keep: int = 5):
     """清理 filepath 对应的 .bak 文件，只保留最新的 max_keep 个"""
     import glob
@@ -85,12 +97,24 @@ def _cleanup_bak_files(filepath: str, max_keep: int = 5):
             pass
 
 
-def json_read(filepath: str, default: Any = None) -> Any:
-    """读 JSON 文件（带锁），遇到损坏 JSON 尝试修复"""
+def json_read(filepath: str, default: Any = None, ttl: float = 5.0) -> Any:
+    """读 JSON 文件（带锁 + 内存缓存），遇到损坏 JSON 尝试修复"""
+    # 检查缓存
+    now = time.time()
+    cached = _JSON_CACHE.get(filepath)
+    if cached is not None:
+        data, expiry = cached
+        if now < expiry:
+            # 返回 deep-copy，避免调用方修改缓存数据（如 Inbox.from_dict 会 pop 'from'）
+            return copy.deepcopy(data)
+
     with file_lock():
         try:
             with open(filepath) as f:
-                return json.load(f)
+                data = json.load(f)
+            # 写入缓存（缓存原始对象，返回 deep-copy 防止调用方误改）
+            _JSON_CACHE[filepath] = (data, now + ttl)
+            return copy.deepcopy(data)
         except FileNotFoundError:
             return default
         except json.JSONDecodeError:
@@ -124,6 +148,8 @@ def json_write(filepath: str, data: Any, indent: int = 2):
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, filepath)
+    # 写入后清除缓存，确保下次读取拿到最新数据
+    _JSON_CACHE.pop(filepath, None)
 
 
 def jsonl_append(filepath: str, entry: dict):
@@ -135,6 +161,8 @@ def jsonl_append(filepath: str, entry: dict):
         with open(filepath, "a") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
             f.flush()
+    # 追加写入后清除缓存
+    _JSON_CACHE.pop(filepath, None)
 
 
 # ── 日志 ──────────────────────────────────────────────────────────────
@@ -225,7 +253,8 @@ def is_content_urgent(content: str, priority: str) -> bool:
 
 def _build_reply_format(to: str, msg_id: str, data_dir: str = None) -> dict:
     """构建消息附带的回复格式说明"""
-    inbox_base = data_dir + "/inbox" if data_dir else "/mnt/e/ai_tools/mail/store/inbox"
+    from .constants import DEFAULT_DATA_DIR
+    inbox_base = (data_dir + "/inbox") if data_dir else (DEFAULT_DATA_DIR + "/inbox")
     return {
         "ack": {
             "file": f"{inbox_base}/{to}/ack.json",

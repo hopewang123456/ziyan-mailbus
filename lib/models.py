@@ -230,6 +230,46 @@ class Inbox:
         inbox.messages = [Message.from_dict(m) if isinstance(m, dict) else m for m in d.get("messages", [])]
         return inbox
 
+    # ── 统一消息访问器（消除 isinstance 判断） ──
+
+    def get_msg(self, msg_id: str) -> Optional["Message"]:
+        """安全获取单条消息（返回 Message 对象）"""
+        for m in self.messages:
+            m_obj = Message.from_dict(m) if isinstance(m, dict) else m
+            if m_obj.id == msg_id:
+                return m_obj
+        return None
+
+    def set_msg_status(self, msg_id: str, status: str, **extra) -> bool:
+        """安全更新消息状态（同时更新 dict 和 Message 对象）"""
+        for i, m in enumerate(self.messages):
+            mid = m.get("id") if isinstance(m, dict) else m.id
+            if mid == msg_id:
+                if isinstance(m, dict):
+                    m["status"] = status
+                    for k, v in extra.items():
+                        m[k] = v
+                else:
+                    m.status = status
+                    for k, v in extra.items():
+                        setattr(m, k, v)
+                return True
+        return False
+
+    def has_unread_messages(self) -> bool:
+        """检查是否有未读消息"""
+        return any(
+            (m.get("status") if isinstance(m, dict) else m.status)
+            not in ("acknowledged", "archived")
+            for m in self.messages
+        )
+
+    def msg_field(self, msg: object, field: str, default=None):
+        """安全读取消息字段（兼容 dict 和 Message 对象）"""
+        if isinstance(msg, dict):
+            return msg.get(field, default)
+        return getattr(msg, field, default)
+
 
 @dataclass
 class AgentConfig:

@@ -37,7 +37,7 @@ from lib.utils import (
     json_read, json_write, jsonl_append, log_error, resolve_paths,
     build_message, _now_iso, _ensure_dir, file_lock,
 )
-from lib.scanner import build_queues, update_message_status
+from lib.scanner import build_queues, run_housekeeping, update_message_status
 from lib.pusher import push_messages, resolve_cli_chain
 from lib.ack_handler import scan_ack_files, scan_forward_files, scan_error_reports
 from lib.archiver import archive_all
@@ -45,6 +45,10 @@ from lib.tracker import TaskTracker
 from lib.heartbeat import heartbeat_scan, is_online, load_status
 from lib.search import scan_and_index, search
 from lib.api_server import serve as api_serve
+from lib.constants import (
+    DEFAULT_DATA_DIR, DEFAULT_ACK_TIMEOUT, DEFAULT_MAX_RETRIES,
+    DEFAULT_ARCHIVE_DAYS, DEFAULT_ARCHIVE_MAX_MESSAGES,
+)
 
 
 # ── 配置加载 ──────────────────────────────────────────────────────────
@@ -52,11 +56,11 @@ from lib.api_server import serve as api_serve
 DEFAULT_CONFIG = {
     "project": "ziyan-mailbus",
     "version": "1.0.0",
-    "data_dir": "/mnt/e/ai_tools/mail/store",
-    "ack_timeout": 30,
-    "max_retries": 3,
-    "archive_days": 7,
-    "archive_max_messages": 300,
+    "data_dir": DEFAULT_DATA_DIR,
+    "ack_timeout": DEFAULT_ACK_TIMEOUT,
+    "max_retries": DEFAULT_MAX_RETRIES,
+    "archive_days": DEFAULT_ARCHIVE_DAYS,
+    "archive_max_messages": DEFAULT_ARCHIVE_MAX_MESSAGES,
     "agents": {},
 }
 
@@ -76,6 +80,8 @@ def save_config(config_path: str, config: dict):
 
 def get_system_message(agent_name: str) -> dict:
     """生成新 agent 上线时的系统消息"""
+    from lib.constants import DEFAULT_DATA_DIR
+    inbox_base = f"{DEFAULT_DATA_DIR}/inbox"
     return {
         "id": f"sys-welcome-{agent_name}",
         "from": "mailbus",
@@ -85,14 +91,14 @@ def get_system_message(agent_name: str) -> dict:
         "content": f"欢迎 {agent_name} 加入 ziyan-mailbus 消息总线。",
         "reply_format": {
             "ack": {
-                "file": f"/mnt/e/ai_tools/mail/store/inbox/{agent_name}/ack.json",
+                "file": f"{inbox_base}/{agent_name}/ack.json",
                 "format": {"action": "ack", "msg_id": "<id>", "agent": agent_name, "timestamp": "<ISO时间>"},
             },
             "mark_read": {
                 "format": {"action": "mark_read", "msg_ids": ["<id>"], "agent": agent_name, "timestamp": "<ISO时间>"},
             },
             "forward": {
-                "target_format": "/mnt/e/ai_tools/mail/store/inbox/<目标agent>/inbox.json",
+                "target_format": f"{inbox_base}/<目标agent>/inbox.json",
                 "format": {
                     "action": "forward", "original_msg_id": "<id>", "from": agent_name,
                     "to": "<目标>", "type": "normal", "priority": "normal",
@@ -101,8 +107,8 @@ def get_system_message(agent_name: str) -> dict:
             },
         },
         "system_info": {
-            "inbox_location": f"/mnt/e/ai_tools/mail/store/inbox/{agent_name}/inbox.json",
-            "inbox_format": "/mnt/e/ai_tools/mail/store/inbox/<目标agent>/inbox.json",
+            "inbox_location": f"{inbox_base}/{agent_name}/inbox.json",
+            "inbox_format": f"{inbox_base}/<目标agent>/inbox.json",
             "registered_agents": [],
             "bus_cli_location": "/mnt/e/ai_tools/mail/bus.py",
             "bus_cron_interval": "每分钟扫描一次",
@@ -176,6 +182,9 @@ def cmd_scan(args):
     
     # 2. 扫描 inbox → 构建队列
     urgent_queue, normal_queue = build_queues(data_dir, agents)
+    
+    # 2b. 执行运维任务（超时催办 / 技能消费 / 离线检测 / 归档 / 索引）
+    run_housekeeping(data_dir, agents)
     
     total_messages = sum(len(v) for v in urgent_queue.values()) + sum(len(v) for v in normal_queue.values())
     if total_messages == 0:

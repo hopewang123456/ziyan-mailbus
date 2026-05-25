@@ -116,6 +116,8 @@ def push_messages(
                 return []
             msg_ids = remaining
             # 从 messages 中也过滤掉
+            from .models import Inbox as _Ib
+            inbox_obj = _Ib.from_dict(inbox_data) if "agent" in inbox_data else None
             messages = [m for m in messages if (m.id if hasattr(m, 'id') else m["id"]) in msg_ids]
     
     # 1. 标记为 pushed
