@@ -84,7 +84,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(content)
             return True
-        except Exception:
+        except (OSError, IOError):
             return False
 
     def do_GET(self):
@@ -190,7 +190,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         """读取公告板"""
         try:
             return json_read(self.bulletin_file, {"bulletins": []})
-        except Exception:
+        except (FileNotFoundError, json.JSONDecodeError):
             return {"bulletins": []}
 
     def _save_bulletin(self, data: dict):
@@ -857,7 +857,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             if status == "online":
                 agent_state["missed_pings"] = 0
             save_status(self.data_dir, hb_cache)
-        except Exception:
+        except (OSError, json.JSONDecodeError):
+            # 心跳缓存写入失败不影响主流程
             pass
 
     def _handle_ping(self, agent: str):
@@ -977,7 +978,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                     # gateway 启动超时
                     try:
                         log_content = open(f"/tmp/openclaw-gw-{agent}.log").read()[-300:]
-                    except Exception:
+                    except (FileNotFoundError, IOError):
                         log_content = "无日志"
                     self._send_json({
                         "agent": agent,

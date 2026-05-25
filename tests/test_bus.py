@@ -61,7 +61,7 @@ def test_load_config_bad_json():
 
 def test_get_system_message():
     """get_system_message 返回正确的结构"""
-    from bus import get_system_message
+    from lib.commands import get_system_message
     msg = get_system_message("test_agent")
     assert msg["to"] == "test_agent"
     assert msg["from"] == "mailbus"
