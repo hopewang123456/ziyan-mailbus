@@ -1605,9 +1605,15 @@ function renderTasks(t) {
   const rows = t.tasks.map(task => {
     const hops = (task.chain || []).map(h => `${h.agent}:${h.action}`).join(' → ');
     const creator = (task.chain && task.chain[0]) ? task.chain[0].agent : '-';
+    // 失败任务显示 ❗ + tooltip 错误原因
+    const errIcon = task.status === 'failed' && task.error
+      ? `<span style="display:inline-flex;align-items:center;margin-left:4px;cursor:help"
+           title="${esc(typeof task.error === 'string' ? task.error : (task.error.detail || JSON.stringify(task.error)))}">
+           ❗</span>`
+      : '';
     return `<tr>
       <td style="font-size:11px;color:#64748b">${task.task_id}</td>
-      <td>${statusBadge(task.status)}</td>
+      <td>${statusBadge(task.status)}${errIcon}</td>
       <td>${task.summary || '-'}</td>
       <td>${creator}</td>
       <td>${task.assignee || '-'}</td>
