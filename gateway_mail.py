@@ -34,73 +34,113 @@ except ImportError:
     sys.exit(1)
 
 
+def _get_password(mail_cfg: dict) -> str:
+    """读取密码：优先环境变量，其次配置文件"""
+    env_pw = os.environ.get("MAILBUS_MAIL_PASSWORD")
+    if env_pw:
+        return env_pw
+    return mail_cfg.get("password", "")
+
+
+def _connect_imap(mail_cfg: dict, retries: int = 3) -> Optional[imaplib.IMAP4_SSL]:
+    """连接 IMAP（带重试），返回 imap 对象或 None"""
+    server = mail_cfg["imap_server"]
+    port = mail_cfg.get("imap_port", 993)
+    email_addr = mail_cfg.get("email", "")
+    password = _get_password(mail_cfg)
+
+    for attempt in range(1, retries + 1):
+        try:
+            imap = imaplib.IMAP4_SSL(server, port)
+            imap.login(email_addr, password)
+            imap.select(mail_cfg.get("inbox_folder", "INBOX"))
+            return imap
+        except Exception as e:
+            print(f"  IMAP 连接失败 (第{attempt}次): {e}")
+            if attempt < retries:
+                time.sleep(attempt * 5)  # 退避：5s, 10s, 15s
+    return None
+
+
 def fetch_mails(config: dict) -> list:
-    """连接 IMAP 并获取未读邮件"""
+    """连接 IMAP 并获取未读邮件（带重试 + 自动重连）"""
     mail_cfg = config.get("mail", {})
     if not mail_cfg.get("imap_server"):
         return []
     
+    imap = _connect_imap(mail_cfg)
+    if not imap:
+        return []
+    
     try:
-        imap = imaplib.IMAP4_SSL(mail_cfg["imap_server"], mail_cfg.get("imap_port", 993))
-        imap.login(mail_cfg["email"], mail_cfg["password"])
-        imap.select(mail_cfg.get("inbox_folder", "INBOX"))
-        
         status, ids = imap.search(None, "UNSEEN")
         if status != "OK" or not ids[0]:
-            imap.logout()
             return []
         
         msg_ids = ids[0].split()
         mails = []
         for mid in msg_ids:
-            status, data = imap.fetch(mid, "(RFC822)")
-            if status != "OK":
+            try:
+                status, data = imap.fetch(mid, "(RFC822)")
+                if status != "OK":
+                    continue
+                
+                raw_email = data[0][1]
+                parsed = BytesParser(policy=policy.default).parsebytes(raw_email)
+                
+                subject = str(parsed.get("subject", ""))
+                from_addr = str(parsed.get("from", ""))
+                to_addr = str(parsed.get("to", ""))
+                date_str = str(parsed.get("date", ""))
+                
+                # 提取正文
+                body = ""
+                if parsed.is_multipart():
+                    for part in parsed.walk():
+                        if part.get_content_type() == "text/plain":
+                            body = part.get_content()
+                            break
+                        elif part.get_content_type() == "text/html":
+                            body = part.get_content()
+                else:
+                    body = parsed.get_content()
+                
+                if body:
+                    body = body[:2000]
+                
+                mails.append({
+                    "id": f"email-{mid.decode()}-{int(time.time())}",
+                    "from": from_addr,
+                    "to": to_addr,
+                    "subject": subject[:100],
+                    "body": body,
+                    "date": date_str,
+                })
+                
+                # 标记为已读或移动到 processed
+                processed_folder = mail_cfg.get("processed_folder", "")
+                if processed_folder:
+                    try:
+                        imap.copy(mid, processed_folder)
+                    except Exception:
+                        pass
+                try:
+                    imap.store(mid, "+FLAGS", "\\Seen")
+                except Exception:
+                    pass
+            except Exception as e:
+                print(f"  邮件读取失败: {e}")
                 continue
-            
-            raw_email = data[0][1]
-            parsed = BytesParser(policy=policy.default).parsebytes(raw_email)
-            
-            subject = str(parsed.get("subject", ""))
-            from_addr = str(parsed.get("from", ""))
-            to_addr = str(parsed.get("to", ""))
-            date_str = str(parsed.get("date", ""))
-            
-            # 提取正文
-            body = ""
-            if parsed.is_multipart():
-                for part in parsed.walk():
-                    if part.get_content_type() == "text/plain":
-                        body = part.get_content()
-                        break
-                    elif part.get_content_type() == "text/html":
-                        body = part.get_content()
-            else:
-                body = parsed.get_content()
-            
-            if body:
-                body = body[:2000]
-            
-            mails.append({
-                "id": f"email-{mid.decode()}-{int(time.time())}",
-                "from": from_addr,
-                "to": to_addr,
-                "subject": subject[:100],
-                "body": body,
-                "date": date_str,
-            })
-            
-            # 标记为已读或移动到 processed
-            processed_folder = mail_cfg.get("processed_folder", "")
-            if processed_folder:
-                imap.copy(mid, processed_folder)
-            imap.store(mid, "+FLAGS", "\\Seen")
         
-        imap.logout()
         return mails
-    
     except Exception as e:
         print(f"IMAP 读取失败: {e}")
         return []
+    finally:
+        try:
+            imap.logout()
+        except Exception:
+            pass
 
 
 def route_email(mail: dict, config: dict, data_dir: str) -> Optional[str]:
@@ -162,16 +202,27 @@ def run_once(config: dict, data_dir: str) -> int:
 
 
 if __name__ == "__main__":
-    # 测试模式
     import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data-dir", default="/mnt/e/ai_tools/mail/store")
+    parser = argparse.ArgumentParser(description="mailbus 邮件网关")
+    parser.add_argument("--data-dir", default=None, help="mailbus store 目录")
+    parser.add_argument("--daemon", action="store_true", help="持续运行模式")
+    parser.add_argument("--interval", type=int, default=5, help="轮询间隔（分钟），默认5分钟")
     args = parser.parse_args()
     
-    # 读取配置
-    config_path = os.path.join(args.data_dir, "config.json")
-    with open(config_path) as f:
-        config = json.load(f)
+    config_path = os.path.join(args.data_dir, "config.json") if args.data_dir else None
+    if config_path and os.path.exists(config_path):
+        with open(config_path) as f:
+            config = json.load(f)
+    else:
+        config = {"mail": {}}
     
-    count = run_once(config, args.data_dir)
-    print(f"共接收 {count} 封邮件")
+    if args.daemon:
+        print(f"📬 mailbus 邮件网关启动，每 {args.interval} 分钟轮询一次")
+        while True:
+            count = run_once(config, args.data_dir)
+            if count:
+                print(f"  → 已接收 {count} 封邮件")
+            time.sleep(args.interval * 60)
+    else:
+        count = run_once(config, args.data_dir)
+        print(f"共接收 {count} 封邮件")

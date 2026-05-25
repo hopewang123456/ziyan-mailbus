@@ -379,7 +379,8 @@ def cmd_serve(args):
         print("✗ 没有注册的 agent")
         return 1
 
-    api_serve(data_dir, agents, agent_types, host=args.host, port=port)
+    token = getattr(args, 'token', '')
+    api_serve(data_dir, agents, agent_types, host=args.host, port=port, token=token)
     return 0
 
 
@@ -1021,6 +1022,7 @@ def main():
     _add_data_dir_arg(p_sv)
     p_sv.add_argument("--host", default="127.0.0.1", help="监听地址（默认 127.0.0.1）")
     p_sv.add_argument("--port", type=int, default=9812, help="监听端口（默认 9812）")
+    p_sv.add_argument("--token", default="", help="API 认证 token（留空不启用认证）")
     
     # backup
     p_bk = sub.add_parser("backup", help="备份 store/ 目录到 backup/（tar.gz，保留最近7个）")

@@ -20,6 +20,20 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     data_dir = ""
     agents = {}
     agent_types = {}
+    auth_token: Optional[str] = None  # 若设置，请求需带 Authorization: Bearer <token>
+
+    def _check_auth(self) -> bool:
+        """检查请求是否携带有效的 token（如未配置 token 则放行）"""
+        if not self.auth_token:
+            return True
+        auth = self.headers.get("Authorization", "")
+        if auth.startswith("Bearer ") and auth[7:] == self.auth_token:
+            return True
+        # 也支持 X-API-Key header
+        if self.headers.get("X-API-Key") == self.auth_token:
+            return True
+        self._send_json({"error": "unauthorized"}, 401)
+        return False
 
     def _send_json(self, data: dict, status: int = 200):
         self.send_response(status)
@@ -74,6 +88,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             return False
 
     def do_GET(self):
+        if not self._check_auth():
+            return
         path = self._read_path()
 
         if path == "/api/status":
@@ -135,6 +151,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "not_found", "path": path}, 404)
 
     def do_POST(self):
+        if not self._check_auth():
+            return
         path = self._read_path()
 
         if path == "/api/launch":
@@ -1015,11 +1033,12 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
 
 
 def serve(data_dir: str, agents: dict, agent_types: dict,
-          host: str = "127.0.0.1", port: int = 9812):
+          host: str = "127.0.0.1", port: int = 9812, token: str = ""):
     """启动 HTTP API 服务"""
     MailbusAPIHandler.data_dir = data_dir
     MailbusAPIHandler.agents = agents
     MailbusAPIHandler.agent_types = agent_types
+    MailbusAPIHandler.auth_token = token or None  # 空字符串视为未配置
 
     # 读取公告板配置
     config_path = os.path.join(data_dir, "config.json")
