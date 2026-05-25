@@ -48,6 +48,7 @@ from lib.api_server import serve as api_serve
 from lib.constants import (
     DEFAULT_DATA_DIR, DEFAULT_ACK_TIMEOUT, DEFAULT_MAX_RETRIES,
     DEFAULT_ARCHIVE_DAYS, DEFAULT_ARCHIVE_MAX_MESSAGES,
+    PROJECT_ROOT_STR,
 )
 
 
@@ -110,7 +111,7 @@ def get_system_message(agent_name: str) -> dict:
             "inbox_location": f"{inbox_base}/{agent_name}/inbox.json",
             "inbox_format": f"{inbox_base}/<目标agent>/inbox.json",
             "registered_agents": [],
-            "bus_cli_location": "/mnt/e/ai_tools/mail/bus.py",
+            "bus_cli_location": f"{PROJECT_ROOT_STR}/bus.py",
             "bus_cron_interval": "每分钟扫描一次",
             "ack_timeout": "30秒",
         },

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 import json
+from .constants import DEFAULT_DATA_DIR
 
 # ── 消息状态 ──────────────────────────────────────────────────────────
 
@@ -122,7 +123,7 @@ class ReplyFormat:
     """消息附带的回复格式说明（agent 知道怎么回复总线）"""
     ack: dict = field(default_factory=lambda: dict(ACK_FORMAT))
     mark_read: dict = field(default_factory=lambda: dict(MARK_READ_FORMAT))
-    forward_target_format: str = "/mnt/e/ai_tools/mail/store/inbox/<目标agent>/inbox.json"
+    forward_target_format: str = f"{DEFAULT_DATA_DIR}/inbox/<目标agent>/inbox.json"
 
 
 @dataclass
@@ -285,7 +286,7 @@ class BusConfig:
     """总线配置"""
     project: str = "ziyan-mailbus"
     version: str = "1.0.0"
-    data_dir: str = "/mnt/e/ai_tools/mail/store"
+    data_dir: str = field(default_factory=lambda: DEFAULT_DATA_DIR)
     ack_timeout: int = 30           # 等待 ack 超时（秒）
     max_retries: int = 3            # 最大重试次数
     archive_days: int = 7           # 归档天数
