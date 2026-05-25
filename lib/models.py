@@ -271,6 +271,13 @@ class Inbox:
             return msg.get(field, default)
         return getattr(msg, field, default)
 
+    def set_msg_field(self, msg: object, field: str, value):
+        """安全设置消息字段（兼容 dict 和 Message 对象）"""
+        if isinstance(msg, dict):
+            msg[field] = value
+        else:
+            setattr(msg, field, value)
+
 
 @dataclass
 class AgentConfig:

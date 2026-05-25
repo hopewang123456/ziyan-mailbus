@@ -3,6 +3,7 @@
 import os, sys, json, time, signal, logging, argparse, subprocess, tempfile, re
 from datetime import datetime, timezone, timedelta
 from lib.constants import DEFAULT_DATA_DIR as _DD, DEFAULT_LOG_DIR as _LD, DEFAULT_POLL_INTERVAL, DEFAULT_HEARTBEAT_INTERVAL
+from lib.models import Inbox
 
 # ── 进程管理常量 ──
 MAX_AGENT_RUNTIME = 1800  # 30 分钟超时，超时自动 kill
@@ -120,23 +121,21 @@ class MailboxDaemon:
 
     # ── 消息解析（统一使用邮件格式） ──
 
-    def _parse_message(self, msg: dict) -> dict:
-        """
-        解析消息为规范化字典。
-        统一使用平铺格式: {id, from, to, type, content, ...}
-        """
-        content = msg.get('content', '')
+    def _parse_message(self, msg, inbox=None) -> dict:
+        _mf = (lambda m, f, d='': inbox.msg_field(m, f, d)) if inbox else (
+            lambda m, f, d='': m.get(f, d) if isinstance(m, dict) else getattr(m, f, d))
+        content = _mf(msg, 'content', '')
         return {
-            'id': msg.get('id', ''),
-            'from': msg.get('from', ''),
-            'to': msg.get('to', ''),
+            'id': _mf(msg, 'id', ''),
+            'from': _mf(msg, 'from', ''),
+            'to': _mf(msg, 'to', ''),
             'cc': [],
-            'priority': msg.get('priority', 'normal'),
-            'type': msg.get('type', 'notice'),
+            'priority': _mf(msg, 'priority', 'normal'),
+            'type': _mf(msg, 'type', 'notice'),
             'version': '1.0',
-            'body': {'content': content, 'raw_type': msg.get('type', 'notice')},
+            'body': {'content': content, 'raw_type': _mf(msg, 'type', 'notice')},
             'preview': (content[:80] if isinstance(content, str) else str(content)[:80]).replace('\n', ' '),
-            'created_at': msg.get('created_at', ''),
+            'created_at': _mf(msg, 'created_at', ''),
             'thread_id': '',
             'reply_to': '',
         }
@@ -217,28 +216,27 @@ class MailboxDaemon:
     # ── 收信处理 ──
 
     def _process_inbox(self):
-        inbox = read_json(self.inbox_path)
-        if not inbox:
+        raw_inbox = read_json(self.inbox_path)
+        if not raw_inbox:
             return
+        inbox = Inbox.from_dict(raw_inbox)
         # 读取已 ack 的消息 ID 集合, 避免重复处理
         acked_ids = set()
         ack_data = read_json(self.ack_path, [])
-        if isinstance(ack_data, dict):
-            ack_data = [ack_data]
-        for e in ack_data:
-            if isinstance(e, dict) and e.get("action") == "ack":
-                acked_ids.add(e.get("msg_id"))
+        ack_entries = [ack_data] if isinstance(ack_data, dict) else (ack_data or [])
+        for e in ack_entries:
+            eid = e.get("msg_id") if isinstance(e, dict) else getattr(e, 'msg_id', '')
+            if (e.get("action") if isinstance(e, dict) else getattr(e, 'action', '')) == "ack":
+                acked_ids.add(eid)
         pending_raw = [
-            m for m in inbox.get("messages", [])
-            if isinstance(m, dict)
-            and m.get("id") not in acked_ids
-            and m.get("id") not in self._processing_ids   # 内存去重：正在被 agent 处理的跳过
+            m for m in inbox.messages
+            if inbox.msg_field(m, 'id', '') not in acked_ids
+            and inbox.msg_field(m, 'id', '') not in self._processing_ids
             and (
-                # 新消息：还未处理（兼容 "new" 和 "pending" 两种状态）
-                (m.get("status") in ("new", "pending"))
+                (inbox.msg_field(m, 'status', '') in ("new", "pending"))
                 or
-                # 崩溃恢复：已 ack 但未完成（daemon 在 ack 后、处理完前挂了）
-                (m.get("status") == "acknowledged" and m.get("state") != "done")
+                (inbox.msg_field(m, 'status', '') == "acknowledged"
+                 and inbox.msg_field(m, 'state', '') != "done")
             )
         ]
         if not pending_raw:
@@ -249,7 +247,7 @@ class MailboxDaemon:
         agent_entries = []  # [{msg_id, sender, preview, parsed, raw_msg}, ...]
 
         for msg in pending_raw:
-            parsed = self._parse_message(msg)
+            parsed = self._parse_message(msg, inbox)
             msg_id = parsed['id']
             msg_type = parsed['type']
             priority = parsed['priority']
@@ -270,12 +268,10 @@ class MailboxDaemon:
                 continue
 
             # Step 3: 完成回执风暴检测
-            body_text = ''
-            if isinstance(body, dict):
-                body_text = body.get('content', '') or str(body)
-            elif isinstance(body, str):
-                body_text = body
-            if isinstance(body_text, str) and body_text.startswith("✅ 任务完成回执"):
+            body_text = inbox.msg_field(body, 'content', '')
+            if not body_text:
+                body_text = str(body) if body else ''
+            if body_text.startswith("✅ 任务完成回执"):
                 self.log.info(f"  完成回执，无需再唤醒 agent，标记 done")
                 self._mark_done(msg_id, "完成回执，不递归")
                 continue
@@ -305,27 +301,24 @@ class MailboxDaemon:
         notes = body.get('notes', '')
         self.log.info(f"  收到回执: {ack_for} → {ack_status}{f' ({notes})' if notes else ''}")
 
-        # 遍历所有 inbox 文件，找到原始消息并更新 ack 状态
         inbox_dir = os.path.join(self.data_dir, "inbox")
         updated = False
         if os.path.isdir(inbox_dir):
             for agent_dir in os.listdir(inbox_dir):
                 inbox_file = os.path.join(inbox_dir, agent_dir, "inbox.json")
-                inbox = read_json(inbox_file)
-                if not inbox:
+                raw = read_json(inbox_file)
+                if not raw:
                     continue
-                changed = False
-                for m in inbox.get("messages", []):
-                    if m.get("id") == ack_for:
-                        m["ack_status"] = ack_status
+                obj = Inbox.from_dict(raw)
+                for m in obj.messages:
+                    if obj.msg_field(m, 'id', '') == ack_for:
+                        m['ack_status'] = ack_status
                         if notes:
-                            m["ack_notes"] = notes
-                        m["ack_received_at"] = now_iso()
-                        changed = True
+                            m['ack_notes'] = notes
+                        m['ack_received_at'] = now_iso()
+                        write_json(inbox_file, obj.to_dict())
                         updated = True
                         break
-                if changed:
-                    write_json(inbox_file, inbox)
         if not updated:
             self.log.debug(f"  未找到原始消息 {ack_for}（可能已归档）")
 
@@ -399,42 +392,37 @@ class MailboxDaemon:
     def _auto_ack(self, msg_id):
         ts = now_iso()
         ack = read_json(self.ack_path, [])
-        if isinstance(ack, dict):
-            ack = [ack]
-        if any(e.get("msg_id") == msg_id and e.get("action") == "ack" for e in ack):
+        ack_list = [ack] if isinstance(ack, dict) else (ack or [])
+        if any(e.get("msg_id") == msg_id and e.get("action") == "ack" for e in ack_list):
             return
-        ack.append({"action": "ack", "msg_id": msg_id,
-                     "agent": self.agent_name, "timestamp": ts})
-        write_json(self.ack_path, ack)
-        # 同步更新 inbox 中该消息的状态, 避免重复处理
-        inbox = read_json(self.inbox_path)
-        if inbox:
-            for m in inbox.get("messages", []):
-                if m.get("id") == msg_id and m.get("status") in ("new", "pending"):
-                    m["status"] = "acknowledged"
-                    m["acknowledged_at"] = ts
-                    inbox["has_unread"] = any(
-                        mm.get("status") not in ("acknowledged", "archived")
-                        for mm in inbox.get("messages", []))
-                    write_json(self.inbox_path, inbox)
-                    break
+        ack_list.append({"action": "ack", "msg_id": msg_id,
+                         "agent": self.agent_name, "timestamp": ts})
+        write_json(self.ack_path, ack_list)
+        raw = read_json(self.inbox_path)
+        if raw:
+            inbox = Inbox.from_dict(raw)
+            if inbox.set_msg_status(msg_id, "acknowledged", acknowledged_at=ts):
+                inbox.has_unread = inbox.has_unread_messages()
+                write_json(self.inbox_path, inbox.to_dict())
 
     def _mark_done(self, msg_id, note=""):
-        """在 inbox 中将消息标记为 done"""
-        inbox = read_json(self.inbox_path)
-        if not inbox:
+        raw = read_json(self.inbox_path)
+        if not raw:
             return
-        for m in inbox.get("messages", []):
-            if m.get("id") == msg_id:
-                m["state"] = "done"
-                m["done_at"] = now_iso()
-                if note:
-                    m["done_note"] = note
-                inbox["has_unread"] = any(
-                    mm.get("status") not in ("acknowledged", "archived")
-                    for mm in inbox.get("messages", []))
-                write_json(self.inbox_path, inbox)
+        inbox = Inbox.from_dict(raw)
+        found = False
+        extra = {"state": "done", "done_at": now_iso()}
+        if note:
+            extra["done_note"] = note
+        for m in inbox.messages:
+            if inbox.msg_field(m, 'id', '') == msg_id:
+                for k, v in extra.items():
+                    inbox.set_msg_field(m, k, v)
+                found = True
                 break
+        if found:
+            inbox.has_unread = inbox.has_unread_messages()
+            write_json(self.inbox_path, inbox.to_dict())
 
     # ── CLI 唤醒 + 完成追踪 ──
 
