@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """mailbox-daemon.py — Agent 侧邮箱守护进程 v0.5 (任务追踪+去重保护)"""
-import os, sys, json, time, signal, logging, argparse, subprocess, tempfile
+import os, sys, json, time, signal, logging, argparse, subprocess, tempfile, re
 from datetime import datetime, timezone, timedelta
 from lib.constants import DEFAULT_DATA_DIR as _DD, DEFAULT_LOG_DIR as _LD, DEFAULT_POLL_INTERVAL, DEFAULT_HEARTBEAT_INTERVAL
+
+# ── 进程管理常量 ──
+MAX_AGENT_RUNTIME = 1800  # 30 分钟超时，超时自动 kill
 
 DEFAULT_DATA_DIR = _DD
 POLL_INTERVAL = DEFAULT_POLL_INTERVAL
@@ -190,6 +193,8 @@ class MailboxDaemon:
         self._watcher = FileWatcher(self.inbox_path)
         signal.signal(signal.SIGTERM, lambda *_: setattr(self, '_running', False))
         signal.signal(signal.SIGINT, lambda *_: setattr(self, '_running', False))
+        # ── 清理上一轮孤儿进程 ──
+        self._cleanup_orphans()
         # 清理上一轮的临时脚本
         for f in os.listdir(LOG_DIR):
             if f.startswith(f"run-{self.agent_name}-") and f.endswith(".sh"):
@@ -600,15 +605,53 @@ class MailboxDaemon:
 
     # ── 进程收割 + 完成回执 ──
 
+    @staticmethod
+    def _cleanup_orphans():
+        """启动时清理上一轮 daemon 留下的孤儿进程"""
+        import subprocess, re
+        try:
+            # 查找由 mailbox-daemon 唤醒、但父进程已不存在的 opencode/hermes 进程
+            result = subprocess.run(
+                ["ps", "aux"], capture_output=True, text=True, timeout=10
+            )
+            for line in result.stdout.split("\n"):
+                if "你有新的任务消息:" in line:
+                    parts = line.strip().split()
+                    if len(parts) > 1:
+                        pid = parts[1]
+                        try:
+                            os.kill(int(pid), signal.SIGKILL)
+                            logging.info(f"  孤儿进程已清理 (PID: {pid})")
+                        except (OSError, ValueError):
+                            pass
+        except Exception:
+            pass
+
     def _reap_processes(self):
-        """检查已完成的 agent 进程, 发回执（支持 msg_ids 批量）"""
+        """检查已完成的 agent 进程, 发回执（支持 msg_ids 批量）；超时进程自动 kill"""
+        now = time.time()
         finished = []
-        for pid, info in self._running_procs.items():
+        for pid, info in list(self._running_procs.items()):
             proc = info["proc"]
             ret = proc.poll()
+            elapsed = now - info["started_at"]
+
+            # ── 超时保护：运行超过 MAX_AGENT_RUNTIME 的进程强制 kill ──
+            if ret is None and elapsed > MAX_AGENT_RUNTIME:
+                self.log.warning(f"  agent 超时 ({elapsed:.0f}s > {MAX_AGENT_RUNTIME}s), 强制终止 (PID: {pid})")
+                try:
+                    proc.kill()
+                    proc.wait(timeout=5)
+                except Exception:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except OSError:
+                        pass
+                ret = -9
+                elapsed = now - info["started_at"]
+
             if ret is not None:
                 finished.append(pid)
-                elapsed = time.time() - info["started_at"]
                 self.log.info(f"  agent 进程完成 (PID: {pid}, 耗时: {elapsed:.0f}s, 返回码: {ret})")
                 # 收集 stdout（过滤 ANSI 转义 + [thinking] 痕迹，截短防 token 浪费）
                 stdout = ""
