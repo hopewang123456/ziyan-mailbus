@@ -242,7 +242,11 @@ class MailboxDaemon:
             return
         self.log.info(f"发现 {len(pending_raw)} 条待处理消息 (含崩溃恢复)")
 
-        # ── 合并处理：先 ack 所有消息，再按需一次唤醒 agent ──
+        # ── 合并处理（延迟 ack 策略）：先收集，agent 成功唤醒后才 ack ──
+        # ⚠️ 关键设计：_auto_ack 写入 ack.json 后，消息 ID 进入「已处理」黑名单
+        #    如果 agent 崩溃/session 过期，下次启动时该消息会被永久跳过。
+        #    因此：只有确认 agent 已成功唤醒后，才调用 _auto_ack。
+        #    不需要唤醒的消息（report/system）可以直接 ack。
         agent_entries = []  # [{msg_id, sender, preview, parsed, raw_msg}, ...]
 
         for msg in pending_raw:
@@ -256,26 +260,24 @@ class MailboxDaemon:
 
             self.log.info(f"  [{msg_type}] {msg_id} 来自 {from_}: {preview}")
 
-            # Step 1: auto ack（每条都 ack）
-            self._auto_ack(msg_id)
-            self.log.info(f"  已 ack")
-
-            # Step 2: status_ack 单独处理
+            # Step 1: status_ack 单独处理（不涉及 agent 消息内容，直接处理）
             if msg_type == 'status_ack':
                 self._handle_status_ack(parsed)
+                self._auto_ack(msg_id)
                 self._mark_done(msg_id, "status_ack 处理完毕")
                 continue
 
-            # Step 3: 完成回执风暴检测
+            # Step 2: 完成回执风暴检测（agent 的自动回复，无需再次唤醒）
             body_text = inbox.msg_field(body, 'content', '')
             if not body_text:
                 body_text = str(body) if body else ''
             if body_text.startswith("✅ 任务完成回执"):
                 self.log.info(f"  完成回执，无需再唤醒 agent，标记 done")
+                self._auto_ack(msg_id)
                 self._mark_done(msg_id, "完成回执，不递归")
                 continue
 
-            # Step 4: 判断是否需要唤醒 agent
+            # Step 3: 判断是否需要唤醒 agent
             if self._needs_agent(msg_type, priority, parsed, from_=from_):
                 agent_entries.append({
                     "msg_id": msg_id,
@@ -284,13 +286,23 @@ class MailboxDaemon:
                     "parsed": parsed,
                     "raw_msg": msg,  # 保留原始消息全文，用于构建回复指令
                 })
+                # 🚫 不 auto_ack！等 agent 成功唤醒后再 ack，防止 session 过期丢消息
             else:
-                self.log.info(f"  无需唤醒 (type={msg_type})")
+                self.log.info(f"  无需唤醒 (type={msg_type}), 直接 ack+done")
+                self._auto_ack(msg_id)
                 self._mark_done(msg_id, "无需处理")
 
-        # Step 5: 合并唤醒 — 一次 spawn agent 处理所有消息
+        # Step 4: 合并唤醒 — 一次 spawn agent 处理所有消息
         if agent_entries:
-            self._trigger_agent_batch(agent_entries)
+            ok = self._trigger_agent_batch(agent_entries)
+            if ok:
+                # ✅ agent 已成功 spawn，现在安全了 — 写入 ack.json，防止下次重复触发
+                for e in agent_entries:
+                    self._auto_ack(e["msg_id"])
+                self.log.info(f"  ✅ agent 唤醒成功, {len(agent_entries)} 条消息已 ack")
+            else:
+                # ❌ spawn 失败，不移除 processing_ids，下次 poll 重新发现/重试
+                self.log.warning(f"  ⚠️ agent 唤醒失败, {len(agent_entries)} 条消息保留 pending 供下次重试")
 
     def _handle_status_ack(self, parsed: dict):
         """处理 status_ack 类型消息：记录 ack 状态到对应消息"""
@@ -428,9 +440,13 @@ class MailboxDaemon:
     # ── CLI 唤醒 + 完成追踪 ──
 
     def _trigger_agent_batch(self, entries):
-        """批量唤醒：合并多条消息为一次 agent 调用"""
+        """批量唤醒：合并多条消息为一次 agent 调用
+        
+        返回: True=agent 已成功 spawn (可安全 ack)
+              False=spawn 失败 (不要 ack，让下次重试)
+        """
         if not entries:
-            return
+            return False
 
         # 构建合并数据
         all_msg_ids = []
@@ -443,11 +459,9 @@ class MailboxDaemon:
             self._processing_ids.add(e["msg_id"])
 
         if len(entries) == 1:
-            # 单条消息：直接用 preview 做摘要（不走 _trigger_agent 避免递归）
             e = entries[0]
             summary = e["preview"]
         else:
-            # 多条消息：构建合并摘要
             self.log.info(f"  合并唤醒 agent: {len(entries)} 条消息（来自 {len(set(e['sender'] for e in entries))} 个发件人）")
             summary = self._build_combined_message(entries)
 
@@ -456,14 +470,14 @@ class MailboxDaemon:
         atype = agent_cfg.get("type", "none")
         tmpl = config.get("agent_types", {}).get(atype, {}).get("push", "")
         if not tmpl:
-            self.log.warning("未找到 CLI 模板, 跳过唤醒")
-            for mid in all_msg_ids:
-                self._mark_done(mid, "CLI 模板未配置")
-            return
+            self.log.warning("未找到 CLI 模板, 跳过唤醒 → 保留 pending 供下次重试")
+            # 不移除 processing_ids，让下次循环重新发现
+            return False
 
         cmd = self._build_agent_cmd(tmpl, agent_cfg, config, summary)
         self.log.info(f"  CLI: {cmd[:150]}...（{len(entries)} 条消息）")
-        self._spawn_agent_process(cmd, all_msg_ids, all_senders, summary)
+        result = self._spawn_agent_process(cmd, all_msg_ids, all_senders, summary)
+        return result  # True=已spawn, False=失败
 
     def _build_combined_message(self, entries):
         """为多条消息构建合并摘要，每条包含内容 + 回复指令"""
@@ -529,7 +543,10 @@ class MailboxDaemon:
         return cmd
 
     def _spawn_agent_process(self, cmd, msg_ids, senders, summary_text):
-        """spawn agent 子进程，记录到 _running_procs"""
+        """spawn agent 子进程，记录到 _running_procs
+        
+        返回: True=进程已spawn, False=spawn失败
+        """
         env = os.environ.copy()
         home = os.path.expanduser("~")
         extra_paths = [
@@ -574,6 +591,7 @@ class MailboxDaemon:
                 "started_at": time.time(),
             }
             self.log.info(f"  agent 已唤醒 (PID: {proc.pid}, 消息数: {len(msg_ids)})")
+            return True
         except Exception as e:
             self.log.error(f"  唤醒失败: {e}")
             # 所有消息都发失败回执 + 移出处理中集合
@@ -581,6 +599,7 @@ class MailboxDaemon:
                 s = senders.get(mid, "unknown")
                 self._send_completion_notice(mid, s, "失败", f"Agent 唤醒失败: {e}")
                 self._processing_ids.discard(mid)
+            return False
 
     def _trigger_agent(self, msg_id, sender, summary):
         """单条消息唤醒（原有逻辑，委托给 batch 方法）"""

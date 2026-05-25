@@ -1,0 +1,111 @@
+2026-05-25 00:33:00,762 [INFO] [lingjin] Mailbox Daemon v0.2 启动 — agent=lingjin
+2026-05-25 00:33:00,764 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 00:33:00,765 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 00:33:00,777 [INFO] [lingjin] 监听模式: poll (5s)
+2026-05-25 00:34:05,949 [ERROR] [lingjin] 循环异常: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 121, in start
+    self._heartbeat_tick()
+    ~~~~~~~~~~~~~~~~~~~~^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 363, in _heartbeat_tick
+    write_json(self.hb_path, hb)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 25, in write_json
+    os.replace(tmp, path)
+    ~~~~~~~~~~^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+2026-05-25 00:38:06,279 [ERROR] [lingjin] 循环异常: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 121, in start
+    signal.signal(signal.SIGINT, lambda *_: setattr(self, '_running', False))
+                ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 363, in _heartbeat_tick
+    ts = datetime.now(timezone.utc).isoformat()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 25, in write_json
+    f.flush()
+    ~~~~~~~^^
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+2026-05-25 00:39:06,308 [ERROR] [lingjin] 循环异常: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+Traceback (most recent call last):
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 121, in start
+    signal.signal(signal.SIGINT, lambda *_: setattr(self, '_running', False))
+                ^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 363, in _heartbeat_tick
+    ts = datetime.now(timezone.utc).isoformat()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/e/ai_tools/mail/mailbox-daemon.py", line 25, in write_json
+    f.flush()
+    ~~~~~~~^^
+FileNotFoundError: [Errno 2] No such file or directory: '/mnt/e/ai_tools/mail/store/heartbeat.json.tmp' -> '/mnt/e/ai_tools/mail/store/heartbeat.json'
+2026-05-25 00:40:36,389 [INFO] [lingjin] Mailbox Daemon 已停止
+2026-05-25 00:40:57,609 [INFO] [lingjin] Mailbox Daemon v0.2 启动 — agent=lingjin
+2026-05-25 00:40:57,611 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 00:40:57,612 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 00:40:57,620 [INFO] [lingjin] 监听模式: poll (5s)
+2026-05-25 00:44:23,105 [INFO] [lingjin] Mailbox Daemon 已停止
+2026-05-25 00:44:50,953 [INFO] [lingjin] Mailbox Daemon v0.2 启动 — agent=lingjin
+2026-05-25 00:44:50,955 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 00:44:50,957 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 00:44:50,980 [INFO] [lingjin] 监听模式: poll (5s)
+2026-05-25 01:17:48,806 [INFO] [lingjin] Mailbox Daemon 已停止
+2026-05-25 01:18:10,723 [INFO] [lingjin] Mailbox Daemon v0.4 启动 (风险修复: write_json容错 + reply去唤醒) — agent=lingjin
+2026-05-25 01:18:10,725 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 01:18:10,726 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 01:18:10,739 [INFO] [lingjin] 监听模式: poll (5s)
+2026-05-25 01:41:04,805 [INFO] [lingjin] Mailbox Daemon v0.4 启动 (风险修复: write_json容错 + reply去唤醒) — agent=lingjin
+2026-05-25 01:41:04,807 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 01:41:04,808 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 01:41:04,815 [INFO] [lingjin] 监听模式: poll (15s)
+2026-05-25 01:44:30,109 [INFO] [lingjin] Mailbox Daemon 已停止
+2026-05-25 01:44:52,894 [INFO] [lingjin] Mailbox Daemon v0.4 启动 (风险修复: write_json容错 + reply去唤醒) — agent=lingjin
+2026-05-25 01:44:52,896 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 01:44:52,897 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 01:44:52,906 [INFO] [lingjin] 监听模式: poll (15s)
+2026-05-25 01:44:52,928 [INFO] [lingjin] 发现 3 条待处理消息 (含崩溃恢复)
+2026-05-25 01:44:52,930 [INFO] [lingjin]   [notice] msg-20260522-60148 来自 lingzhao: 灵瑾，测试消息：请写ack确认你已就绪。
+2026-05-25 01:44:52,976 [INFO] [lingjin]   已 ack
+2026-05-25 01:44:52,978 [INFO] [lingjin]   唤醒 agent (type=notice)
+2026-05-25 01:44:53,104 [INFO] [lingjin]   任务已创建: msg-20260522-60148
+2026-05-25 01:44:53,352 [INFO] [lingjin]   CLI: export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: 灵瑾，测试消息：请写...
+2026-05-25 01:44:53,370 [INFO] [lingjin]   agent 已唤醒 (PID: 2478)
+2026-05-25 01:44:53,372 [INFO] [lingjin]   [notice] test-ack-1779613274-lingjin 来自 mailbus-test: 📬 灵瑾，这是一条 ack 测试消息。  请做以下操作： 1. 写 ack 文件到 /mnt/e/ai_tools/mail/store/inbox/lingj
+2026-05-25 01:44:53,427 [INFO] [lingjin]   已 ack
+2026-05-25 01:44:53,429 [INFO] [lingjin]   无需唤醒 (type=notice)
+2026-05-25 01:44:53,480 [INFO] [lingjin]   [notice] test-mailbus-1779615355-lingjin 来自 mailbus-test: 灵瑾 🦋，这是一条 mailbus 格式测试消息。  请按照以下步骤操作：  1. 写 ack 文件确认已读    文件路径: /mnt/e/ai_tools/
+2026-05-25 01:44:53,536 [INFO] [lingjin]   已 ack
+2026-05-25 01:44:53,538 [INFO] [lingjin]   无需唤醒 (type=notice)
+2026-05-25 01:46:33,995 [INFO] [lingjin]   agent 进程完成 (PID: 2478, 耗时: 101s, 返回码: 0)
+2026-05-25 01:46:34,110 [INFO] [lingjin]   回执已发送至 lingzhao (原始消息: msg-20260522-60148)
+2026-05-25 02:11:36,532 [INFO] [lingjin] Mailbox Daemon 已停止
+2026-05-25 02:11:44,576 [INFO] [lingjin] Mailbox Daemon v0.4 启动 (风险修复: write_json容错 + reply去唤醒) — agent=lingjin
+2026-05-25 02:11:44,576 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 02:11:44,577 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 02:11:44,579 [INFO] [lingjin] 监听模式: poll (15s)
+2026-05-25 02:12:21,744 [INFO] [lingjin] Mailbox Daemon v0.4 启动 (风险修复: write_json容错 + reply去唤醒) — agent=lingjin
+2026-05-25 02:12:21,744 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 02:12:21,745 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 02:12:21,750 [INFO] [lingjin] 监听模式: poll (15s)
+2026-05-25 02:16:27,070 [INFO] [lingjin] Mailbox Daemon 已停止
+2026-05-25 02:18:58,464 [INFO] [lingjin] Mailbox Daemon v0.5 启动 (任务追踪+去重保护) — agent=lingjin
+2026-05-25 02:18:58,465 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 02:18:58,465 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 02:18:58,474 [INFO] [lingjin] 监听模式: poll (15s)
+2026-05-25 08:08:11,528 [INFO] [lingjin] Mailbox Daemon v0.5 启动 (任务追踪+去重保护) — agent=lingjin
+2026-05-25 08:08:11,530 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 08:08:11,531 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 08:08:11,539 [INFO] [lingjin] 监听模式: poll (15s)
+2026-05-25 10:59:34,853 [INFO] [lingjin] Mailbox Daemon v0.5 启动 (任务追踪+去重保护) — agent=lingjin
+2026-05-25 10:59:34,855 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 10:59:34,855 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 10:59:34,874 [INFO] [lingjin] 监听模式: poll (15s)
+2026-05-25 22:31:26,609 [INFO] [lingjin] Mailbox Daemon v0.5 启动 (任务追踪+去重保护) — agent=lingjin
+2026-05-25 22:31:26,611 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 22:31:26,611 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 22:31:26,622 [INFO] [lingjin] 监听模式: poll (15s)
+2026-05-25 22:40:23,873 [INFO] [lingjin] Mailbox Daemon 已停止
+2026-05-25 22:40:46,490 [INFO] [lingjin] Mailbox Daemon v0.5 启动 (任务追踪+去重保护) — agent=lingjin
+2026-05-25 22:40:46,493 [INFO] [lingjin]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingjin/inbox.json
+2026-05-25 22:40:46,495 [INFO] [lingjin]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingjin/ack.json
+2026-05-25 22:40:46,511 [INFO] [lingjin] 监听模式: poll (15s)
+2026-05-25 22:40:46,524 [INFO] [lingjin]   孤儿进程已清理 (PID: 8985)
