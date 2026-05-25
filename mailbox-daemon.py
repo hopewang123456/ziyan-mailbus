@@ -324,12 +324,13 @@ class MailboxDaemon:
         self._mark_done(parsed['id'], f"status_ack 处理完毕: {ack_for} → {ack_status}")
 
     def _needs_agent(self, msg_type, priority, parsed=None, from_=None):
-        # urgent 优先级别必唤醒
+        # urgent 优先级必唤醒
         if priority == "urgent":
             return True
 
-        # 重要发件人（灵昭/子言）的消息必唤醒，不被 type 限制
-        if from_ in ("lingzhao", "ziyan", "lingxi"):
+        # 🔑 核心修复: 任何来自其他 agent 的消息（有发件人）必唤醒
+        # 防止「缓存的信件无人读」——以前的逻辑只认特定type，导致 notice/forward 被静默吃掉
+        if from_ and from_ not in ("mailbus", "system", ""):
             return True
 
         # schema 结构化类型分流
@@ -341,13 +342,14 @@ class MailboxDaemon:
             return False
 
         # 兼容旧格式
-        if msg_type in ("task", "task_reply", "discuss"):
+        if msg_type in ("task", "task_reply", "discuss", "notice", "forward"):
             return True
-        if msg_type in ("notice", "report", "system", "forward"):
+        # report/system 不唤醒（系统自动产生）
+        if msg_type in ("report", "system"):
             return False
-        # 兜底：新格式未知类型不唤醒，旧格式未知类型唤醒
+        # 兜底：新格式未知类型唤醒（保守策略：宁多不少）
         if parsed and parsed['version'] != '1.0':
-            return False
+            return True
         return True
 
     # ── 任务追踪 ──
