@@ -95,11 +95,10 @@ def push_messages(
         推送失败的消息 ID 列表（推送成功即视为送达，不等待 ack）
     """
     failed_ids = []
-    msg_ids = [m.id if hasattr(m, 'id') else m["id"] for m in messages]
+    msg_ids = [m.id if not isinstance(m, dict) else m["id"] for m in messages]
     paths = resolve_paths(data_dir)
     
     # 0. 幂等去重：检查这些消息是否已经被 agent ack 过
-    # 如果已经被 ack，直接返回空（不需要再推）
     inbox_file = f"{paths['inbox']}/{agent_name}/inbox.json"
     inbox_data = json_read(inbox_file, {})
     if inbox_data:
@@ -107,18 +106,13 @@ def push_messages(
         acked_ids = _get_acked_ids(inbox_data)
         already_acked = [mid for mid in msg_ids if mid in acked_ids]
         if already_acked:
-            # 已 ack 的消息直接标记为 acknowledged（不用再推）
             for mid in already_acked:
                 update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
-            # 过滤掉已 ack 的，只推未处理的
             remaining = [mid for mid in msg_ids if mid not in acked_ids]
             if not remaining:
                 return []
             msg_ids = remaining
-            # 从 messages 中也过滤掉
-            from .models import Inbox as _Ib
-            inbox_obj = _Ib.from_dict(inbox_data) if "agent" in inbox_data else None
-            messages = [m for m in messages if (m.id if hasattr(m, 'id') else m["id"]) in msg_ids]
+            messages = [m for m in messages if (m.id if not isinstance(m, dict) else m["id"]) in msg_ids]
     
     # 1. 标记为 pushed
     mark_as_pushed(data_dir, agent_name, msg_ids)
@@ -131,24 +125,14 @@ def push_messages(
     
     # 2. 构建推送文本（从 Message.action 结构化字段读取指令）
     text_parts = []
-    for m in messages:
-        # 兼容 dict 和 Message 对象
-        if isinstance(m, dict):
-            from_ = m.get("from", "?")
-            content = m.get("content", "")
-            msg_id = m.get("id", "")
-            action = m.get("action", {})
-            msg_type = m.get("type", "notice")
-            task_data = m.get("task")
-            fwd_chain = m.get("forward_chain")
-        else:
-            from_ = m.from_
-            content = m.content
-            msg_id = m.id
-            action = m.action or MsgType.default_action(m.type)
-            msg_type = m.type
-            task_data = m.task
-            fwd_chain = m.forward_chain
+    for msg_entry in messages:
+        from_ = msg_entry.get("from", "?") if isinstance(msg_entry, dict) else msg_entry.from_
+        content = msg_entry.get("content", "") if isinstance(msg_entry, dict) else msg_entry.content
+        msg_id = msg_entry.get("id", "") if isinstance(msg_entry, dict) else msg_entry.id
+        action_raw = msg_entry.get("action", {}) if isinstance(msg_entry, dict) else (msg_entry.action or MsgType.default_action(msg_entry.type))
+        msg_type = msg_entry.get("type", "notice") if isinstance(msg_entry, dict) else msg_entry.type
+        task_data = msg_entry.get("task") if isinstance(msg_entry, dict) else msg_entry.task
+        fwd_chain = msg_entry.get("forward_chain") if isinstance(msg_entry, dict) else msg_entry.forward_chain
 
         # ack 路径（从 data_dir 推导，确保迁移时路径正确）
         ack_path = f"{data_dir}/inbox/{agent_name}/ack.json"

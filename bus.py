@@ -596,8 +596,7 @@ def cmd_status(args):
         print(f"\n📬 {name}:")
         print(f"  消息总数: {len(inbox.messages)}")
         for m in inbox.messages:
-            if isinstance(m, dict):
-                print(f"  [{m['status']}] {m['id']} — {m.get('content', '')[:40]}")
+            print(f"  [{inbox.msg_field(m, 'status')}] {inbox.msg_field(m, 'id')} — {inbox.msg_field(m, 'content', '')[:40]}")
         return 0
     
     # 查看所有
@@ -615,9 +614,8 @@ def cmd_status(args):
         inbox = Inbox.from_dict(inbox_data)
         statuses = {}
         for m in inbox.messages:
-            if isinstance(m, dict):
-                s = m.get("status", "unknown")
-                statuses[s] = statuses.get(s, 0) + 1
+            s = inbox.msg_field(m, "status", "unknown")
+            statuses[s] = statuses.get(s, 0) + 1
         
         parts = [f"{s}: {c}" for s, c in sorted(statuses.items())]
         print(f"  {name}: {', '.join(parts) if parts else '空'}")
@@ -643,9 +641,8 @@ def cmd_retry(args):
                 continue
             inbox = Inbox.from_dict(inbox_data)
             for m in inbox.messages:
-                if isinstance(m, dict) and m.get("id") == args.msg_id:
-                    m["status"] = MsgStatus.PENDING
-                    m["pushed_count"] = 0
+                if inbox.msg_field(m, "id") == args.msg_id:
+                    inbox.set_msg_status(args.msg_id, MsgStatus.PENDING, pushed_count=0)
                     json_write(inbox_file, inbox.to_dict())
                     print(f"✓ {args.msg_id} 已重置为 pending，下个 cron 将重试")
                     found = True
@@ -666,10 +663,8 @@ def cmd_retry(args):
         inbox = Inbox.from_dict(inbox_data)
         changed = False
         for m in inbox.messages:
-            if isinstance(m, dict) and m.get("status") == MsgStatus.FAILED:
-                m["status"] = MsgStatus.PENDING
-                m["pushed_count"] = 0
-                m["status"] = MsgStatus.RESENDING
+            if inbox.msg_field(m, "status") == MsgStatus.FAILED:
+                inbox.set_msg_status(inbox.msg_field(m, "id"), MsgStatus.RESENDING, pushed_count=0)
                 changed = True
                 count += 1
         if changed:

@@ -202,18 +202,22 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             if data:
                 msgs = data.get("messages", [])
                 total_messages += len(msgs)
-                if data.get("has_unread"):
-                    for m in msgs:
-                        if isinstance(m, dict) and m.get("status") == "pending":
-                            unread_count += 1
+                inbox = Inbox.from_dict(data)
+                for m in inbox.messages:
+                    if inbox.msg_field(m, "status") == "pending":
+                        unread_count += 1
             agent_statuses[name] = {
-                "active_messages": len([m for m in data.get("messages", []) if isinstance(m, dict) and m.get("status") != "archived"]) if data else 0,
+                "active_messages": len([m for m in (Inbox.from_dict(data).messages if data else []) if m.status != "archived"]) if data else 0,
                 "has_unread": data.get("has_unread", False) if data else False,
-                "unread_count": len([m for m in data.get("messages", []) if isinstance(m, dict) and m.get("status") != "acknowledged" and m.get("status") != "archived" and m.get("type") != "system"]) if data else 0,
-                "pending_count": len([m for m in data.get("messages", []) if isinstance(m, dict) and m.get("status") == "pending"]) if data else 0,
                 "type": self.agents[name].get("type", "?"),
                 "role": self.agents[name].get("role", ""),
+                "unread_count": 0,
+                "pending_count": 0,
             }
+            if data:
+                inbox = Inbox.from_dict(data)
+                agent_statuses[name]["unread_count"] = len([m for m in inbox.messages if inbox.msg_field(m, "status") not in ("acknowledged", "archived") and inbox.msg_field(m, "type") != "system"])
+                agent_statuses[name]["pending_count"] = len([m for m in inbox.messages if inbox.msg_field(m, "status") == "pending"])
         self._send_json({
             "service": "ziyan-mailbus",
             "agents": len(self.agents),
@@ -274,16 +278,17 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             data = json_read(inbox_path, {})
             if not data:
                 continue
-            for m in data.get("messages", []):
-                if isinstance(m, dict) and m.get("from") == "mailbus":
-                    content = m.get("content", "")
+            inbox = Inbox.from_dict(data)
+            for m in inbox.messages:
+                if inbox.msg_field(m, "from") == "mailbus":
+                    content = inbox.msg_field(m, "content", "")
                     if "超时提醒" in content or "超时催办" in content:
                         remind_alerts.append({
                             "severity": "warn",
                             "type": "timeout",
                             "agent": name,
                             "message": content[:120],
-                            "created_at": m.get("created_at", ""),
+                            "created_at": inbox.msg_field(m, "created_at", ""),
                         })
         
         all_alerts = remind_alerts + alerts
@@ -302,24 +307,23 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             self._send_json({"agent": agent, "messages": [], "has_unread": False})
             return
         msgs = data.get("messages", [])
-        # 只返回未归档的消息
-        active = [m for m in msgs if isinstance(m, dict) and m.get("status") != "archived"]
+        inbox_obj = Inbox.from_dict(data)
+        active = [m for m in inbox_obj.messages if inbox_obj.msg_field(m, "status") != "archived"]
         summary = []
         for m in active:
-            if isinstance(m, dict):
-                summary.append({
-                    "id": m.get("id", ""),
-                    "from": m.get("from", ""),
-                    "to": m.get("to", ""),
-                    "type": m.get("type", ""),
-                    "content_preview": m.get("content", "")[:100],
-                    "status": m.get("status", ""),
-                    "state": m.get("state", ""),
-                    "state_history": m.get("state_history", []),
-                    "actions": m.get("actions", []),
-                    "read": m.get("read", False),
-                    "created_at": m.get("created_at", ""),
-                })
+            summary.append({
+                "id": inbox_obj.msg_field(m, "id", ""),
+                "from": inbox_obj.msg_field(m, "from", ""),
+                "to": inbox_obj.msg_field(m, "to", ""),
+                "type": inbox_obj.msg_field(m, "type", ""),
+                "content_preview": inbox_obj.msg_field(m, "content", "")[:100],
+                "status": inbox_obj.msg_field(m, "status", ""),
+                "state": inbox_obj.msg_field(m, "state", ""),
+                "state_history": inbox_obj.msg_field(m, "state_history", []),
+                "actions": inbox_obj.msg_field(m, "actions", []),
+                "read": inbox_obj.msg_field(m, "read", False),
+                "created_at": inbox_obj.msg_field(m, "created_at", ""),
+            })
         self._send_json({
             "agent": agent,
             "has_unread": data.get("has_unread", False),
@@ -388,15 +392,16 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             return
         # 标记所有非 system 消息为 acknowledged（agent 已读）
         changed = 0
-        for m in data.get("messages", []):
-            if isinstance(m, dict) and m.get("type") != "system" and m.get("status") != "acknowledged" and m.get("status") != "archived":
-                m["status"] = "acknowledged"
-                m["read_at"] = _now_iso()
+        inbox_obj = Inbox.from_dict(data)
+        for m in inbox_obj.messages:
+            if inbox_obj.msg_field(m, "type") != "system" and inbox_obj.msg_field(m, "status") not in ("acknowledged", "archived"):
+                inbox_obj.set_msg_status(inbox_obj.msg_field(m, "id"), "acknowledged", read_at=_now_iso())
                 changed += 1
-        data["has_unread"] = any(
-            isinstance(m, dict) and m.get("type") != "system" and m.get("status") != "acknowledged" and m.get("status") != "archived"
-            for m in data.get("messages", [])
+        inbox_obj.has_unread = any(
+            inbox_obj.msg_field(m, "type") != "system" and inbox_obj.msg_field(m, "status") not in ("acknowledged", "archived")
+            for m in inbox_obj.messages
         )
+        data = inbox_obj.to_dict()
         json_write(inbox_file, data)
         self._send_json({"status": "ok", "agent": agent, "marked": changed})
 
@@ -631,31 +636,22 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         inbox = Inbox.from_dict(data)
         found = False
         for m in inbox.messages:
-            mid = m.id if not isinstance(m, dict) else m.get("id", "")
+            mid = inbox.msg_field(m, "id", "")
             if mid == msg_id:
-                if isinstance(m, dict):
-                    actions = m.get("actions", [])
-                else:
-                    actions = list(m.actions or [])
+                actions_raw = inbox.msg_field(m, "actions", [])
+                actions = list(actions_raw or [])
                 
                 if step_index is not None and 0 <= step_index < len(actions):
                     ts = _now_iso()
                     if isinstance(actions[step_index], dict):
                         actions[step_index]["status"] = step_status
-                    if isinstance(m, dict):
-                        m["actions"] = actions
-                    else:
-                        m.actions = actions
+                    inbox.set_msg_status(mid, inbox.msg_field(m, "status", ""), actions=actions)
                     found = True
                 elif step_index is None and actions:
-                    # 没指定 index → 全部完成
                     for a in actions:
                         if isinstance(a, dict):
                             a["status"] = step_status
-                    if isinstance(m, dict):
-                        m["actions"] = actions
-                    else:
-                        m.actions = actions
+                    inbox.set_msg_status(mid, inbox.msg_field(m, "status", ""), actions=actions)
                     found = True
                 break
 

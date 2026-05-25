@@ -84,9 +84,13 @@ def scan_and_index(data_dir: str, agents: dict):
             import json as _json
             with open(inbox_file) as f:
                 data = _json.load(f)
-            for msg in data.get("messages", []):
+            from .models import Inbox
+            inbox = Inbox.from_dict(data)
+            for msg in inbox.messages:
                 if isinstance(msg, dict):
                     index_message(data_dir, msg)
+                else:
+                    index_message(data_dir, msg.to_dict())
         except (FileNotFoundError, json.JSONDecodeError):
             pass
 
