@@ -6,88 +6,109 @@ ziyan-mailbus scanner
 
 import os
 import json
-from typing import List, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import List, Tuple, Optional
 
 from .models import Message, MsgStatus, Priority, Inbox
 from .utils import json_read, json_write, resolve_paths, _now_iso
 
 
-def scan_all(data_dir: str, agents: dict) -> List[Tuple[str, list, list]]:
+def _scan_one_agent(data_dir: str, name: str, inbox_base: str) -> Optional[Tuple[str, list, list]]:
     """
-    扫描所有 agent 的 inbox。
+    扫描单个 agent 的 inbox。
+    
+    返回: (agent_name, urgent_messages, normal_messages) 或 None（无待处理消息）
+    """
+    inbox_path = f"{inbox_base}/{name}/inbox.json"
+    if not os.path.exists(inbox_path):
+        return None
+    
+    inbox_data = json_read(inbox_path, {})
+    if not inbox_data:
+        return None
+    
+    inbox = Inbox.from_dict(inbox_data)
+    
+    # 检测该 agent 是否有回复消息（来自 agent 自己的回复）
+    replied_ids = set()
+    for m_raw in inbox.messages:
+        msg_type = inbox.msg_field(m_raw, 'type', '')
+        msg_from = inbox.msg_field(m_raw, 'from', '')
+        msg_id = inbox.msg_field(m_raw, 'id', '')
+        original_msg_id = inbox.msg_field(m_raw, 'original_msg_id', '') or msg_id
+        
+        if msg_type in ("reply", "forward") and msg_from == name:
+            replied_ids.add(original_msg_id)
+            if msg_id != original_msg_id:
+                replied_ids.add(msg_id)
+    
+    if replied_ids:
+        from datetime import datetime
+        ts = datetime.now().isoformat()
+        for m_raw in inbox.messages:
+            mid = inbox.msg_field(m_raw, 'id', '')
+            if mid in replied_ids:
+                mstatus = inbox.msg_field(m_raw, 'status', '')
+                if mstatus in (MsgStatus.PENDING, MsgStatus.PUSHED):
+                    inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, acknowledged_at=ts)
+                    mtype = inbox.msg_field(m_raw, 'type', '')
+                    if not inbox.msg_field(m_raw, 'state'):
+                        inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED,
+                                             state=MsgStatus.RECEIVED, received_at=ts)
+                        if mtype not in ("task", "task_reply"):
+                            inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED,
+                                                 state=MsgStatus.DONE, done_at=ts)
+        json_write(inbox_path, inbox.to_dict())
+    
+    urgent_msgs = []
+    normal_msgs = []
+    has_pending = False
+    
+    for m_raw in inbox.messages:
+        msg = Message.from_dict(m_raw) if isinstance(m_raw, dict) else m_raw
+        if msg.status == MsgStatus.PENDING:
+            has_pending = True
+            if msg.priority == Priority.URGENT:
+                urgent_msgs.append(msg)
+            else:
+                normal_msgs.append(msg)
+    
+    if has_pending:
+        return (name, urgent_msgs, normal_msgs)
+    return None
+
+
+def scan_all(data_dir: str, agents: dict, max_workers: int = 4) -> List[Tuple[str, list, list]]:
+    """
+    并行扫描所有 agent 的 inbox。
+    
+    参数:
+        data_dir: 数据目录
+        agents: agent 配置字典
+        max_workers: 最大并行线程数（默认 4）
     
     返回: [(agent_name, urgent_messages, normal_messages), ...]
     按加急在前、普通在后排序。
     """
     paths = resolve_paths(data_dir)
-    results = []
+    inbox_base = paths['inbox']
     
-    for name in agents:
-        inbox_path = f"{paths['inbox']}/{name}/inbox.json"
-        if not os.path.exists(inbox_path):
-            continue
-        
-        inbox_data = json_read(inbox_path, {})
-        if not inbox_data:
-            continue
-        
-        inbox = Inbox.from_dict(inbox_data)
-        
-        # 检测该 agent 是否有回复消息（来自 agent 自己的回复）
-        # 如果有，说明 agent 已经读了前面的消息，自动标为 acknowledged
-        replied_ids = set()
-        for m_raw in inbox.messages:
-            msg_type = inbox.msg_field(m_raw, 'type', '')
-            msg_from = inbox.msg_field(m_raw, 'from', '')
-            msg_id = inbox.msg_field(m_raw, 'id', '')
-            original_msg_id = inbox.msg_field(m_raw, 'original_msg_id', '') or msg_id
-            
-            # 如果 agent 发了 reply/forward 类型的消息，说明它已经读了
-            if msg_type in ("reply", "forward") and msg_from == name:
-                replied_ids.add(original_msg_id)
-                if msg_id != original_msg_id:
-                    replied_ids.add(msg_id)
-        
-        # 如果有回复，找到对应的 pending 消息并标为 acknowledged
-        if replied_ids:
-            from datetime import datetime
-            ts = datetime.now().isoformat()
-            for m_raw in inbox.messages:
-                mid = inbox.msg_field(m_raw, 'id', '')
-                if mid in replied_ids:
-                    mstatus = inbox.msg_field(m_raw, 'status', '')
-                    if mstatus in (MsgStatus.PENDING, MsgStatus.PUSHED):
-                        inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, acknowledged_at=ts)
-                        mtype = inbox.msg_field(m_raw, 'type', '')
-                        if not inbox.msg_field(m_raw, 'state'):
-                            inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED,
-                                                 state=MsgStatus.RECEIVED, received_at=ts)
-                            if mtype not in ("task", "task_reply"):
-                                inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED,
-                                                     state=MsgStatus.DONE, done_at=ts)
-            json_write(inbox_path, inbox.to_dict())
-        
-        # 只处理未读且 pending 状态的消息
-        urgent_msgs = []
-        normal_msgs = []
-        has_pending = False
-        
-        for m_raw in inbox.messages:
-            msg = Message.from_dict(m_raw) if isinstance(m_raw, dict) else m_raw
-            
-            if msg.status == MsgStatus.PENDING:
-                has_pending = True
-                if msg.priority == Priority.URGENT:
-                    urgent_msgs.append(msg)
-                else:
-                    normal_msgs.append(msg)
-        
-        if has_pending:
-            results.append((name, urgent_msgs, normal_msgs))
+    results = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_scan_one_agent, data_dir, name, inbox_base): name
+            for name in agents
+        }
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+                if result is not None:
+                    results.append(result)
+            except Exception:
+                pass  # 单个 agent 扫描失败不影响其他
     
     # 排序：有加急的 agent 排前面
     results.sort(key=lambda x: -len(x[1]))
-    
     return results
 
 

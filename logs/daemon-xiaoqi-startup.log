@@ -1,4 +1,0 @@
-2026-05-25 00:44:50,963 [INFO] [xiaoqi] Mailbox Daemon v0.2 启动 — agent=xiaoqi
-2026-05-25 00:44:50,966 [INFO] [xiaoqi]   inbox: /mnt/e/ai_tools/mail/store/inbox/xiaoqi/inbox.json
-2026-05-25 00:44:50,969 [INFO] [xiaoqi]   ack:   /mnt/e/ai_tools/mail/store/inbox/xiaoqi/ack.json
-2026-05-25 00:44:50,994 [INFO] [xiaoqi] 监听模式: poll (5s)

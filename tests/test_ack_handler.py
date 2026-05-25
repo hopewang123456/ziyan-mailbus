@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from lib.models import MsgStatus, Inbox
 from lib.utils import resolve_paths, _now_iso
 from lib.ack_handler import process_ack, process_mark_read, process_forward, scan_ack_files
+from lib.utils import clear_json_cache
 
 
 class TestAckHandler:
@@ -84,6 +85,7 @@ class TestAckHandler:
     
     def test_process_mark_read(self):
         """mark_read → 多条消息改为 acknowledged"""
+        clear_json_cache()
         msg1 = self._make_msg("msg-mr1", MsgStatus.PUSHED)
         msg2 = self._make_msg("msg-mr2", MsgStatus.PUSHED)
         self._write_inbox("agent_a", [msg1, msg2])
@@ -132,6 +134,7 @@ class TestAckHandler:
     
     def test_scan_ack_files(self):
         """scan_ack_files → 处理所有 ack + mark"""
+        clear_json_cache()
         msg = self._make_msg("msg-scan1", MsgStatus.PUSHED)
         self._write_inbox("agent_a", [msg])
         # 写 ack.json

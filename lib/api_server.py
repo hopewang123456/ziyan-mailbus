@@ -1035,27 +1035,8 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
 
 def serve(data_dir: str, agents: dict, agent_types: dict,
           host: str = "127.0.0.1", port: int = 9812, token: str = ""):
-    """启动 HTTP API 服务"""
-    MailbusAPIHandler.data_dir = data_dir
-    MailbusAPIHandler.agents = agents
-    MailbusAPIHandler.agent_types = agent_types
-    MailbusAPIHandler.auth_token = token or None  # 空字符串视为未配置
-
-    # 读取公告板配置
-    config_path = os.path.join(data_dir, "config.json")
-    raw = json_read(config_path, {})
-    MailbusAPIHandler.bulletin_permit = raw.get("bulletin_permit", [])
-    MailbusAPIHandler.bulletin_authors = raw.get("bulletin_authors", {})
-    MailbusAPIHandler.bulletin_file = os.path.join(data_dir, "bulletin.json")
-    MailbusAPIHandler.permission_file = os.path.join(data_dir, "permission.json")
-    MailbusAPIHandler.permissions = json_read(MailbusAPIHandler.permission_file, {})
-
-    server = ThreadingHTTPServer((host, port), MailbusAPIHandler)
-    print(f"📡 mailbus API 服务已启动: http://{host}:{port}")
-    print(f"   端点: /api/status /api/agents /api/tasks /api/heartbeat /api/alerts /api/inbox/<name>")
-    print(f"   公告板: {len(MailbusAPIHandler.bulletin_permit)} 人可发公告")
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\n  服务已停止")
-        server.server_close()
+    """启动 HTTP API 服务（已迁移至 lib.api 包）"""
+    import warnings
+    warnings.warn("api_server.serve 已迁移至 lib.api.serve，请更新导入", DeprecationWarning, stacklevel=2)
+    from lib.api import serve as new_serve
+    new_serve(data_dir, agents, agent_types or {}, host=host, port=port, token=token)

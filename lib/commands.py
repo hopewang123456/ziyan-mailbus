@@ -39,12 +39,14 @@ from lib.utils import (
 )
 from lib.scanner import build_queues, run_housekeeping, update_message_status
 from lib.pusher import push_messages, resolve_cli_chain
+from lib.webhook_pusher import push_via_webhook
 from lib.ack_handler import scan_ack_files, scan_forward_files, scan_error_reports
 from lib.archiver import archive_all
 from lib.tracker import TaskTracker
 from lib.heartbeat import heartbeat_scan, is_online, load_status
 from lib.search import scan_and_index, search
-from lib.api_server import serve as api_serve
+from lib.api import serve as api_serve
+from lib.config_schema import validate_config
 from lib.constants import (
     DEFAULT_DATA_DIR, DEFAULT_ACK_TIMEOUT, DEFAULT_MAX_RETRIES,
     DEFAULT_ARCHIVE_DAYS, DEFAULT_ARCHIVE_MAX_MESSAGES,
@@ -67,10 +69,16 @@ DEFAULT_CONFIG = {
 
 
 def load_config(config_path: str) -> dict:
-    """加载配置，缺失字段用默认值填充"""
+    """加载配置，缺失字段用默认值填充，并校验合法性"""
     config = json_read(config_path, {})
     for k, v in DEFAULT_CONFIG.items():
         config.setdefault(k, v)
+    # 校验配置合法性
+    errors = validate_config(config)
+    if errors:
+        print(f"⚠️ 配置校验告警 ({config_path}):")
+        for err in errors:
+            print(f"   - {err}")
     return config
 
 
@@ -394,19 +402,32 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
             print(f"   ⚠ {agent_name}: 配置不存在，跳过")
             continue
         
-        chain = resolve_cli_chain(agent_cfg, agent_types)
-        cli_cmds = [c[0] for c in chain]  # 只取命令，不要别名
-        print(f"   → {agent_name} ({label}): {len(messages)} 条" + (f' [{len(cli_cmds)} models]' if len(cli_cmds) > 1 else ''))
-        
-        failed = push_messages(
-            data_dir=data_dir,
-            agent_name=agent_name,
-            messages=messages,
-            cli_cmd=cli_cmds,
-            ack_timeout=config.get("ack_timeout", 30),
-            max_retries=config.get("max_retries", 3),
-            auto_ack=agent_cfg.get("type") in ("hermes", "hermes_profile"),  # Hermes 类型直接标记已读，其他靠回复确认
-        )
+        webhook_url = agent_cfg.get("webhook_url", "")
+        if webhook_url:
+            print(f"   🌐 {agent_name} ({label}): {len(messages)} 条 [Webhook]")
+            failed = push_via_webhook(
+                data_dir=data_dir,
+                agent_name=agent_name,
+                messages=messages,
+                webhook_url=webhook_url,
+                webhook_secret=agent_cfg.get("webhook_secret", ""),
+                max_retries=config.get("max_retries", 3),
+                auto_ack=agent_cfg.get("type") in ("hermes", "hermes_profile"),
+            )
+        else:
+            chain = resolve_cli_chain(agent_cfg, agent_types)
+            cli_cmds = [c[0] for c in chain]  # 只取命令，不要别名
+            print(f"   → {agent_name} ({label}): {len(messages)} 条" + (f' [{len(cli_cmds)} models]' if len(cli_cmds) > 1 else ''))
+            
+            failed = push_messages(
+                data_dir=data_dir,
+                agent_name=agent_name,
+                messages=messages,
+                cli_cmd=cli_cmds,
+                ack_timeout=config.get("ack_timeout", 30),
+                max_retries=config.get("max_retries", 3),
+                auto_ack=agent_cfg.get("type") in ("hermes", "hermes_profile"),  # Hermes 类型直接标记已读，其他靠回复确认
+            )
         all_failed.extend(failed)
         
         if failed:

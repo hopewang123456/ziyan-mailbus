@@ -1,2 +1,0 @@
-#!/bin/bash
-export HERMES_HOME=${HERMES_HOME:-/mnt/e/hermes-data/.hermes} && /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/hermes chat -q '你有新的任务消息: 灵犀，帮我做个调研。 目标：对比 TencentDB for Agent Memory（腾讯云的 Agent 记忆存储方案）和我们当前用的 AgentMemo' -Q --profile lingxi

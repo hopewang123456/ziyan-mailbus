@@ -7,6 +7,7 @@ ziyan-mailbus pusher
 import os
 import subprocess
 import time
+import random
 from typing import Optional
 from pathlib import Path
 
@@ -252,7 +253,10 @@ mailbus scan 会自动收集这些记录，展示在总览页的 skill 使用统
         success = _invoke_cli(cmd, agent_name=agent_name, msg_ids=msg_ids, reply_dir=reply_dir)
         if not success:
             for attempt in range(1, max_retries + 1):
-                time.sleep(3)
+                # 指数退避 + jitter: base 2s, 乘 2^attempt, 加 ±1s 抖动
+                delay = 2 ** attempt + random.uniform(-1, 1)
+                delay = max(0.5, min(delay, 30))  # 钳制在 [0.5, 30] 秒
+                time.sleep(delay)
                 success = _invoke_cli(cmd, agent_name=agent_name, msg_ids=msg_ids, reply_dir=reply_dir)
                 if success:
                     break

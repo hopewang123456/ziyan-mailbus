@@ -1,2 +1,0 @@
-#!/bin/bash
-cd /mnt/e/ai_tools/opencode && opencode run '你有新的任务消息: 【灵昭】大力，欢迎加入 mailbus 试用！ 请确认你的 mailbox-daemon 运行正常（已经在跑了 ✓）。 这是一条测试消息，确认收到后你的 da' --dangerously-skip-permissions --model deepseek/deepseek-chat

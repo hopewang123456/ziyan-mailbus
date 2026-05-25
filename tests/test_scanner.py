@@ -11,7 +11,7 @@ import shutil
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lib.models import Message, Inbox, MsgStatus, Priority, MsgType
-from lib.utils import resolve_paths, _now_iso
+from lib.utils import resolve_paths, _now_iso, clear_json_cache
 from lib.scanner import scan_all, build_queues, mark_as_pushed, update_message_status
 
 
@@ -26,6 +26,7 @@ class TestScanner:
         os.makedirs(f"{cls.data_dir}/queue/normal", exist_ok=True)
         os.makedirs(f"{cls.data_dir}/errors", exist_ok=True)
         cls.agents = {"agent_a": {}, "agent_b": {}}
+        clear_json_cache()  # 确保全局缓存干净
     
     @classmethod
     def teardown_class(cls):
@@ -33,6 +34,7 @@ class TestScanner:
     
     def _write_inbox(self, agent: str, inbox: Inbox):
         path = f"{self.data_dir}/inbox/{agent}/inbox.json"
+        clear_json_cache()  # 直接写文件会绕过 json_write 的缓存清除，手动清理
         with open(path, "w") as f:
             json.dump(inbox.to_dict(), f, ensure_ascii=False)
     
