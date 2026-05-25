@@ -6,6 +6,7 @@ ziyan-mailbus 全局常量与路径
 
 import os
 from pathlib import Path
+from datetime import datetime, timezone, timedelta
 
 # ── 项目根目录 ──────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent.parent  # mailbus/lib/ → mailbus/
@@ -26,3 +27,13 @@ DEFAULT_HEARTBEAT_INTERVAL = 60
 
 # ── 全局锁文件 ───────────────────────────────────────────────────────────
 LOCK_FILE = "/tmp/ziyan-mailbus.lock"
+
+
+# ── 工具函数 ──────────────────────────────────────────────────────────
+
+TZ_CST = timezone(timedelta(hours=8))
+
+
+def _now_iso() -> str:
+    """返回当前时间的 ISO 格式字符串（本地时间 +08:00）"""
+    return datetime.now(TZ_CST).strftime("%Y-%m-%dT%H:%M:%S%z")

@@ -14,7 +14,8 @@ import contextlib
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Any
 
-from .models import Message, MsgStatus, Priority, MsgType, Level, generate_msg_id, _now_iso
+from .models import Message, MsgStatus, Priority, MsgType, Level, generate_msg_id
+from .constants import _now_iso
 
 # ── 路径常量 ──────────────────────────────────────────────────────────
 

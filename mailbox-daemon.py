@@ -38,8 +38,7 @@ def write_json(path, data):
             pass
         raise
 
-def now_iso():
-    return datetime.now(TZ_CST).strftime("%Y-%m-%dT%H:%M:%S+0800")
+from lib.utils import _now_iso as now_iso
 
 # ── 文件监听器 ──
 

@@ -122,7 +122,7 @@ def get_system_message(agent_name: str) -> dict:
 
 # ── CLI 命令实现 ──────────────────────────────────────────────────────
 
-def cmd_init(args):
+def cmd_init(args) -> int:
     """初始化目录结构 + 创建默认配置"""
     data_dir = args.data_dir or DEFAULT_CONFIG["data_dir"]
     _ensure_dir(data_dir)
@@ -162,7 +162,7 @@ def cmd_init(args):
     return 0
 
 
-def cmd_scan(args):
+def cmd_scan(args) -> int:
     """扫描全员 inbox → 推送未读消息"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -274,7 +274,7 @@ def cmd_scan(args):
     return 0
 
 
-def cmd_search(args):
+def cmd_search(args) -> int:
     """消息检索"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -305,7 +305,7 @@ def cmd_search(args):
     return 0
 
 
-def cmd_heartbeat(args):
+def cmd_heartbeat(args) -> int:
     """心跳检测"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -366,7 +366,7 @@ def cmd_heartbeat(args):
     return 0
 
 
-def cmd_serve(args):
+def cmd_serve(args) -> int:
     """启动 HTTP API 服务"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -417,7 +417,7 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
     return all_failed
 
 
-def cmd_send(args):
+def cmd_send(args) -> int:
     """手动发消息给指定 agent"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -461,7 +461,7 @@ def cmd_send(args):
     return 0
 
 
-def cmd_broadcast(args):
+def cmd_broadcast(args) -> int:
     """发公告板（推送全员）"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -503,7 +503,7 @@ def cmd_broadcast(args):
     return 0
 
 
-def cmd_ack(args):
+def cmd_ack(args) -> int:
     """agent 确认收到"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -534,7 +534,7 @@ def cmd_ack(args):
     return 0
 
 
-def cmd_mark_read(args):
+def cmd_mark_read(args) -> int:
     """agent 标记已读"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -563,7 +563,7 @@ def cmd_mark_read(args):
     return 0
 
 
-def cmd_status(args):
+def cmd_status(args) -> int:
     """查看消息状态"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -625,7 +625,7 @@ def cmd_status(args):
     return 0
 
 
-def cmd_retry(args):
+def cmd_retry(args) -> int:
     """重试失败消息"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -678,7 +678,7 @@ def cmd_retry(args):
     return 0
 
 
-def cmd_archive(args):
+def cmd_archive(args) -> int:
     """手动触发归档"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -703,7 +703,7 @@ def cmd_archive(args):
     return 0
 
 
-def cmd_backup(args):
+def cmd_backup(args) -> int:
     """备份 store/ 目录到 backup/"""
     import shutil, datetime
     config_path = _find_config(args)
@@ -740,7 +740,7 @@ def cmd_backup(args):
         return 1
 
 
-def cmd_errors(args):
+def cmd_errors(args) -> int:
     """查看错误日志"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -769,7 +769,7 @@ def cmd_errors(args):
     return 0
 
 
-def cmd_agent_add(args):
+def cmd_agent_add(args) -> int:
     """注册新 agent"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -828,7 +828,7 @@ def cmd_agent_add(args):
     return 0
 
 
-def cmd_agent_remove(args):
+def cmd_agent_remove(args) -> int:
     """移除 agent"""
     config_path = _find_config(args)
     config = load_config(config_path)
@@ -850,7 +850,7 @@ def cmd_agent_remove(args):
     return 0
 
 
-def cmd_review(args):
+def cmd_review(args) -> int:
     """代码审查：运行 review.py 审查代码变更"""
     import subprocess
 

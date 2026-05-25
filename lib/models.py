@@ -8,7 +8,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 import json
-from .constants import DEFAULT_DATA_DIR
+from .constants import DEFAULT_DATA_DIR, _now_iso
 
 # ── 消息状态 ──────────────────────────────────────────────────────────
 
@@ -305,12 +305,6 @@ class BusConfig:
 
 
 # ── 工具函数 ──────────────────────────────────────────────────────────
-
-def _now_iso() -> str:
-    """返回当前时间的 ISO 格式字符串（本地时间 +08:00）"""
-    # UTC+8
-    tz = timezone(timedelta(hours=8))
-    return datetime.now(tz).strftime("%Y-%m-%dT%H:%M:%S%z")
 
 
 def generate_msg_id() -> str:
