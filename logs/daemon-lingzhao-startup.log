@@ -1,5 +1,0 @@
-2026-05-25 22:40:46,492 [INFO] [lingzhao] Mailbox Daemon v0.5 启动 (任务追踪+去重保护) — agent=lingzhao
-2026-05-25 22:40:46,494 [INFO] [lingzhao]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingzhao/inbox.json
-2026-05-25 22:40:46,497 [INFO] [lingzhao]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingzhao/ack.json
-2026-05-25 22:40:46,513 [INFO] [lingzhao] 监听模式: poll (15s)
-2026-05-25 22:40:46,525 [INFO] [lingzhao]   孤儿进程已清理 (PID: 8985)

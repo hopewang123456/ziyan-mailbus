@@ -9,6 +9,10 @@ build/
 store/
 *.tmp
 
+# 守护进程日志（运行时自动生成，不提交）
+logs/
+!.gitkeep
+
 # IDE
 .vscode/
 .idea/

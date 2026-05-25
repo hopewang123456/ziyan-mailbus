@@ -1,4 +1,0 @@
-2026-05-25 22:40:46,542 [INFO] [lingxi] Mailbox Daemon v0.5 启动 (任务追踪+去重保护) — agent=lingxi
-2026-05-25 22:40:46,544 [INFO] [lingxi]   inbox: /mnt/e/ai_tools/mail/store/inbox/lingxi/inbox.json
-2026-05-25 22:40:46,547 [INFO] [lingxi]   ack:   /mnt/e/ai_tools/mail/store/inbox/lingxi/ack.json
-2026-05-25 22:40:46,560 [INFO] [lingxi] 监听模式: poll (15s)

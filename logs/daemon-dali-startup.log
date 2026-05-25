@@ -1,4 +1,0 @@
-2026-05-25 22:40:46,503 [INFO] [dali] Mailbox Daemon v0.5 启动 (任务追踪+去重保护) — agent=dali
-2026-05-25 22:40:46,506 [INFO] [dali]   inbox: /mnt/e/ai_tools/mail/store/inbox/dali/inbox.json
-2026-05-25 22:40:46,508 [INFO] [dali]   ack:   /mnt/e/ai_tools/mail/store/inbox/dali/ack.json
-2026-05-25 22:40:46,531 [INFO] [dali] 监听模式: poll (15s)
