@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lib.models import MsgStatus, Inbox
-from lib.utils import _now_iso
+from lib.utils import _now_iso, clear_json_cache
 from lib.archiver import archive_agent, archive_all
 
 
@@ -81,28 +81,38 @@ class TestArchiver:
         assert len(data["messages"]) == 1
     
     def test_archive_by_count(self):
-        """超过 max_messages → 归档"""
+        """超过 max_messages → 归档溢出部分（保留 max_messages//2 条）"""
         msgs = [self._make_msg(f"msg-arch-count-{i}", MsgStatus.ACKNOWLEDGED) for i in range(5)]
         self._write_inbox(msgs)
+        clear_json_cache()
         count = archive_agent(self.data_dir, "agent_a", archive_days=7, max_messages=3)
-        # 注意：只归档 acknowledged 的，5 条全 acknowledged，超过 3 条 → 归档 5 条
-        assert count == 5, f"预期归档 5 条，得到 {count}"
+        # 5 条全 acknowledged，超过 3 条上限 → 溢出 4 条归档，保留 3//2=1 条
+        assert count == 4, f"预期归档 4 条，得到 {count}"
         data = self._read_inbox()
-        assert len(data["messages"]) == 0, "inbox 应清空"
+        assert len(data["messages"]) == 1, "inbox 应保留 1 条"
     
     def test_archive_keeps_pending(self):
-        """pending 状态的消息不会被归档"""
+        """pending 状态的消息永远不会被归档，即使 overflow"""
+        clear_json_cache()
         pending = self._make_msg("msg-pending1", MsgStatus.PENDING)
         acked = self._make_msg("msg-acked1", MsgStatus.ACKNOWLEDGED)
         self._write_inbox([pending, acked])
         count = archive_agent(self.data_dir, "agent_a", archive_days=7, max_messages=1)
-        assert count == 1, f"预期归档 1 条，得到 {count}"
+        # 2 条消息 > max_messages=1 → 触发归档。但只有 1 条 acked，保留至少 1 条 → 不归档
+        assert count == 0, f"预期归档 0 条，得到 {count}"
         data = self._read_inbox()
-        assert len(data["messages"]) == 1
-        assert data["messages"][0]["id"] == "msg-pending1"
+        assert len(data["messages"]) == 2
+        # 再多一条 overflow 时才会归档 acked 消息
+        more_acked = [self._make_msg(f"msg-extra-{i}", MsgStatus.ACKNOWLEDGED) for i in range(3)]
+        self._write_inbox([pending] + more_acked)
+        clear_json_cache()
+        count2 = archive_agent(self.data_dir, "agent_a", archive_days=7, max_messages=1)
+        assert count2 == 2, f"预期归档 2 条，得到 {count2}"  # 3 acked - 1 keep = 2 archived
+        data2 = self._read_inbox()
+        assert data2["messages"][0]["id"] == "msg-pending1"
     
     def test_archive_creates_archive_file(self):
-        """归档后 archive/ 目录下应有文件"""
+        """归档后 archive/ 目录下应有文件（至少保留 1 条 acked）"""
         self._clean_archive()
         msgs = [self._make_msg(f"msg-arch-file-{i}", MsgStatus.ACKNOWLEDGED) for i in range(3)]
         self._write_inbox(msgs)
@@ -112,36 +122,26 @@ class TestArchiver:
         assert len(files) > 0, "归档目录应有文件"
         with open(f"{archive_dir}/{files[0]}") as f:
             lines = f.readlines()
-        assert len(lines) == 3, f"预期 3 条归档记录，得到 {len(lines)}"
+        # 3 条全 acked，max_messages=1 → 保留 1 条，归档 2 条
+        assert len(lines) == 2, f"预期 2 条归档记录，得到 {len(lines)}"
     
     def test_archive_all(self):
         """archive_all 处理所有 agent"""
+        self._clean_archive()
         os.makedirs(f"{self.data_dir}/inbox/agent_b", exist_ok=True)
         os.makedirs(f"{self.data_dir}/archive/agent_b", exist_ok=True)
-        msg_a = self._make_msg("msg-all-a", MsgStatus.ACKNOWLEDGED)
-        self._write_inbox([msg_a])
-        msg_b = {
-            "id": "msg-all-b",
-            "from": "test",
-            "to": "agent_b",
-            "priority": "normal",
-            "type": "notice",
-            "content": "test msg-all-b",
-            "attachments": [],
-            "reply_format": {},
-            "status": MsgStatus.ACKNOWLEDGED,
-            "pushed_count": 1,
-            "created_at": _now_iso(),
-            "acknowledged_at": _now_iso(),
-        }
+        # 每个 agent 给 5 条 acked，max_messages=3 → 各归档 4 条（保留 1）
+        msgs_a = [self._make_msg(f"msg-all-a-{i}", MsgStatus.ACKNOWLEDGED) for i in range(5)]
+        self._write_inbox(msgs_a)
+        msgs_b = [self._make_msg(f"msg-all-b-{i}", MsgStatus.ACKNOWLEDGED) for i in range(5)]
         path_b = f"{self.data_dir}/inbox/agent_b/inbox.json"
         with open(path_b, "w") as f:
-            json.dump({"agent": "agent_b", "has_unread": False, "messages": [msg_b], "since": _now_iso()}, f)
-        results = archive_all(self.data_dir, {"agent_a": {}, "agent_b": {}}, archive_days=7, max_messages=1)
+            json.dump({"agent": "agent_b", "has_unread": False, "messages": msgs_b, "since": _now_iso()}, f)
+        results = archive_all(self.data_dir, {"agent_a": {}, "agent_b": {}}, archive_days=7, max_messages=3)
         assert "agent_a" in results
         assert "agent_b" in results
-        assert results["agent_a"] >= 1
-        assert results["agent_b"] >= 1
+        assert results["agent_a"] == 4, f"agent_a 预期 4，得到 {results.get('agent_a')}"
+        assert results["agent_b"] == 4, f"agent_b 预期 4，得到 {results.get('agent_b')}"
 
 
 if __name__ == "__main__":
