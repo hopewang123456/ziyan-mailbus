@@ -170,7 +170,7 @@ mailbus 会将你的回复视为已读确认。
 消息ID: {msg_id}
 内容: {content}{chain_text}"""
 
-        reply_to = action.get("reply_to", "") if action else ""
+        reply_to = action_raw.get("reply_to", "") if action_raw else ""
         if reply_to and reply_to not in ("mailbus", "broadcast", "system", "manual", "mailbus-test", "test", ""):
             reply_path = f"{data_dir}/inbox/{reply_to}/inbox.json"
             reply_msg_id = f"reply-{msg_id}"
@@ -184,7 +184,7 @@ mailbus 会将你的回复视为已读确认。
 {{"id":"{reply_msg_id}","from":"{agent_name}","to":"{reply_to}","type":"reply","priority":"normal","status":"pending","content":"<你的回复>","created_at":"<ISO时间>"}}
 ```"""
 
-        forward_to = action.get("forward_to", []) if action else []
+        forward_to = action_raw.get("forward_to", []) if action_raw else []
         if forward_to:
             targets = [t for t in forward_to if t != agent_name]
             if targets:
