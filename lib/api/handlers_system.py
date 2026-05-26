@@ -47,12 +47,13 @@ def handle_agents(handler):
     result = {}
     for name, cfg in handler.agents.items():
         result[name] = {
-            "type": cfg.get("type", "?"),
+            "name": cfg.get("name", name),
             "role": cfg.get("role", ""),
+            "type": cfg.get("type", "?"),
             "models": cfg.get("models", []),
             "webhook_url": cfg.get("webhook_url", ""),
         }
-    handler._send_json(result)
+    handler._send_json({"agents": result})
 
 
 def handle_heartbeat(handler):
@@ -72,6 +73,7 @@ def handle_config(handler):
     config_path = f"{handler.data_dir}/config.json"
     config = json_read(config_path, {})
     safe = {k: v for k, v in config.items() if k != "token"}
+    handler._send_json(safe)
 
 
 def handle_reports(handler):
@@ -153,42 +155,52 @@ def handle_ping(handler, agent: str):
 
 
 def handle_list_launchable(handler):
-    """GET /api/launch — 列出可启动的 agent"""
-    launchable = []
+    """GET /api/launch — 列出可启动的 agent（含启动模式、has_browser 等信息）"""
+    result = {}
     for name, cfg in handler.agents.items():
-        if cfg.get("type") not in ("none", ""):
-            launchable.append({"name": name, "type": cfg.get("type", "?"), "role": cfg.get("role", "")})
-    handler._send_json({"launchable": launchable})
+        atype = cfg.get("type", "none")
+        launch_modes = ["browser", "cli"]
+        has_browser = cfg.get("launch", {}).get("has_browser", True)
+        result[name] = {
+            "name": cfg.get("name", name),
+            "type": atype,
+            "launch_modes": launch_modes,
+            "has_browser": has_browser,
+            "models": cfg.get("models", []),
+        }
+    handler._send_json({"agents": result})
 
 
 def handle_launch(handler):
-    """POST /api/launch — 启动 agent"""
+    """POST /api/launch — 通过 launch-agent.sh 启动 agent"""
     body = handler._read_post_body()
     agent = body.get("agent", "")
+    mode = body.get("mode", "browser")
+
     if not agent or agent not in handler.agents:
-        handler._send_json({"error": "agent not found"}, 404)
-        return
-    cfg = handler.agents[agent]
-    atype = cfg.get("type", "")
-
-    if atype == "agentmemory":
-        _launch_agentmemory(handler)
+        handler._send_json({"error": f"agent '{agent}' not found"}, 404)
         return
 
-    launch_scripts = {
-        "hermes": ["bash", "-c", f"cd ~ && nohup hermes --profile {cfg.get('profile', 'default')} >/dev/null 2>&1 &"],
-        "opencode": ["bash", "-c", "cd /mnt/e/ai_tools/opencode && nohup python3 opencode_gui.py >/dev/null 2>&1 &"],
-        "cline": ["bash", "-c", "cd ~ && nohup cline --provider openai-compatible --yolo >/dev/null 2>&1 &"],
-    }
-    cmd = launch_scripts.get(atype)
-    if not cmd:
-        handler._send_json({"error": f"不支持启动类型: {atype}"}, 400)
+    # 查找 launch-agent.sh 脚本
+    script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "launch-agent.sh")
+    if not os.path.isfile(script_path):
+        handler._send_json({"error": "launch script not found"}, 500)
         return
+
     try:
-        subprocess.Popen(cmd, start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        handler._send_json({"agent": agent, "status": "launched", "type": atype})
+        result = subprocess.run(
+            ["bash", script_path, agent, mode],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode == 0:
+            handler._send_json({"status": "ok", "agent": agent, "message": f"Launched {agent} ({mode})"})
+        else:
+            handler._send_json({"status": "error", "agent": agent,
+                                "error": result.stderr.strip() or result.stdout.strip()}, 500)
+    except subprocess.TimeoutExpired:
+        handler._send_json({"status": "timeout", "agent": agent}, 500)
     except Exception as e:
-        handler._send_json({"error": str(e)}, 500)
+        handler._send_json({"status": "error", "error": str(e)}, 500)
 
 
 def _launch_agentmemory(handler):
@@ -225,5 +237,3 @@ def _check_agentmemory():
         return {"status": "healthy"} if resp.getcode() == 200 else {"status": "error"}
     except Exception:
         return {"status": "unreachable"}
-
-    handler._send_json(safe)

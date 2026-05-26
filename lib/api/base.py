@@ -81,7 +81,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     def _serve_static(self, path: str) -> bool:
         if ".." in path or "~" in path:
             return False
-        docs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "docs")
+        docs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "docs")
         filename = "index.html" if path in ("", "/") else path.lstrip("/")
         abs_path = os.path.normpath(os.path.join(docs_dir, filename))
         if not abs_path.startswith(os.path.normpath(docs_dir)):

@@ -594,9 +594,10 @@ class MailboxDaemon:
         for i, e in enumerate(entries, 1):
             sender = e["sender"]
             raw = e["raw_msg"]
-            content = raw.get("content", "")
-            msg_type = raw.get("type", "notice")
-            priority = raw.get("priority", "normal")
+            # raw 可能是 Message 对象（dataclass）或 dict，统一用 safe_get 兼容
+            content = raw.content if hasattr(raw, 'content') else raw.get("content", "")
+            msg_type = raw.type if hasattr(raw, 'type') else raw.get("type", "notice")
+            priority = raw.priority if hasattr(raw, 'priority') else raw.get("priority", "normal")
             reply_path = f"{self.data_dir}/inbox/{sender}/inbox.json"
             reply_msg_id = f"reply-{e['msg_id']}"
 
@@ -796,7 +797,7 @@ class MailboxDaemon:
                 if is_signal_exit and ret != 0:
                     # 检查是否已重试过
                     all_retried = all(
-                        retry_map.get(mid, 0) < 2 for mid in msg_ids
+                        retry_map.get(mid, 0) < 3 for mid in msg_ids
                     )
                     if all_retried and elapsed < MAX_AGENT_RUNTIME * 0.5:
                         # 记录重试

@@ -129,6 +129,36 @@ def run_housekeeping(data_dir: str, agents: dict):
     # 超时检测：检查所有 agent 的 inbox，超时未处理的消息自动催办
     _check_timeouts(data_dir, agents, paths['inbox'], paths)
 
+    # Tracker 催办检测：检查 tracker 中 running 任务是否需要催办
+    try:
+        from .tracker import TaskTracker
+        tracker = TaskTracker(data_dir)
+        escalated = tracker.check_reminders(agents, reminder_minutes=5, max_reminders=3)
+        if escalated:
+            for e in escalated:
+                print(f"  ⏰ 催办: {e['agent']} — {e['summary'][:40]}")
+                # 写催办通知到目标 inbox
+                escalate_file = f"{paths['inbox']}/{e['agent']}/inbox.json"
+                if os.path.exists(os.path.dirname(escalate_file)):
+                    e_data = json_read(escalate_file, {})
+                    e_inbox = Inbox.from_dict(e_data) if e_data else Inbox(agent=e['agent'])
+                    import time as _time
+                    remind_msg = {
+                        "id": f"tracker-remind-{int(_time.time())}",
+                        "from": "mailbus",
+                        "to": e['agent'],
+                        "type": "notice",
+                        "priority": "urgent",
+                        "status": "pending",
+                        "content": f"⏰ 催办提醒：任务「{e['summary']}」已超过催办时间，请尽快处理（第{e['reminded_count']}次催办）",
+                        "created_at": _now_iso(),
+                    }
+                    e_inbox.messages.append(remind_msg)
+                    e_inbox.has_unread = True
+                    json_write(escalate_file, e_inbox.to_dict())
+    except Exception as exc:
+        print(f"  [scanner] tracker 催办异常: {exc}")
+
     # 技能使用记录消费：扫描 skill-usage-pending 目录，归入 skill-usage.json
     _consume_skill_usage(data_dir)
 

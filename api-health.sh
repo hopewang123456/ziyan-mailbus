@@ -3,7 +3,7 @@
 # 用 crontab 每隔5分钟运行一次
 
 DATA_DIR="/mnt/e/ai_tools/mail"
-HOST="127.0.0.1"
+HOST="0.0.0.0"
 PORT=9812
 LOG_FILE="$DATA_DIR/logs/api-health.log"
 

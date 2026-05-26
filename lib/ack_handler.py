@@ -223,6 +223,19 @@ def scan_error_reports(data_dir: str, agents: dict) -> list:
             error = inbox.msg_field(m, 'error', {})
 
             if msg_type == "error_report" and error and task_id:
+                # 更新 tracker 任务状态为 failed
+                try:
+                    from .tracker import TaskTracker, TaskStatus
+                    tracker = TaskTracker(data_dir)
+                    tracker.update_status(task_id, TaskStatus.FAILED, error={
+                        "code": error.get("code", "UNKNOWN"),
+                        "reason": error.get("reason", ""),
+                        "detail": error.get("trace", ""),
+                        "agent": name,
+                        "reported_at": _now_iso(),
+                    })
+                except Exception as e:
+                    print(f"[ack_handler] tracker 更新失败: {e}")
                 reports.append({
                     "task_id": task_id,
                     "agent": name,

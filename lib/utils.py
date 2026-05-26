@@ -174,11 +174,22 @@ def json_write(filepath: str, data: Any, indent: int = 2):
     """写 JSON 文件（带锁，原子写入）"""
     tmp = filepath + ".tmp"
     with file_lock(path=filepath):
-        with open(tmp, "w") as f:
-            json.dump(data, f, ensure_ascii=False, indent=indent)
-            f.flush()
-            os.fsync(f.fileno())
-        os.replace(tmp, filepath)
+        # 确保目标目录存在（防止并发删除导致的 FileNotFoundError）
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        try:
+            with open(tmp, "w") as f:
+                json.dump(data, f, ensure_ascii=False, indent=indent)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, filepath)
+        except Exception:
+            # 如果写入过程中被中断（如进程被 kill），清理残留 tmp 文件
+            try:
+                if os.path.exists(tmp):
+                    os.unlink(tmp)
+            except OSError:
+                pass
+            raise
     # 写入后清除缓存，确保下次读取拿到最新数据
     _JSON_CACHE.pop(filepath, None)
 

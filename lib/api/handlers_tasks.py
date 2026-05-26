@@ -73,10 +73,106 @@ def handle_permission(handler):
 
 
 def handle_skill_usage(handler):
-    """GET /api/skill-usage — 技能使用统计"""
-    skill_file = os.path.join(handler.data_dir, "skill-usage.json")
-    data = json_read(skill_file, {})
-    handler._send_json(data)
+    """GET /api/skill-usage — 技能使用统计（聚合所有来源）"""
+    data_dir = handler.data_dir
+    merged = {}
+
+    # 0. mailbus 统一 skill 使用记录
+    bus_file = os.path.join(data_dir, "skill-usage.json")
+    bus_data = json_read(bus_file, {})
+    for skill, agent_data in bus_data.items():
+        merged[skill] = {"agents": {}}
+        for agent, rec in agent_data.items():
+            merged[skill]["agents"][agent] = {
+                "use_count": rec.get("use_count", 0),
+                "view_count": rec.get("view_count", 0),
+                "last_used": (rec.get("last_used") or "")[:16],
+                "state": "active",
+            }
+        merged[skill]["total_use"] = sum(
+            a.get("use_count", 0) for a in merged[skill]["agents"].values()
+        )
+        merged[skill]["total_view"] = sum(
+            a.get("view_count", 0) for a in merged[skill]["agents"].values()
+        )
+        merged[skill]["last_used"] = max(
+            (a.get("last_used", "") for a in merged[skill]["agents"].values()),
+            default="",
+        )
+
+    # 1. Hermes usage.json（补充不在 bus 记录中的 skill）
+    hermes_profiles = {
+        "lingzhao": "/mnt/e/hermes-data/.hermes/skills/.usage.json",
+        "lingxi": "/mnt/e/hermes-data/.hermes/profiles/lingxi/skills/.usage.json",
+    }
+    for agent, path in hermes_profiles.items():
+        if os.path.isfile(path):
+            try:
+                with open(path, encoding="utf-8") as f:
+                    data = json.load(f)
+                for skill, rec in data.items():
+                    if skill not in merged:
+                        merged[skill] = {"agents": {}}
+                    merged[skill]["agents"][agent] = {
+                        "use_count": rec.get("use_count", 0),
+                        "view_count": rec.get("view_count", 0),
+                        "last_used": (rec.get("last_used_at") or "")[:16],
+                        "state": rec.get("state", "active"),
+                    }
+                    merged[skill]["total_use"] = sum(
+                        a.get("use_count", 0) for a in merged[skill]["agents"].values()
+                    )
+                    merged[skill]["total_view"] = sum(
+                        a.get("view_count", 0) for a in merged[skill]["agents"].values()
+                    )
+                    merged[skill]["last_used"] = max(
+                        (a.get("last_used", "") for a in merged[skill]["agents"].values()),
+                        default="",
+                    )
+            except Exception:
+                pass
+
+    # 2. CLI 框架 skill 目录扫描（只有名称，没有使用次数）
+    cli_skills = {
+        "lingxiao": "/home/administrator/.codex/skills",
+        "xiaoqi": "/mnt/e/ai_tools/openclaw_space/skills",
+        "yige": "/mnt/e/ai_tools/openclaw_space/skills",
+        "dali": "/mnt/e/ai_tools/opencode/.opencode/skills",
+        "lingjin": "/mnt/e/hermes-data/.hermes/profiles/lingjin/skills",
+    }
+    for agent, skill_dir in cli_skills.items():
+        if os.path.isdir(skill_dir):
+            for root, dirs, files in os.walk(skill_dir):
+                for f in files:
+                    if f == "SKILL.md" or f.endswith("-skill.md"):
+                        skill_name = os.path.basename(root) if f == "SKILL.md" else f.replace("-skill.md", "").replace(".md", "")
+                        if skill_name:
+                            if skill_name not in merged:
+                                merged[skill_name] = {"agents": {}}
+                            if agent not in merged[skill_name]["agents"]:
+                                merged[skill_name]["agents"][agent] = {
+                                    "use_count": 0,
+                                    "view_count": 0,
+                                    "last_used": "",
+                                    "state": "installed",
+                                }
+                            merged[skill_name]["total_use"] = sum(
+                                a.get("use_count", 0) for a in merged[skill_name]["agents"].values()
+                            )
+                            merged[skill_name]["last_used"] = max(
+                                (a.get("last_used", "") for a in merged[skill_name]["agents"].values()),
+                                default="",
+                            )
+
+    # 按使用次数排序
+    sorted_skills = sorted(
+        merged.items(),
+        key=lambda x: -(x[1].get("total_use", 0) or 0),
+    )
+    handler._send_json({
+        "skills": [{"name": n, **d} for n, d in sorted_skills],
+        "total_skills": len(sorted_skills),
+    })
 
 
 def handle_skill_use(handler):
