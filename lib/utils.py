@@ -100,6 +100,12 @@ def file_lock(timeout: float = 10.0, path: str = ""):
         if acquired:
             fcntl.flock(lock_fd, fcntl.LOCK_UN)
         lock_fd.close()
+        # 清理锁文件（非全局锁），防止 /tmp 积压
+        if lock_file != GLOBAL_LOCK_FILE:
+            try:
+                os.unlink(lock_file)
+            except OSError:
+                pass
 
 
 # ── JSON 读写 ─────────────────────────────────────────────────────────

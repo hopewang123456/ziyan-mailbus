@@ -172,6 +172,9 @@ def cmd_init(args) -> int:
 
 def cmd_scan(args) -> int:
     """扫描全员 inbox → 推送未读消息"""
+    # 清理过期锁文件（超过1小时），防止 /tmp 积压
+    _cleanup_stale_locks()
+
     config_path = _find_config(args)
     config = load_config(config_path)
     data_dir = config["data_dir"]
@@ -923,6 +926,18 @@ def cmd_review(args) -> int:
 
 
 # ── 辅助函数 ──────────────────────────────────────────────────────────
+
+def _cleanup_stale_locks(max_age: int = 3600):
+    """清理 /tmp 中超过 max_age 秒的 mailbus 锁文件"""
+    import glob
+    now = time.time()
+    for fpath in glob.glob("/tmp/ziyan-mailbus-*.lock"):
+        try:
+            if now - os.path.getmtime(fpath) > max_age:
+                os.unlink(fpath)
+        except OSError:
+            pass
+
 
 def _find_config(args) -> str:
     """获取配置文件路径"""
