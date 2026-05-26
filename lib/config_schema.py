@@ -130,7 +130,8 @@ def validate_config(config: dict, config_path: str = "") -> list:
                 errors.append(f"agents.{name}.type: 不支持的 agent 类型 ({cfg['type']})")
             # 检查未知字段
             allowed = {"type", "role", "profile", "agent", "agent_id", "provider",
-                       "models", "webhook_url", "webhook_secret"}
+                       "models", "webhook_url", "webhook_secret",
+                       "name", "inbox", "profile_paths", "launch"}
             extra = set(cfg.keys()) - allowed
             if extra:
                 errors.append(f"agents.{name}: 未知字段 {extra}")

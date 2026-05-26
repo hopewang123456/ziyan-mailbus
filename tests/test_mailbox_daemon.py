@@ -202,10 +202,10 @@ def test_reap_processes_signal_exit_retry():
 
 
 def test_reap_processes_retry_twice_then_give_up():
-    """_reap_processes 重试2次后不再重试"""
+    """_reap_processes 重试3次后不再重试"""
     daemon = _make_daemon()
     daemon._processing_ids = set()
-    daemon._retry_map = {"m1": 2}
+    daemon._retry_map = {"m1": 3}
     mock_proc = mock.MagicMock()
     mock_proc.poll.return_value = 137
     mock_proc.communicate.return_value = (b"", b"")
@@ -274,6 +274,11 @@ def _make_daemon():
     import logging
     daemon.log = logging.getLogger("test_daemon")
     daemon.log.addHandler(logging.NullHandler())
+    
+    # 初始化 daemon 内部状态（__new__ 不会自动初始化这些）
+    daemon._running_procs = {}
+    daemon._retry_map = {}
+    daemon._processing_ids = set()
     
     # 初始化 inbox 文件
     json.dump({"agent": "test", "messages": [], "has_unread": False},
