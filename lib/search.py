@@ -26,7 +26,7 @@ def _get_conn(data_dir: str):
     conn.row_factory = sqlite3.Row
     conn.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS messages USING fts5(
-            msg_id, from_agent, to_agent, type, content, status,
+            msg_id, from_agent, to_agent, type, content, state,
             tokenize='unicode61'
         )
     """)
@@ -49,6 +49,7 @@ def index_message(data_dir: str, msg: dict):
     to_ = msg.get("to", "")
     msg_type = msg.get("type", "")
     status = msg.get("status", "")
+    state = msg.get("state", "") or status
 
     # 跳过空消息
     if not msg_id:
@@ -61,8 +62,8 @@ def index_message(data_dir: str, msg: dict):
 
         # 写入 FTS
         conn.execute(
-            "INSERT INTO messages (msg_id, from_agent, to_agent, type, content, status) VALUES (?, ?, ?, ?, ?, ?)",
-            (msg_id, from_, to_, msg_type, content, status),
+            "INSERT INTO messages (msg_id, from_agent, to_agent, type, content, state) VALUES (?, ?, ?, ?, ?, ?)",
+            (msg_id, from_, to_, msg_type, content, state),
         )
         conn.execute(
             "INSERT INTO meta (msg_id, created_at, updated_at) VALUES (?, ?, ?)",
@@ -133,12 +134,12 @@ def search(data_dir: str, query_str: str = "", from_agent: str = "",
         params.append(msg_type)
 
     if status:
-        conditions.append("status = ?")
+        conditions.append("state = ?")
         params.append(status)
 
     where = " AND ".join(conditions) if conditions else "1=1"
     sql = f"""
-        SELECT m.msg_id, m.from_agent, m.to_agent, m.type, m.content, m.status,
+        SELECT m.msg_id, m.from_agent, m.to_agent, m.type, m.content, m.state as state,
                meta.created_at
         FROM messages m
         LEFT JOIN meta ON m.msg_id = meta.msg_id
@@ -158,7 +159,7 @@ def search(data_dir: str, query_str: str = "", from_agent: str = "",
                 "to": row["to_agent"],
                 "type": row["type"],
                 "content": row["content"][:200],  # 只显示前 200 字符
-                "status": row["status"],
+                "status": row["state"],
                 "created_at": row["created_at"],
             })
     except sqlite3.Error as e:

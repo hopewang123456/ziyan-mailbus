@@ -178,8 +178,11 @@ class Message:
     def to_dict(self):
         d = asdict(self)
         d["from"] = d.pop("from_")  # from_ → from（JSON 友好）
+        # 迁移：如果 state 为空但 status 有值，用 status 作为 state
+        if not d.get("state") and d.get("status"):
+            d["state"] = d["status"]
         # 清理空字段保持 JSON 干净
-        for drop_key in ["state", "state_history", "actions", "received_at", "done_at",
+        for drop_key in ["state_history", "actions", "received_at", "done_at",
                           "timeout_minutes", "escalate_to", "reminded_count", "last_reminded_at",
                           "done_note"]:
             if drop_key in d and not d[drop_key]:
@@ -280,13 +283,12 @@ class Inbox:
         return False
 
     def has_unread_messages(self) -> bool:
-        """检查是否有未读消息（同时检查 status 和 state）"""
+        """检查是否有未读消息（优先检查 state，回退读 status）"""
         for m in self.messages:
-            status = m.get("status") if isinstance(m, dict) else m.status
             state = m.get("state") if isinstance(m, dict) else getattr(m, 'state', '')
-            if status in ("acknowledged", "archived"):
-                continue
-            if state == "done":
+            if not state:
+                state = m.get("status") if isinstance(m, dict) else m.status
+            if state in ("acknowledged", "archived", "done", "closed", "rejected", "received", "sent"):
                 continue
             return True
         return False

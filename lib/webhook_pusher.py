@@ -77,6 +77,7 @@ def push_via_webhook(
                 "content": msg_entry.get("content"),
                 "attachments": msg_entry.get("attachments", []),
                 "status": msg_entry.get("status"),
+                "state": msg_entry.get("state") or msg_entry.get("status"),
                 "created_at": msg_entry.get("created_at"),
                 "reply_format": msg_entry.get("reply_format", {}),
             })
@@ -90,6 +91,7 @@ def push_via_webhook(
                 "content": msg_entry.content,
                 "attachments": msg_entry.attachments or [],
                 "status": msg_entry.status,
+                "state": getattr(msg_entry, 'state', '') or msg_entry.status,
                 "created_at": msg_entry.created_at,
                 "reply_format": msg_entry.reply_format or {},
             })

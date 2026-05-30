@@ -123,7 +123,7 @@ def get_system_message(agent_name: str) -> dict:
             "bus_cron_interval": "每分钟扫描一次",
             "ack_timeout": "30秒",
         },
-        "status": MsgStatus.PENDING,
+        "state": MsgStatus.PENDING,
         "created_at": _now_iso(),
     }
 
@@ -681,7 +681,8 @@ def cmd_status(args) -> int:
         print(f"\n📬 {name}:")
         print(f"  消息总数: {len(inbox.messages)}")
         for m in inbox.messages:
-            print(f"  [{inbox.msg_field(m, 'status')}] {inbox.msg_field(m, 'id')} — {inbox.msg_field(m, 'content', '')[:40]}")
+            s = inbox.msg_field(m, 'state', '') or inbox.msg_field(m, 'status', '')
+            print(f"  [{s}] {inbox.msg_field(m, 'id')} — {inbox.msg_field(m, 'content', '')[:40]}")
         return 0
     
     # 查看所有
@@ -699,7 +700,7 @@ def cmd_status(args) -> int:
         inbox = Inbox.from_dict(inbox_data)
         statuses = {}
         for m in inbox.messages:
-            s = inbox.msg_field(m, "status", "unknown")
+            s = inbox.msg_field(m, "state", "") or inbox.msg_field(m, "status", "unknown")
             statuses[s] = statuses.get(s, 0) + 1
         
         parts = [f"{s}: {c}" for s, c in sorted(statuses.items())]

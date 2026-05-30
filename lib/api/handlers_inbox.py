@@ -23,14 +23,14 @@ def handle_inbox(handler, agent: str):
         return
     inbox = Inbox.from_dict(data)
     msg_count = len(inbox.messages)
-    unread = sum(1 for m in inbox.messages if inbox.msg_field(m, "status") == "pending")
+    unread = sum(1 for m in inbox.messages if (inbox.msg_field(m, "state", "") or inbox.msg_field(m, "status", "")) == "pending")
     msgs_out = []
     for m in inbox.messages:
         msg = Message.from_dict(m) if isinstance(m, dict) else m
         msgs_out.append({
             "id": msg.id, "from": msg.from_, "type": msg.type,
             "priority": msg.priority, "content": msg.content,
-            "status": msg.status, "attachments": msg.attachments or [],
+            "status": msg.status, "state": msg.state or msg.status, "attachments": msg.attachments or [],
             "created_at": msg.created_at, "pushed_count": msg.pushed_count,
         })
     handler._send_json({
@@ -57,7 +57,7 @@ def handle_mark_read(handler, agent: str):
     for mid in msg_ids:
         inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, acknowledged_at=ts)
         inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, state=MsgStatus.DONE, done_at=ts)
-    inbox.has_unread = any(inbox.msg_field(m, "status") == "pending" for m in inbox.messages)
+    inbox.has_unread = any((inbox.msg_field(m, "state", "") or inbox.msg_field(m, "status", "")) == "pending" for m in inbox.messages)
     json_write(inbox_file, inbox.to_dict())
     handler._send_json({"status": "ok", "marked": len(msg_ids)})
 
@@ -114,7 +114,7 @@ def handle_replies(handler):
                 msg = Message.from_dict(m) if isinstance(m, dict) else m
                 replies.append({
                     "id": msg.id, "from": msg.from_, "type": msg.type,
-                    "content": msg.content, "status": msg.status,
+                    "content": msg.content, "status": msg.status, "state": msg.state or msg.status,
                     "created_at": msg.created_at,
                 })
         if replies:

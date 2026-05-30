@@ -376,17 +376,18 @@ class MailboxDaemon:
             eid = e.get("msg_id") if isinstance(e, dict) else getattr(e, 'msg_id', '')
             if (e.get("action") if isinstance(e, dict) else getattr(e, 'action', '')) == "ack":
                 acked_ids.add(eid)
+        def _msg_state(m):
+            s = inbox.msg_field(m, 'state', '')
+            if not s:
+                s = inbox.msg_field(m, 'status', '')
+            return s
+
         pending_raw = [
             m for m in inbox.messages
             if inbox.msg_field(m, 'id', '') not in acked_ids
             and inbox.msg_field(m, 'id', '') not in self._processing_ids
-            and inbox.msg_field(m, 'state', '') != "done"
-            and (
-                (inbox.msg_field(m, 'status', '') in ("new", "pending", "sent", ""))
-                or
-                (inbox.msg_field(m, 'status', '') == "acknowledged"
-                 and inbox.msg_field(m, 'state', '') not in ("done", "closed", "rejected"))
-            )
+            and _msg_state(m) not in ("done", "closed", "rejected")
+            and _msg_state(m) in ("new", "pending", "sent", "", "received", "acknowledged")
         ]
         if not pending_raw:
             return
@@ -918,7 +919,6 @@ class MailboxDaemon:
             "to": sender,
             "type": "reply",
             "priority": "normal",
-            "status": "pending",
             "state": "sent",
             "content": (
                 f"✅ 任务完成回执\n"

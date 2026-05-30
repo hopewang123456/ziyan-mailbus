@@ -79,7 +79,7 @@ def archive_agent(data_dir: str, agent_name: str, archive_days: int = 7, max_mes
     
     for m in to_archive:
         msg_dict = m.to_dict() if hasattr(m, 'to_dict') else m
-        msg_dict["status"] = MsgStatus.ARCHIVED
+        msg_dict["state"] = MsgStatus.ARCHIVED
         jsonl_append(archive_file, msg_dict)
         # 同时写入搜索索引（如果在同一项目下）
         try:

@@ -181,7 +181,7 @@ mailbus 会将你的回复视为已读确认。
 写文件到: {reply_path}
 在 messages 数组末尾追加一条，设 has_unread=true：
 ```json
-{{"id":"{reply_msg_id}","from":"{agent_name}","to":"{reply_to}","type":"reply","priority":"normal","status":"pending","content":"<你的回复>","created_at":"<ISO时间>"}}
+{{"id":"{reply_msg_id}","from":"{agent_name}","to":"{reply_to}","type":"reply","priority":"normal","state":"pending","content":"<你的回复>","created_at":"<ISO时间>"}}
 ```"""
 
         forward_to = action_raw.get("forward_to", []) if action_raw else []
@@ -199,8 +199,8 @@ mailbus 会将你的回复视为已读确认。
   → 转发至 {target}:
     文件: {fwd_path}
     写入:
-    ```json
-    {{"id":"{fwd_msg_id}","from":"{agent_name}","to":"{target}","type":"forward","priority":"normal","status":"pending","content":"<转发说明>","created_at":"<ISO时间>"}}
+```json
+{{"id":"{fwd_msg_id}","from":"{agent_name}","to":"{target}","type":"forward","priority":"normal","state":"pending","content":"<转发说明>","created_at":"<ISO时间>"}}
     ```"""
 
         msg_body += """

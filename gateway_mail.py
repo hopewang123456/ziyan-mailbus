@@ -169,7 +169,7 @@ def route_email(mail: dict, config: dict, data_dir: str) -> Optional[str]:
                 "to": agent,
                 "type": "reply",
                 "priority": "normal",
-                "status": "pending",
+                "state": "pending",
                 "content": f"📧 {mail.get('subject', '(无主题)')}\n\n来自: {mail.get('from', '')}\n\n{mail.get('body', '')[:2000]}",
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }

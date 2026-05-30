@@ -13,6 +13,14 @@ from .models import Message, MsgStatus, Priority, Inbox
 from .utils import json_read, json_write, resolve_paths, _now_iso
 
 
+def get_msg_state(msg):
+    """统一读取消息状态：先读 state，回退读 status"""
+    state = msg.get('state', '') if isinstance(msg, dict) else getattr(msg, 'state', '')
+    if not state:
+        state = msg.get('status', '') if isinstance(msg, dict) else getattr(msg, 'status', '')
+    return state
+
+
 def _scan_one_agent(data_dir: str, name: str, inbox_base: str) -> Optional[Tuple[str, list, list]]:
     """
     扫描单个 agent 的 inbox。
@@ -48,11 +56,12 @@ def _scan_one_agent(data_dir: str, name: str, inbox_base: str) -> Optional[Tuple
         for m_raw in inbox.messages:
             mid = inbox.msg_field(m_raw, 'id', '')
             if mid in replied_ids:
-                mstatus = inbox.msg_field(m_raw, 'status', '')
-                if mstatus in (MsgStatus.PENDING, MsgStatus.PUSHED):
+                mstate = get_msg_state(m_raw)
+                if mstate in (MsgStatus.PENDING, MsgStatus.PUSHED):
                     inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, acknowledged_at=ts)
                     mtype = inbox.msg_field(m_raw, 'type', '')
-                    if not inbox.msg_field(m_raw, 'state'):
+                    cur_state = inbox.msg_field(m_raw, 'state', '')
+                    if not cur_state:
                         inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED,
                                              state=MsgStatus.RECEIVED, received_at=ts)
                         if mtype not in ("task", "task_reply"):
@@ -66,7 +75,8 @@ def _scan_one_agent(data_dir: str, name: str, inbox_base: str) -> Optional[Tuple
     
     for m_raw in inbox.messages:
         msg = Message.from_dict(m_raw) if isinstance(m_raw, dict) else m_raw
-        if msg.status == MsgStatus.PENDING:
+        mstate = get_msg_state(m_raw)
+        if mstate == MsgStatus.PENDING:
             has_pending = True
             if msg.priority == Priority.URGENT:
                 urgent_msgs.append(msg)
@@ -149,7 +159,7 @@ def run_housekeeping(data_dir: str, agents: dict):
                         "to": e['agent'],
                         "type": "notice",
                         "priority": "urgent",
-                        "status": "pending",
+                        "state": "pending",
                         "content": f"⏰ 催办提醒：任务「{e['summary']}」已超过催办时间，请尽快处理（第{e['reminded_count']}次催办）",
                         "created_at": _now_iso(),
                     }
@@ -248,6 +258,9 @@ def _check_timeouts(data_dir: str, agents: dict, inbox_base: str, paths: dict):
                 continue
             if msg.state in (MsgStatus.DONE, MsgStatus.CLOSED, MsgStatus.REJECTED):
                 continue
+            mstate = get_msg_state(m_raw)
+            if mstate in (MsgStatus.DONE, MsgStatus.CLOSED, MsgStatus.REJECTED):
+                continue
             
             # 计算已过去的时间
             created = None
@@ -294,7 +307,7 @@ def _check_timeouts(data_dir: str, agents: dict, inbox_base: str, paths: dict):
                             "to": escalate,
                             "type": "notice",
                             "priority": "urgent",
-                            "status": MsgStatus.PENDING,
+                            "state": MsgStatus.PENDING,
                             "content": f"⚠️ 超时提醒：{name} 有一条消息已超过 {int(timeout_min)} 分钟未处理。\n消息ID: {msg.id}\n请关注。",
                             "created_at": datetime.now(timezone.utc).isoformat(),
                         }
@@ -359,16 +372,14 @@ def _get_acked_ids(inbox_data: dict) -> set:
     """
     inbox = Inbox.from_dict(inbox_data) if "agent" in inbox_data else None
     if not inbox:
-        # 原始 dict 无法构造 Inbox，手动遍历
         acked = set()
         for m in inbox_data.get("messages", []):
-            status = m.get("status") if isinstance(m, dict) else getattr(m, 'status', '')
             mid = m.get("id") if isinstance(m, dict) else getattr(m, 'id', '')
-            if status == MsgStatus.ACKNOWLEDGED:
+            if get_msg_state(m) == MsgStatus.ACKNOWLEDGED:
                 acked.add(mid)
         return acked
     return {inbox.msg_field(m, 'id', '') for m in inbox.messages
-            if inbox.msg_field(m, 'status', '') == MsgStatus.ACKNOWLEDGED}
+            if get_msg_state(m) == MsgStatus.ACKNOWLEDGED}
 
 
 def mark_as_pushed(data_dir: str, agent_name: str, msg_ids: list):
@@ -457,7 +468,7 @@ def _check_offline_agents(data_dir: str, agents: dict, paths: dict):
                             "to": escalate_to,
                             "type": "notice",
                             "priority": "urgent",
-                            "status": MsgStatus.PENDING,
+                            "state": MsgStatus.PENDING,
                             "content": f"⚠️ Agent 离线通知：{name} 已离线，连续 {missed} 次心跳未响应。",
                             "created_at": datetime.now(timezone.utc).isoformat(),
                         }
