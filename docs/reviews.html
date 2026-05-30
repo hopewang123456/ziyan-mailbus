@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>代码审查报告</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", sans-serif; background: #f5f7fa; color: #333; padding: 24px; }
+  h1 { font-size: 24px; margin-bottom: 8px; color: #1a1a2e; }
+  .subtitle { color: #666; margin-bottom: 24px; font-size: 14px; }
+  .project-card { background: #fff; border-radius: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 12px; overflow: hidden; }
+  .project-header { padding: 16px 20px; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: background .1s; }
+  .project-header:hover { background: #f8f9ff; }
+  .project-name { font-size: 16px; font-weight: 600; flex: 1; }
+  .project-count { font-size: 12px; background: #e8ecf4; padding: 2px 10px; border-radius: 12px; color: #555; }
+  .project-arrow { transition: transform .2s; font-size: 12px; color: #999; }
+  .project-card.open .project-arrow { transform: rotate(90deg); }
+  .report-list { display: none; border-top: 1px solid #eee; }
+  .project-card.open .report-list { display: block; }
+  .report-item { padding: 12px 20px 12px 32px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: background .1s; font-size: 14px; }
+  .report-item:hover { background: #f0f2ff; }
+  .report-time { color: #888; font-size: 12px; min-width: 140px; }
+  .report-name { flex: 1; color: #2563eb; }
+  .report-size { color: #999; font-size: 12px; }
+  .report-content { display: none; padding: 16px 32px 24px; border-top: 1px solid #f0f0f0; }
+  .report-content.show { display: block; }
+  .report-content pre { background: #f8f9fc; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.6; max-height: 80vh; overflow-y: auto; }
+  .report-content .loading { color: #999; font-style: italic; }
+  .empty { text-align: center; padding: 60px 20px; color: #999; }
+  .empty .icon { font-size: 48px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<h1>📋 代码审查报告</h1>
+<p class="subtitle" id="subtitle">加载中...</p>
+
+<div id="projects"></div>
+
+<script>
+async function load() {
+  try {
+    const res = await fetch('/api/reports/projects');
+    const data = await res.json();
+    const container = document.getElementById('projects');
+    const subtitle = document.getElementById('subtitle');
+    const projects = data.projects || {};
+    const total = Object.values(projects).flat().length;
+    subtitle.textContent = `共 ${Object.keys(projects).length} 个项目，${total} 份审查报告`;
+
+    if (Object.keys(projects).length === 0) {
+      container.innerHTML = '<div class="empty"><div class="icon">🔍</div><p>暂无审查报告</p><p style="font-size:12px;margin-top:8px;color:#bbb;">提交代码后 watcher 会自动触发审查</p></div>';
+      return;
+    }
+
+    for (const [project, reports] of Object.entries(projects)) {
+      const card = document.createElement('div');
+      card.className = 'project-card';
+
+      const header = document.createElement('div');
+      header.className = 'project-header';
+      header.innerHTML = `
+        <span class="project-arrow">▶</span>
+        <span class="project-name">📁 ${project}</span>
+        <span class="project-count">${reports.length} 份</span>
+      `;
+      header.onclick = () => card.classList.toggle('open');
+
+      const list = document.createElement('div');
+      list.className = 'report-list';
+
+      for (const r of reports) {
+        const item = document.createElement('div');
+        item.className = 'report-item';
+        item.innerHTML = `
+          <span class="report-time">${r.time}</span>
+          <span class="report-name">${r.file}</span>
+          <span class="report-size">${(r.size / 1024).toFixed(1)} KB</span>
+        `;
+
+        const content = document.createElement('div');
+        content.className = 'report-content';
+        content.innerHTML = '<div class="loading">加载中...</div>';
+
+        item.onclick = async (e) => {
+          e.stopPropagation();
+          const isOpen = content.classList.contains('show');
+          // 关闭其他
+          list.querySelectorAll('.report-content.show').forEach(el => el.classList.remove('show'));
+          if (isOpen) return;
+
+          content.classList.add('show');
+          if (content.dataset.loaded) return;
+          content.dataset.loaded = '1';
+
+          try {
+            const rres = await fetch(`/api/reports/${encodeURIComponent(r.file)}`);
+            const rdata = await rres.json();
+            content.innerHTML = rdata.html ? rdata.html : `<pre>${rdata.raw || '无内容'}</pre>`;
+          } catch (e) {
+            content.innerHTML = `<pre style="color:#c00;">加载失败: ${e.message}</pre>`;
+          }
+        };
+
+        list.appendChild(item);
+        list.appendChild(content);
+      }
+
+      card.appendChild(header);
+      card.appendChild(list);
+      container.appendChild(card);
+    }
+  } catch (e) {
+    document.getElementById('projects').innerHTML =
+      `<div class="empty"><div class="icon">⚠️</div><p>加载失败: ${e.message}</p></div>`;
+  }
+}
+
+load();
+</script>
+</body>
+</html>

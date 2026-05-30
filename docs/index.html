@@ -735,16 +735,49 @@ async function launchAgent(name, mode) {
   btn.disabled = true;
   btn.textContent = '⏳';
   try {
-    const r = await fetch(apiUrl('/api/launch'), {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({agent: name, mode: mode}),
-    });
-    const data = await r.json();
-    if (data.status === 'ok') {
-      toast('已启动 ' + name + ' (' + mode + ')', 'success');
+    // 浏览器模式：前端直接用 window.open()，不依赖后端通过 WSL interop 开 Windows 窗口
+    if (mode === 'browser') {
+      // 从缓存中查找 agent 的 launch_url
+      let url = null;
+      if (rawData.launchInfo && rawData.launchInfo[name]) {
+        url = rawData.launchInfo[name].launch_url;
+      }
+      if (!url) {
+        // 没缓存的话从 /api/launch 获取
+        const info = await fetchJSON('/api/launch');
+        rawData.launchInfo = info.agents || {};
+        url = (info.agents && info.agents[name] && info.agents[name].launch_url) || null;
+      }
+      if (url) {
+        window.open(url, '_blank');
+        toast('已打开 ' + name + ' (' + url + ')', 'success');
+      } else {
+        // 没 URL 则 fallback 到后端启动
+        const r = await fetch(apiUrl('/api/launch'), {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({agent: name, mode: 'browser'}),
+        });
+        const data = await r.json();
+        if (data.status === 'ok') {
+          toast('已启动 ' + name + ' (browser)', 'success');
+        } else {
+          toast('启动失败: ' + (data.error || 'unknown'), 'error');
+        }
+      }
     } else {
-      toast('启动失败: ' + (data.error || 'unknown'), 'error');
+      // CLI 模式：走后端 API
+      const r = await fetch(apiUrl('/api/launch'), {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({agent: name, mode: mode}),
+      });
+      const data = await r.json();
+      if (data.status === 'ok') {
+        toast('已启动 ' + name + ' (' + mode + ')', 'success');
+      } else {
+        toast('启动失败: ' + (data.error || 'unknown'), 'error');
+      }
     }
   } catch(e) {
     toast('启动失败: ' + e.message, 'error');
@@ -757,6 +790,24 @@ async function launchAgent(name, mode) {
 async function launchAgentFromModal(name, mode) {
   toast('正在启动 ' + name + ' (' + mode + ')...', 'info');
   try {
+    if (mode === 'browser') {
+      // 浏览器模式：前端 window.open()
+      let url = null;
+      if (rawData.launchInfo && rawData.launchInfo[name]) {
+        url = rawData.launchInfo[name].launch_url;
+      }
+      if (!url) {
+        const info = await fetchJSON('/api/launch');
+        rawData.launchInfo = info.agents || {};
+        url = (info.agents && info.agents[name] && info.agents[name].launch_url) || null;
+      }
+      if (url) {
+        window.open(url, '_blank');
+        toast('已打开 ' + name, 'success');
+        return;
+      }
+    }
+    // CLI 模式或浏览器无 URL 时走后端 API
     const r = await fetch(apiUrl('/api/launch'), {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},

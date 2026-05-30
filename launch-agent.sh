@@ -24,16 +24,42 @@ start_wsl() {
   local script="/tmp/launch-window-${ts}.sh"
   cat > "$script" <<- HEREDOC
 #!/bin/bash
+# === launch-agent.sh wrapper ===
+# 防止子脚本的 set -e 导致窗口闪退
+set +e
 ${cmd}
+EXIT_CODE=\$?
+echo ""
+if [ \$EXIT_CODE -ne 0 ]; then
+  echo "⚠️  脚本异常退出 (code: \$EXIT_CODE)"
+else
+  echo "✅ 脚本执行完毕 (code: \$EXIT_CODE)"
+fi
+echo "按 Enter 键关闭窗口..."
+read
 HEREDOC
   chmod +x "$script"
   $PS_HELPER -Command "Start-Process wsl.exe -ArgumentList '-d','Ubuntu','-e','bash','${script}'" 2>/dev/null || true
-  (sleep 15 && rm -f "$script") &
+  # 延迟删除脚本（给用户留足操作时间，避免边用边删）
+  (sleep 600 && rm -f "$script") &
 }
 
 start_browser() {
   local url="$1"
-  $PS_HELPER -Command "Start-Process '$url'" 2>/dev/null || true
+  local err=""
+  # 方法1: cmd.exe /c start（最可靠，直接调用 Windows Shell 协议关联）
+  local CMD_HELPER="/mnt/c/Windows/System32/cmd.exe"
+  if [ -x "$CMD_HELPER" ]; then
+    err=$("$CMD_HELPER" /c start "" "$url" 2>&1) && return 0
+  fi
+  # 方法2: PowerShell Start-Process（回退方案）
+  if [ -x "$PS_HELPER" ]; then
+    err=$("$PS_HELPER" -NoProfile -Command "Start-Process '$url'" 2>&1) && return 0
+  fi
+  # 都失败了，输出错误
+  echo "[ERROR] 无法打开浏览器: $url" >&2
+  echo "[ERROR] cmd.exe: ${err:-not found}" >&2
+  return 1
 }
 
 # ── JSON 读取函数 ──

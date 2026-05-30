@@ -240,6 +240,7 @@ def build_message(
     task: Optional[dict] = None,
     timeout_minutes: Optional[int] = None,
     escalate_to: Optional[str] = None,
+    project: Optional[str] = None,  # v4.0
 ) -> Message:
     """构建一条新消息，自动生成 ID、时间、reply_format、action"""
     msg_id = generate_msg_id()
@@ -284,10 +285,71 @@ def build_message(
         created_at=_now_iso(),
         timeout_minutes=timeout_minutes,
         escalate_to=escalate_to,
+        project=project,
     )
     if actions_list:
         msg.actions = actions_list
     return msg
+
+
+# ── Registry 加载 / Domain 路由 ──────────────────────────────────────
+
+
+DEFAULT_REGISTRY_PATH = None  # 由 data_dir 推导
+
+
+def _registry_path(data_dir: str) -> str:
+    """获取 registry.json 的路径（默认在 data_dir 同级）"""
+    return os.path.join(data_dir, "registry.json")
+
+
+_REGISTRY_CACHE: dict = {}
+
+
+def load_registry(data_dir: str) -> dict:
+    """
+    加载 registry.json。
+    
+    返回: {"version": "1", "agents": {name: {domains, role, skills}}}
+    文件不存在返回空 registry。
+    """
+    rpath = _registry_path(data_dir)
+    global _REGISTRY_CACHE
+    if rpath in _REGISTRY_CACHE:
+        return _REGISTRY_CACHE[rpath]
+    
+    rdata = json_read(rpath, {})
+    agents = rdata.get("agents", {})
+    result = {"version": rdata.get("version", "1"), "agents": agents}
+    _REGISTRY_CACHE[rpath] = result
+    return result
+
+
+def clear_registry_cache():
+    """清空 registry 缓存（测试用）"""
+    global _REGISTRY_CACHE
+    _REGISTRY_CACHE = {}
+
+
+def resolve_domain_to_agents(domain: str, registry: dict) -> list:
+    """
+    根据 domain 解析对应的 agent 列表。
+    
+    参数:
+        domain: domain 名称（如 "engineering"）
+        registry: load_registry() 返回的 registry 数据
+    
+    返回: agent 名称列表（去重、按字母序）
+    """
+    agents = {}
+    for name, info in registry.get("agents", {}).items():
+        domains = info.get("domains", [])
+        if domain in domains:
+            agents[name] = True
+        if domain == "ALL" and domains:
+            agents[name] = True
+    
+    return sorted(agents.keys())
 
 
 def is_content_urgent(content: str, priority: str) -> bool:

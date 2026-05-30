@@ -154,7 +154,10 @@ def test_load_checkpoint_restores_state():
     }
     json.dump(ckpt, open(ckpt_path, "w"))
     daemon._load_checkpoint()
-    assert "m1" in daemon._processing_ids
+    # m1 在 running_procs 中 → _mark_done 后 _processing_ids.discard
+    assert "m1" not in daemon._processing_ids
+    # m2 不在 running_procs 中，只作为 processing_ids 恢复
+    assert "m2" in daemon._processing_ids
     assert daemon._retry_map == {"m1": 1}
     assert not os.path.exists(ckpt_path)
 

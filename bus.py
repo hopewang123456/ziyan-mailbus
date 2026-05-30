@@ -86,18 +86,21 @@ def main():
     # send
     p_send = sub.add_parser("send", help="手动发消息")
     _add_data_dir_arg(p_send)
-    p_send.add_argument("agent", help="目标 agent 名称")
+    p_send.add_argument("agent", nargs="?", default=None, help="目标 agent 名称（不传则用 --domain）")
     p_send.add_argument("--msg", required=True, help="消息内容")
     p_send.add_argument("--from", dest="from_", default="manual", help="发件人")
     p_send.add_argument("--priority", default="normal", choices=["normal", "urgent"])
     p_send.add_argument("--type", default="notice", choices=list(MsgType.ALL), help="消息类型")
     p_send.add_argument("--forward-to", nargs="*", default=[], help="转发目标 agent（可多个）")
+    p_send.add_argument("--domain", default="", help="按 domain 路由（如 engineering），不指定则按 agent 名称发送")
+    p_send.add_argument("--project", default="", help="所属项目（如 mailbus）")
     
     # broadcast
     p_bc = sub.add_parser("broadcast", help="发公告板")
     _add_data_dir_arg(p_bc)
     p_bc.add_argument("--msg", required=True, help="公告内容")
     p_bc.add_argument("--priority", default="normal", choices=["normal", "urgent"])
+    p_bc.add_argument("--domain", default="", help="限定 domain（如 engineering），不指定则广播全员")
     
     # ack
     p_ack = sub.add_parser("ack", help="agent 确认收到")

@@ -124,9 +124,33 @@ class MailboxDaemon:
         _mf = (lambda m, f, d='': inbox.msg_field(m, f, d)) if inbox else (
             lambda m, f, d='': m.get(f, d) if isinstance(m, dict) else getattr(m, f, d))
         content = _mf(msg, 'content', '')
+        msg_id = _mf(msg, 'id', '')
+        from_val = _mf(msg, 'from', '')
+        # 容错：如果 from 为空，尝试从 msg_id 前缀推断发件人
+        # 常见模式: "lingxi-xxx", "lingzhao-xxx", "lingxiao-xxx" 等
+        if not from_val and msg_id:
+            import re
+            # 匹配 agent 名前缀: 小写字母开头，后跟短横线
+            known_agents = ['lingzhao', 'lingjin', 'lingxi', 'lingxiao', 'xiaoqi', 'yige', 'dali', 'dazhuang']
+            id_lower = msg_id.lower()
+            for agent in known_agents:
+                if id_lower.startswith(agent + '-') or id_lower.startswith(agent + '_'):
+                    from_val = agent
+                    self.log.debug(f"  ↳ 从 msg_id 推断 from={from_val}")
+                    break
+            # 如果还没推断出来，尝试从内容签名推断（如 "——灵犀 🦊"）
+            if not from_val and content:
+                sig_map = {'灵犀': 'lingxi', '灵昭': 'lingzhao', '灵瑾': 'lingjin',
+                           '灵霄': 'lingxiao', '小七': 'xiaoqi', '一哥': 'yige',
+                           '大力': 'dali', '大壮': 'dazhuang'}
+                for name, agent in sig_map.items():
+                    if name in content:
+                        from_val = agent
+                        self.log.debug(f"  ↳ 从内容签名推断 from={from_val}")
+                        break
         return {
-            'id': _mf(msg, 'id', ''),
-            'from': _mf(msg, 'from', ''),
+            'id': msg_id,
+            'from': from_val,
             'to': _mf(msg, 'to', ''),
             'cc': [],
             'priority': _mf(msg, 'priority', 'normal'),
@@ -236,6 +260,7 @@ class MailboxDaemon:
                     "Daemon 重启恢复: 上次 session 被信号终止，请重新派发"
                 )
                 self._mark_done(mid, "daemon 重启恢复: 被中断")
+                self._processing_ids.discard(mid)
         # 清理 checkpoint 文件（避免重复恢复）
         try:
             os.remove(ckpt_path)
@@ -276,6 +301,21 @@ class MailboxDaemon:
                         os.kill(pid, signal.SIGKILL)
                     except OSError:
                         pass
+
+        # 清理本轮生成的临时启动脚本
+        try:
+            for f in os.listdir(LOG_DIR):
+                if f.startswith(f"run-{self.agent_name}-") and f.endswith(".sh"):
+                    os.remove(os.path.join(LOG_DIR, f))
+        except Exception:
+            pass
+        # 清理 /tmp 下的 launch 脚本（launch-agent.sh 生成的）
+        try:
+            for f in os.listdir("/tmp"):
+                if f.startswith("launch-window-") and f.endswith(".sh"):
+                    os.remove(os.path.join("/tmp", f))
+        except Exception:
+            pass
 
         self.log.info("优雅关闭完成")
 
@@ -341,7 +381,7 @@ class MailboxDaemon:
             if inbox.msg_field(m, 'id', '') not in acked_ids
             and inbox.msg_field(m, 'id', '') not in self._processing_ids
             and (
-                (inbox.msg_field(m, 'status', '') in ("new", "pending"))
+                (inbox.msg_field(m, 'status', '') in ("new", "pending", "sent", ""))
                 or
                 (inbox.msg_field(m, 'status', '') == "acknowledged"
                  and inbox.msg_field(m, 'state', '') != "done")
@@ -414,31 +454,13 @@ class MailboxDaemon:
                 self.log.warning(f"  ⚠️ agent 唤醒失败, {len(agent_entries)} 条消息保留 pending 供下次重试")
 
     def _handle_status_ack(self, parsed: dict):
-        """处理 status_ack 类型消息：记录 ack 状态到对应消息"""
+        """处理 status_ack 类型消息：记录 ack 状态到对应消息
+        DEPRECATED: _parse_message 将 body 压平为 {'content': ..., 'raw_type': ...}，
+        ack_for_msg_id/ack_status/notes 等元数据丢失在 content 字符串中。
+        上层已通过 ack.json 机制完成追踪，此方法保留仅供兼容。
+        """
         body = parsed['body']
-        ack_for = body.get('ack_for_msg_id', '')
-        ack_status = body.get('ack_status', 'received')
-        notes = body.get('notes', '')
-        self.log.info(f"  收到回执: {ack_for} → {ack_status}{f' ({notes})' if notes else ''}")
-
-        inbox_dir = os.path.join(self.data_dir, "inbox")
-        updated = False
-        if os.path.isdir(inbox_dir):
-            for agent_dir in os.listdir(inbox_dir):
-                inbox_file = os.path.join(inbox_dir, agent_dir, "inbox.json")
-                raw = read_json(inbox_file)
-                if not raw:
-                    continue
-                obj = Inbox.from_dict(raw)
-                for m in obj.messages:
-                    if obj.msg_field(m, 'id', '') == ack_for:
-                        m['ack_status'] = ack_status
-                        if notes:
-                            m['ack_notes'] = notes
-                        m['ack_received_at'] = now_iso()
-                        write_json(inbox_file, obj.to_dict())
-                        updated = True
-                        break
+        self.log.debug(f"  status_ack 已废弃: content={body.get('content', '')[:80]}")
         if not updated:
             self.log.debug(f"  未找到原始消息 {ack_for}（可能已归档）")
 
@@ -449,10 +471,16 @@ class MailboxDaemon:
         if priority == "urgent":
             return True
 
-        # 🔑 核心修复: 任何来自其他 agent 的消息（有发件人）必唤醒
-        # 防止「缓存的信件无人读」——以前的逻辑只认特定type，导致 notice/forward 被静默吃掉
+        # 对话冷却期防护：同一 from→agent 组合 30 秒内不重复唤醒
+        now = time.time()
         if from_ and from_ not in ("mailbus", "system", ""):
-            return True
+            last = getattr(self, '_last_agent_awaken', {}).get(from_, 0)
+            if now - last < 30:
+                self.log.debug(f"  冷却期内跳过 (from={from_}, elapsed={now-last:.1f}s)")
+                return False
+            if not hasattr(self, '_last_agent_awaken'):
+                self._last_agent_awaken = {}
+            self._last_agent_awaken[from_] = now
 
         # schema 结构化类型分流
         if msg_type in ('design_review', 'task_status', 'code_review'):
@@ -462,16 +490,13 @@ class MailboxDaemon:
         if msg_type == 'status_ack':
             return False
 
-        # 兼容旧格式
+        # 白名单模式：明确列出的类型才唤醒，未知类型不唤醒
         if msg_type in ("task", "task_reply", "discuss", "notice", "forward"):
             return True
         # report/system 不唤醒（系统自动产生）
         if msg_type in ("report", "system"):
             return False
-        # 兜底：新格式未知类型唤醒（保守策略：宁多不少）
-        if parsed and parsed['version'] != '1.0':
-            return True
-        return True
+        return False
 
     # ── 任务追踪 ──
 
@@ -644,10 +669,11 @@ class MailboxDaemon:
                 for p in ["--model MODEL", "-m MODEL", "MODEL"]:
                     cmd = cmd.replace(p, "")
         provider = agent_cfg.get("provider", "")
-        if provider:
-            cmd = cmd.replace("PROVIDER", provider)
+        if not provider:
+            cmd = cmd.replace("--provider PROVIDER", "")
         else:
-            cmd = cmd.replace("--provider PROVIDER", "").replace("PROVIDER", "")
+            cmd = cmd.replace("PROVIDER", provider)
+        # MSG 最后替换，防止 summary_text 内容含 AGENT/MODEL/PROVIDER 关键字被误替换
         cmd = cmd.replace("MSG", f"你有新的任务消息: {summary_text}")
         cmd = " ".join(cmd.split())
         return cmd
@@ -727,22 +753,45 @@ class MailboxDaemon:
     @staticmethod
     def _cleanup_orphans():
         """启动时清理上一轮 daemon 留下的孤儿进程"""
-        import subprocess, re
+        import subprocess
         try:
-            # 查找由 mailbox-daemon 唤醒、但父进程已不存在的 opencode/hermes 进程
+            current_pid = os.getpid()
             result = subprocess.run(
                 ["ps", "aux"], capture_output=True, text=True, timeout=10
             )
             for line in result.stdout.split("\n"):
-                if "你有新的任务消息:" in line:
-                    parts = line.strip().split()
-                    if len(parts) > 1:
-                        pid = parts[1]
+                if "你有新的任务消息:" not in line:
+                    continue
+                parts = line.strip().split()
+                if len(parts) < 2:
+                    continue
+                pid_str = parts[1]
+                try:
+                    pid = int(pid_str)
+                    if pid == current_pid:
+                        continue
+                    # 检查 PPID 链，确保是自己的子/孙进程才清理
+                    ppid = pid
+                    is_descendant = False
+                    for _ in range(10):
                         try:
-                            os.kill(int(pid), signal.SIGKILL)
-                            logging.info(f"  孤儿进程已清理 (PID: {pid})")
-                        except (OSError, ValueError):
-                            pass
+                            with open(f"/proc/{ppid}/status") as f:
+                                for ln in f:
+                                    if ln.startswith("PPid:"):
+                                        ppid = int(ln.split()[1])
+                                        break
+                            if ppid == current_pid:
+                                is_descendant = True
+                                break
+                            if ppid <= 1:
+                                break
+                        except (OSError, ValueError, IOError):
+                            break
+                    if is_descendant:
+                        os.kill(pid, signal.SIGKILL)
+                        logging.info(f"  孤儿子进程已清理 (PID: {pid})")
+                except (OSError, ValueError, TypeError):
+                    pass
         except Exception:
             pass
 
@@ -873,6 +922,9 @@ class MailboxDaemon:
         }
         sender_inbox = os.path.join(self.data_dir, "inbox", sender, "inbox.json")
         inbox = read_json(sender_inbox, {"agent": sender, "has_unread": False, "messages": []})
+        # 始终确保 agent 字段存在（防止残缺文件导致 daemon 崩溃）
+        if "agent" not in inbox:
+            inbox["agent"] = sender
         inbox["messages"].append(notice)
         inbox["has_unread"] = True
         write_json(sender_inbox, inbox)

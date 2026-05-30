@@ -8,14 +8,83 @@ ziyan-mailbus HTTP API — 任务/公告板/Skill 相关路由处理器
 import os
 import json
 from lib.utils import json_read, json_write, _now_iso
-from lib.tracker import TaskTracker
+from lib.tracker import TaskTracker, TaskStatus
 
 
 def handle_tasks(handler):
     """GET /api/tasks — 获取任务追踪列表"""
     tracker = TaskTracker(handler.data_dir)
-    tasks = tracker.list_all(handler.agents)
-    handler._send_json({"tasks": tasks})
+    tasks = tracker.list_all()
+    handler._send_json({"tasks": tasks, "count": len(tasks)})
+
+
+def handle_task_create(handler):
+    """POST /api/tasks/create — 创建新任务"""
+    body = handler._read_post_body()
+    task_id = body.get("task_id", "")
+    summary = body.get("summary", "")
+    assignee = body.get("assignee", "")
+    deliverable = body.get("deliverable", "")
+    chain_hops = body.get("chain", None)
+
+    if not task_id:
+        handler._send_json({"error": "缺少 task_id"}, 400)
+        return
+    if not summary:
+        handler._send_json({"error": "缺少 summary"}, 400)
+        return
+
+    tracker = TaskTracker(handler.data_dir)
+    existing = tracker.get(task_id)
+    if existing:
+        handler._send_json({"error": f"任务 {task_id} 已存在"}, 409)
+        return
+
+    task = tracker.create(
+        task_id=task_id,
+        summary=summary,
+        assignee=assignee,
+        deliverable=deliverable,
+        chain_hops=chain_hops,
+    )
+    handler._send_json({"status": "ok", "task": task}, 201)
+
+
+def handle_task_update(handler):
+    """POST /api/tasks/update — 更新任务状态"""
+    body = handler._read_post_body()
+    task_id = body.get("task_id", "")
+    status = body.get("status", "")
+    error = body.get("error", None)
+
+    if not task_id:
+        handler._send_json({"error": "缺少 task_id"}, 400)
+        return
+    if status not in TaskStatus.ALL:
+        handler._send_json(
+            {"error": f"无效状态 {status}，可选: {', '.join(sorted(TaskStatus.ALL))}"},
+            400,
+        )
+        return
+
+    tracker = TaskTracker(handler.data_dir)
+    task = tracker.get(task_id)
+    if not task:
+        handler._send_json({"error": f"任务 {task_id} 不存在"}, 404)
+        return
+
+    updated = tracker.update_status(task_id, status, error=error)
+    handler._send_json({"status": "ok", "task": updated})
+
+
+def handle_task_get(handler, task_id: str):
+    """GET /api/tasks/<task_id> — 获取单任务详情"""
+    tracker = TaskTracker(handler.data_dir)
+    task = tracker.get(task_id)
+    if not task:
+        handler._send_json({"error": "not_found"}, 404)
+        return
+    handler._send_json({"task": task})
 
 
 def handle_bulletin(handler):

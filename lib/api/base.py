@@ -137,6 +137,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/bulletin/permit": lambda: self._send_json({"permit": self.bulletin_permit}),
             "/api/permission": lambda: h["tasks"].handle_permission(self),
             "/api/reports": lambda: h["system"].handle_reports(self),
+            "/api/reviews": lambda: h["system"].handle_code_reviews(self),
+            "/api/reviews/projects": lambda: h["system"].handle_code_reviews_projects(self),
             "/api/replies": lambda: h["inbox"].handle_replies(self),
             "/api/skill-usage": lambda: h["tasks"].handle_skill_usage(self),
             "/api/skill-use": lambda: h["tasks"].handle_skill_use(self),
@@ -146,17 +148,30 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
 
         if path in routes:
             routes[path]()
+        elif path.startswith("/api/tasks/"):
+            task_id = path[len("/api/tasks/"):]
+            if task_id:
+                h["tasks"].handle_task_get(self, task_id)
+            else:
+                h["tasks"].handle_tasks(self)
+        
         elif path.startswith("/api/inbox/"):
             h["inbox"].handle_inbox(self, path[len("/api/inbox/"):])
         elif path.startswith("/api/agent-profile/"):
             h["system"].handle_agent_profile(self, path[len("/api/agent-profile/"):])
         elif path.startswith("/api/ping/"):
             h["system"].handle_ping(self, path[len("/api/ping/"):])
+        elif path.startswith("/api/reviews/"):
+            fname = path[len("/api/reviews/"):]
+            h["system"].handle_code_reviews_detail(self, fname)
         elif path.startswith("/api/search"):
             h["system"].handle_search(self)
         elif path in ("", "/"):
             self._serve_static("/")
         elif path == "/index.html":
+            self._serve_static("/")
+        elif path == "/reviews":
+            self._serve_static("reviews.html")
             self._serve_static("/")
         elif path == "/ping-test":
             self._send_json({
@@ -184,6 +199,10 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             h["tasks"].handle_permission(self)
         elif path == "/api/skill-use":
             h["tasks"].handle_skill_use(self)
+        elif path == "/api/tasks/create":
+            h["tasks"].handle_task_create(self)
+        elif path == "/api/tasks/update":
+            h["tasks"].handle_task_update(self)
         elif path == "/api/send-msg":
             h["inbox"].handle_send_msg(self)
         elif path.startswith("/api/actions/update/"):

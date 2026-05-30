@@ -27,9 +27,12 @@ def handle_status(handler):
         data = json_read(inbox_file, {})
         count = len(data.get("messages", [])) if data else 0
         total += count
-        if data:
-            inbox = Inbox.from_dict(data)
-            unread += sum(1 for m in inbox.messages if inbox.msg_field(m, "status") == "pending")
+        if data and "agent" in data:
+            try:
+                inbox = Inbox.from_dict(data)
+                unread += sum(1 for m in inbox.messages if inbox.msg_field(m, "status") == "pending")
+            except (KeyError, TypeError):
+                pass
         agent_statuses[name] = {
             "active_messages": count,
             "has_unread": data.get("has_unread", False) if data else False,
@@ -74,6 +77,94 @@ def handle_config(handler):
     config = json_read(config_path, {})
     safe = {k: v for k, v in config.items() if k != "token"}
     handler._send_json(safe)
+
+
+def _extract_repo_name(fname: str) -> str:
+    """从文件名提取仓库名: review-mailbus-20260526.md → mailbus
+    旧格式 review-<commit_prefix>-<date>.md → 未知项目"""
+    parts = fname.replace(".md", "").split("-")
+    if len(parts) >= 3 and parts[0] == "review":
+        repo_parts = []
+        for p in parts[1:]:
+            # 纯数字且>=8位 → 日期戳，停止
+            if p.isdigit() and len(p) >= 8:
+                break
+            # 短 hex（commit hash 前缀）→ 旧格式，返回未知
+            if len(p) <= 8 and all(c in "0123456789abcdef" for c in p.lower()):
+                return "未知项目（旧报告）"
+            repo_parts.append(p)
+        if repo_parts:
+            return "-".join(repo_parts)
+    return "未知项目（旧报告）"
+
+
+def handle_code_reviews(handler):
+    """GET /api/reviews — 返回代码审查报告列表"""
+    reports_dir = os.path.join(handler.data_dir, "reports")
+    reports = []
+    if os.path.isdir(reports_dir):
+        for fname in sorted(os.listdir(reports_dir), reverse=True):
+            if fname.endswith(".md"):
+                fpath = os.path.join(reports_dir, fname)
+                try:
+                    size = os.path.getsize(fpath)
+                    mtime = os.path.getmtime(fpath)
+                    import datetime
+                    mtime_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+                    preview = ""
+                    with open(fpath, encoding="utf-8") as f:
+                        preview = f.read()[:300]
+                    repo = _extract_repo_name(fname)
+                    reports.append({"file": fname, "repo": repo, "size": size,
+                                    "time": mtime_str, "content": preview})
+                except Exception:
+                    pass
+    handler._send_json({"reports": reports, "count": len(reports)})
+
+
+def handle_code_reviews_projects(handler):
+    """GET /api/reviews/projects — 按项目分组的代码审查报告"""
+    reports_dir = os.path.join(handler.data_dir, "reports")
+    projects = {}
+    if os.path.isdir(reports_dir):
+        for fname in sorted(os.listdir(reports_dir), reverse=True):
+            if fname.endswith(".md"):
+                fpath = os.path.join(reports_dir, fname)
+                try:
+                    repo = _extract_repo_name(fname)
+                    mtime = os.path.getmtime(fpath)
+                    import datetime
+                    mtime_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M:%S")
+                    projects.setdefault(repo, []).append({
+                        "file": fname,
+                        "time": mtime_str,
+                        "size": os.path.getsize(fpath),
+                    })
+                except Exception:
+                    pass
+    for repo in projects:
+        projects[repo] = projects[repo][:10]
+    handler._send_json({"projects": projects, "count": len(projects)})
+
+
+def handle_code_reviews_detail(handler, fname: str):
+    """GET /api/reviews/<file> — 返回单份代码审查报告"""
+    fpath = os.path.join(handler.data_dir, "reports", fname)
+    if not os.path.isfile(fpath) or not fname.endswith(".md"):
+        handler._send_json({"error": "not found"}, 404)
+        return
+    try:
+        with open(fpath, encoding="utf-8") as f:
+            content = f.read()
+        # 尝试用 markdown 渲染
+        try:
+            import markdown
+            html = markdown.markdown(content, extensions=["fenced_code", "codehilite"])
+        except ImportError:
+            html = f"<pre>{content}</pre>"
+        handler._send_json({"file": fname, "html": html, "raw": content})
+    except Exception as e:
+        handler._send_json({"error": str(e)}, 500)
 
 
 def handle_reports(handler):
@@ -124,27 +215,67 @@ def handle_templates(handler):
 
 
 def handle_agent_profile(handler, agent: str):
-    """GET /api/agent-profile/<agent> — agent 详细信息"""
+    """GET /api/agent-profile/<agent> — agent 详细信息（含身份/人设/技能）"""
     cfg = handler.agents.get(agent)
     if not cfg:
         handler._send_json({"error": "not found"}, 404)
         return
-    paths = resolve_paths(handler.data_dir)
-    inbox_file = f"{paths['inbox']}/{agent}/inbox.json"
+
+    profile = {
+        "name": agent,
+        "config": cfg,
+        "identity": None,
+        "soul": None,
+        "skills": [],
+    }
+
+    # 从 profile_paths 读取身份/人设/技能
+    paths_cfg = cfg.get("profile_paths", {})
+    identity_path = paths_cfg.get("identity", "")
+    if identity_path and os.path.isfile(identity_path):
+        try:
+            with open(identity_path, "r", encoding="utf-8", errors="replace") as f:
+                profile["identity"] = f.read(2000)[:1000]
+        except Exception:
+            pass
+
+    soul_path = paths_cfg.get("soul", "")
+    if soul_path and os.path.isfile(soul_path):
+        try:
+            with open(soul_path, "r", encoding="utf-8", errors="replace") as f:
+                profile["soul"] = f.read(2000)[:1000]
+        except Exception:
+            pass
+
+    skill_dirs = paths_cfg.get("skills_dirs", [])
+    all_skills = set()
+    for sd in skill_dirs:
+        if os.path.isdir(sd):
+            try:
+                for fname in sorted(os.listdir(sd)):
+                    if fname.endswith((".md", ".py", ".sh", ".txt")):
+                        all_skills.add(fname.rsplit(".", 1)[0])
+            except Exception:
+                pass
+    profile["skills"] = sorted(all_skills)
+
+    # inbox 统计
+    inbox_paths = resolve_paths(handler.data_dir)
+    inbox_file = f"{inbox_paths['inbox']}/{agent}/inbox.json"
     data = json_read(inbox_file, {})
-    msg_count = len(data.get("messages", [])) if data else 0
-    unread = 0
+    profile["messages"] = len(data.get("messages", [])) if data else 0
+    profile["unread"] = 0
     if data:
         inbox = Inbox.from_dict(data)
         for m in inbox.messages:
             if inbox.msg_field(m, "status") == "pending":
-                unread += 1
+                profile["unread"] += 1
+
+    # 心跳
     hb_data = load_heartbeat(handler.data_dir)
-    agent_hb = (hb_data.get("agents", {}) or {}).get(agent, {}) if hb_data else {}
-    handler._send_json({
-        "name": agent, "config": cfg, "messages": msg_count, "unread": unread,
-        "heartbeat": agent_hb,
-    })
+    profile["heartbeat"] = (hb_data.get("agents", {}) or {}).get(agent, {}) if hb_data else {}
+
+    handler._send_json(profile)
 
 
 def handle_ping(handler, agent: str):
@@ -154,18 +285,66 @@ def handle_ping(handler, agent: str):
     handler._send_json({"agent": agent, "online": online})
 
 
+def _get_gateway_token() -> str:
+    """从 OpenClaw 配置中读取 gateway token
+    优先读 ~/.openclaw-data/openclaw.json（新版主配置），
+    fallback 到 ~/.openclaw/openclaw.json（旧版）
+    """
+    candidates = [
+        os.path.expanduser("~/.openclaw-data/openclaw.json"),
+        os.path.expanduser("~/.openclaw/openclaw.json"),
+    ]
+    for oc_path in candidates:
+        try:
+            if os.path.isfile(oc_path):
+                with open(oc_path) as f:
+                    oc = json.load(f)
+                gw = oc.get("gateway", {})
+                auth = gw.get("auth", {})
+                if auth.get("mode") == "token":
+                    return auth.get("token", "")
+        except Exception:
+            pass
+    return ""
+
+
+def _get_launch_url(handler, agent_name: str) -> str:
+    """从 agent 配置中提取浏览器启动 URL（含 gateway token）"""
+    cfg = handler.agents.get(agent_name, {})
+    launch = cfg.get("launch", {})
+    if not launch:
+        return ""
+    # 合并模板 + agent 覆盖（与 launch-agent.sh 逻辑一致）
+    tmpl_name = launch.get("template", "")
+    tmpl = handler.agent_types.get("launch_templates", {}).get(tmpl_name, {})
+    browser_cfg = dict(tmpl.get("browser", {}))
+    browser_cfg.update(launch.get("browser", {}))
+    url = browser_cfg.get("url", "")
+    port = browser_cfg.get("gateway_port", browser_cfg.get("dashboard_port", ""))
+    if url and port:
+        url = url.replace("{port}", str(port))
+    # 如果 gateway 开启了 token 认证，自动追加到 URL
+    token = _get_gateway_token()
+    if token:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}token={token}"
+    return url
+
+
 def handle_list_launchable(handler):
-    """GET /api/launch — 列出可启动的 agent（含启动模式、has_browser 等信息）"""
+    """GET /api/launch — 列出可启动的 agent（含启动模式、has_browser、launch_url 等信息）"""
     result = {}
     for name, cfg in handler.agents.items():
         atype = cfg.get("type", "none")
         launch_modes = ["browser", "cli"]
         has_browser = cfg.get("launch", {}).get("has_browser", True)
+        launch_url = _get_launch_url(handler, name)
         result[name] = {
             "name": cfg.get("name", name),
             "type": atype,
             "launch_modes": launch_modes,
             "has_browser": has_browser,
+            "launch_url": launch_url,
             "models": cfg.get("models", []),
         }
     handler._send_json({"agents": result})

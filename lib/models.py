@@ -145,6 +145,8 @@ class Message:
     action: Optional[dict] = None   # {ack, reply_to, execute, forward_to, store_memory}
     task: Optional[dict] = None     # {summary, assignee, status, deadline, deliverable}
     forward_chain: Optional[dict] = None  # {root_id, hops: [{agent, action, at}], status}
+    # v4.0 项目关联字段
+    project: Optional[str] = None          # 所属项目（如 "mailbus", "paperclip"）
     # v3.0 任务状态机字段
     state: str = ""                 # 任务流转状态：received/processing/done/closed/rejected
     state_history: list = field(default_factory=list)  # [{state, at}, ...]
@@ -193,6 +195,8 @@ class Message:
             d.pop("task", None)
         if not d.get("forward_chain"):
             d.pop("forward_chain", None)
+        if not d.get("project"):
+            d.pop("project", None)
         return d
 
     @classmethod
@@ -201,6 +205,7 @@ class Message:
         known = {"id", "from_", "to", "priority", "type", "content",
                  "attachments", "reply_format", "status", "pushed_count",
                  "created_at", "acknowledged_at", "action", "task", "forward_chain",
+                 "project",
                  "state", "state_history", "actions", "received_at", "done_at",
                  "timeout_minutes", "escalate_to", "reminded_count", "last_reminded_at",
                  "done_note"}
@@ -230,7 +235,15 @@ class Inbox:
 
     @classmethod
     def from_dict(cls, d: dict):
-        inbox = cls(agent=d["agent"], has_unread=d.get("has_unread", False), since=d.get("since", ""))
+        agent = d.get("agent", "")
+        if not agent:
+            # 容错：从 messages 第一条的 to/from 推断 agent，或者留空
+            msgs = d.get("messages", [])
+            if msgs:
+                first = msgs[0] if isinstance(msgs[0], dict) else msgs[0].to_dict()
+                agent = first.get("to", first.get("from", ""))
+            d["agent"] = agent
+        inbox = cls(agent=agent, has_unread=d.get("has_unread", False), since=d.get("since", ""))
         inbox.messages = [Message.from_dict(m) if isinstance(m, dict) else m for m in d.get("messages", [])]
         return inbox
 

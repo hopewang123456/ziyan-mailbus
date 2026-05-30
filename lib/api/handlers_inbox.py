@@ -101,9 +101,12 @@ def handle_replies(handler):
     for name in handler.agents:
         inbox_file = f"{reply_base}/{name}/inbox.json"
         data = json_read(inbox_file, {})
-        if not data:
+        if not data or "agent" not in data:
             continue
-        inbox = Inbox.from_dict(data)
+        try:
+            inbox = Inbox.from_dict(data)
+        except (KeyError, TypeError):
+            continue
         replies = []
         for m in inbox.messages:
             mtype = inbox.msg_field(m, "type", "")

@@ -442,7 +442,7 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
 
 
 def cmd_send(args) -> int:
-    """手动发消息给指定 agent"""
+    """手动发消息给指定 agent（支持 --domain 批量路由）"""
     config_path = _find_config(args)
     config = load_config(config_path)
     data_dir = config["data_dir"]
@@ -454,7 +454,49 @@ def cmd_send(args) -> int:
     from_ = getattr(args, 'from_', None) or "manual"
     priority = getattr(args, 'priority', Priority.NORMAL)
     msg_type = getattr(args, 'type', MsgType.NOTICE)
+    domain = getattr(args, 'domain', "") or ""
+    project = getattr(args, 'project', "") or ""
     
+    # ── 任务追踪（仅 task / task_reply 类型） ──
+    if msg_type in (MsgType.TASK, MsgType.TASK_REPLY):
+        tracker = TaskTracker(data_dir)
+    
+    # ── Domain 路由模式 ──
+    if not to and domain:
+        from lib.utils import load_registry, resolve_domain_to_agents
+        registry = load_registry(data_dir)
+        targets = resolve_domain_to_agents(domain, registry)
+        if not targets:
+            print(f"✗ domain '{domain}' 没有匹配的 agent")
+            print(f"  可用 domain 请查看 store/registry.json")
+            return 1
+        # 过滤出已注册的 agent
+        targets = [t for t in targets if t in agents]
+        if not targets:
+            print(f"✗ domain '{domain}' 匹配的 agent 均未注册到总线")
+            return 1
+        print(f"  → Domain '{domain}' 匹配 {len(targets)} 个 agent: {', '.join(targets)}")
+        success_count = 0
+        for target in targets:
+            msg = build_message(from_, target, content, msg_type, priority,
+                                forward_to=getattr(args, 'forward_to', None),
+                                project=project or None)
+            _write_to_inbox(data_dir, target, msg)
+            if msg_type in (MsgType.TASK, MsgType.TASK_REPLY):
+                try:
+                    tracker.create(task_id=msg.id, summary=content[:80], assignee=target)
+                except Exception as e:
+                    print(f"  ⚠️ 任务追踪创建失败: {e}")
+            success_count += 1
+            print(f"  ✓ 已写入 {target}")
+        print(f"✓ 消息已发送给 {success_count} 个 agent (domain={domain})")
+        print(f"  下个 cron 周期将自动推送")
+        return 0
+    
+    # ── 单 agent 模式 ──
+    if not to:
+        print("✗ 请指定 agent 名称或使用 --domain")
+        return 1
     if to not in agents:
         print(f"✗ agent '{to}' 未注册")
         print(f"  已注册: {', '.join(agents.keys())}")
@@ -462,31 +504,40 @@ def cmd_send(args) -> int:
     
     agent_types = config.get("agent_types", {})
     cli_cmds = [c[0] for c in resolve_cli_chain(agents[to], agent_types)]
-    
     print(f"  CLI: {' | '.join(cli_cmds[:3]) or '(纯文件通信)'}")
     
     # 构建消息
     msg = build_message(from_, to, content, msg_type, priority,
-                        forward_to=getattr(args, 'forward_to', None))
-    
-    # 写入 inbox
-    paths = resolve_paths(data_dir)
-    inbox_file = f"{paths['inbox']}/{to}/inbox.json"
-    inbox_data = json_read(inbox_file, {"agent": to, "has_unread": False, "messages": [], "since": _now_iso()})
-    inbox = Inbox.from_dict(inbox_data)
-    inbox.has_unread = True
-    inbox.messages.append(msg.to_dict())
-    json_write(inbox_file, inbox.to_dict())
-    
+                        forward_to=getattr(args, 'forward_to', None),
+                        project=project or None)
+    _write_to_inbox(data_dir, to, msg)
+    if msg_type in (MsgType.TASK, MsgType.TASK_REPLY):
+        try:
+            tracker.create(task_id=msg.id, summary=content[:80], assignee=to)
+        except Exception as e:
+            print(f"  ⚠️ 任务追踪创建失败: {e}")
     print(f"✓ 消息已写入 {to} 的 inbox")
     print(f"  ID: {msg.id}")
     print(f"  内容: {content[:60]}{'...' if len(content) > 60 else ''}")
+    if project:
+        print(f"  项目: {project}")
     print(f"  下个 cron 周期将自动推送")
     return 0
 
 
+def _write_to_inbox(data_dir: str, agent_name: str, msg: Message):
+    """将消息写入指定 agent 的 inbox"""
+    paths = resolve_paths(data_dir)
+    inbox_file = f"{paths['inbox']}/{agent_name}/inbox.json"
+    inbox_data = json_read(inbox_file, {"agent": agent_name, "has_unread": False, "messages": [], "since": _now_iso()})
+    inbox = Inbox.from_dict(inbox_data)
+    inbox.has_unread = True
+    inbox.messages.append(msg.to_dict())
+    json_write(inbox_file, inbox.to_dict())
+
+
 def cmd_broadcast(args) -> int:
-    """发公告板（推送全员）"""
+    """发公告板（支持 --domain 过滤）"""
     config_path = _find_config(args)
     config = load_config(config_path)
     data_dir = config["data_dir"]
@@ -498,6 +549,18 @@ def cmd_broadcast(args) -> int:
     
     content = args.msg
     priority = getattr(args, 'priority', Priority.NORMAL)
+    domain = getattr(args, 'domain', "") or ""
+    
+    # ── Domain 过滤 ──
+    targets = list(agents.keys())
+    if domain:
+        from lib.utils import load_registry, resolve_domain_to_agents
+        registry = load_registry(data_dir)
+        domain_agents = resolve_domain_to_agents(domain, registry)
+        targets = [t for t in targets if t in domain_agents]
+        if not targets:
+            print(f"✗ domain '{domain}' 没有匹配的已注册 agent")
+            return 1
     
     # 写入公告板
     paths = resolve_paths(data_dir)
@@ -508,22 +571,18 @@ def cmd_broadcast(args) -> int:
         "content": content,
         "priority": priority,
         "created_at": _now_iso(),
+        "domain": domain or None,
     }
     board_data["board"].append(board_msg)
     json_write(paths["board"], board_data)
     
-    # 写入每个 agent 的 inbox
+    # 写入每个目标 agent 的 inbox
     from_ = "broadcast"
-    for name in agents:
+    for name in targets:
         msg = build_message(from_, name, content, MsgType.NOTICE, priority)
-        inbox_file = f"{paths['inbox']}/{name}/inbox.json"
-        inbox_data = json_read(inbox_file, {"agent": name, "has_unread": False, "messages": [], "since": _now_iso()})
-        inbox = Inbox.from_dict(inbox_data)
-        inbox.has_unread = True
-        inbox.messages.append(msg.to_dict())
-        json_write(inbox_file, inbox.to_dict())
+        _write_to_inbox(data_dir, name, msg)
     
-    print(f"✓ 公告已发送给 {len(agents)} 个 agent")
+    print(f"✓ 公告已发送给 {len(targets)} 个 agent" + (f" (domain={domain})" if domain else ""))
     return 0
 
 
