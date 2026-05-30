@@ -89,7 +89,7 @@ def send_message(to, content, from_agent="mailbus", msg_type="notice",
         "type": msg_type,
         "priority": priority,
         "content": content,
-        "status": "pending",
+        "state": "pending",
         "created_at": ts,
         "timestamp": ts,
     }
@@ -114,7 +114,7 @@ def send_message(to, content, from_agent="mailbus", msg_type="notice",
         sender_inbox = ensure_inbox_format(sender_inbox, from_agent)
         # 在发件记录中标记为已发送
         sent_msg = dict(msg)
-        sent_msg["status"] = "sent"
+        sent_msg["state"] = "sent"
         sent_msg["delivered_to"] = [to] if isinstance(to, str) else to
         sender_inbox["messages"].append(sent_msg)
         sender_inbox["has_unread"] = True

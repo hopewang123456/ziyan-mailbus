@@ -380,11 +380,12 @@ class MailboxDaemon:
             m for m in inbox.messages
             if inbox.msg_field(m, 'id', '') not in acked_ids
             and inbox.msg_field(m, 'id', '') not in self._processing_ids
+            and inbox.msg_field(m, 'state', '') != "done"
             and (
                 (inbox.msg_field(m, 'status', '') in ("new", "pending", "sent", ""))
                 or
                 (inbox.msg_field(m, 'status', '') == "acknowledged"
-                 and inbox.msg_field(m, 'state', '') != "done")
+                 and inbox.msg_field(m, 'state', '') not in ("done", "closed", "rejected"))
             )
         ]
         if not pending_raw:
@@ -549,6 +550,13 @@ class MailboxDaemon:
         if raw:
             inbox = Inbox.from_dict(raw)
             if inbox.set_msg_status(msg_id, "acknowledged", acknowledged_at=ts):
+                # 同步设置 state（只在 state 为空时才写入 "received"，
+                # 避免覆盖 processing/done 等已有值）
+                msg = inbox.get_msg(msg_id)
+                if msg:
+                    cur_state = inbox.msg_field(msg, 'state', '')
+                    if not cur_state:
+                        inbox.set_msg_field(msg, 'state', 'received')
                 inbox.has_unread = inbox.has_unread_messages()
                 write_json(self.inbox_path, inbox.to_dict())
 
@@ -911,6 +919,7 @@ class MailboxDaemon:
             "type": "reply",
             "priority": "normal",
             "status": "pending",
+            "state": "sent",
             "content": (
                 f"✅ 任务完成回执\n"
                 f"原始消息: {original_msg_id}\n"

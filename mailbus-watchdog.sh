@@ -24,7 +24,19 @@ try:
 except (json.JSONDecodeError, FileNotFoundError):
     sys.exit(0)
 
-pending = [m for m in inbox.get('messages', []) if m.get('status') == 'pending']
+def msg_state(m):
+    s = m.get('state', '')
+    if not s:
+        s = m.get('status', '')
+    return s
+
+pending = [
+    m for m in inbox.get('messages', [])
+    if (
+        msg_state(m) in ('new', 'pending', 'sent', '', 'received')
+        or (msg_state(m) == 'acknowledged' and m.get('state') != 'done')
+    )
+]
 if not pending:
     if os.path.exists(outfile):
         os.remove(outfile)

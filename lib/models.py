@@ -201,7 +201,13 @@ class Message:
 
     @classmethod
     def from_dict(cls, d: dict):
+        # 防御: from 字段缺失时用 unknown
+        if "from" not in d:
+            d["from"] = "unknown"
         d["from_"] = d.pop("from")  # from → from_
+        # 防御: to 字段是数组时取第一个元素
+        if isinstance(d.get("to"), list):
+            d["to"] = d["to"][0] if d["to"] else ""
         known = {"id", "from_", "to", "priority", "type", "content",
                  "attachments", "reply_format", "status", "pushed_count",
                  "created_at", "acknowledged_at", "action", "task", "forward_chain",
@@ -274,12 +280,16 @@ class Inbox:
         return False
 
     def has_unread_messages(self) -> bool:
-        """检查是否有未读消息"""
-        return any(
-            (m.get("status") if isinstance(m, dict) else m.status)
-            not in ("acknowledged", "archived")
-            for m in self.messages
-        )
+        """检查是否有未读消息（同时检查 status 和 state）"""
+        for m in self.messages:
+            status = m.get("status") if isinstance(m, dict) else m.status
+            state = m.get("state") if isinstance(m, dict) else getattr(m, 'state', '')
+            if status in ("acknowledged", "archived"):
+                continue
+            if state == "done":
+                continue
+            return True
+        return False
 
     def msg_field(self, msg: object, field: str, default=None):
         """安全读取消息字段（兼容 dict 和 Message 对象）"""
