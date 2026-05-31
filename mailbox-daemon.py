@@ -208,7 +208,11 @@ class MailboxDaemon:
 
     # ── Checkpoint 持久化 ──
 
-    CHECKPOINT_FILE = "checkpoint.json"  # 存放在 data_dir 下
+    CHECKPOINT_FILE = None  # 动态生成: checkpoint.{agent_name}.json
+
+    @property
+    def _checkpoint_path(self):
+        return os.path.join(self.data_dir, f"checkpoint.{self.agent_name}.json")
 
     def _save_checkpoint(self):
         """将当前运行中的任务状态写入 checkpoint，供崩溃恢复"""
@@ -234,14 +238,22 @@ class MailboxDaemon:
                 "processing_ids": list(self._processing_ids),
                 "retry_map": getattr(self, '_retry_map', {}),
             }
-            write_json(os.path.join(self.data_dir, self.CHECKPOINT_FILE), ckpt)
+            write_json(self._checkpoint_path, ckpt)
             self.log.debug(f"checkpoint 已保存: {len(procs_data)} 个运行中任务")
 
     def _load_checkpoint(self):
         """从 checkpoint 恢复运行中任务的状态追踪"""
-        ckpt_path = os.path.join(self.data_dir, self.CHECKPOINT_FILE)
+        ckpt_path = self._checkpoint_path
         ckpt = read_json(ckpt_path)
         if not ckpt:
+            return
+        ckpt_agent = ckpt.get("agent", "")
+        if ckpt_agent and ckpt_agent != self.agent_name:
+            self.log.warning(f"  ⚠️ checkpoint 属于 agent={ckpt_agent}，跳过（当前 agent={self.agent_name}）")
+            try:
+                os.remove(ckpt_path)
+            except OSError:
+                pass
             return
         self.log.info(f"发现 checkpoint: agent={ckpt.get('agent')}, "
                       f"运行中任务={len(ckpt.get('running_procs', []))}")
