@@ -123,6 +123,10 @@ mailbus agent-remove <name>         # Remove an agent
 mailbus heartbeat                   # Heartbeat detection (check all agent online status)
 mailbus search                      # Full-text message search
 mailbus serve [--host] [--port]      # Start HTTP API server (default 127.0.0.1:9812)
+mailbus launch                       # Start all agent processes (Gateways / Dashboards)
+mailbus launch --status              # View agent process running status
+mailbus launch --stop                # Stop all agent processes
+mailbus launch --agent xiaoqi        # Start a specific agent
 ```
 
 ## Platform Web UI
@@ -260,6 +264,7 @@ Full example config at [examples/config.example.json](examples/config.example.js
 ```
 ziyan-mailbus/
 ├── bus.py                        # CLI entry point
+├── mailbus-boot.sh                # Full startup script (launches bus.py + all agent processes)
 ├── lib/
 │   ├── __init__.py
 │   ├── models.py                 # Data models (Message, Inbox, MsgType)

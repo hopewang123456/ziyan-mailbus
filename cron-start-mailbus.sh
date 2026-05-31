@@ -1,3 +1,7 @@
 #!/bin/bash
-cd /mnt/e/ai_tools/mail
-exec /mnt/e/hermes-data/.hermes/hermes-agent/venv/bin/python3 bus.py serve --host 0.0.0.0 --port 9812 --data-dir /mnt/e/ai_tools/mail/store >> /mnt/e/ai_tools/mail/store/cron.log 2>&1
+# ============================================================
+# cron-start-mailbus.sh — 由 crontab/系统服务调用
+# 现在委托给 mailbus-boot.sh 全量启动（含所有 agent）
+# ============================================================
+exec /mnt/e/ai_tools/mail/mailbus-boot.sh
+

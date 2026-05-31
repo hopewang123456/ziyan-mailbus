@@ -26,6 +26,7 @@ import json
 import argparse
 import time
 import shutil
+import subprocess
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -392,6 +393,188 @@ def cmd_serve(args) -> int:
 
     token = getattr(args, 'token', '')
     api_serve(data_dir, agents, agent_types, host=args.host, port=port, token=token)
+    return 0
+
+
+def cmd_launch(args) -> int:
+    """启动/停止 agent 常驻进程
+
+    根据 config.json 中 agents 的 launch 配置，启动或停止各类常驻进程。
+
+    用法:
+      bus.py launch                   启动所有需要常驻的 agent
+      bus.py launch --agent xiaoqi    启动指定 agent
+      bus.py launch --stop            停止所有 agent 进程
+      bus.py launch --status          查看运行状态
+    """
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    agents = config.get("agents", {})
+    agent_types = config.get("agent_types", {})
+    templates = agent_types.get("launch_templates", {})
+    data_dir = config.get("data_dir", "")
+
+    stop_mode = getattr(args, "stop", False)
+    status_mode = getattr(args, "status", False)
+    agent_filter = getattr(args, "agent", "")
+
+    # ── --status: 查看状态 ──────────────────────────────────────────
+    if status_mode:
+        print("")
+        print("📊 Agent 进程状态 (bus.py launch --status)")
+        print("──────────────────────────────────────────")
+        for name, cfg in agents.items():
+            launch = cfg.get("launch", {})
+            template_name = launch.get("template", "")
+            has_browser = launch.get("has_browser", False)
+            browser_cfg = launch.get("browser", {})
+
+            # 检测是否在运行
+            port = browser_cfg.get("gateway_port") or browser_cfg.get("dashboard_port") or \
+                   browser_cfg.get("port", "")
+            if port:
+                port_check = subprocess.run(
+                    ["ss", "-tlnp"], capture_output=True, text=True, timeout=5
+                )
+                if f":{port} " in port_check.stdout:
+                    print(f"  ✅ {cfg.get('name', name)} ({name}) — :{port} 监听中")
+                else:
+                    print(f"  ❌ {cfg.get('name', name)} ({name}) — :{port} 未启动")
+            elif template_name == "url_only":
+                print(f"  ⚪ {cfg.get('name', name)} ({name}) — CLI 模式，无常驻进程")
+            else:
+                # 尝试 pgrep
+                proc_check = subprocess.run(
+                    ["pgrep", "-f", name], capture_output=True, text=True, timeout=5
+                )
+                if proc_check.returncode == 0:
+                    print(f"  ✅ {cfg.get('name', name)} ({name}) — PID: {proc_check.stdout.strip()}")
+                else:
+                    print(f"  ❌ {cfg.get('name', name)} ({name}) — 未运行")
+        # ── 显示 inbox 积压情况 ──────────────────────────────
+        print("📦 Inbox 积压:")
+        import os as _os
+        for name, cfg in agents.items():
+            inbox_path = cfg.get("inbox", f"{data_dir}/inbox/{name}/inbox.json")
+            if _os.path.exists(inbox_path):
+                fsize = _os.path.getsize(inbox_path)
+                try:
+                    with open(inbox_path) as _f:
+                        _d = json.load(_f)
+                    mcount = len(_d.get("messages", []))
+                    unread = _d.get("has_unread", False)
+                    flag = " 📩" if unread else ""
+                    print(f"  {cfg.get('name', name)}: {mcount} 条 / {fsize//1024}K{flag}")
+                except (json.JSONDecodeError, OSError):
+                    print(f"  {cfg.get('name', name)}: {fsize//1024}K (读取失败)")
+        print("")
+        return 0
+
+    # ── --stop: 停止所有 ────────────────────────────────────────────
+    if stop_mode:
+        print("")
+        print("🛑 停止 agent 常驻进程...")
+        print("──────────────────────────")
+        for name, cfg in agents.items():
+            if agent_filter and name != agent_filter:
+                continue
+            launch = cfg.get("launch", {})
+            browser_cfg = launch.get("browser", {})
+            start_cmd = browser_cfg.get("start_command", "")
+            if not start_cmd:
+                continue
+
+            # 通过端口获取 PID 来杀（比 pgrep/pkill 可靠）
+            port = (browser_cfg.get("gateway_port") or
+                    browser_cfg.get("dashboard_port") or
+                    browser_cfg.get("port", ""))
+            if not port:
+                print(f"  ⚠️ {cfg.get('name', name)} ({name}): 无端口配置，跳过")
+                continue
+
+            # 用 ss 获取监听该端口的 PID
+            try:
+                ss_out = subprocess.run(
+                    ["ss", "-tlnp"],
+                    capture_output=True, text=True, timeout=5
+                ).stdout
+                for line in ss_out.splitlines():
+                    if f":{port} " in line and "pid=" in line:
+                        # 提取所有 PID
+                        import re
+                        pids = re.findall(r'pid=(\d+)', line)
+                        for pid in pids:
+                            subprocess.run(["kill", pid], capture_output=True, timeout=5)
+                            print(f"  ✅ 已停止: {cfg.get('name', name)} ({name}:{port}) — PID {pid}")
+                        break
+                else:
+                    print(f"  ⚪ {cfg.get('name', name)} ({name}): :{port} 未监听，无需停止")
+            except Exception as e:
+                print(f"  ⚠️ {cfg.get('name', name)} ({name}): 停止失败 — {e}")
+        print("")
+        return 0
+
+    # ── 默认：启动 agent ────────────────────────────────────────────
+    print("")
+    print("╔══════════════════════════════════════════╗")
+    print("║   🚀 mailbus agent 启动                  ║")
+    print("╚══════════════════════════════════════════╝")
+    print("")
+
+    launched = 0
+    skipped = 0
+    for name, cfg in agents.items():
+        if agent_filter and name != agent_filter:
+            continue
+
+        launch = cfg.get("launch", {})
+        template_name = launch.get("template", "")
+        if template_name == "url_only":
+            print(f"  ⚪ {cfg.get('name', name)} ({name}): CLI 模式，跳过")
+            skipped += 1
+            continue
+
+        browser_cfg = launch.get("browser", {})
+        start_cmd = browser_cfg.get("start_command", "")
+        if not start_cmd:
+            print(f"  ⚪ {cfg.get('name', name)} ({name}): 无启动命令，跳过")
+            skipped += 1
+            continue
+
+        # 检查端口是否已被占用
+        port = browser_cfg.get("gateway_port") or browser_cfg.get("dashboard_port") or \
+               browser_cfg.get("port", "")
+        if port:
+            port_check = subprocess.run(
+                ["ss", "-tlnp"], capture_output=True, text=True, timeout=5
+            )
+            if f":{port} " in port_check.stdout:
+                print(f"  ⚠️  {cfg.get('name', name)} ({name}): :{port} 已在监听，跳过")
+                skipped += 1
+                continue
+
+        # 执行启动命令
+        log_file = f"/tmp/mailbus-{name}-launch.log"
+        full_cmd = f"{start_cmd} > {log_file} 2>&1 &"
+        print(f"  🚀 {cfg.get('name', name)} ({name}): {start_cmd[:80]}...")
+
+        try:
+            subprocess.run(
+                ["nohup", "sh", "-c", start_cmd],
+                stdout=open(log_file, "w"),
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+                timeout=30,
+            )
+            launched += 1
+            print(f"     ✅ 已启动 (日志: {log_file})")
+        except Exception as e:
+            print(f"     ❌ 启动失败: {e}")
+
+    print("")
+    print(f"📊 结果: {launched} 个启动, {skipped} 个跳过")
+    print("💡 查看状态: bus.py launch --status")
+    print("")
     return 0
 
 

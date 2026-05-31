@@ -105,6 +105,10 @@ mailbus agent-remove <名>           # 移除 Agent
 mailbus heartbeat                   # 心跳检测（检测所有 Agent 在线状态）
 mailbus search                      # 消息全文检索（--query/--from/--to/--type/--status）
 mailbus serve [--host] [--port]      # 启动 HTTP API 服务（默认 127.0.0.1:9812）
+mailbus launch                       # 启动所有 Agent 常驻进程（Gateway / Dashboard）
+mailbus launch --status              # 查看 Agent 进程运行状态
+mailbus launch --stop                # 停止所有 Agent 进程
+mailbus launch --agent xiaoqi        # 启动指定 Agent
 ```
 
 ## Platform 管理界面
@@ -243,6 +247,7 @@ CLI 模板中用 `MODEL` 占位符，总线自动根据 agent 的 `models` 列�
 ```
 ziyan-mailbus/
 ├── bus.py                        # 入口脚本（CLI 命令入口）
+├── mailbus-boot.sh                # 全量启动脚本（自动拉起 bus.py + 所有 Agent 进程）
 ├── lib/
 │   ├── __init__.py
 │   ├── models.py                 # 数据模型（Message / Inbox / MsgType）

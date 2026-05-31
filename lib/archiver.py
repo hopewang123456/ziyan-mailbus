@@ -30,25 +30,29 @@ def archive_agent(data_dir: str, agent_name: str, archive_days: int = 7, max_mes
     
     inbox = Inbox.from_dict(inbox_data)
     
-    # 找出需要归档的消息：acknowledged 且（超过数量限制 或 超过时间限制）
-    acked_count = sum(1 for m in inbox.messages
-                      if inbox.msg_field(m, 'status', '') == MsgStatus.ACKNOWLEDGED)
+    # 找出可归档的消息：state=done/closed/acknowledged 或 status=acknowledged
+    # 兼容 ADR: 新消息用 state，旧消息用 status
+    def _is_archivable(m):
+        s = inbox.msg_field(m, 'state', '') or inbox.msg_field(m, 'status', '')
+        return s in ('done', 'closed', 'acknowledged')
+
+    archivable = [m for m in inbox.messages if _is_archivable(m)]
     
-    if acked_count == 0:
+    if len(archivable) == 0:
         return 0
     
     should_archive_by_count = len(inbox.messages) >= max_messages
-    should_archive_by_time = _has_old_acknowledged(inbox, archive_days)
+    should_archive_by_time = _has_old_archivable(inbox, archive_days)
     
     if not should_archive_by_count and not should_archive_by_time:
         return 0
     
     to_archive = []
-    keep_acked = []    # ack 过的消息（可能被数量裁剪）
-    keep_pending = []  # 未 ack 的消息（永不裁剪）
+    keep_acked = []    # 已确认但保留
+    keep_pending = []  # 未确认（永不裁剪）
     
     for m in inbox.messages:
-        if inbox.msg_field(m, 'status', '') == MsgStatus.ACKNOWLEDGED:
+        if _is_archivable(m):
             if _is_old(inbox, m, archive_days):
                 to_archive.append(m)
             else:
@@ -111,11 +115,12 @@ def archive_all(data_dir: str, agents: dict, archive_days: int = 7, max_messages
     return results
 
 
-def _has_old_acknowledged(inbox: Inbox, archive_days: int) -> bool:
-    """检查是否有 archive_days 天以上的已确认消息"""
+def _has_old_archivable(inbox: Inbox, archive_days: int) -> bool:
+    """检查是否有 archive_days 天以上可以归档的消息"""
     for m in inbox.messages:
-        if inbox.msg_field(m, 'status', '') == MsgStatus.ACKNOWLEDGED:
-            ack_at = inbox.msg_field(m, 'acknowledged_at', '')
+        s = inbox.msg_field(m, 'state', '') or inbox.msg_field(m, 'status', '')
+        if s in ('done', 'closed', 'acknowledged'):
+            ack_at = inbox.msg_field(m, 'acknowledged_at', '') or inbox.msg_field(m, 'done_at', '')
             if ack_at and _is_old_msg(ack_at, archive_days):
                 return True
     return False

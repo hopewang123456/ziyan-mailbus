@@ -67,7 +67,7 @@ DEFAULT_CONFIG = {
 
 
 
-from lib.commands import load_config, save_config, cmd_init, cmd_scan, cmd_search, cmd_heartbeat, cmd_serve, cmd_send, cmd_broadcast, cmd_ack, cmd_mark_read, cmd_status, cmd_retry, cmd_archive, cmd_backup, cmd_errors, cmd_agent_add, cmd_agent_remove, cmd_review, _add_data_dir_arg
+from lib.commands import load_config, save_config, cmd_init, cmd_scan, cmd_search, cmd_heartbeat, cmd_serve, cmd_send, cmd_broadcast, cmd_ack, cmd_mark_read, cmd_status, cmd_retry, cmd_archive, cmd_backup, cmd_errors, cmd_agent_add, cmd_agent_remove, cmd_review, cmd_launch, _add_data_dir_arg
 
 
 def main():
@@ -160,6 +160,13 @@ def main():
     p_hb = sub.add_parser("heartbeat", help="心跳检测（检测所有 agent 在线状态）")
     _add_data_dir_arg(p_hb)
     
+    # launch (启动/停止 agent 进程)
+    p_lc = sub.add_parser("launch", help="启动/停止/查看 agent 常驻进程")
+    _add_data_dir_arg(p_lc)
+    p_lc.add_argument("--agent", default="", help="指定 agent（不指定则操作全部）")
+    p_lc.add_argument("--stop", action="store_true", help="停止所有 agent 进程")
+    p_lc.add_argument("--status", action="store_true", help="查看运行状态")
+
     # serve (HTTP API)
     p_sv = sub.add_parser("serve", help="启动 HTTP API 服务（用于 Web 看板）")
     _add_data_dir_arg(p_sv)
@@ -206,6 +213,7 @@ def main():
         "serve": cmd_serve,
         "search": cmd_search,
         "review": cmd_review,
+        "launch": cmd_launch,
     }
     
     return cmd_map[args.command](args)
