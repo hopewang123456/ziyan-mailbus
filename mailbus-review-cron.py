@@ -101,11 +101,14 @@ def get_head_commit(repo_path: str) -> str:
         return ""
 
 
-def run_review(repo_path: str, repo_name: str):
+def run_review(repo_path: str, repo_name: str, config: dict | None = None):
     """调用 review.py 审查"""
-    candidates = [
+    candidates = []
+    if config and config.get("review_script"):
+        candidates.append(os.path.normpath(config["review_script"]))
+    candidates += [
         os.path.join(os.path.dirname(__file__), "..", "pr-agent", "review.py"),
-        "/mnt/e/ai_tools/pr-agent/review.py",
+        os.path.expanduser("~/pr-agent/review.py"),
     ]
     review_script = None
     for c in candidates:
@@ -144,7 +147,7 @@ def run_review(repo_path: str, repo_name: str):
         return False
 
 
-def scan_one(data_dir: str, target: dict, debounce_minutes: int = 0) -> bool:
+def scan_one(data_dir: str, target: dict, debounce_minutes: int = 0, config: dict | None = None) -> bool:
     """扫描单个仓库，返回是否有变更并执行了审查"""
     name = target.get("name", "?")
     path = target.get("path", "")
@@ -175,7 +178,7 @@ def scan_one(data_dir: str, target: dict, debounce_minutes: int = 0) -> bool:
         return False
 
     print(f"  🔍 {name}: 检测到新 commit ({head[:12]})")
-    ok = run_review(path, name)
+    ok = run_review(path, name, config=config)
     if ok:
         save_last_reviewed(data_dir, name, head)
     print()
@@ -286,7 +289,7 @@ def main():
             print(f"  可用: {[t.get('name') for t in targets]}")
             sys.exit(1)
         print(f"⚡ 触发审查 — {name} ({_now_cn()})")
-        scan_one(args.data_dir, target, debounce_minutes=args.debounce_minutes)
+        scan_one(args.data_dir, target, debounce_minutes=args.debounce_minutes, config=config)
         return
 
     # ── 轮询模式 ──
@@ -296,7 +299,7 @@ def main():
 
     changed = 0
     for target in targets:
-        if scan_one(args.data_dir, target):
+        if scan_one(args.data_dir, target, config=config):
             changed += 1
 
     print(f"✅ 本轮审查完成，{changed} 个仓库有变更")

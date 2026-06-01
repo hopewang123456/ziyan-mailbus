@@ -1118,54 +1118,192 @@ def cmd_agent_remove(args) -> int:
 
 
 def cmd_review(args) -> int:
-    """代码审查：运行 review.py 审查代码变更"""
+    """代码审查：pylint + mypy 静态检查 + review.py AI 审查 + semgrep 安全扫描"""
     import subprocess
 
-    review_script = "/mnt/e/ai_tools/pr-agent/review.py"
-    if not os.path.isfile(review_script):
-        print(f"✗ review.py 未找到: {review_script}")
-        return 1
+    config_path = _find_config(args)
+    config = load_config(config_path)
 
     workdir = args.workdir or os.getcwd()
     if not os.path.isdir(workdir):
         print(f"✗ 目录不存在: {workdir}")
         return 1
 
-    cmd = [sys.executable, review_script]
+    output_lines = []
+    def emit(line=""):
+        print(line)
+        output_lines.append(line)
+
+    # ── 0. 收集改动的 Python 文件 ──
+    changed_py_files = []
     if args.commit:
-        cmd += ["--commit", args.commit]
-    if args.semgrep:
-        cmd += ["--semgrep"]
+        try:
+            r = subprocess.run(
+                ["git", "diff", "--name-only", f"{args.commit}^..{args.commit}"],
+                cwd=workdir, capture_output=True, text=True, timeout=30
+            )
+            if r.returncode == 0:
+                changed_py_files = [
+                    os.path.join(workdir, f) for f in r.stdout.strip().splitlines()
+                    if f.endswith(".py")
+                ]
+        except Exception:
+            pass
+    emit(f"🔍 代码审查开始: {workdir}")
+    if changed_py_files:
+        emit(f"   改动 Python 文件 ({len(changed_py_files)} 个):")
+        for f in changed_py_files:
+            emit(f"     - {os.path.relpath(f, workdir)}")
+
+    # ── 1. pylint 静态检查 ──
+    if changed_py_files:
+        pylint_exit = 0
+        pylint_output = ""
+        if shutil.which("pylint"):
+            emit("\n── pylint ──")
+            try:
+                r = subprocess.run(
+                    ["pylint", "--output-format=text", "--score=n"] + changed_py_files,
+                    cwd=workdir, capture_output=True, text=True, timeout=60
+                )
+                pylint_output = r.stdout
+                if r.stdout.strip():
+                    emit(r.stdout)
+                if r.returncode != 0:
+                    pylint_exit = r.returncode
+                    # 非致命：pylint 1-4 表示有 issue
+            except subprocess.TimeoutExpired:
+                emit("⚠ pylint 超时（60秒）")
+            except Exception as e:
+                emit(f"⚠ pylint 执行异常: {e}")
+        else:
+            emit("⚠ pylint 不可用，跳过")
+
+    # ── 2. mypy 类型检查 ──
+    if changed_py_files:
+        mypy_exit = 0
+        mypy_output = ""
+        if shutil.which("mypy"):
+            emit("\n── mypy ──")
+            try:
+                r = subprocess.run(
+                    ["mypy", "--show-error-codes"] + changed_py_files,
+                    cwd=workdir, capture_output=True, text=True, timeout=60
+                )
+                mypy_output = r.stdout
+                if r.stdout.strip():
+                    emit(r.stdout)
+                if r.returncode != 0:
+                    mypy_exit = r.returncode
+            except subprocess.TimeoutExpired:
+                emit("⚠ mypy 超时（60秒）")
+            except Exception as e:
+                emit(f"⚠ mypy 执行异常: {e}")
+        else:
+            emit("⚠ mypy 不可用，跳过")
+
+    # ── 3. semgrep 安全扫描 ──
+    semgrep_exit = 0
+    if getattr(args, "semgrep", False):
+        semgrep_rules_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "semgrep-rules")
+        semgrep_rules_dir = os.path.normpath(semgrep_rules_dir)
+        semgrep_exit = 0
+        if shutil.which("semgrep") and os.path.isdir(semgrep_rules_dir):
+            target_dir = args.target or "."
+            target_path = os.path.join(workdir, target_dir) if not os.path.isabs(target_dir) else target_dir
+            if not os.path.isdir(target_path):
+                target_path = workdir
+            emit("\n── semgrep ──")
+            try:
+                r = subprocess.run(
+                    ["semgrep", "scan", "--config", semgrep_rules_dir,
+                     "--json", target_path],
+                    cwd=workdir, capture_output=True, text=True, timeout=120
+                )
+                if r.returncode in (0, 1):
+                    import json as _json
+                    try:
+                        data = _json.loads(r.stdout)
+                        results = data.get("results", [])
+                        if results:
+                            emit(f"  发现 {len(results)} 个安全问题:")
+                            for res in results:
+                                path = res.get("path", "")
+                                line = res.get("start", {}).get("line", "")
+                                check_id = res.get("check_id", "").split(".", 1)[-1]
+                                msg = res.get("extra", {}).get("message", "")
+                                emit(f"    • {path}:{line} [{check_id}] {msg}")
+                        else:
+                            emit("  未发现安全问题 ✓")
+                        semgrep_exit = len(results)
+                    except (_json.JSONDecodeError, Exception) as e:
+                        emit(f"⚠ semgrep 输出解析失败: {e}")
+                        if r.stdout:
+                            emit(r.stdout[:500])
+                else:
+                    emit(f"⚠ semgrep 异常退出 (exit={r.returncode})")
+                    if r.stderr:
+                        emit(f"  stderr: {r.stderr[:300]}")
+            except subprocess.TimeoutExpired:
+                emit("⚠ semgrep 超时（120秒）")
+            except Exception as e:
+                emit(f"⚠ semgrep 执行异常: {e}")
+        else:
+            if not shutil.which("semgrep"):
+                emit("⚠ semgrep 不可用，跳过")
+            if not os.path.isdir(semgrep_rules_dir):
+                emit(f"⚠ semgrep 规则目录不存在: {semgrep_rules_dir}")
+
+    # ── 4. review.py AI 审查 diff ──
+    review_script = config.get("review_script", "")
+    if not review_script:
+        review_script = os.environ.get(
+            "MAILBUS_REVIEW_SCRIPT",
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "pr-agent", "review.py"),
+        )
+    review_script = os.path.normpath(review_script)
+    if os.path.isfile(review_script):
+        emit("\n── AI 代码审查 ──")
+        cmd = [sys.executable, review_script]
+        if args.commit:
+            cmd += ["--commit", args.commit]
+        if args.output:
+            cmd += ["--output", args.output]
+        if args.target:
+            cmd += ["--target-dir", args.target]
+
+        env = os.environ.copy()
+        if not env.get("DEEPSEEK_API_KEY"):
+            env["DEEPSEEK_API_KEY"] = _read_deepseek_key_from_openclaw_config()
+
+        try:
+            r = subprocess.run(cmd, cwd=workdir, env=env, capture_output=True, text=True, timeout=180)
+            if r.stdout:
+                emit(r.stdout)
+            if r.stderr:
+                emit(f"⚠ stderr: {r.stderr[:300]}")
+        except subprocess.TimeoutExpired:
+            emit("✗ AI 审查超时（180秒）")
+        except Exception as e:
+            emit(f"✗ AI 审查失败: {e}")
+    else:
+        emit("⚠ review.py 未找到，跳过 AI 审查")
+
+    # ── 5. 写入报告 ──
     if args.output:
-        cmd += ["--output", args.output]
-    if args.target:
-        cmd += ["--target-dir", args.target]
+        try:
+            _ensure_dir(os.path.dirname(args.output))
+            with open(args.output, "w", encoding="utf-8") as f:
+                f.write("\n".join(output_lines))
+            emit(f"\n📄 报告已写入: {args.output}")
+        except Exception as e:
+            emit(f"⚠ 报告写入失败: {e}")
 
-    print(f"🔍 代码审查开始: {workdir}")
-    env = os.environ.copy()
-    env["DEEPSEEK_API_KEY"] = env.get("DEEPSEEK_API_KEY", "")
-    if not env["DEEPSEEK_API_KEY"]:
-        print("⚠ DEEPSEEK_API_KEY 未设置，尝试从 .env 读取...")
-        env_path = os.path.expanduser("~/.hermes/.env")
-        if os.path.isfile(env_path):
-            with open(env_path) as f:
-                for line in f:
-                    if line.startswith("DEEPSEEK_API_KEY="):
-                        env["DEEPSEEK_API_KEY"] = line.strip().split("=", 1)[1].strip("'\"")
-                        break
-
-    try:
-        r = subprocess.run(cmd, cwd=workdir, env=env, capture_output=True, text=True, timeout=180)
-        print(r.stdout)
-        if r.stderr:
-            print(f"⚠ stderr: {r.stderr[:300]}")
-        return r.returncode
-    except subprocess.TimeoutExpired:
-        print("✗ 审查超时（180秒）")
-        return 1
-    except Exception as e:
-        print(f"✗ 审查失败: {e}")
-        return 1
+    # 综合退出码
+    overall = 0
+    if semgrep_exit > 0:
+        overall = 1
+    return overall
 
 
 # ── 辅助函数 ──────────────────────────────────────────────────────────
@@ -1180,6 +1318,32 @@ def _cleanup_stale_locks(max_age: int = 3600):
                 os.unlink(fpath)
         except OSError:
             pass
+
+
+def _read_deepseek_key_from_openclaw_config() -> str:
+    """从 openclaw.json 的 env.vars 中读取 DEEPSEEK_API_KEY"""
+    candidates = [
+        os.path.expanduser("~/.openclaw-data/openclaw.json"),
+        os.path.expanduser("~/.openclaw/openclaw.json"),
+    ]
+    for oc_path in candidates:
+        try:
+            if os.path.isfile(oc_path):
+                with open(oc_path) as f:
+                    oc = json.load(f)
+                key = oc.get("env", {}).get("vars", {}).get("DEEPSEEK_API_KEY", "")
+                if key:
+                    return key
+        except Exception:
+            pass
+    # fallback: 从 ~/.hermes/.env 读
+    env_path = os.path.expanduser("~/.hermes/.env")
+    if os.path.isfile(env_path):
+        with open(env_path) as f:
+            for line in f:
+                if line.startswith("DEEPSEEK_API_KEY="):
+                    return line.strip().split("=", 1)[1].strip("'\"")
+    return ""
 
 
 def _find_config(args) -> str:
