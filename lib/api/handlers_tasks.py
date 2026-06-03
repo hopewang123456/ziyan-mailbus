@@ -77,6 +77,41 @@ def handle_task_update(handler):
     handler._send_json({"status": "ok", "task": updated})
 
 
+def handle_task_audit(handler):
+    """POST /api/tasks/audit — 追加审计记录到任务"""
+    body = handler._read_post_body()
+    task_id = body.get("task_id", "")
+    reviewer = body.get("reviewer", "")
+    result = body.get("result", "")
+    issues = body.get("issues", None)
+    summary = body.get("summary", "")
+    report_file = body.get("report_file", "")
+
+    if not task_id:
+        handler._send_json({"error": "缺少 task_id"}, 400)
+        return
+    if not reviewer:
+        handler._send_json({"error": "缺少 reviewer"}, 400)
+        return
+    if result not in ("pass", "fail", "warn"):
+        handler._send_json({"error": "result 必须是 pass/fail/warn"}, 400)
+        return
+
+    tracker = TaskTracker(handler.data_dir)
+    task = tracker.add_audit(
+        task_id=task_id,
+        reviewer=reviewer,
+        result=result,
+        issues=issues,
+        summary=summary,
+        report_file=report_file,
+    )
+    if not task:
+        handler._send_json({"error": f"任务 {task_id} 不存在"}, 404)
+        return
+    handler._send_json({"status": "ok", "task": task})
+
+
 def handle_task_get(handler, task_id: str):
     """GET /api/tasks/<task_id> — 获取单任务详情"""
     tracker = TaskTracker(handler.data_dir)

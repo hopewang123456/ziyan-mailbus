@@ -102,16 +102,41 @@ class TaskTracker:
         return task["reminded_count"]
 
     def list_all(self, status_filter: str = None) -> list:
-        """列出所有任务，可选按状态过滤"""
+        """列出所有任务，可选按状态过滤，按 updated_at 倒序（最新的在最上面）"""
         if not os.path.isdir(self.tasks_dir):
             return []
         results = []
-        for fname in sorted(os.listdir(self.tasks_dir)):
+        for fname in os.listdir(self.tasks_dir):
             if fname.endswith(".json"):
                 task = json_read(os.path.join(self.tasks_dir, fname), None)
                 if task and (not status_filter or task.get("status") == status_filter):
                     results.append(task)
+        # 按 updated_at 倒序（最新的在最上面），fallback 到 created_at
+        results.sort(key=lambda t: t.get("updated_at", t.get("created_at", "")), reverse=True)
         return results
+
+    def add_audit(self, task_id: str, reviewer: str, result: str,
+                  issues: list = None, summary: str = "", report_file: str = ""):
+        """追加审计记录到任务"""
+        task = self.get(task_id)
+        if not task:
+            return None
+        if "audit_log" not in task:
+            task["audit_log"] = []
+        task["audit_log"].append({
+            "reviewer": reviewer,
+            "result": result,
+            "issues": issues or [],
+            "summary": summary,
+            "report_file": report_file,
+            "at": _now_iso(),
+        })
+        task["updated_at"] = _now_iso()
+        # 如果审计失败，自动标记任务为 failed
+        if result == "fail":
+            task["status"] = TaskStatus.FAILED
+        json_write(self._task_path(task_id), task)
+        return task
 
     # ── 催办逻辑 ──────────────────────────────────────────────────
 

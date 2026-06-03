@@ -203,6 +203,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             h["tasks"].handle_task_create(self)
         elif path == "/api/tasks/update":
             h["tasks"].handle_task_update(self)
+        elif path == "/api/tasks/audit":
+            h["tasks"].handle_task_audit(self)
         elif path == "/api/send-msg":
             h["inbox"].handle_send_msg(self)
         elif path.startswith("/api/actions/update/"):
