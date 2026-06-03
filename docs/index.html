@@ -121,6 +121,8 @@ h1{font-size:22px;font-weight:700;margin-bottom:4px;position:relative;z-index:1}
 .btn-primary{background:linear-gradient(135deg,#2563eb,#3b82f6);border-color:rgba(59,130,246,0.5)}
 .btn-primary:hover{background:linear-gradient(135deg,#3b82f6,#60a5fa)}
 .btn-sm{padding:4px 10px;font-size:11px}
+.btn-gold{background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border-color:rgba(245,158,11,0.5)}
+.btn-gold:hover{background:linear-gradient(135deg,#f59e0b,#fbbf24)}
 .btn-danger{background:linear-gradient(135deg,#dc2626,#ef4444);border-color:rgba(239,68,68,0.5)}
 
 .tab-content{display:none}
@@ -377,17 +379,70 @@ td{padding:8px 10px;border-bottom:1px solid #1e293b}
 
 <!-- 导航标签 -->
 <div class="tabs" id="mainTabs">
-  <div class="tab active" data-tab="overview" onclick="switchTab('overview')"><span class=icon3d>📊</span> 总览</div>
+  <div class="tab active" data-tab="ziyan" onclick="switchTab('ziyan')"><span class=icon3d>👑</span> 子言</div>
+  <div class="tab" data-tab="overview" onclick="switchTab('overview')"><span class=icon3d>📊</span> 总览</div>
   <div class="tab" data-tab="agents" onclick="switchTab('agents')"><span class=icon3d>🤖</span> Agent <span class="num" id="tabAgentCount"></span></div>
   <div class="tab" data-tab="bulletin" onclick="switchTab('bulletin')"><span class=icon3d>📢</span> 公告栏 <span class="num" id="tabBulletinCount"></span></div>
-  <div class="tab" data-tab="tasks" onclick="switchTab('tasks')"><span class=icon3d>🎯</span> 任务追踪</div>
-  <div class="tab" data-tab="review" onclick="switchTab('review')"><span class=icon3d>🔍</span> 审查 <span class="num" id="tabReviewCount"></span></div>
+  <div class="tab" data-tab="tasks-audit" onclick="switchTab('tasks-audit')"><span class=icon3d>📋</span> 任务审计</div>
   <div class="tab" data-tab="heartbeat" onclick="switchTab('heartbeat')"><span class=icon3d>💓</span> 健康状态</div>
   <div class="tab" data-tab="alerts" onclick="switchTab('alerts')"><span class=icon3d>🔔</span> 告警</div>
 </div>
 
+<!-- Tab: 子言面板 -->
+<div class="tab-content active" id="tab-ziyan">
+  <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:13px;color:#94a3b8">子言专属 · 一屏掌握</span>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-sm" onclick="openSendModal()">✉️ 发信</button>
+      <button class="btn btn-sm" onclick="renderZiyanTab()">🔄 刷新</button>
+    </div>
+  </div>
+  <div id="ziyanPending"></div>
+  <div id="ziyanTeam" style="margin-top:12px"></div>
+  <div id="ziyanAlerts" style="margin-top:12px"></div>
+</div>
+
+<!-- 回复弹窗 -->
+<div class="modal" id="replyModal" style="display:none">
+  <div class="modal-inner" style="max-width:500px">
+    <h3 id="replyTitle"></h3>
+    <div id="replyOrigMsg" style="color:#64748b;font-size:12px;margin-bottom:8px;padding:8px;background:rgba(30,41,59,0.5);border-radius:6px"></div>
+    <textarea id="replyInput" rows=4 style="width:100%;margin:8px 0;background:#1e293b;border:1px solid #334155;border-radius:6px;color:#e2e8f0;padding:8px;font-size:13px;resize:vertical" placeholder="输入回复内容..."></textarea>
+    <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm" onclick="closeReply()">取消</button>
+      <button class="btn btn-sm btn-gold" onclick="sendReply()" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff">发送</button>
+    </div>
+  </div>
+</div>
+
+<!-- 发信弹窗 -->
+<div class="modal" id="sendModal" style="display:none">
+  <div class="modal-inner" style="max-width:500px">
+    <h3>✉️ 发送消息</h3>
+    <div style="margin:8px 0">
+      <label style="font-size:12px;color:#94a3b8;display:block;margin-bottom:4px">发送给</label>
+      <select id="sendTo" style="width:100%;background:#1e293b;border:1px solid #334155;border-radius:6px;color:#e2e8f0;padding:8px;font-size:13px"></select>
+    </div>
+    <div style="margin:8px 0">
+      <label style="font-size:12px;color:#94a3b8;display:block;margin-bottom:4px">优先级</label>
+      <select id="sendPriority" style="width:100%;background:#1e293b;border:1px solid #334155;border-radius:6px;color:#e2e8f0;padding:8px;font-size:13px">
+        <option value="normal">普通</option>
+        <option value="urgent">紧急</option>
+      </select>
+    </div>
+    <div style="margin:8px 0">
+      <label style="font-size:12px;color:#94a3b8;display:block;margin-bottom:4px">消息内容</label>
+      <textarea id="sendContent" rows=5 style="width:100%;background:#1e293b;border:1px solid #334155;border-radius:6px;color:#e2e8f0;padding:8px;font-size:13px;resize:vertical" placeholder="输入消息内容..."></textarea>
+    </div>
+    <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-sm" onclick="closeSendModal()">取消</button>
+      <button class="btn btn-sm btn-gold" id="sendBtn" onclick="doSend()" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff">发送</button>
+    </div>
+  </div>
+</div>
+
 <!-- Tab: 总览 -->
-<div class="tab-content active" id="tab-overview">
+<div class="tab-content" id="tab-overview">
   <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
     <span style="font-size:13px;color:#94a3b8">平台运行总览 · 消息量 · 类型分布 · 已读状态</span>
     <button class="btn btn-sm" onclick="loadAll()">🔄 刷新</button>
@@ -421,13 +476,19 @@ td{padding:8px 10px;border-bottom:1px solid #1e293b}
   <div id="bulletinList"></div>
 </div>
 
-<!-- Tab: 任务追踪 -->
-<div class="tab-content" id="tab-tasks">
+<!-- Tab: 任务审计（合并任务追踪+审查报告） -->
+<div class="tab-content" id="tab-tasks-audit">
   <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
-    <span style="font-size:13px;color:#94a3b8"><span id="taskCount"></span> 个活跃任务</span>
-    <button class="btn btn-sm" onclick="reloadData('tasks')">🔄 刷新</button>
+    <div style="display:flex;gap:6px;align-items:center">
+      <button class="btn btn-sm filter-btn active" data-filter="all" onclick="switchAuditFilter('all')">全部</button>
+      <button class="btn btn-sm filter-btn" data-filter="running" onclick="switchAuditFilter('running')">⏳ 进行中</button>
+      <button class="btn btn-sm filter-btn" data-filter="success" onclick="switchAuditFilter('success')">✅ 已完成</button>
+      <button class="btn btn-sm filter-btn" data-filter="failed" onclick="switchAuditFilter('failed')">❌ 失败</button>
+      <button class="btn btn-sm filter-btn" data-filter="pending-audit" onclick="switchAuditFilter('pending-audit')">🔍 待审计</button>
+    </div>
+    <button class="btn btn-sm" onclick="reloadData('tasks-audit')">🔄 刷新</button>
   </div>
-  <div id="taskTable"></div>
+  <div id="taskAuditList"></div>
 </div>
 
 <!-- Tab: 健康状态 -->
@@ -614,7 +675,6 @@ async function loadAll() {
     rawData = { status, agents, tasks, hb, alerts, bulletin, reports, replies, skillUsage };
     renderAgentTab(status, agents);
     renderBulletinTab(bulletin);
-    renderTasks(tasks);
     renderHeartbeat(hb);
     renderAlerts(alerts);
     rawData.alerts = alerts; // 存起来给超时计数用
@@ -669,10 +729,14 @@ async function loadAll() {
       const interval = cfg.dashboard_refresh_seconds || 0;
       if (refreshTimer) clearInterval(refreshTimer);
       if (interval > 0) refreshTimer = setInterval(() => {
-        reloadData('heartbeat'); reloadData('tasks'); reloadData('alerts');
+        reloadData('heartbeat'); reloadData('tasks-audit'); reloadData('alerts');
       }, interval * 1000);
     } catch(e) {}
     
+    // 加载子言面板 + 任务审计
+    renderZiyanTab();
+    renderTaskAuditTab();
+
     // 启动自动刷新（默认 30 秒）
     startAutoRefresh();
     
@@ -709,6 +773,7 @@ async function reloadData(name) {
     bulletin: ['/api/bulletin'],
     review: ['/api/reports'],
     tasks: ['/api/tasks'],
+    'tasks-audit': ['/api/tasks', '/api/reports'],
     heartbeat: ['/api/heartbeat'],
     alerts: ['/api/alerts'],
   };
@@ -721,7 +786,7 @@ async function reloadData(name) {
     if (name === 'agents') { rawData.status = results[0]; rawData.agents = results[1]; renderAgentTab(results[0], results[1]); if (results[0] && results[1] && results[1].agents) renderStats(results[1].agents, (results[0].agent_statuses||{})); }
     if (name === 'bulletin') { rawData.bulletin = results[0]; renderBulletinTab(results[0]); }
     if (name === 'review') { rawData.reports = results[0]; renderReviewTab(results[0]); }
-    if (name === 'tasks') { rawData.tasks = results[0]; renderTasks(results[0]); }
+    if (name === 'tasks-audit') { rawData.tasks = results[0]; rawData.reports = results[1]; renderTaskAuditTab(); }
     if (name === 'heartbeat') { rawData.hb = results[0]; renderHeartbeat(results[0]); }
     if (name === 'alerts') { rawData.alerts = results[0]; renderAlerts(results[0]); }
     toast(name + ' 已刷新', 'success');
@@ -1722,33 +1787,6 @@ document.addEventListener('change', function(e) {
 
 // ── Tab 4: 任务追踪 ──
 
-function renderTasks(t) {
-  const el = document.getElementById('taskTable');
-  const count = document.getElementById('taskCount');
-  if (!t || !t.tasks || t.tasks.length === 0) { el.innerHTML = '<div style="color:#64748b;font-size:13px">暂无活跃任务</div>'; count.textContent = ''; return; }
-  count.textContent = t.count;
-  const rows = t.tasks.map(task => {
-    const hops = (task.chain || []).map(h => `${h.agent}:${h.action}`).join(' → ');
-    const creator = (task.chain && task.chain[0]) ? task.chain[0].agent : '-';
-    // 失败任务显示 ❗ + tooltip 错误原因
-    const errIcon = task.status === 'failed' && task.error
-      ? `<span style="display:inline-flex;align-items:center;margin-left:4px;cursor:help"
-           title="${esc(typeof task.error === 'string' ? task.error : (task.error.detail || JSON.stringify(task.error)))}">
-           ❗</span>`
-      : '';
-    return `<tr>
-      <td style="font-size:11px;color:#64748b">${task.task_id}</td>
-      <td>${statusBadge(task.status)}${errIcon}</td>
-      <td>${task.summary || '-'}</td>
-      <td>${creator}</td>
-      <td>${task.assignee || '-'}</td>
-      <td style="font-size:11px;color:#64748b;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${hops || '-'}</td>
-      <td style="font-size:11px;color:#64748b">${task.reminded_count || 0}</td>
-    </tr>`;
-  }).join('');
-  el.innerHTML = `<table><thead><tr><th>ID</th><th>状态</th><th>概要</th><th>发起人</th><th>负责人</th><th>追踪链</th><th>催办</th></tr></thead><tbody>${rows}</tbody></table>`;
-}
-
 // ── Tab 5: 审查报告 ──
 
 function renderReviewTab(reports) {
@@ -1904,6 +1942,349 @@ function renderAlerts(a) {
   el.innerHTML = `<table><thead><tr><th>级别</th><th>类型</th><th>Agent</th><th>消息</th><th>处理人</th><th>时间</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+// ── 📋 任务审计面板 ──
+
+let _auditFilter = 'all';
+
+const AUDIT_STATUS_MAP = {
+  running: '⏳ 进行中', success: '✅ 成功', failed: '❌ 失败', timeout: '⏰ 超时',
+  pending: '⏳ 待处理', cancelled: '🚫 已取消'
+};
+
+const AGENT_ICONS = {
+  lingzhao:'🪷', lingjin:'🦋', lingxi:'🔭', xiaoqi:'🦞',
+  yige:'👨‍🔧', lingxiao:'🎯', dali:'🤖', lingjian:'🔍', lingyan:'🧪', ziyan:'👑'
+};
+
+function switchAuditFilter(filter) {
+  _auditFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.dataset.filter === filter));
+  renderTaskAuditTab();
+}
+
+async function renderTaskAuditTab() {
+  const el = document.getElementById('taskAuditList');
+  if (!el) return;
+
+  let tasksData = null, reportsData = null;
+  try {
+    [tasksData, reportsData] = await Promise.all([
+      fetchJSON('/api/tasks'),
+      fetchJSON('/api/reports'),
+    ]);
+  } catch(e) {
+    el.innerHTML = '<div style="color:#64748b;font-size:13px;padding:20px">⚠️ 数据加载失败</div>';
+    return;
+  }
+
+  const tasks = (tasksData && tasksData.tasks) || [];
+  const reports = (reportsData && reportsData.reports) || [];
+
+  // 筛选
+  let filtered = tasks;
+  if (_auditFilter === 'pending-audit') {
+    filtered = tasks.filter(t => {
+      const s = (t.status || '').toLowerCase();
+      return (s === 'success' || s === 'failed' || s === 'timeout') && (!t.audit_log || t.audit_log.length === 0);
+    });
+  } else if (_auditFilter !== 'all') {
+    filtered = tasks.filter(t => (t.status || '').toLowerCase() === _auditFilter);
+  }
+
+  // 按 updated_at 倒序
+  filtered.sort((a, b) => (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''));
+
+  let html = '';
+  if (filtered.length === 0) {
+    html = '<div style="color:#64748b;font-size:13px;padding:20px;text-align:center">📭 无匹配任务</div>';
+  } else {
+    const defaultExpanded = 5; // 默认展开最近 5 条
+    html = filtered.map((task, idx) => {
+      const tid = task.task_id || '';
+      const summary = task.summary || '-';
+      const assignee = task.assignee || '-';
+      const status = (task.status || 'unknown').toLowerCase();
+      const statusLabel = AUDIT_STATUS_MAP[status] || status;
+      const updatedAt = (task.updated_at || task.created_at || '').substring(0, 16);
+      const chain = (task.chain || []).map(h => `${AGENT_ICONS[h.agent] || '?'}${h.agent}`).join(' → ');
+      const errMsg = task.error ? (typeof task.error === 'string' ? task.error : (task.error.detail || JSON.stringify(task.error))) : '';
+      const hasAudit = task.audit_log && task.audit_log.length > 0;
+      const expanded = idx < defaultExpanded ? 'open' : '';
+
+      let auditHtml = '';
+      if (hasAudit) {
+        auditHtml = task.audit_log.map(a => {
+          const reviewerIcon = AGENT_ICONS[a.reviewer] || '🔍';
+          const resultIcon = a.result === 'pass' ? '✅' : a.result === 'fail' ? '❌' : '⚠️';
+          const at = (a.at || '').substring(0, 16);
+          const issues = (a.issues || []).map(i => `<div style="font-size:11px;color:#94a3b8;margin-left:12px">• ${i.severity ? '['+i.severity+'] ' : ''}${esc(i.desc || i)}</div>`).join('');
+          const reportLink = a.report_file
+            ? `<button class="btn btn-sm" style="margin-top:4px" onclick="showAuditReport('${esc(a.report_file)}')">📄 查看完整报告</button>`
+            : '';
+          return `<div style="padding:6px 10px;margin-bottom:4px;background:rgba(30,41,59,0.5);border-radius:6px;border-left:3px solid ${a.result === 'pass' ? '#22c55e' : a.result === 'fail' ? '#ef4444' : '#f59e0b'}">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:12px;font-weight:500">${reviewerIcon} ${AGENT_ICONS[a.reviewer] ? '' : ''}${a.reviewer} · ${resultIcon} ${a.result} · ${at}</span>
+            </div>
+            ${a.summary ? `<div style="font-size:12px;color:#e2e8f0;margin-top:2px">${esc(a.summary)}</div>` : ''}
+            ${issues}
+            ${reportLink}
+          </div>`;
+        }).join('');
+      }
+
+      return `<div class="msg-item" style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;padding:10px 12px" onclick="this.parentElement.classList.toggle('collapsed');this.querySelector('.collapse-icon').textContent = this.parentElement.classList.contains('collapsed') ? '▶' : '▼'">
+          <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+            <span class="collapse-icon" style="font-size:10px;color:#64748b">▼</span>
+            <span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(summary)}</span>
+            <span style="font-size:11px">${statusBadge(status)}</span>
+            ${hasAudit ? '<span style="font-size:11px;color:#22c55e">✓ 已审计</span>' : '<span style="font-size:11px;color:#f59e0b">⏳ 待审计</span>'}
+          </div>
+          <span style="font-size:11px;color:#64748b;white-space:nowrap">${updatedAt}</span>
+        </div>
+        <div style="padding:0 12px 10px 32px;${expanded ? '' : 'display:none'}">
+          <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#94a3b8;margin-bottom:6px">
+            <span><span style="color:#64748b">ID:</span> ${esc(tid.substring(0, 24))}</span>
+            <span><span style="color:#64748b">负责人:</span> ${AGENT_ICONS[assignee] || ''}${esc(assignee)}</span>
+            <span><span style="color:#64748b">状态:</span> ${statusLabel}</span>
+          </div>
+          ${chain ? `<div style="font-size:12px;color:#94a3b8;margin-bottom:6px"><span style="color:#64748b">追踪链:</span> ${chain}</div>` : ''}
+          ${errMsg ? `<div style="font-size:12px;color:#fca5a5;margin-bottom:6px;background:rgba(239,68,68,0.1);padding:6px 8px;border-radius:4px">❗ ${esc(errMsg)}</div>` : ''}
+          ${hasAudit ? `<div style="margin-top:8px"><div style="font-size:12px;font-weight:500;color:#a78bfa;margin-bottom:4px">🔍 审计记录</div>${auditHtml}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  el.innerHTML = html;
+}
+
+// 查看审计报告（弹窗）
+let _reportCache = {};
+
+async function showAuditReport(reportFile) {
+  let content = _reportCache[reportFile];
+  if (!content) {
+    try {
+      const r = await fetch('/api/report-content/' + encodeURIComponent(reportFile));
+      if (r.ok) {
+        content = await r.text();
+        _reportCache[reportFile] = content;
+      }
+    } catch(e) {}
+  }
+  if (!content) content = '报告内容加载失败';
+  const html = `<div class=header>
+    <h2>📄 ${esc(reportFile)}</h2>
+    <button class="btn btn-sm" onclick="closeModal()">✕</button>
+  </div>
+  <div style="font-size:13px;line-height:1.7;white-space:pre-wrap;background:#0f172a;border-radius:8px;padding:16px;max-height:70vh;overflow:auto">${esc(content)}</div>`;
+  document.getElementById('agentModalContent').innerHTML = html;
+  document.getElementById('agentModal').classList.add('open');
+}
+
+// ── 👑 子言面板 ──
+
+const AGENT_NAMES = {
+  lingzhao:'🪷灵昭', lingjin:'🦋灵瑾', lingxi:'🔭灵犀', xiaoqi:'🦞小七',
+  yige:'👨‍🔧一哥', lingxiao:'🎯灵霄', dali:'🤖大力', lingjian:'🔍灵鉴', lingyan:'🧪灵验'
+};
+
+let _replyContext = null; // {to, msg_id, origContent}
+
+async function renderZiyanTab() {
+  const elPending = document.getElementById('ziyanPending');
+  const elTeam = document.getElementById('ziyanTeam');
+  const elAlerts = document.getElementById('ziyanAlerts');
+  if (!elPending) return;
+
+  // 并发拉数据
+  let inboxData = null, statusData = null, alertsData = null;
+  try {
+    [inboxData, statusData, alertsData] = await Promise.all([
+      fetchJSON('/api/inbox/lingzhao'),
+      fetchJSON('/api/status'),
+      fetchJSON('/api/alerts'),
+    ]);
+  } catch(e) {
+    elPending.innerHTML = '<div style="color:#64748b;font-size:13px">⚠️ 数据加载失败</div>';
+    return;
+  }
+
+  // ── 卡片 1: 待回复消息 ──
+  const agentStatuses = (statusData && statusData.agent_statuses) || {};
+  let pendingMsgs = [];
+  if (inboxData && inboxData.messages) {
+    pendingMsgs = inboxData.messages.filter(m => {
+      const s = (m.state || m.status || '').toLowerCase();
+      return s === 'pending' || s === '' || s === 'new';
+    });
+    // 按时间倒序
+    pendingMsgs.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  }
+
+  let pendingHtml = '';
+  if (pendingMsgs.length === 0) {
+    pendingHtml = '<div style="padding:20px;text-align:center;color:#6ee7b7;font-size:14px">🎉 暂无待回复消息</div>';
+  } else {
+    pendingHtml = pendingMsgs.map(m => {
+      const fromIcon = AGENT_NAMES[m.from] || m.from || '?';
+      const time = m.created_at ? m.created_at.substring(0, 16) : '';
+      const summary = (m.content || '').substring(0, 80) + ((m.content || '').length > 80 ? '...' : '');
+      const pBadge = m.priority === 'urgent' ? '<span style="background:rgba(239,68,68,0.3);color:#fca5a5;font-size:11px;padding:1px 6px;border-radius:4px;margin-right:6px">紧急</span>' : '';
+      return `<div class="msg-item" style="margin-bottom:6px">
+        <div class="head">${fromIcon} · ${time} ${pBadge}</div>
+        <div class="body">${esc(summary)}</div>
+        <div style="margin-top:6px;display:flex;gap:6px">
+          <button class="btn btn-sm" onclick="openReply('${esc(m.from || '')}','${esc(m.msg_id || '')}','${esc(summary.replace(/['"\\]/g,''))}')">💬 回复</button>
+          <button class="btn btn-sm" onclick="markRead('${esc(m.msg_id || '')}')" style="color:#64748b">✓ 已阅</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  elPending.innerHTML = `
+    <div class="stat-card" style="background:rgba(30,41,59,0.7);backdrop-filter:blur(12px);border:1px solid rgba(51,65,85,0.4);border-radius:12px;padding:14px">
+      <h3 style="font-size:14px;margin-bottom:8px">📩 待回复消息 <span class="num">${pendingMsgs.length}</span></h3>
+      <div style="max-height:360px;overflow-y:auto">${pendingHtml}</div>
+    </div>
+  `;
+
+  // ── 卡片 2: 团队状态 ──
+  let hb = null;
+  try { hb = await fetchJSON('/api/heartbeat'); } catch(e) {}
+  let statusHtml = '';
+  if (hb && hb.agents) {
+    const names = Object.keys(AGENT_NAMES);
+    const chips = names.map(name => {
+      const state = hb.agents[name];
+      const cn = AGENT_NAMES[name];
+      const dot = state && state.status === 'online' ? '🟢' : '🔴';
+      return `<span style="display:inline-block;padding:4px 10px;margin:3px;background:rgba(30,41,59,0.6);border-radius:8px;font-size:13px">${dot} ${cn}</span>`;
+    }).join('');
+    // 未读清单
+    const unreadList = names.filter(name => {
+      const s = agentStatuses[name];
+      return s && (s.has_unread || s.active_messages > 0);
+    }).map(name => `${AGENT_NAMES[name]} 📩`).join(' · ');
+    statusHtml = chips;
+    if (unreadList) {
+      statusHtml += '<div style="margin-top:8px;font-size:12px;color:#fbbf24">未读: ' + unreadList + '</div>';
+    }
+  } else {
+    statusHtml = '<div style="color:#64748b;font-size:13px">⏳ 加载中...</div>';
+  }
+
+  elTeam.innerHTML = `
+    <div class="stat-card" style="background:rgba(30,41,59,0.7);backdrop-filter:blur(12px);border:1px solid rgba(51,65,85,0.4);border-radius:12px;padding:14px">
+      <h3 style="font-size:14px;margin-bottom:8px">🏢 团队状态</h3>
+      <div>${statusHtml}</div>
+    </div>
+  `;
+
+  // ── 卡片 3: 最近告警 ──
+  let alertHtml = '';
+  if (alertsData && alertsData.alerts && alertsData.alerts.length > 0) {
+    const recent = alertsData.alerts.slice(-5).reverse();
+    const colorMap = {critical:'#fca5a5', warn:'#fdba74', info:'#93c5fd'};
+    alertHtml = recent.map(a => {
+      const dot = colorMap[a.severity] ? `<span style="color:${colorMap[a.severity]}">●</span>` : '○';
+      const assignee = a.assignee ? ` · <span style="color:#a78bfa">${AGENT_NAMES[a.assignee] || a.assignee}处理</span>` : '';
+      const time = a.created_at ? a.created_at.substring(0, 16) : '';
+      return `<div class="msg-item" style="margin-bottom:4px;padding:8px 10px">
+        <div class="head">${dot} ${a.severity} ${a.type} · ${a.agent}${assignee} · ${time}</div>
+        <div class="body" style="font-size:12px">${esc(a.message || '')}</div>
+      </div>`;
+    }).join('');
+  } else {
+    alertHtml = '<div style="color:#6ee7b7;font-size:13px">✅ 无告警</div>';
+  }
+
+  elAlerts.innerHTML = `
+    <div class="stat-card" style="background:rgba(30,41,59,0.7);backdrop-filter:blur(12px);border:1px solid rgba(51,65,85,0.4);border-radius:12px;padding:14px">
+      <h3 style="font-size:14px;margin-bottom:8px">🔔 最近告警</h3>
+      <div style="max-height:220px;overflow-y:auto">${alertHtml}</div>
+    </div>
+  `;
+}
+
+// 打开回复弹窗
+function openReply(to, msgId, origSummary) {
+  _replyContext = {to, msg_id: msgId, origContent: origSummary};
+  document.getElementById('replyTitle').textContent = '💬 回复 ' + (AGENT_NAMES[to] || to);
+  document.getElementById('replyOrigMsg').textContent = '原消息: ' + origSummary;
+  document.getElementById('replyInput').value = '';
+  document.getElementById('replyModal').style.display = 'flex';
+  document.getElementById('replyInput').focus();
+}
+
+// 关闭回复弹窗
+function closeReply() {
+  document.getElementById('replyModal').style.display = 'none';
+  _replyContext = null;
+}
+
+// 发送回复
+async function sendReply() {
+  const ctx = _replyContext;
+  if (!ctx || !ctx.to) { toast('回复上下文丢失', 'error'); return; }
+  const content = document.getElementById('replyInput').value.trim();
+  if (!content) { toast('请输入回复内容', 'error'); return; }
+  const btn = document.querySelector('#replyModal .btn-gold');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    const r = await fetch('/api/send-msg', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        from: 'lingzhao',
+        to: ctx.to,
+        type: 'reply',
+        priority: 'normal',
+        content: content,
+      }),
+    });
+    const data = await r.json();
+    if (data.status === 'ok') {
+      toast('✅ 已回复 ' + AGENT_NAMES[ctx.to], 'success');
+      closeReply();
+      // 标记原消息为已读
+      if (ctx.msg_id) {
+        try {
+          await fetch('/api/mark-read/lingzhao', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({msg_id: ctx.msg_id}),
+          });
+        } catch(e) {}
+      }
+      renderZiyanTab();
+    } else {
+      toast('发送失败: ' + (data.error || 'unknown'), 'error');
+    }
+  } catch(e) {
+    toast('发送失败: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '发送'; }
+  }
+}
+
+// 标记已读
+async function markRead(msgId) {
+  if (!msgId) return;
+  try {
+    await fetch('/api/mark-read/lingzhao', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({msg_id: msgId}),
+    });
+    toast('✅ 已标记已读', 'success');
+    renderZiyanTab();
+  } catch(e) {
+    toast('标记失败', 'error');
+  }
+}
+
 // ── 心跳触发 ──
 
 async function triggerHeartbeat() {
@@ -1960,6 +2341,98 @@ async function fixBrowserButtons() {
   } catch(e) {}
 }
 setTimeout(fixBrowserButtons, 1000);
+
+// === 发信功能 ===
+function openSendModal() {
+  const sel = document.getElementById('sendTo');
+  sel.innerHTML = '';
+  const agents = window._agents || [];
+  const names = agents.map(a => a.name || a).filter(n => n !== 'ziyan');
+
+  // 构建 agent 列表 + 广播选项
+  function addAgentOpt(sel, n) {
+    const opt = document.createElement('option');
+    opt.value = n;
+    opt.textContent = (AGENT_NAMES[n] ? AGENT_NAMES[n] + ' (' + n + ')' : n);
+    sel.appendChild(opt);
+  }
+
+  if (names.length === 0) {
+    // fallback: 从 AGENT_NAMES 推断
+    const fallback = ['lingzhao','lingjin','lingxi','lingxiao','xiaoqi','dali','yige','lingjian','lingyan'];
+    fallback.forEach(n => addAgentOpt(sel, n));
+  } else {
+    names.forEach(n => addAgentOpt(sel, n));
+  }
+
+  // 广播选项（始终加在最后）
+  const allOpt = document.createElement('option');
+  allOpt.value = '__broadcast__';
+  allOpt.textContent = '📡 全部广播';
+  sel.appendChild(allOpt);
+  document.getElementById('sendContent').value = '';
+  document.getElementById('sendPriority').value = 'normal';
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('sendBtn').textContent = '发送';
+  document.getElementById('sendModal').style.display = 'flex';
+  document.getElementById('sendContent').focus();
+}
+
+function closeSendModal() {
+  document.getElementById('sendModal').style.display = 'none';
+}
+
+async function doSend() {
+  const to = document.getElementById('sendTo').value;
+  const content = document.getElementById('sendContent').value.trim();
+  const priority = document.getElementById('sendPriority').value;
+  if (!content) { toast('请输入消息内容', 'error'); return; }
+
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳';
+
+  try {
+    if (to === '__broadcast__') {
+      // 广播：给所有人发
+      const agents = window._agents || [];
+      const names = agents.map(a => a.name || a).filter(n => n !== 'ziyan');
+      if (names.length === 0) {
+        toast('没有可发送的 agent', 'error');
+        btn.disabled = false;
+        btn.textContent = '发送';
+        return;
+      }
+      let ok = 0, fail = 0;
+      for (const name of names) {
+        try {
+          const r = await fetch('/api/send-msg', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({to: name, content, from: 'ziyan', priority})
+          });
+          if (r.ok) ok++; else fail++;
+        } catch(e) { fail++; }
+      }
+      toast(`📡 广播完成: ${ok} 成功, ${fail} 失败`, fail === 0 ? 'success' : 'error');
+    } else {
+      const r = await fetch('/api/send-msg', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({to, content, from: 'ziyan', priority})
+      });
+      if (!r.ok) { toast('发送失败: ' + (await r.text()), 'error'); return; }
+      toast(`✅ 已发送给 ${AGENT_NAMES[to] || to}`, 'success');
+    }
+    closeSendModal();
+    renderZiyanTab();
+  } catch(e) {
+    toast('发送异常: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '发送';
+  }
+}
 </script>
 </body>
 </html>

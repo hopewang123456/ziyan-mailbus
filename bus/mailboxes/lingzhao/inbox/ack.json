@@ -1,0 +1,9 @@
+[
+  {
+    "action": "ack",
+    "msg_id": "reply-msg-20260603-64632",
+    "agent": "lingzhao",
+    "timestamp": "2026-06-03T11:30:00+08:00",
+    "status": "reconfirmed"
+  }
+]

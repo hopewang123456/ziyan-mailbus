@@ -210,59 +210,20 @@ mailbus 会将你的回复视为已读确认。
         text_parts.append(msg_body)
     combined_text = "\n---\n".join(text_parts)
     
-    # 在第一条消息前加上 mailbus 系统上下文（仅首次）
-    system_context = f"""【系统上下文】你正在通过 ziyan-mailbus 消息总线工作。
+    # 在第一条消息前加上 mailbus 系统上下文（精简版，核心字段仅 11 行）
+    rules_dir = f"{data_dir}/rules"
+    system_context = f"""【系统上下文】ziyan-mailbus 消息总线
 
-你的名称: {agent_name}
-你的 inbox: {data_dir}/inbox/{agent_name}/inbox.json
-你的 ack 路径: {data_dir}/inbox/{agent_name}/ack.json
+agent: {agent_name}
+inbox: {data_dir}/inbox/{agent_name}/inbox.json
+ack:   {data_dir}/inbox/{agent_name}/ack.json
 
-━━━━ mailbus 工作纪律（必须遵守）━━━━
+【规则文档】
+通用: {rules_dir}/common.md
+岗位: {rules_dir}/{agent_name.replace('ling','')}.md（如存在）
 
-1. 【必须】写 ack → 收到消息后立即写 ack 确认（2秒内完成）
-2. 【必须】执行 → 写 ack 后必须立即开始执行任务，不得只 ack 不执行
-3. 【必须】回复 → 任务完成后必须回复发件人（写回发件人的 inbox），告知完成状态
-4. 【禁止】不做「仅 ack 不执行」或「执行完不回复」
-5. 如果任务失败，也必须回复错误原因
-6. 【必须】回复格式必须是带 msg_id 的结构化消息，写入发件人 inbox 的 messages 数组
-7. 【必须】任务生命周期：ack → 执行 → 回复完成 → 标记 done
-
-━━━━ 任务追踪（自动记录）━━━━
-mailbus 会自动追踪任务的完整生命周期：
-- 发起 → ack → 执行中 → 完成/失败
-- 每个 hop 都会记录到 store/tasks/ 目录
-- 超时未完成将自动催办和升级
-
-━━━━ 完成回执格式 ────────────────────
-任务完成后，请确保已回复发件人。回复写入发件人 inbox 时：
-- 设置 id 为原始 msg_id 的 reply 版本
-- 设置 type 为 "reply"
-- 设置状态为 "pending"
-- 设置 has_unread = true
-
-mailbus 会检测到你的回复并自动标记原始任务为 done。
-如果你不回复，mailbus 会周期性催办，3次催办后任务自动超时。
-
-━━━━ 重要提醒 ────────────────────────
-不遵守以上纪律的后果：
-1. 消息发送方不知道任务状态 → 需要人工确认 → 失去自动化价值
-2. 任务被标记为 timeout → 信誉下降
-3. 需要人工手动重试 → 浪费团队时间
-
-mailbus 通过 CLI 将消息推送给你。你收到的每条消息都包含操作指令，
-请按【必须】标记的步骤严格执行。
-
-【Skill 使用记录】
-如果你在本次任务中调用了任何 skill，请额外写一条记录文件：
-  写文件到: {data_dir}/skill-usage-pending/{agent_name}-{msg_id}.json
-  格式:
-  ```json
-  {{"skill": "<skill名称>", "agent": "{agent_name}", "timestamp": "<ISO时间>"}}
-  ```
-  示例: {{"skill": "scrapling-skill", "agent": "{agent_name}", "timestamp": "2026-05-24T12:00:00+08:00"}}
-
-mailbus scan 会自动收集这些记录，展示在总览页的 skill 使用统计中。
-
+【回复格式】
+对方 inbox 追加: id=reply-<原id>, type=reply, state=pending, has_unread=true
 ---
 """
     combined_text = system_context + combined_text

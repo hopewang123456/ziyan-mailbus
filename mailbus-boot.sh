@@ -278,6 +278,23 @@ for idx, item in enumerate(data, start=${idx}):
         print(f'  ⚠️  :{port} 已被占用，跳过')
         continue
 
+    # ── P0: API Key 继承 ─────────────────────────────────────
+    # 对 hermes_profile 类型 agent，自动创建 .env 符号链接
+    if agent_type == 'hermes_profile':
+        hermes_home = '/mnt/e/hermes-data/.hermes'
+        profile_dir = f'{hermes_home}/profiles/{name}'
+        env_src = f'{hermes_home}/.env'
+        env_dst = f'{profile_dir}/.env'
+        if os.path.isfile(env_src) and os.path.isdir(profile_dir):
+            if not os.path.isfile(env_dst) and not os.path.islink(env_dst):
+                try:
+                    os.symlink(env_src, env_dst)
+                    print(f'  🔑 .env 符号链接已创建: {env_dst} → {env_src}')
+                except Exception as e:
+                    print(f'  ⚠️ .env 链接失败: {e}')
+            elif os.path.islink(env_dst):
+                print(f'  🔑 .env 符号链接已存在')
+
     # 执行启动命令
     log_file = f'/tmp/mailbus-{name}-launch.log'
     print(f'  🚀 {start_cmd[:80]}...')

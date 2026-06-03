@@ -115,8 +115,8 @@ class TestScanner:
         urgent, normal = build_queues(self.data_dir, {"agent_a": {}})
         assert "agent_a" in urgent
         assert len(urgent["agent_a"]) == 1
-        assert "agent_a" in normal
-        assert len(normal["agent_a"]) == 1
+        # P2 串行约束：有加急时只推加急，普通排队
+        assert "agent_a" not in normal
     
     def test_mark_as_pushed(self):
         """mark_as_pushed 正确修改状态"""

@@ -13,7 +13,15 @@ from lib.pusher import push_messages, resolve_cli_chain
 
 
 def handle_inbox(handler, agent: str):
-    """GET /api/inbox/<agent> — 获取指定 agent 的 inbox 内容"""
+    """GET /api/inbox/<agent> — 获取指定 agent 的 inbox 内容
+    
+    支持查询参数:
+        ?status_filter=pending  — 只返回待处理消息（默认返回全部）
+    """
+    from urllib.parse import urlparse, parse_qs
+    qs = parse_qs(urlparse(handler.path).query)
+    status_filter = qs.get("status_filter", [None])[0]
+    
     paths = resolve_paths(handler.data_dir)
     inbox_file = f"{paths['inbox']}/{agent}/inbox.json"
     if not os.path.exists(inbox_file):
@@ -25,10 +33,19 @@ def handle_inbox(handler, agent: str):
         return
     inbox = Inbox.from_dict(data)
     msg_count = len(inbox.messages)
-    unread = sum(1 for m in inbox.messages if (inbox.msg_field(m, "state", "") or inbox.msg_field(m, "status", "")) == "pending")
+    # P4: 非 terminal 态（pending/pushed/acknowledged/processing）视为未处理
+    terminal_states = {"done", "closed", "rejected", "failed", "archived", "sent"}
+    unread = sum(1 for m in inbox.messages
+                 if (inbox.msg_field(m, "state", "") or inbox.msg_field(m, "status", ""))
+                 not in terminal_states)
     msgs_out = []
     for m in inbox.messages:
         msg = Message.from_dict(m) if isinstance(m, dict) else m
+        # P4: 支持 status_filter 过滤
+        if status_filter:
+            cur_state = msg.state or msg.status
+            if cur_state != status_filter:
+                continue
         msgs_out.append({
             "id": msg.id, "from": msg.from_, "type": msg.type,
             "priority": msg.priority, "content": msg.content,
@@ -59,7 +76,9 @@ def handle_mark_read(handler, agent: str):
     for mid in msg_ids:
         inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, acknowledged_at=ts)
         inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, state=MsgStatus.DONE, done_at=ts)
-    inbox.has_unread = any((inbox.msg_field(m, "state", "") or inbox.msg_field(m, "status", "")) == "pending" for m in inbox.messages)
+    # P4: 非 terminal 态才视为有未处理消息
+    terminal_states = {"done", "closed", "rejected", "failed", "archived", "sent"}
+    inbox.has_unread = any((inbox.msg_field(m, "state", "") or inbox.msg_field(m, "status", "")) not in terminal_states for m in inbox.messages)
     json_write(inbox_file, inbox.to_dict())
     handler._send_json({"status": "ok", "marked": len(msg_ids)})
 

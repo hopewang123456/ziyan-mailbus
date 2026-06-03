@@ -30,7 +30,11 @@ def handle_status(handler):
         if data and "agent" in data:
             try:
                 inbox = Inbox.from_dict(data)
-                unread += sum(1 for m in inbox.messages if inbox.msg_field(m, "status") == "pending")
+                # P4: 统计所有非 terminal 态消息（pending/pushed/acknowledged/processing）
+                terminal_states = {"done", "closed", "rejected", "failed", "archived", "sent"}
+                unread += sum(1 for m in inbox.messages
+                              if (inbox.msg_field(m, "state") or inbox.msg_field(m, "status", ""))
+                              not in terminal_states)
             except (KeyError, TypeError):
                 pass
         agent_statuses[name] = {

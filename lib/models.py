@@ -291,12 +291,17 @@ class Inbox:
         return False
 
     def has_unread_messages(self) -> bool:
-        """检查是否有未读消息（优先检查 state，回退读 status）"""
+        """检查是否有未读消息（优先检查 state，回退读 status）
+        
+        P4: processing 视为活跃状态（未完成），不视为已读。
+        只有 terminal 态（done/closed/rejected/failed/archived）才视为已处理。
+        """
         for m in self.messages:
             state = m.get("state") if isinstance(m, dict) else getattr(m, 'state', '')
             if not state:
                 state = m.get("status") if isinstance(m, dict) else m.status
-            if state in ("acknowledged", "archived", "done", "closed", "rejected", "received", "sent"):
+            # terminal 态 → 已处理
+            if state in ("done", "closed", "rejected", "failed", "archived", "sent"):
                 continue
             return True
         return False

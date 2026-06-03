@@ -132,6 +132,82 @@ def test_list_all():
     print("  ✓ test_list_all")
 
 
+def test_list_all_ordering():
+    """验证倒序排序正确性：最新的 updated_at 应排在最前面"""
+    import json
+    from lib.utils import json_write
+    with tempfile.TemporaryDirectory() as td:
+        t = TaskTracker(td)
+        tasks_dir = os.path.join(td, "tasks")
+        os.makedirs(tasks_dir, exist_ok=True)
+
+        # 直接写入带不同 updated_at 的任务（模拟时间间隔）
+        task_old = {
+            "task_id": "task-order-001", "summary": "最早",
+            "status": "success",
+            "updated_at": "2026-06-03T10:00:00+0800",
+        }
+        task_mid = {
+            "task_id": "task-order-002", "summary": "中间",
+            "status": "running",
+            "updated_at": "2026-06-03T12:00:00+0800",
+        }
+        task_new = {
+            "task_id": "task-order-003", "summary": "最新",
+            "status": "running",
+            "updated_at": "2026-06-03T15:00:00+0800",
+        }
+        json_write(os.path.join(tasks_dir, "task-order-001.json"), task_old)
+        json_write(os.path.join(tasks_dir, "task-order-002.json"), task_mid)
+        json_write(os.path.join(tasks_dir, "task-order-003.json"), task_new)
+
+        all_tasks = t.list_all()
+        assert len(all_tasks) == 3
+        # 最新更新的在最上面
+        assert all_tasks[0]["task_id"] == "task-order-003", \
+            f"预期 task-order-003 排最前，实际: {all_tasks[0]['task_id']}"
+        assert all_tasks[1]["task_id"] == "task-order-002"
+        assert all_tasks[2]["task_id"] == "task-order-001"
+    print("  ✓ test_list_all_ordering")
+
+
+def test_list_all_ordering_with_timezone():
+    """验证带 +0800 时区后缀的 updated_at 排序正确"""
+    import json
+    with tempfile.TemporaryDirectory() as td:
+        t = TaskTracker(td)
+        # 直接写入带不同时区的 updated_at（模拟真实场景）
+        tasks_dir = os.path.join(td, "tasks")
+        os.makedirs(tasks_dir, exist_ok=True)
+
+        # 注意：+0800 的时间比 +0000 的时间「看起来」小时更大
+        # 但实际 UTC 时间 +0800 的更早
+        task_a = {
+            "task_id": "task-tz-001",
+            "summary": "有+0800的较晚记录",
+            "status": "pending",
+            "updated_at": "2026-06-03T15:12:58+0800",  # UTC 07:12:58
+        }
+        task_b = {
+            "task_id": "task-tz-002",
+            "summary": "有+0000的较早记录",
+            "status": "pending",
+            "updated_at": "2026-06-03T10:12:58+0000",  # UTC 10:12:58 → 实际更晚
+        }
+        # 用 json_write 写入
+        from lib.utils import json_write
+        json_write(os.path.join(tasks_dir, "task-tz-001.json"), task_a)
+        json_write(os.path.join(tasks_dir, "task-tz-002.json"), task_b)
+
+        all_tasks = t.list_all()
+        assert len(all_tasks) == 2
+        # task-tz-002 的 UTC 时间更晚（10:12:58 > 07:12:58），应排前面
+        assert all_tasks[0]["task_id"] == "task-tz-002", \
+            f"预期 task-tz-002 排最前（UTC 10:12:58），实际: {all_tasks[0]['task_id']}"
+        assert all_tasks[1]["task_id"] == "task-tz-001"
+    print("  ✓ test_list_all_ordering_with_timezone")
+
+
 if __name__ == "__main__":
     test_create()
     test_get()
@@ -143,4 +219,6 @@ if __name__ == "__main__":
     test_check_reminders_trigger()
     test_check_reminders_timeout()
     test_list_all()
-    print(f"\n✓ 全部 {10} 个测试通过")
+    test_list_all_ordering()
+    test_list_all_ordering_with_timezone()
+    print(f"\n✓ 全部 {12} 个测试通过")

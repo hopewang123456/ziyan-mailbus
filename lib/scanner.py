@@ -58,16 +58,13 @@ def _scan_one_agent(data_dir: str, name: str, inbox_base: str) -> Optional[Tuple
             mid = inbox.msg_field(m_raw, 'id', '')
             if mid in replied_ids:
                 mstate = get_msg_state(m_raw)
-                if mstate in (MsgStatus.PENDING, MsgStatus.PUSHED):
+                if mstate in (MsgStatus.PENDING, MsgStatus.PUSHED, MsgStatus.PROCESSING):
                     inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, acknowledged_at=ts)
                     mtype = inbox.msg_field(m_raw, 'type', '')
                     cur_state = inbox.msg_field(m_raw, 'state', '')
-                    if not cur_state:
+                    if not cur_state or cur_state == MsgStatus.PROCESSING:
                         inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED,
-                                             state=MsgStatus.RECEIVED, received_at=ts)
-                        if mtype not in ("task", "task_reply"):
-                            inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED,
-                                                 state=MsgStatus.DONE, done_at=ts)
+                                             state=MsgStatus.DONE, done_at=ts)
         json_write(inbox_path, inbox.to_dict())
     
     urgent_msgs = []
@@ -416,25 +413,49 @@ def push_to_queue(data_dir: str, agent_name: str, messages: list, is_urgent: boo
     json_write(queue_file, existing)
 
 
+def _has_pushed_message(inbox) -> bool:
+    """检查 inbox 中是否已有 pushed 状态的消息（串行约束）"""
+    for m in inbox.messages:
+        state = get_msg_state(m)
+        if state == MsgStatus.PUSHED:
+            return True
+    return False
+
+
 def build_queues(data_dir: str, agents: dict) -> Tuple[dict, dict]:
     """
     完整流程：scan 全员的 inbox → 构建加急队列和普通队列。
+    
+    串行约束（P2）：一个 agent 最多同时只有 1 条 pushed 消息，
+    有 pushed 消息时不再推送新的 pending 消息。
     
     返回: (urgent_queue, normal_queue)
     每项: {agent_name: [Message, ...]}
     """
     urgent_queue = {}
     normal_queue = {}
+    paths = resolve_paths(data_dir)
     
     scanned = scan_all(data_dir, agents)
     
     for name, urgent_msgs, normal_msgs in scanned:
+        # ── P2 串行约束：检查该 agent 是否已有 pushed 消息 ──
+        inbox_file = f"{paths['inbox']}/{name}/inbox.json"
+        inbox_data = json_read(inbox_file, {})
+        if inbox_data:
+            inbox = Inbox.from_dict(inbox_data) if "agent" in inbox_data else None
+            if inbox and _has_pushed_message(inbox):
+                continue  # 有正在推送中的消息，暂不推新的
+        
+        # 每次最多推 1 条（加急优先）
         if urgent_msgs:
-            urgent_queue[name] = urgent_msgs
-            push_to_queue(data_dir, name, urgent_msgs, is_urgent=True)
-        if normal_msgs:
-            normal_queue[name] = normal_msgs
-            push_to_queue(data_dir, name, normal_msgs, is_urgent=False)
+            head = [urgent_msgs[0]]
+            urgent_queue[name] = head
+            push_to_queue(data_dir, name, head, is_urgent=True)
+        elif normal_msgs:
+            head = [normal_msgs[0]]
+            normal_queue[name] = head
+            push_to_queue(data_dir, name, head, is_urgent=False)
     
     return urgent_queue, normal_queue
 
@@ -481,6 +502,8 @@ def mark_as_pushed(data_dir: str, agent_name: str, msg_ids: list):
 def update_message_status(data_dir: str, agent_name: str, msg_id: str, new_status: str):
     """
     更新 inbox 中单条消息的状态。
+
+    状态机: pending → pushed → acknowledged → processing → done
     """
     paths = resolve_paths(data_dir)
     inbox_file = f"{paths['inbox']}/{agent_name}/inbox.json"
@@ -493,7 +516,7 @@ def update_message_status(data_dir: str, agent_name: str, msg_id: str, new_statu
     extra = {}
     if new_status == MsgStatus.ACKNOWLEDGED:
         extra["acknowledged_at"] = _now_iso()
-        extra["state"] = MsgStatus.RECEIVED
+        extra["state"] = MsgStatus.PROCESSING  # P4: acknowledged → processing（非 received）
         extra["received_at"] = _now_iso()
     
     found = inbox.set_msg_status(msg_id, new_status, **extra)

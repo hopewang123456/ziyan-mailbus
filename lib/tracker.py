@@ -33,6 +33,28 @@ class ChainStatus:
     ALL = {IN_PROGRESS, COMPLETED, FAILED}
 
 
+def _parse_iso_dt(s: str) -> datetime:
+    """安全解析 ISO 时间字符串（带或不带时区），返回 timezone-aware datetime。
+
+    支持格式：
+      - 2026-06-03T15:12:58+0800
+      - 2026-06-03T15:12:58
+    解析失败时返回 epoch (UTC) 作为 fallback，确保排序不崩溃。
+    """
+    if not s:
+        return datetime(1970, 1, 1, tzinfo=timezone.utc)
+    try:
+        return datetime.strptime(s, "%Y-%m-%dT%H:%M:%S%z")
+    except ValueError:
+        pass
+    try:
+        # 无时区 → 视为 UTC
+        dt = datetime.strptime(s, "%Y-%m-%dT%H:%M:%S")
+        return dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        return datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
 class TaskTracker:
     """任务追踪器"""
 
@@ -112,7 +134,8 @@ class TaskTracker:
                 if task and (not status_filter or task.get("status") == status_filter):
                     results.append(task)
         # 按 updated_at 倒序（最新的在最上面），fallback 到 created_at
-        results.sort(key=lambda t: t.get("updated_at", t.get("created_at", "")), reverse=True)
+        # 使用 _parse_iso_dt 安全解析带时区后缀（如 +0800）的时间字符串
+        results.sort(key=lambda t: _parse_iso_dt(t.get("updated_at", t.get("created_at", ""))), reverse=True)
         return results
 
     def add_audit(self, task_id: str, reviewer: str, result: str,

@@ -45,18 +45,24 @@ def process_ack(data_dir: str, agent_name: str, ack_data: dict) -> bool:
     found = inbox.set_msg_status(msg_id, MsgStatus.ACKNOWLEDGED, acknowledged_at=ts)
     
     if found:
-        # v3.0 状态机：ack → received（使用统一访问器）
+        # v3.0 状态机：ack → processing（task）或 received（非 task）
         msg = inbox.get_msg(msg_id)
         if msg and not inbox.msg_field(msg, 'state'):
-            inbox.set_msg_status(msg_id, MsgStatus.ACKNOWLEDGED,
-                                 state=MsgStatus.RECEIVED,
-                                 received_at=ts)
-            # 非 task 类型直接 done
             mtype = inbox.msg_field(msg, 'type', '')
-            if mtype not in ("task", "task_reply"):
+            if mtype in ("task", "task_reply"):
+                # P4: task 类型 ack 后进入 processing 态
                 inbox.set_msg_status(msg_id, MsgStatus.ACKNOWLEDGED,
-                                     state=MsgStatus.DONE,
-                                     done_at=ts)
+                                     state=MsgStatus.PROCESSING,
+                                     received_at=ts)
+            else:
+                inbox.set_msg_status(msg_id, MsgStatus.ACKNOWLEDGED,
+                                     state=MsgStatus.RECEIVED,
+                                     received_at=ts)
+                # 非 task 类型直接 done
+                if mtype not in ("task", "task_reply"):
+                    inbox.set_msg_status(msg_id, MsgStatus.ACKNOWLEDGED,
+                                         state=MsgStatus.DONE,
+                                         done_at=ts)
         
         # 检查 forward_chain，自动更新当前 agent 的 hop 状态
         for m in inbox.messages:
