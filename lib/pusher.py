@@ -16,17 +16,36 @@ from .utils import json_read, json_write, jsonl_append, log_error, resolve_paths
 from .scanner import mark_as_pushed, update_message_status
 
 # ── API Key 注入 ─────────────────────────────────────────────────────
-# 从 bus.py 所在目录的上级搜索 .env 文件
+# P0: 统一从 .env 文件加载所有 API Key，注入子进程
+# 不再通过 cmd 字面量搜索 provider 名（那不可靠）
 _ENV_LOADED = False
-_ENV_VARS = {}
+_ALL_ENV_KEYS = {}
+
+# 已知 API Key 变量名列表（扩展时在此追加）
+KNOWN_API_KEYS = [
+    "DEEPSEEK_API_KEY",
+    "OPENROUTER_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "QWEN_API_KEY",
+    "ZHIPU_API_KEY",
+    "GEMINI_API_KEY",
+    "GROQ_API_KEY",
+    "TOGETHER_API_KEY",
+    "MISTRAL_API_KEY",
+    "COHERE_API_KEY",
+]
 
 
 def _load_env():
-    """加载 mailbus 项目目录下的 .env 文件，缓存到全局变量"""
-    global _ENV_LOADED, _ENV_VARS
+    """加载 mailbus 项目目录下的 .env 文件，缓存所有环境变量"""
+    global _ENV_LOADED, _ALL_ENV_KEYS
     if _ENV_LOADED:
         return
     _ENV_LOADED = True
+
+    # 先继承父进程已有的 API Key 环境变量
+    _ALL_ENV_KEYS.update({k: v for k, v in os.environ.items() if k.endswith("_API_KEY")})
 
     # 搜索路径：先找项目根，再找 ~/.hermes/.env
     bus_dir = Path(__file__).resolve().parent.parent  # mailbus/lib/ → mailbus/
@@ -45,28 +64,23 @@ def _load_env():
                     key, _, val = line.partition("=")
                     key = key.strip()
                     val = val.strip().strip("'\"")
-                    _ENV_VARS[key] = val
+                    if val:
+                        _ALL_ENV_KEYS[key] = val
             break  # 找到第一个有效的 .env 就停
 
 
-def get_env_for_cli(cmd: str) -> dict:
-    """给 CLI 命令补充环境变量"""
+def get_env_for_cli(cmd: str = "") -> dict:
+    """给 CLI 命令补充所有已知的 API Key 环境变量
+
+    P0 增强：不再通过 cmd 中查找 provider 名来推测需要什么 key，
+    而是统一注入所有已知的 API Key，确保子进程总是能用。
+    如果某个 key 不存在于 .env 中，就不注入——不产生坏影响。
+    """
     _load_env()
-    # 只注入 CLI 命令相关的 API Key
-    # 通过 cmd 中提到的 provider 名推断
     extra_env = {}
-    if "deepseek" in cmd.lower() or "openai-compatible" in cmd.lower():
-        if "DEEPSEEK_API_KEY" in _ENV_VARS:
-            extra_env["DEEPSEEK_API_KEY"] = _ENV_VARS["DEEPSEEK_API_KEY"]
-    if "openrouter" in cmd.lower():
-        if "OPENROUTER_API_KEY" in _ENV_VARS:
-            extra_env["OPENROUTER_API_KEY"] = _ENV_VARS["OPENROUTER_API_KEY"]
-    if "anthropic" in cmd.lower() or "claude" in cmd.lower():
-        if "ANTHROPIC_API_KEY" in _ENV_VARS:
-            extra_env["ANTHROPIC_API_KEY"] = _ENV_VARS["ANTHROPIC_API_KEY"]
-    if "openai" in cmd.lower():
-        if "OPENAI_API_KEY" in _ENV_VARS:
-            extra_env["OPENAI_API_KEY"] = _ENV_VARS["OPENAI_API_KEY"]
+    for key in KNOWN_API_KEYS:
+        if key in _ALL_ENV_KEYS:
+            extra_env[key] = _ALL_ENV_KEYS[key]
     return extra_env
 
 
@@ -125,107 +139,61 @@ def push_messages(
         return []
     
     # 2. 构建推送文本（从 Message.action 结构化字段读取指令）
-    text_parts = []
+    # ── P1/A: 精简推送 + 规则文档外置 ──
+    # 系统上下文精简为7行核心信息，不再嵌入长说明
+    # 规则文档路径引用由 store/rules/ 外部文件提供
+    rules_dir = f"{data_dir}/rules"
+    system_context = f"""【系统上下文】ziyan-mailbus 消息总线
+agent: {agent_name}
+inbox: {data_dir}/inbox/{agent_name}/inbox.json
+写 ack 到: {data_dir}/inbox/{agent_name}/ack.json
+纪律: ack → 执行任务 → 回复发件人告知结果
+规则: {rules_dir}/common.md
+岗位规则: {rules_dir}/<role>.md（如存在）
+---
+"""
+    combined_text = system_context
+
     for msg_entry in messages:
         from_ = msg_entry.get("from", "?") if isinstance(msg_entry, dict) else msg_entry.from_
         content = msg_entry.get("content", "") if isinstance(msg_entry, dict) else msg_entry.content
         msg_id = msg_entry.get("id", "") if isinstance(msg_entry, dict) else msg_entry.id
         action_raw = msg_entry.get("action", {}) if isinstance(msg_entry, dict) else (msg_entry.action or MsgType.default_action(msg_entry.type))
         msg_type = msg_entry.get("type", "notice") if isinstance(msg_entry, dict) else msg_entry.type
-        task_data = msg_entry.get("task") if isinstance(msg_entry, dict) else msg_entry.task
         fwd_chain = msg_entry.get("forward_chain") if isinstance(msg_entry, dict) else msg_entry.forward_chain
 
-        # ack 路径（从 data_dir 推导，确保迁移时路径正确）
         ack_path = f"{data_dir}/inbox/{agent_name}/ack.json"
 
-        # 构建指令列表
-        instructions = []
-        # 1. ack（总是有）
-        instructions.append(f"""【必须】写 ack 确认已读
-  文件: {ack_path}
-  格式: {{"action":"ack","msg_id":"{msg_id}","agent":"{agent_name}","timestamp":"<当前ISO时间>"}}
-  ⚠️ 重要: 写 ack 后必须在 30 秒内开始执行任务，不可只 ack 不执行""")
-
-        # 构建消息体
+        # 追踪链
         chain_text = ""
         if fwd_chain and fwd_chain.get("hops"):
             hops = fwd_chain["hops"]
-            chain_text = "\n".join([f"  {h.get('agent','?')}: {h.get('action','?')}" for h in hops])
-            chain_text = f"\n追踪链:\n{chain_text}"
+            chain_text = " | ".join([f"{h.get('agent','?')}:{h.get('action','?')}" for h in hops])
+            chain_text = f" [链: {chain_text}]"
 
-        msg_body = f"""╔══════════════════════════════════════════╗
-║        ziyan-mailbus 消息总线           ║
-╚══════════════════════════════════════════╝
-
-📬 你有一条新消息
-
-━━━━ 回复确认说明 ━━━━
-
-你收到此消息后，只需正常回复文字即可。
-mailbus 会将你的回复视为已读确认。
-不需要写 ack 文件。
-
-━━━━ 消息内容 ━━━━
-类型: {msg_type}
-来自: {from_}
-消息ID: {msg_id}
-内容: {content}{chain_text}"""
+        # 精简消息体（移除 ASCII 盒和冗长说明）
+        msg_body = f"""📬 新消息
+类型: {msg_type}  来自: {from_}  消息ID: {msg_id}{chain_text}
+内容: {content}
+📝 ack 写入: {ack_path}
+📋 工作纪律: 写 ack → 读规则 → 执行任务 → 回复发件人"""
 
         reply_to = action_raw.get("reply_to", "") if action_raw else ""
         if reply_to and reply_to not in ("mailbus", "broadcast", "system", "manual", "mailbus-test", "test", ""):
             reply_path = f"{data_dir}/inbox/{reply_to}/inbox.json"
             reply_msg_id = f"reply-{msg_id}"
             msg_body += f"""
-
-▶ 【必须】回复发件人 {reply_to}
-
-写文件到: {reply_path}
-在 messages 数组末尾追加一条，设 has_unread=true：
-```json
-{{"id":"{reply_msg_id}","from":"{agent_name}","to":"{reply_to}","type":"reply","priority":"normal","state":"pending","content":"<你的回复>","created_at":"<ISO时间>"}}
-```"""
+▶ 需回复发件人 {reply_to}
+  写入: {reply_path} 追加 {{id:"{reply_msg_id}",from:"{agent_name}",to:"{reply_to}",type:"reply",state:"pending",content:"<回复>",created_at:"<ISO>"}}"""
 
         forward_to = action_raw.get("forward_to", []) if action_raw else []
         if forward_to:
             targets = [t for t in forward_to if t != agent_name]
             if targets:
-                msg_body += f"""
+                msg_body += f"\n▶ 需转发至: {', '.join(targets)}"
 
-▶ 【必须】转发给指定 agent: {', '.join(targets)}"""
-                for target in targets:
-                    fwd_path = f"{data_dir}/inbox/{target}/inbox.json"
-                    fwd_msg_id = f"fwd-{msg_id}-{target}"
-                    msg_body += f"""
-
-  → 转发至 {target}:
-    文件: {fwd_path}
-    写入:
-```json
-{{"id":"{fwd_msg_id}","from":"{agent_name}","to":"{target}","type":"forward","priority":"normal","state":"pending","content":"<转发说明>","created_at":"<ISO时间>"}}
-    ```"""
-
-        msg_body += """
-
-━━━━━━━━━━━━━━━━"""
-        text_parts.append(msg_body)
-    combined_text = "\n---\n".join(text_parts)
-    
-    # 在第一条消息前加上 mailbus 系统上下文（精简版，核心字段仅 11 行）
-    rules_dir = f"{data_dir}/rules"
-    system_context = f"""【系统上下文】ziyan-mailbus 消息总线
-
-agent: {agent_name}
-inbox: {data_dir}/inbox/{agent_name}/inbox.json
-ack:   {data_dir}/inbox/{agent_name}/ack.json
-
-【规则文档】
-通用: {rules_dir}/common.md
-岗位: {rules_dir}/{agent_name.replace('ling','')}.md（如存在）
-
-【回复格式】
-对方 inbox 追加: id=reply-<原id>, type=reply, state=pending, has_unread=true
----
-"""
+        msg_body += "\n---"
+        combined_text += msg_body
     combined_text = system_context + combined_text
     
     # 3. 多模型 fallback 推送
