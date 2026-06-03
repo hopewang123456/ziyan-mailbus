@@ -58,48 +58,57 @@ def push_alert(data_dir: str, alert_type: str, severity: str,
 
 
 def _notify_admin(data_dir: str, alert: dict):
-    """推送给管理员（第一个 hermes 类型的 agent）"""
+    """推送给管理员（灵昭）并同时通知子言"""
     config_path = os.path.join(data_dir, "config.json")
     config = json_read(config_path, {})
     if not config:
         return
 
     agents = config.get("agents", {})
-    # 找管理员: 优先找 子言，没有则找第一个 hermes 类型
-    admin_name = None
-    for name, cfg in agents.items():
-        if name == "ziyan" or name == "子言":
-            admin_name = name
-            break
-    if not admin_name:
-        for name, cfg in agents.items():
-            if cfg.get("type") in ("hermes", "hermes_profile"):
-                admin_name = name
-                break
-    if not admin_name:
-        return
-
-    from .utils import build_message
     severity_icon = {"critical": "🔴", "warn": "⚠️", "info": "ℹ️"}
     icon = severity_icon.get(alert["severity"], "ℹ️")
 
-    msg = build_message(
-        from_="mailbus",
-        to=admin_name,
-        content=f"{icon} 【{alert['severity'].upper()}】{alert['message']}\n类型: {alert['type']}\nAgent: {alert['agent']}",
-        msg_type=MsgType.NOTICE,
-        priority=Priority.URGENT if alert["severity"] in ("critical", "warn") else Priority.NORMAL,
-    )
+    # 告警内容
+    content = f"{icon} 【{alert['severity'].upper()}】{alert['message']}\n类型: {alert['type']}\nAgent: {alert['agent']}"
 
-    from .utils import resolve_paths
-    paths = resolve_paths(data_dir)
-    inbox_file = f"{paths['inbox']}/{admin_name}/inbox.json"
-    inbox_data = json_read(inbox_file, {"agent": admin_name, "has_unread": False, "messages": [], "since": _now_iso()})
+    # 通知灵昭（处理人）
+    from .utils import build_message, resolve_paths
     from .models import Inbox
-    inbox = Inbox.from_dict(inbox_data)
-    inbox.has_unread = True
-    inbox.messages.append(msg.to_dict())
-    json_write(inbox_file, inbox.to_dict())
+    paths = resolve_paths(data_dir)
+
+    for name in ["lingzhao", "xiaoqi"]:
+        if name not in agents:
+            continue
+        priority = Priority.URGENT if alert["severity"] in ("critical", "warn") else Priority.NORMAL
+        msg = build_message(
+            from_="mailbus",
+            to=name,
+            content=content,
+            msg_type=MsgType.NOTICE,
+            priority=priority,
+        )
+        inbox_file = f"{paths['inbox']}/{name}/inbox.json"
+        inbox_data = json_read(inbox_file, {"agent": name, "has_unread": False, "messages": [], "since": _now_iso()})
+        inbox = Inbox.from_dict(inbox_data)
+        inbox.has_unread = True
+        inbox.messages.append(msg.to_dict())
+        json_write(inbox_file, inbox.to_dict())
+
+        # 即时推送
+        try:
+            from .pusher import push_messages, resolve_cli
+            agent_cfg = agents.get(name, {})
+            agent_types = config.get("agent_types", {})
+            cli_cmd = resolve_cli(agent_cfg, agent_types)
+            if cli_cmd:
+                push_messages(data_dir, name, [msg.to_dict()], cli_cmd=[cli_cmd],
+                              auto_ack=True, max_retries=1)
+        except Exception:
+            pass
+
+    # 记录告警到 store/alerts.json（供 dashboard 告警 tab 展示）
+    # 告警数据中标记谁负责处理
+    alert["assignee"] = "lingzhao"
 
 
 def get_recent_alerts(data_dir: str, limit: int = 10) -> list:

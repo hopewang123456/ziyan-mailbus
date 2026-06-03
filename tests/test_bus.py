@@ -14,7 +14,7 @@ def test_load_config_defaults():
     with tempfile.TemporaryDirectory() as tmp:
         cfg = load_config(os.path.join(tmp, "nonexistent.json"))
         assert cfg["project"] == "ziyan-mailbus"
-        assert cfg["ack_timeout"] == 30
+        assert cfg["ack_timeout"] == 10  # 默认填充
         assert cfg["max_retries"] == 3
         assert cfg["agents"] == {}
 
@@ -27,7 +27,7 @@ def test_load_config_merged():
             json.dump({"project": "custom", "agents": {"test": {"name": "t"}}}, f)
         cfg = load_config(path)
         assert cfg["project"] == "custom"
-        assert cfg["ack_timeout"] == 30  # 默认填充
+        assert cfg["ack_timeout"] == 10  # 默认填充
         assert cfg["agents"]["test"]["name"] == "t"
 
 

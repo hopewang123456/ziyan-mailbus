@@ -106,8 +106,11 @@ def run_review(repo_path: str, repo_name: str, config: dict | None = None):
     candidates = []
     if config and config.get("review_script"):
         candidates.append(os.path.normpath(config["review_script"]))
+    if os.environ.get("MAILBUS_REVIEW_SCRIPT"):
+        candidates.append(os.path.normpath(os.environ["MAILBUS_REVIEW_SCRIPT"]))
+    mail_home = os.environ.get("MAIL_HOME", os.path.dirname(os.path.abspath(__file__)))
     candidates += [
-        os.path.join(os.path.dirname(__file__), "..", "pr-agent", "review.py"),
+        os.path.join(mail_home, "..", "pr-agent", "review.py"),
         os.path.expanduser("~/pr-agent/review.py"),
     ]
     review_script = None
@@ -147,6 +150,29 @@ def run_review(repo_path: str, repo_name: str, config: dict | None = None):
         return False
 
 
+def _notify_xiaoqi(data_dir: str, repo_name: str):
+    """审查完成后通知小七"""
+    msg_id = f"review-{int(time.time())}"
+    msg = {
+        "id": msg_id,
+        "from": "mailbus",
+        "to": "xiaoqi",
+        "type": "notice",
+        "priority": "normal",
+        "content": f"🔍 {repo_name} 有新代码审查报告，请查看 dashboard 🔍 tab",
+        "status": "pending",
+        "created_at": _now_cn(),
+    }
+    inbox_file = f"{data_dir}/inbox/xiaoqi/inbox.json"
+    if not os.path.exists(os.path.dirname(inbox_file)):
+        return
+    import json
+    inbox_data = json_read(inbox_file, {"agent": "xiaoqi", "has_unread": False, "messages": [], "since": _now_cn()})
+    inbox_data.setdefault("messages", []).append(msg)
+    inbox_data["has_unread"] = True
+    json_write(inbox_file, inbox_data)
+
+
 def scan_one(data_dir: str, target: dict, debounce_minutes: int = 0, config: dict | None = None) -> bool:
     """扫描单个仓库，返回是否有变更并执行了审查"""
     name = target.get("name", "?")
@@ -181,6 +207,11 @@ def scan_one(data_dir: str, target: dict, debounce_minutes: int = 0, config: dic
     ok = run_review(path, name, config=config)
     if ok:
         save_last_reviewed(data_dir, name, head)
+        # 通知小七有新审查报告
+        try:
+            _notify_xiaoqi(data_dir, name)
+        except Exception:
+            pass
     print()
     return ok
 

@@ -44,7 +44,7 @@ from lib.archiver import archive_all
 from lib.tracker import TaskTracker
 from lib.heartbeat import heartbeat_scan, is_online, load_status
 from lib.search import scan_and_index, search
-from lib.api_server import serve as api_serve
+from lib import api as api_serve
 from lib.constants import (
     DEFAULT_DATA_DIR, DEFAULT_ACK_TIMEOUT, DEFAULT_MAX_RETRIES,
     DEFAULT_ARCHIVE_DAYS, DEFAULT_ARCHIVE_MAX_MESSAGES,

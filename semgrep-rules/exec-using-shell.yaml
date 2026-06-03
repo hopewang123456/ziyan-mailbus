@@ -1,0 +1,14 @@
+rules:
+  - id: exec-using-shell
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.call(..., shell=True, ...)
+          - pattern: subprocess.Popen(..., shell=True, ...)
+          - pattern: os.system(...)
+          - pattern: os.popen(...)
+          - pattern: commands.getoutput(...)
+      - pattern-not: os.system("false")
+    message: 发现 shell 执行 — 可能引入命令注入风险
+    languages:
+      - python
+    severity: WARNING

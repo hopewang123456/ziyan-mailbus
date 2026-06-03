@@ -82,7 +82,6 @@ def send_message(to, content, from_agent="mailbus", msg_type="notice",
     msg_id = generate_msg_id()
     ts = now_iso()
     msg = {
-        "msg_id": msg_id,
         "id": msg_id,
         "from": from_agent,
         "to": to if isinstance(to, str) else (to[0] if to else ""),

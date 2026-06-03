@@ -25,6 +25,8 @@ from datetime import datetime, timezone, timedelta
 from email import policy
 from email.parser import BytesParser
 from typing import Optional
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from lib.utils import json_read, json_write
 
 try:
     import imaplib
@@ -156,11 +158,8 @@ def route_email(mail: dict, config: dict, data_dir: str) -> Optional[str]:
             if not os.path.exists(os.path.dirname(inbox_path)):
                 return None
             
-            try:
-                with open(inbox_path) as f:
-                    inbox = json.load(f)
-            except (FileNotFoundError, json.JSONDecodeError):
-                inbox = {"agent": agent, "has_unread": True, "messages": []}
+            inbox = json_read(inbox_path, default={"agent": agent, "has_unread": True, "messages": []})
+            inbox["agent"] = agent
             
             from_addr = mail.get("from", "").split("<")[-1].rstrip(">")
             msg = {
@@ -176,9 +175,7 @@ def route_email(mail: dict, config: dict, data_dir: str) -> Optional[str]:
             
             inbox.setdefault("messages", []).append(msg)
             inbox["has_unread"] = True
-            
-            with open(inbox_path, "w") as f:
-                json.dump(inbox, f, ensure_ascii=False, indent=2)
+            json_write(inbox_path, inbox)
             
             return agent
     

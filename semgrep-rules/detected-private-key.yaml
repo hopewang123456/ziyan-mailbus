@@ -1,0 +1,13 @@
+rules:
+  - id: private-key-leak
+    patterns:
+      - pattern-regex: -----BEGIN\s?(RSA\s)?PRIVATE\s?KEY-----
+    message: 发现私钥泄露（BEGIN PRIVATE KEY）
+    languages:
+      - python
+      - javascript
+      - typescript
+      - yaml
+      - json
+      - shell
+    severity: ERROR

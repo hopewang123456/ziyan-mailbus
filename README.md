@@ -86,21 +86,25 @@ mailbus status --failed
 
 > Adding a new framework? Just add one CLI template to `agent_types`. Zero code changes.
 
-### Registered Agents (v1.2.0)
+### Registered Agents (v2.1.0)
 
 | Agent | Name | Role | Framework |
 |-------|------|------|-----------|
 | `lingzhao` | 🪷 灵昭 | Solution Design | Hermes |
 | `lingjin` | 🦋 灵瑾 | Network Security | Hermes Profile |
 | `lingxi` | 🔭 灵犀 | Tech Radar | Hermes Profile |
+| `lingjian` | 🔍 灵鉴 | Code Review | Hermes Profile |
+| `lingyan` | 🧪 灵验 | Testing & QA | Hermes Profile |
 | `xiaoqi` | 🦞 小七 | Dispatch | OpenClaw |
 | `yige` | 👨‍🔧 一哥 | Operations | OpenClaw |
-| `lingxiao` | 🦅 灵霄 | Tech Lead | Cline CLI |
+| `lingxiao` | 🎯 灵霄 | Tech Lead | Cline CLI |
 | `dali` | 🤖 大力 | Coding | OpenCode |
-| `dazhuang` | 💪 大壮 | Code Review | File-only |
+
+> 💪 大壮 (Code Review, Aider) — 已退役，由灵鉴 + review.py + Semgrep 替代
 
 ### Changelog
 
+- **v2.1.0** (2026-06-03) — 🔍 灵鉴 (Code Review), 🧪 灵验 (Testing) joined; version migration system; instant push on API send-message; timeout auto-closed after 3 reminders; all dict field defensive checks in Message.from_dict; security audit fixes (env leak, path traversal); alerter notifies 灵昭 + 小七 with instant push; tracker syncs with inbox state; heartbeat offline notification instant push; test port conflict fixed
 - **v1.2.0** (2026-05-22) — 🦋 灵曦 renamed to 灵瑾; 🔭 灵犀 (Tech Radar) joined as Hermes Profile
 - **v1.1.0** (2026-05-21) — Multi-model fallback, heartbeat, alerting, Platform v2 UI (tabs + cards)
 

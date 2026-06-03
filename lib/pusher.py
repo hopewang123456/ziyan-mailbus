@@ -11,7 +11,7 @@ import random
 from typing import Optional
 from pathlib import Path
 
-from .models import Message, MsgStatus, Priority
+from .models import Message, MsgStatus, Priority, MsgType
 from .utils import json_read, json_write, jsonl_append, log_error, resolve_paths, _now_iso
 from .scanner import mark_as_pushed, update_message_status
 
@@ -143,7 +143,8 @@ def push_messages(
         # 1. ack（总是有）
         instructions.append(f"""【必须】写 ack 确认已读
   文件: {ack_path}
-  格式: {{"action":"ack","msg_id":"{msg_id}","agent":"{agent_name}","timestamp":"<当前ISO时间>"}}""")
+  格式: {{"action":"ack","msg_id":"{msg_id}","agent":"{agent_name}","timestamp":"<当前ISO时间>"}}
+  ⚠️ 重要: 写 ack 后必须在 30 秒内开始执行任务，不可只 ack 不执行""")
 
         # 构建消息体
         chain_text = ""
@@ -216,8 +217,40 @@ mailbus 会将你的回复视为已读确认。
 你的 inbox: {data_dir}/inbox/{agent_name}/inbox.json
 你的 ack 路径: {data_dir}/inbox/{agent_name}/ack.json
 
+━━━━ mailbus 工作纪律（必须遵守）━━━━
+
+1. 【必须】写 ack → 收到消息后立即写 ack 确认（2秒内完成）
+2. 【必须】执行 → 写 ack 后必须立即开始执行任务，不得只 ack 不执行
+3. 【必须】回复 → 任务完成后必须回复发件人（写回发件人的 inbox），告知完成状态
+4. 【禁止】不做「仅 ack 不执行」或「执行完不回复」
+5. 如果任务失败，也必须回复错误原因
+6. 【必须】回复格式必须是带 msg_id 的结构化消息，写入发件人 inbox 的 messages 数组
+7. 【必须】任务生命周期：ack → 执行 → 回复完成 → 标记 done
+
+━━━━ 任务追踪（自动记录）━━━━
+mailbus 会自动追踪任务的完整生命周期：
+- 发起 → ack → 执行中 → 完成/失败
+- 每个 hop 都会记录到 store/tasks/ 目录
+- 超时未完成将自动催办和升级
+
+━━━━ 完成回执格式 ────────────────────
+任务完成后，请确保已回复发件人。回复写入发件人 inbox 时：
+- 设置 id 为原始 msg_id 的 reply 版本
+- 设置 type 为 "reply"
+- 设置状态为 "pending"
+- 设置 has_unread = true
+
+mailbus 会检测到你的回复并自动标记原始任务为 done。
+如果你不回复，mailbus 会周期性催办，3次催办后任务自动超时。
+
+━━━━ 重要提醒 ────────────────────────
+不遵守以上纪律的后果：
+1. 消息发送方不知道任务状态 → 需要人工确认 → 失去自动化价值
+2. 任务被标记为 timeout → 信誉下降
+3. 需要人工手动重试 → 浪费团队时间
+
 mailbus 通过 CLI 将消息推送给你。你收到的每条消息都包含操作指令，
-请按【必须】标记的步骤执行，最重要的是写 ack 确认已读。
+请按【必须】标记的步骤严格执行。
 
 【Skill 使用记录】
 如果你在本次任务中调用了任何 skill，请额外写一条记录文件：

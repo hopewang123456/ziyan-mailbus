@@ -1,0 +1,172 @@
+你被派发了两项任务，请按优先级顺序处理。
+
+## 任务1 [优先级高]：harness-001-fix — 修 install-hooks.sh 路径
+
+文件：/mnt/e/ai_tools/mail/install-hooks.sh（当前只有 tarot-miniapp 一个仓库，需要改成5个）
+
+TARGET_REPOS 需要改为：
+1. /mnt/e/ai_tools/mail
+2. /mnt/e/hermes-data/.hermes/hermes-agent
+3. /mnt/e/hermes-data/tarot-miniapp
+4. /mnt/e/ai_tools/openclaw_space
+5. /mnt/e/ai_tools/opencode
+
+此外：
+- 已装在 mail/tarot/openclaw_space/opencode 的 hook 是旧版，用 /mnt/e/ai_tools/mail/post-commit-hook.sh 覆盖
+- hermes-agent 补装 hook
+- 运行 ./install-hooks.sh 验证5个仓库都正确安装
+
+验收标准：
+1. install-hooks.sh 中的 TARGET_REPOS 包含5个正确路径
+2. 跑 ./install-hooks.sh dry-run 验证所有路径有效
+3. 覆盖旧版 hook 后新版内容正确
+4. hermes-agent 的 hook 指向正确脚本
+5. 每个仓库的 .git/hooks/post-commit 不可执行
+
+## 任务2 [优先级中]：harness-002-complete — review.py 加 pylint + mypy
+
+文件：/mnt/e/hermes-data/.hermes/scripts/review.py
+
+当前 review.py 内容如下（248行），已有 --semgrep 功能，模仿其模式加 --pylint 和 --mypy：
+
+```python
+#!/usr/bin/env python3
+"""
+ziyan-code-review — 轻量代码审查工具
+调 DeepSeek API 对 git diff 做 AI 审查，支持安全扫描辅助（Semgrep）。
+用法:
+  python3 review.py
+  python3 review.py --diff-file /path/to/diff
+  python3 review.py --commit HEAD~1
+  python3 review.py --output report.md
+  python3 review.py --semgrep
+"""
+import os, sys, json, subprocess, argparse
+from datetime import datetime, timezone, timedelta
+
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+if not DEEPSEEK_API_KEY:
+    for env_path in [os.path.expanduser("~/.hermes/.env"), os.path.expanduser("~/.env")]:
+        if os.path.isfile(env_path):
+            with open(env_path) as f:
+                for line in f:
+                    if line.startswith("DEEPSEEK_API_KEY="):
+                        DEEPSEEK_API_KEY = line.strip().split("=",1)[1].strip("'\"")
+                        break
+            if DEEPSEEK_API_KEY: break
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/beta")
+REPORT_DIR = os.environ.get("REVIEW_REPORT_DIR", "/mnt/e/ai_tools/mail/store/reports")
+
+def _now_iso():
+    return datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%dT%H:%M:%S+0800")
+
+def get_git_diff(commit=None, diff_file=None):
+    if diff_file:
+        with open(diff_file) as f: return f.read()
+    if commit:
+        r = subprocess.run(["git","diff",f"{commit}~1..{commit}"], capture_output=True, text=True, timeout=30)
+    else:
+        r = subprocess.run(["git","diff","--cached"], capture_output=True, text=True, timeout=30)
+        if not r.stdout.strip():
+            r = subprocess.run(["git","diff"], capture_output=True, text=True, timeout=30)
+    if r.returncode != 0:
+        print(f"✗ git diff 失败: {r.stderr}"); sys.exit(1)
+    return r.stdout
+
+def run_semgrep(target_dir="."):
+    try:
+        r = subprocess.run(["semgrep","scan","--json","--quiet",target_dir], capture_output=True, text=True, timeout=120)
+        if r.returncode in (0,1):
+            results = json.loads(r.stdout)
+            return [{"path": res.get("path",""), "line": res.get("start",{}).get("line",0), "check_id": res.get("check_id",""), "message": res.get("extra",{}).get("message",""), "severity": res.get("extra",{}).get("severity","WARNING")} for res in results.get("results",[])]
+        return []
+    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return None
+
+def call_deepseek(system_prompt, user_content):
+    import urllib.request
+    if not DEEPSEEK_API_KEY:
+        print("✗ 请设置 DEEPSEEK_API_KEY 环境变量"); sys.exit(1)
+    payload = json.dumps({"model":DEEPSEEK_MODEL,"messages":[{"role":"system","content":system_prompt},{"role":"user","content":user_content}],"temperature":0.3,"max_tokens":4096}).encode()
+    req = urllib.request.Request(f"{DEEPSEEK_BASE_URL}/chat/completions", data=payload, headers={"Content-Type":"application/json","Authorization":f"Bearer {DEEPSEEK_API_KEY}"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            return json.loads(resp.read())["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"✗ API 调用失败: {e}"
+
+def parse_diff_files(diff_text):
+    files = []
+    for line in diff_text.split("\n"):
+        if line.startswith("+++ b/") or line.startswith("--- a/"):
+            f = line[6:]
+            if f not in files and f != "/dev/null": files.append(f)
+    return files
+
+def main():
+    parser = argparse.ArgumentParser(description="轻量代码审查工具")
+    parser.add_argument("--diff-file")
+    parser.add_argument("--commit")
+    parser.add_argument("--output")
+    parser.add_argument("--semgrep", action="store_true", help="同时跑 Semgrep 扫描")
+    parser.add_argument("--repo-name")
+    parser.add_argument("--target-dir", default=".", help="Semgrep 扫描目录")
+    args = parser.parse_args()
+
+    print("📄 获取代码变更...")
+    diff = get_git_diff(args.commit, args.diff_file)
+    if not diff.strip(): print("✓ 没有代码变更"); return
+    changed_files = parse_diff_files(diff)
+    print(f"   变更文件: {len(changed_files)} 个")
+    for f in changed_files: print(f"   - {f}")
+
+    print("\n🤖 AI 代码审查中...")
+    system_prompt = "你是一个资深的代码审查工程师..."  # 略
+    review_result = call_deepseek(system_prompt, diff)
+    print("✓ AI 审查完成")
+
+    semgrep_findings = None
+    if args.semgrep:
+        print("\n🔍 Semgrep 安全扫描中...")
+        semgrep_findings = run_semgrep(args.target_dir)
+        if semgrep_findings is None: print("   Semgrep 未安装，跳过")
+        else: print(f"   发现 {len(semgrep_findings)} 个问题")
+
+    # 组装报告（略）
+    timestamp = _now_iso()
+    report = f"# 代码审查报告\n\n**时间**: {timestamp}\n..."
+    # 略...
+
+    if args.output:
+        os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+        with open(args.output,"w") as f: f.write(report)
+        print(f"\n📝 报告已保存: {args.output}")
+    else:
+        print("\n"+"="*50); print(report)
+
+    os.makedirs(REPORT_DIR, exist_ok=True)
+    repo_tag = f"{args.repo_name}-" if args.repo_name else ""
+    report_file = f"{REPORT_DIR}/review-{repo_tag}{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
+    with open(report_file,"w") as f: f.write(report)
+    print(f"📝 报告已存档: {report_file}")
+
+if __name__ == "__main__": main()
+```
+
+需要加的功能（验收标准）：
+1. 新增 run_pylint(directory) 函数——跑 pylint 返回 [{file, line, message, category}] 列表
+2. 新增 run_mypy(directory) 函数——跑 mypy 返回 [{file, line, message}] 列表
+3. 新增 --pylint 和 --mypy 命令行参数
+4. 审查报告底部追加 pylint/mypy 结果
+5. 工具不可用时优雅跳过（可执行文件不存在、超时等）并打印提示
+6. 所有新功能有 '加了 xx 功能' 的日志输出
+7. 跑 python3 review.py --help 确认显示新参数
+8. pylint/mypy 任一参数也可单独使用（不必须同时启用）
+
+完成后：
+1. 跑自审（requesting-code-review）
+2. 两个工单都完成后，在 /tmp/.dali-tasks-done 写完成标记
+3. 更新工单状态（可选）
+
+开始干活！

@@ -18,11 +18,16 @@ DEFAULT_INBOX_BASE = f"{DEFAULT_DATA_DIR}/inbox"
 DEFAULT_LOG_DIR = os.path.join(PROJECT_ROOT_STR, "logs")
 
 # ── 默认配置 ─────────────────────────────────────────────────────────────
-DEFAULT_ACK_TIMEOUT = 30
+DEFAULT_ACK_TIMEOUT = 10
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_ARCHIVE_DAYS = 7
 DEFAULT_ARCHIVE_MAX_MESSAGES = 300
 DEFAULT_POLL_INTERVAL = 15
+
+# ── 版本号 ──────────────────────────────────────────────────────────────
+# 当前 mailbus 代码版本。每次不兼容更新递增。
+# 用于自动迁移旧配置到新版。
+MAILBUS_VERSION = "2.1.0"
 DEFAULT_HEARTBEAT_INTERVAL = 60
 
 # ── 全局锁文件 ───────────────────────────────────────────────────────────

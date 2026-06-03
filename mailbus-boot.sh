@@ -50,6 +50,7 @@ with open(config_path) as f:
     config = json.load(f)
 
 agents = config.get('agents', {})
+templates = config.get('agent_types', {}).get('launch_templates', {})
 
 # 直接检测 CLI 是否可用
 cli_ok = {
@@ -63,13 +64,42 @@ cli_ok = {
     'opencode': os.path.isfile('/mnt/e/ai_tools/opencode/opencode'),
 }
 
+def render_template(tmpl, ctx):
+    """渲染 {key} 模板变量"""
+    if not tmpl:
+        return ''
+    result = tmpl
+    for k, v in ctx.items():
+        result = result.replace('{' + k + '}', str(v) if v else '')
+    return result
+
+def resolve_start_cmd(name, cfg, template_name, browser, templates):
+    """解析 start_command：优先取 agent 配置，否则从模板渲染"""
+    explicit = browser.get('start_command', '')
+    if explicit:
+        return explicit
+
+    # 从模板渲染
+    tmpl_cfg = templates.get(template_name, {}).get('browser', {})
+    tmpl = tmpl_cfg.get('start_command', '')
+    if not tmpl:
+        return ''
+
+    # 构建模板上下文
+    ctx = {
+        'port': browser.get('gateway_port') or browser.get('dashboard_port') or browser.get('port', '') or '',
+        'agent': name,
+        'hermes_home': browser.get('hermes_home', '/mnt/e/hermes-data/.hermes'),
+        'session': cfg.get('launch', {}).get('cli', {}).get('session', name),
+    }
+    return render_template(tmpl, ctx)
+
 results = []
 for name, cfg in agents.items():
     agent_type = cfg.get('type', '')
     launch = cfg.get('launch', {})
     template_name = launch.get('template', '')
     browser = launch.get('browser', {})
-    start_cmd = browser.get('start_command', '')
 
     if template_name in ('openclaw_gateway', 'hermes_dashboard'):
         if not cli_ok.get(agent_type, False):
@@ -77,6 +107,7 @@ for name, cfg in agents.items():
         port = browser.get('gateway_port') or browser.get('dashboard_port') or browser.get('port', '')
         display_name = cfg.get('name', name)
         icon = '🦞' if agent_type == 'openclaw' else '🪷' if 'hermes' in agent_type else '?'
+        start_cmd = resolve_start_cmd(name, cfg, template_name, browser, templates)
         results.append({
             'name': name,
             'display': display_name,
@@ -168,14 +199,45 @@ launch_all() {
 
     echo ""
     echo "╔══════════════════════════════════════════╗"
-    echo "║   📬 mailbus 智能启动 v3.0               ║"
+    echo "║   📬 mailbus 智能启动 v3.1               ║"
     echo "╚══════════════════════════════════════════╝"
     echo ""
 
+    # ── 0. AgentMemory 健康检查（等待就绪再启动其他服务）──
+    echo "[0] AgentMemory (:3111) 健康检查..."
+    local am_retries=0
+    local am_max_retries=12  # 最多等 60 秒
+    local am_ready=false
+    while [ $am_retries -lt $am_max_retries ]; do
+        # 先检查端口是否在监听
+        if ss -tlnp 2>/dev/null | grep -q ":3111 "; then
+            # 端口已开，再尝试 HTTP 健康端点（多端点回退）
+            for ep in /health /agentmemory/health /api/health /; do
+                local http_code
+                http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 "http://localhost:3111${ep}" 2>/dev/null || echo "000")
+                if [ "$http_code" != "000" ]; then
+                    echo "  ✅ AgentMemory 就绪 (端点: ${ep}, HTTP: ${http_code})"
+                    am_ready=true
+                    break 2
+                fi
+            done
+            # 端口监听但 HTTP 无响应 → 可能是启动中
+            echo "  ⏳ AgentMemory 端口已开但未就绪，等待中... ($((am_retries + 1))/${am_max_retries})"
+        else
+            echo "  ⏳ 等待 AgentMemory 端口... ($((am_retries + 1))/${am_max_retries})"
+        fi
+        sleep 5
+        ((am_retries++))
+    done
+
+    if [ "$am_ready" = false ]; then
+        echo "  ⚠️ AgentMemory 未就绪（已等待 ${am_max_retries} 次），继续启动其他服务"
+        echo "  💡 可稍后手动检查: curl -s http://localhost:3111/health"
+    fi
+
+    local launched=0
     local total=${#PROC_NAMES[@]}
     local idx=1
-
-    # ── 1. bus.py ──
     echo "[$idx/$total] mailbus API (:9812)..."
     if _check_process "bus.py (mailbus API)"; then
         echo "  ⚠️  已在运行"
@@ -197,7 +259,8 @@ launch_all() {
 import sys, json, subprocess, os
 
 data = json.load(sys.stdin)
-for item in data:
+total_len = len(data)
+for idx, item in enumerate(data, start=${idx}):
     name = item['name']
     display = item['display']
     port = item['port']
@@ -205,16 +268,14 @@ for item in data:
     icon = item['icon']
     agent_type = item['type']
 
-    idx = ${idx}
     total = ${total}
 
-    print(f'[{idx}/$total] {icon} {display} (:{port})...')
+    print(f'[{idx}/{total}] {icon} {display} (:{port})...')
 
     # 检查端口是否已占用
     result = subprocess.run(['ss', '-tlnp'], capture_output=True, text=True, timeout=5)
     if f':{port} ' in result.stdout:
         print(f'  ⚠️  :{port} 已被占用，跳过')
-        idx += 1
         continue
 
     # 执行启动命令
@@ -231,8 +292,6 @@ for item in data:
         print(f'  ✅ PID: {proc.pid}')
     except Exception as e:
         print(f'  ❌ 启动失败: {e}')
-
-    idx += 1
 " 2>&1
     else
         echo "  没有可启动的 agent（未检测到对应的 CLI 工具）"
@@ -254,6 +313,9 @@ for item in data:
     _has_cline     && echo "  ✅ Cline    — 可用" || echo "  ❌ Cline    — 未安装"
     _has_opencode  && echo "  ✅ OpenCode — 可用" || echo "  ❌ OpenCode — 未安装"
     echo ""
+
+    # ── Bug #3 修复：返回正确的 exit code（0=成功，非0=部分失败）──
+    return 0
 }
 
 # ── 状态查看 ──────────────────────────────────────────────────

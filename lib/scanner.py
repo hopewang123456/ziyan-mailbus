@@ -11,6 +11,7 @@ from typing import List, Tuple, Optional
 
 from .models import Message, MsgStatus, Priority, Inbox
 from .utils import json_read, json_write, resolve_paths, _now_iso
+from .constants import DEFAULT_ACK_TIMEOUT
 
 
 def get_msg_state(msg):
@@ -143,7 +144,7 @@ def run_housekeeping(data_dir: str, agents: dict):
     try:
         from .tracker import TaskTracker
         tracker = TaskTracker(data_dir)
-        escalated = tracker.check_reminders(agents, reminder_minutes=5, max_reminders=3)
+        escalated = tracker.check_reminders(agents, data_dir=data_dir, reminder_minutes=5, max_reminders=3)
         if escalated:
             for e in escalated:
                 print(f"  ⏰ 催办: {e['agent']} — {e['summary'][:40]}")
@@ -236,6 +237,8 @@ def _consume_skill_usage(data_dir: str):
 def _check_timeouts(data_dir: str, agents: dict, inbox_base: str, paths: dict):
     """扫描所有 inbox，检测超时未处理的消息并催办"""
     from datetime import datetime, timezone, timedelta
+
+    EXEC_TIMEOUT_MINUTES = 30  # 任务执行超时：ACK 后 30 分钟未 done 则催办
     
     for name in agents:
         inbox_file = f"{paths['inbox']}/{name}/inbox.json"
@@ -251,77 +254,148 @@ def _check_timeouts(data_dir: str, agents: dict, inbox_base: str, paths: dict):
         reminded = []
         
         for m_raw in inbox.messages:
-            msg = Message.from_dict(m_raw) if isinstance(m_raw, dict) else m_raw
+            if isinstance(m_raw, dict):
+                # 兼容旧消息：缺失 to/from_ 字段时用默认值
+                if "to" not in m_raw:
+                    m_raw["to"] = name
+                if "from_" not in m_raw and "from" not in m_raw:
+                    m_raw["from_"] = name
+                msg = Message.from_dict(m_raw)
+            else:
+                msg = m_raw
             
-            timeout_min = msg.timeout_minutes
-            if not timeout_min or timeout_min <= 0:
-                continue
-            if msg.state in (MsgStatus.DONE, MsgStatus.CLOSED, MsgStatus.REJECTED):
-                continue
             mstate = get_msg_state(m_raw)
-            if mstate in (MsgStatus.DONE, MsgStatus.CLOSED, MsgStatus.REJECTED):
-                continue
             
-            # 计算已过去的时间
-            created = None
-            if msg.received_at:
-                try:
-                    created = datetime.fromisoformat(msg.received_at)
-                except (ValueError, TypeError):
-                    pass
-            if not created and msg.created_at:
-                try:
-                    created = datetime.fromisoformat(msg.created_at)
-                except (ValueError, TypeError):
-                    pass
-            if not created:
-                continue
+            # ── 1. ACK 超时检测：pending/pushed 消息超过 timeout 分钟未 ack ──
+            timeout_min = msg.timeout_minutes or DEFAULT_ACK_TIMEOUT
+            if timeout_min > 0 and mstate not in (MsgStatus.DONE, MsgStatus.CLOSED, MsgStatus.REJECTED):
+                if msg.state not in (MsgStatus.DONE, MsgStatus.CLOSED, MsgStatus.REJECTED):
+                    created = None
+                    if msg.received_at:
+                        try:
+                            created = datetime.fromisoformat(msg.received_at)
+                        except (ValueError, TypeError):
+                            pass
+                    if not created and msg.created_at:
+                        try:
+                            created = datetime.fromisoformat(msg.created_at)
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    if created:
+                        elapsed_min = (now - created).total_seconds() / 60
+                        if elapsed_min >= timeout_min:
+                            # 发 ACK 超时催办
+                            escalate = msg.escalate_to or msg.from_
+                            if escalate and escalate not in ("mailbus", "broadcast", ""):
+                                escalate_file = f"{paths['inbox']}/{escalate}/inbox.json"
+                                if os.path.exists(os.path.dirname(escalate_file)):
+                                    try:
+                                        e_data = json_read(escalate_file, {})
+                                        e_inbox = Inbox.from_dict(e_data) if e_data else Inbox(agent=escalate)
+                                        import time as _time
+                                        now_ts = int(_time.time())
+                                        remind_count = (inbox.msg_field(m_raw, 'reminded_count', 0) or 0) + 1
+                                        remind_msg = {
+                                            "id": f"remind-{now_ts}-{name}",
+                                            "from": "mailbus",
+                                            "to": escalate,
+                                            "type": "notice",
+                                            "priority": "urgent",
+                                            "state": MsgStatus.PENDING,
+                                            "content": f"⚠️ 超时提醒（第{remind_count}次）：{name} 有一条消息已超过 {int(timeout_min)} 分钟未处理。\n消息ID: {msg.id}\n来自: {msg.from_}\n内容: {inbox.msg_field(m_raw, 'content', '')[:80]}\n{'❤️ 已3次催办无响应，消息将自动标记为 failed' if remind_count >= 3 else '请关注处理。'}",
+                                            "created_at": datetime.now(timezone.utc).isoformat(),
+                                        }
+                                        e_inbox.messages.append(remind_msg)
+                                        e_inbox.has_unread = True
+                                        json_write(escalate_file, e_inbox.to_dict())
+                                        
+                                        # 更新原消息的催办记录
+                                        inbox.set_msg_status(msg.id, inbox.msg_field(m_raw, 'state', ''),
+                                                             reminded_count=remind_count,
+                                                             last_reminded_at=datetime.now(timezone.utc).isoformat())
+                                        
+                                        # 3 次催办后自动标记为 failed
+                                        if remind_count >= 3:
+                                            inbox.set_msg_status(msg.id, MsgStatus.FAILED,
+                                                                 state=MsgStatus.CLOSED,
+                                                                 done_at=datetime.now(timezone.utc).isoformat(),
+                                                                 done_note="3次催办无响应，自动关闭")
+                                        
+                                        # 原消息重推（如果是 pending/pushed 状态）
+                                        if mstate in (MsgStatus.PENDING, MsgStatus.PUSHED, MsgStatus.ACKNOWLEDGED):
+                                            inbox.set_msg_status(msg.id, MsgStatus.RESENDING)
+                                        
+                                        reminded.append(name)
+                                    except Exception:
+                                        pass
             
-            elapsed_min = (now - created).total_seconds() / 60
-            if elapsed_min < timeout_min:
-                continue
-            
-            # 超时了，检查是否已经催办过（至少隔 timeout_min/2 才再次催办）
-            if msg.reminded_count > 0:
-                last_reminded = None
-                if msg.last_reminded_at:
-                    try:
-                        last_reminded = datetime.fromisoformat(msg.last_reminded_at)
-                    except (ValueError, TypeError):
-                        pass
-                if last_reminded and (now - last_reminded).total_seconds() / 60 < timeout_min / 2:
-                    continue
-            
-            # 发催办通知
-            escalate = msg.escalate_to or msg.from_
-            if escalate and escalate not in ("mailbus", "broadcast", ""):
-                escalate_file = f"{paths['inbox']}/{escalate}/inbox.json"
-                if os.path.exists(os.path.dirname(escalate_file)):
-                    try:
-                        e_data = json_read(escalate_file, {})
-                        e_inbox = Inbox.from_dict(e_data) if e_data else Inbox(agent=escalate)
-                        import time as _time
-                        remind_msg = {
-                            "id": f"remind-{int(_time.time())}-{name}",
-                            "from": "mailbus",
-                            "to": escalate,
-                            "type": "notice",
-                            "priority": "urgent",
-                            "state": MsgStatus.PENDING,
-                            "content": f"⚠️ 超时提醒：{name} 有一条消息已超过 {int(timeout_min)} 分钟未处理。\n消息ID: {msg.id}\n请关注。",
-                            "created_at": datetime.now(timezone.utc).isoformat(),
-                        }
-                        e_inbox.messages.append(remind_msg)
-                        e_inbox.has_unread = True
-                        json_write(escalate_file, e_inbox.to_dict())
-                        
-                        # 更新原消息的催办记录（使用 Inbox 统一访问器）
-                        inbox.set_msg_status(msg.id, inbox.msg_field(m_raw, 'state', ''),
-                                             reminded_count=(inbox.msg_field(m_raw, 'reminded_count', 0) or 0) + 1,
-                                             last_reminded_at=datetime.now(timezone.utc).isoformat())
-                        reminded.append(name)
-                    except Exception:
-                        pass
+            # ── 2. 执行超时检测：ACK（received/acknowledged）后 30 分钟未 done ──
+            msg_content = inbox.msg_field(m_raw, 'content', '')
+            msg_type = inbox.msg_field(m_raw, 'type', '')
+            if mstate in (MsgStatus.ACKNOWLEDGED, MsgStatus.RECEIVED) and msg_type in ("task", "task_reply"):
+                if mstate != MsgStatus.DONE and msg.state not in (MsgStatus.DONE, MsgStatus.CLOSED, MsgStatus.REJECTED):
+                    ack_time = None
+                    if msg.received_at:
+                        try:
+                            ack_time = datetime.fromisoformat(msg.received_at)
+                        except (ValueError, TypeError):
+                            pass
+                    if not ack_time and msg.acknowledged_at:
+                        try:
+                            ack_time = datetime.fromisoformat(msg.acknowledged_at)
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    if ack_time:
+                        elapsed_min = (now - ack_time).total_seconds() / 60
+                        if elapsed_min >= EXEC_TIMEOUT_MINUTES:
+                            # 检查是否已催办过执行超时（至少隔 15 分钟再催）
+                            exec_remind_count = inbox.msg_field(m_raw, 'exec_reminded_count', 0) or 0
+                            last_exec_reminded = inbox.msg_field(m_raw, 'last_exec_reminded_at', '')
+                            skip = False
+                            if exec_remind_count > 0 and last_exec_reminded:
+                                try:
+                                    last_er = datetime.fromisoformat(last_exec_reminded)
+                                    if (now - last_er).total_seconds() / 60 < 15:
+                                        skip = True
+                                except (ValueError, TypeError):
+                                    pass
+                            
+                            if not skip:
+                                exec_remind_count += 1
+                                escalate = msg.escalate_to or msg.from_
+                                if escalate and escalate not in ("mailbus", "broadcast", ""):
+                                    escalate_file = f"{paths['inbox']}/{escalate}/inbox.json"
+                                    if os.path.exists(os.path.dirname(escalate_file)):
+                                        try:
+                                            e_data = json_read(escalate_file, {})
+                                            e_inbox = Inbox.from_dict(e_data) if e_data else Inbox(agent=escalate)
+                                            import time as _time
+                                            now_ts = int(_time.time())
+                                            remind_msg = {
+                                                "id": f"exec-remind-{now_ts}-{name}",
+                                                "from": "mailbus",
+                                                "to": escalate,
+                                                "type": "notice",
+                                                "priority": "urgent",
+                                                "state": MsgStatus.PENDING,
+                                                "content": f"⚠️ 执行超时提醒（第{exec_remind_count}次）：{name} 已 ACK 任务超过 {EXEC_TIMEOUT_MINUTES} 分钟，尚未完成。\n"
+                                                           f"消息ID: {msg.id}\n来自: {msg.from_}\n类型: {msg_type}\n"
+                                                           f"内容: {msg_content[:80]}",
+                                                "created_at": datetime.now(timezone.utc).isoformat(),
+                                            }
+                                            e_inbox.messages.append(remind_msg)
+                                            e_inbox.has_unread = True
+                                            json_write(escalate_file, e_inbox.to_dict())
+                                            
+                                            # 更新原消息的执行超时催办记录
+                                            inbox.set_msg_field(m_raw, 'exec_reminded_count', exec_remind_count)
+                                            inbox.set_msg_field(m_raw, 'last_exec_reminded_at', datetime.now(timezone.utc).isoformat())
+                                            
+                                            reminded.append(name)
+                                        except Exception:
+                                            pass
         
         if reminded:
             json_write(inbox_file, inbox.to_dict())
@@ -419,6 +493,8 @@ def update_message_status(data_dir: str, agent_name: str, msg_id: str, new_statu
     extra = {}
     if new_status == MsgStatus.ACKNOWLEDGED:
         extra["acknowledged_at"] = _now_iso()
+        extra["state"] = MsgStatus.RECEIVED
+        extra["received_at"] = _now_iso()
     
     found = inbox.set_msg_status(msg_id, new_status, **extra)
     
@@ -475,6 +551,20 @@ def _check_offline_agents(data_dir: str, agents: dict, paths: dict):
                         e_inbox.messages.append(warn_msg)
                         e_inbox.has_unread = True
                         json_write(escalate_file, e_inbox.to_dict())
+
+                        # 即时推送离线通知
+                        try:
+                            from .pusher import push_messages, resolve_cli
+                            from ..heartbeat import load_config as _hb_config
+                            cfg = _hb_config(data_dir) or {}
+                            agent_types = cfg.get("agent_types", {})
+                            agent_cfg = agents.get(escalate_to, {})
+                            cli_cmd = resolve_cli(agent_cfg, agent_types)
+                            if cli_cmd:
+                                push_messages(data_dir, escalate_to, [warn_msg],
+                                              cli_cmd=[cli_cmd], auto_ack=True, max_retries=1)
+                        except Exception:
+                            pass
                         
                         # 更新已通知记录
                         notified[name] = datetime.now(timezone.utc).isoformat()

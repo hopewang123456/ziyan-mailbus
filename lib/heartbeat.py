@@ -153,14 +153,39 @@ def check_api_keys(config: dict) -> list:
     return results
 
 def check_agentmemory(url: str = "http://localhost:3111") -> dict:
-    """检查 AgentMemory 是否可连接"""
+    """检查 AgentMemory 是否可连接（多重回退策略）"""
     try:
         import urllib.request
-        req = urllib.request.Request(f"{url}/agentmemory/health", method="GET")
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            if resp.status == 200:
-                return {"status": "healthy", "latency_ms": resp.headers.get("X-Response-Time", "?")}
-        return {"status": "error", "detail": f"HTTP {resp.status}"}
+
+        # 策略1: 尝试标准 /health 端点
+        endpoints = ["/health", "/agentmemory/health", "/api/health", "/"]
+        for ep in endpoints:
+            try:
+                req = urllib.request.Request(f"{url}{ep}", method="GET")
+                with urllib.request.urlopen(req, timeout=3) as resp:
+                    if resp.status == 200:
+                        return {"status": "healthy", "endpoint": ep,
+                                "latency_ms": resp.headers.get("X-Response-Time", "?")}
+                    # 非 200 但端口在响应也视为活着
+                    if resp.status in (301, 302, 307, 308, 401, 403):
+                        return {"status": "healthy", "endpoint": ep,
+                                "detail": f"HTTP {resp.status}"}
+            except Exception:
+                continue
+
+        # 策略2: 所有端点都失败，检查端口是否在监听
+        try:
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            result = sock.connect_ex(('localhost', 3111))
+            sock.close()
+            if result == 0:
+                return {"status": "degraded", "detail": "端口3111已监听但HTTP端点无响应"}
+        except Exception:
+            pass
+
+        return {"status": "unreachable", "detail": f"所有健康端点均无响应"}
     except Exception as e:
         return {"status": "unreachable", "detail": str(e)[:80]}
 

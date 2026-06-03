@@ -168,7 +168,7 @@ class Message:
             if self.action.get("reply_to") is None:
                 self.action["reply_to"] = self.from_
         # 没配 forward_chain 的自动初始化
-        if self.forward_chain is None and self.action and self.action.get("forward_to"):
+        if self.forward_chain is None and isinstance(self.action, dict) and self.action.get("forward_to"):
             self.forward_chain = {
                 "root_id": self.id,
                 "hops": [{"agent": self.from_, "action": "发起", "at": self.created_at or ""}],
@@ -211,6 +211,13 @@ class Message:
         # 防御: to 字段是数组时取第一个元素
         if isinstance(d.get("to"), list):
             d["to"] = d["to"][0] if d["to"] else ""
+        # 防御: to 字段缺失时用空字符串
+        if "to" not in d:
+            d["to"] = ""
+        # 防御: action/forward_chain/task 等 dict 字段可能是空字符串而非 dict
+        for _dict_field in ["action", "forward_chain", "task", "reply_format"]:
+            if _dict_field in d and not isinstance(d[_dict_field], dict):
+                d[_dict_field] = {}
         known = {"id", "from_", "to", "priority", "type", "content",
                  "attachments", "reply_format", "status", "pushed_count",
                  "created_at", "acknowledged_at", "action", "task", "forward_chain",
@@ -278,7 +285,8 @@ class Inbox:
                 else:
                     m.status = status
                     for k, v in extra.items():
-                        setattr(m, k, v)
+                        if hasattr(m, k):
+                            setattr(m, k, v)
                 return True
         return False
 

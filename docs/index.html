@@ -627,6 +627,8 @@ async function loadAll() {
     if (rawData.skillUsage && rawData.skillUsage.skills) {
       renderSkillUsage(rawData.skillUsage.skills);
     }
+    // 总览团队组织图
+    renderOrgChart();
     // 总览超时计数（从 alerts 中统计）
     if (rawData.alerts && rawData.alerts.alerts) {
       const timeoutCount = rawData.alerts.alerts.filter(a => a.type === 'timeout').length;
@@ -911,7 +913,7 @@ async function openSendMsg() {
   
   // 渲染收件人
   const agents = (rawData.agents && rawData.agents.agents) || {};
-  const agentNames = {"lingzhao":"灵昭","lingjin":"灵瑾","lingxi":"灵犀","xiaoqi":"小七","yige":"一哥","lingxiao":"灵霄","dali":"大力"};
+  const agentNames = {"lingzhao":"灵昭","lingjin":"灵瑾","lingxi":"灵犀","xiaoqi":"小七","yige":"一哥","lingxiao":"灵霄","dali":"大力","lingjian":"灵鉴","lingyan":"灵验"};
   const optHtml = Object.entries(agents).map(([k, v]) =>
     `<option value="${k}">${agentNames[k] || v.name || k}</option>`
   ).join('');
@@ -1366,7 +1368,7 @@ function renderSkillUsage(skills) {
   const top20 = skills.slice(0, 20);
   const maxUse = Math.max(...top20.map(s => s.total_use || 0), 1);
   const colors = ['#22d3ee','#67e8f9','#34d399','#a78bfa','#fbbf24','#fb923c','#f87171','#e879f9'];
-  const agentNames = {"lingzhao":"灵昭","lingjin":"灵瑾","lingxi":"灵犀","xiaoqi":"小七","yige":"一哥","lingxiao":"灵霄","dali":"大力"};
+  const agentNames = {"lingzhao":"灵昭","lingjin":"灵瑾","lingxi":"灵犀","xiaoqi":"小七","yige":"一哥","lingxiao":"灵霄","dali":"大力","lingjian":"灵鉴","lingyan":"灵验"};
 
   // ── 排行表 ──
   const rows = top20.map((s, i) => {
@@ -1445,6 +1447,78 @@ function renderSkillUsage(skills) {
       </div>
     </div>
   `;
+}
+
+// ── 团队组织图 ──
+
+function renderOrgChart() {
+  const el = document.getElementById('overviewExtra');
+  if (!el) return;
+  const org = `
+    <div style="margin-top:16px">
+      <div class="stat-card">
+        <h3 style="margin-bottom:12px">🏢 团队组织</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;font-size:12px">
+          <div style="background:#1e293b;border-radius:6px;padding:10px;border-left:3px solid #22d3ee">
+            <div style="font-weight:500;color:#e2e8f0">🪷 灵昭</div>
+            <div style="color:#94a3b8;margin-top:2px">方案设计 · 二把手</div>
+            <div style="color:#64748b;font-size:10px">lingzhao · :9120</div>
+          </div>
+          <div style="background:#1e293b;border-radius:6px;padding:10px;border-left:3px solid #34d399">
+            <div style="font-weight:500;color:#e2e8f0">🦋 灵瑾</div>
+            <div style="color:#94a3b8;margin-top:2px">网络安全</div>
+            <div style="color:#64748b;font-size:10px">lingjin · :9121</div>
+          </div>
+          <div style="background:#1e293b;border-radius:6px;padding:10px;border-left:3px solid #fbbf24">
+            <div style="font-weight:500;color:#e2e8f0">🔭 灵犀</div>
+            <div style="color:#94a3b8;margin-top:2px">技术雷达</div>
+            <div style="color:#64748b;font-size:10px">lingxi · :9122</div>
+          </div>
+          <div style="background:#1e293b;border-radius:6px;padding:10px;border-left:3px solid #fb923c">
+            <div style="font-weight:500;color:#e2e8f0">🔍 灵鉴 🆕</div>
+            <div style="color:#94a3b8;margin-top:2px">代码审查</div>
+            <div style="color:#64748b;font-size:10px">lingjian · :9123</div>
+          </div>
+          <div style="background:#1e293b;border-radius:6px;padding:10px;border-left:3px solid #a78bfa">
+            <div style="font-weight:500;color:#e2e8f0">🧪 灵验 🆕</div>
+            <div style="color:#94a3b8;margin-top:2px">测试验证</div>
+            <div style="color:#64748b;font-size:10px">lingyan · :9124</div>
+          </div>
+          <div style="background:#1e293b;border-radius:6px;padding:10px;border-left:3px solid #f87171">
+            <div style="font-weight:500;color:#e2e8f0">🤖 大力</div>
+            <div style="color:#94a3b8;margin-top:2px">编码工程师</div>
+            <div style="color:#64748b;font-size:10px">dali · OpenCode</div>
+          </div>
+          <div style="background:#1e293b;border-radius:6px;padding:10px;border-left:3px solid #e879f9">
+            <div style="font-weight:500;color:#e2e8f0">🎯 灵霄</div>
+            <div style="color:#94a3b8;margin-top:2px">技术负责人</div>
+            <div style="color:#64748b;font-size:10px">lingxiao · Cline</div>
+          </div>
+          <div style="background:#1e293b;border-radius:6px;padding:10px;border-left:3px solid #22d3ee">
+            <div style="font-weight:500;color:#e2e8f0">🦞 小七</div>
+            <div style="color:#94a3b8;margin-top:2px">调度 · 报表 · 验收</div>
+            <div style="color:#64748b;font-size:10px">xiaoqi · :18789</div>
+          </div>
+          <div style="background:#1e293b;border-radius:6px;padding:10px;border-left:3px solid #34d399">
+            <div style="font-weight:500;color:#e2e8f0">👨‍🔧 一哥</div>
+            <div style="color:#94a3b8;margin-top:2px">运营</div>
+            <div style="color:#64748b;font-size:10px">yige · :18790</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;padding:8px 10px;background:#1e1b2e;border-radius:6px;font-size:11px;color:#94a3b8;border-left:3px solid #fbbf24">
+          <b style="color:#fbbf24">📋 上线流程：</b>
+          大力/灵霄写代码 → 🔍灵鉴审查 → 🧪灵验测试 → 🦞小七验收 → 上线
+          <span style="display:block;margin-top:4px;color:#64748b">退役: ~~大壮~~（已由灵鉴 + review.py 替代）</span>
+        </div>
+      </div>
+    </div>
+  `;
+  const existing = el.querySelector('.stat-card:last-child');
+  if (existing) {
+    el.insertAdjacentHTML('beforeend', org);
+  } else {
+    el.innerHTML += org;
+  }
 }
 
 let _mailboxAgent = '';   // 当前邮箱是哪个 agent
@@ -1817,15 +1891,17 @@ function renderAlerts(a) {
   count.textContent = a.count;
   const rows = a.alerts.slice().reverse().slice(0, 30).map(alert => {
     const sc = {critical:'#fca5a5', warn:'#fdba74', info:'#93c5fd'};
+    const assignee = alert.assignee === 'lingzhao' ? '🪷灵昭' : (alert.assignee || '—');
     return `<tr>
       <td><span style="color:${sc[alert.severity]||'#94a3b8'}">●</span> ${alert.severity}</td>
       <td>${alert.type}</td>
       <td>${alert.agent}</td>
-      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${alert.message}</td>
+      <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${alert.message}</td>
+      <td style="font-size:11px;color:#a78bfa">${assignee}</td>
       <td style="font-size:11px;color:#64748b">${alert.created_at || ''}</td>
     </tr>`;
   }).join('');
-  el.innerHTML = `<table><thead><tr><th>级别</th><th>类型</th><th>Agent</th><th>消息</th><th>时间</th></tr></thead><tbody>${rows}</tbody></table>`;
+  el.innerHTML = `<table><thead><tr><th>级别</th><th>类型</th><th>Agent</th><th>消息</th><th>处理人</th><th>时间</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 // ── 心跳触发 ──

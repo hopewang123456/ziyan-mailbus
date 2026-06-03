@@ -72,6 +72,15 @@ DEFAULT_CONFIG = {
 def load_config(config_path: str) -> dict:
     """加载配置，缺失字段用默认值填充，并校验合法性"""
     config = json_read(config_path, {})
+    
+    # 版本升级迁移
+    from .constants import MAILBUS_VERSION
+    old_version = config.get("version", "0.0.0")
+    if old_version != MAILBUS_VERSION:
+        _migrate_config(config, old_version, MAILBUS_VERSION)
+        config["version"] = MAILBUS_VERSION
+        json_write(config_path, config)
+    
     for k, v in DEFAULT_CONFIG.items():
         config.setdefault(k, v)
     # 校验配置合法性
@@ -81,6 +90,31 @@ def load_config(config_path: str) -> dict:
         for err in errors:
             print(f"   - {err}")
     return config
+
+
+def _migrate_config(config: dict, old_version: str, new_version: str):
+    """将配置从旧版本迁移到新版本。每个版本升级写一条规则。"""
+    migrations = [
+        # v2.0.0 → v2.1.0: 新增 bulletin_authors 等默认字段
+        ("2.0.0", "2.1.0", lambda c: c.setdefault("bulletin_authors", {"lingzhao": "灵昭"})),
+    ]
+    for v_from, v_to, fn in migrations:
+        if _version_compare(old_version, v_from) >= 0 and _version_compare(old_version, v_to) < 0:
+            print(f"  [migrate] {v_from} → {v_to}")
+            fn(config)
+
+
+def _version_compare(v1: str, v2: str) -> int:
+    """语义化版本比较：v1 > v2 → 1, v1 == v2 → 0, v1 < v2 → -1"""
+    try:
+        p1 = [int(x) for x in v1.split(".")]
+        p2 = [int(x) for x in v2.split(".")]
+        for a, b in zip(p1, p2):
+            if a > b: return 1
+            if a < b: return -1
+        return len(p1) - len(p2)  # 更长的版本号视为更大
+    except (ValueError, AttributeError):
+        return 0
 
 
 def save_config(config_path: str, config: dict):
@@ -591,6 +625,8 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
         webhook_url = agent_cfg.get("webhook_url", "")
         if webhook_url:
             print(f"   🌐 {agent_name} ({label}): {len(messages)} 条 [Webhook]")
+            # auto_ack 判定：OpenClaw 等不写 ack 的类型直接标记已读
+            auto_ack_types_for_webhook = ("hermes", "hermes_profile", "openclaw")
             failed = push_via_webhook(
                 data_dir=data_dir,
                 agent_name=agent_name,
@@ -598,13 +634,15 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
                 webhook_url=webhook_url,
                 webhook_secret=agent_cfg.get("webhook_secret", ""),
                 max_retries=config.get("max_retries", 3),
-                auto_ack=agent_cfg.get("type") in ("hermes", "hermes_profile"),
+                auto_ack=agent_cfg.get("type") in auto_ack_types_for_webhook,
             )
         else:
             chain = resolve_cli_chain(agent_cfg, agent_types)
             cli_cmds = [c[0] for c in chain]  # 只取命令，不要别名
             print(f"   → {agent_name} ({label}): {len(messages)} 条" + (f' [{len(cli_cmds)} models]' if len(cli_cmds) > 1 else ''))
             
+            # auto_ack 判定：Hermes/OpenClaw 类型直接标记已读（OpenClaw CLI push 不写 ack 文件）
+            auto_ack_types = ("hermes", "hermes_profile", "openclaw")
             failed = push_messages(
                 data_dir=data_dir,
                 agent_name=agent_name,
@@ -612,7 +650,7 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
                 cli_cmd=cli_cmds,
                 ack_timeout=config.get("ack_timeout", 30),
                 max_retries=config.get("max_retries", 3),
-                auto_ack=agent_cfg.get("type") in ("hermes", "hermes_profile"),  # Hermes 类型直接标记已读，其他靠回复确认
+                auto_ack=agent_cfg.get("type") in auto_ack_types,  # Hermes/OpenClaw 类型直接标记已读
             )
         all_failed.extend(failed)
         
@@ -1156,8 +1194,9 @@ def cmd_review(args) -> int:
             emit(f"     - {os.path.relpath(f, workdir)}")
 
     # ── 1. pylint 静态检查 ──
+    pylint_exit = 0
+    mypy_exit = 0
     if changed_py_files:
-        pylint_exit = 0
         pylint_output = ""
         if shutil.which("pylint"):
             emit("\n── pylint ──")
@@ -1181,7 +1220,6 @@ def cmd_review(args) -> int:
 
     # ── 2. mypy 类型检查 ──
     if changed_py_files:
-        mypy_exit = 0
         mypy_output = ""
         if shutil.which("mypy"):
             emit("\n── mypy ──")
@@ -1257,10 +1295,10 @@ def cmd_review(args) -> int:
     # ── 4. review.py AI 审查 diff ──
     review_script = config.get("review_script", "")
     if not review_script:
-        review_script = os.environ.get(
-            "MAILBUS_REVIEW_SCRIPT",
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "pr-agent", "review.py"),
-        )
+        review_script = os.environ.get("MAILBUS_REVIEW_SCRIPT", "")
+    if not review_script:
+        mail_home = os.environ.get("MAIL_HOME", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        review_script = os.path.join(mail_home, "..", "pr-agent", "review.py")
     review_script = os.path.normpath(review_script)
     if os.path.isfile(review_script):
         emit("\n── AI 代码审查 ──")
@@ -1272,12 +1310,10 @@ def cmd_review(args) -> int:
         if args.target:
             cmd += ["--target-dir", args.target]
 
-        env = os.environ.copy()
-        if not env.get("DEEPSEEK_API_KEY"):
-            env["DEEPSEEK_API_KEY"] = _read_deepseek_key_from_openclaw_config()
-
+        # review.py 内部会自己读 ~/.hermes/.env，不需要通过 env 传 key
+        # 避免 DEEPSEEK_API_KEY 通过子进程 /proc/PID/environ 泄露
         try:
-            r = subprocess.run(cmd, cwd=workdir, env=env, capture_output=True, text=True, timeout=180)
+            r = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True, timeout=180)
             if r.stdout:
                 emit(r.stdout)
             if r.stderr:
@@ -1302,22 +1338,72 @@ def cmd_review(args) -> int:
     # 综合退出码
     overall = 0
     if semgrep_exit > 0:
-        overall = 1
+        overall |= 1
+    if pylint_exit > 0:
+        overall |= 2
+    if mypy_exit > 0:
+        overall |= 4
     return overall
 
 
 # ── 辅助函数 ──────────────────────────────────────────────────────────
 
-def _cleanup_stale_locks(max_age: int = 3600):
-    """清理 /tmp 中超过 max_age 秒的 mailbus 锁文件"""
+def _cleanup_stale_locks(max_age: int = 300):
+    """清理 /tmp 中超过 max_age 秒的 mailbus 锁文件和 session 锁文件
+
+    默认 max_age=300（5分钟），每次 scan 周期都会执行。
+    也清理遗留的 session 级 .lock 文件和 .db-shm/.db-wal 文件。
+    """
     import glob
     now = time.time()
+
+    # 清理 mailbus 锁文件
     for fpath in glob.glob("/tmp/ziyan-mailbus-*.lock"):
         try:
             if now - os.path.getmtime(fpath) > max_age:
                 os.unlink(fpath)
         except OSError:
             pass
+
+    # 清理 agentmemory 残留锁文件
+    for pattern in ["/tmp/agentmemory*.sock", os.path.expanduser("~/.agentmemory/*.lock")]:
+        for fpath in glob.glob(pattern):
+            try:
+                if now - os.path.getmtime(fpath) > max_age:
+                    os.unlink(fpath)
+            except OSError:
+                pass
+
+    # ── Bug 4 修复：清理 session 级 .lock 文件 + .db-shm/.db-wal 残留 ──
+    for pattern in ["/tmp/*.lock", "/tmp/*.db-shm", "/tmp/*.db-wal"]:
+        for fpath in glob.glob(pattern):
+            try:
+                # 只清理 mailbus/agentmemory 相关会话锁
+                fname = os.path.basename(fpath).lower()
+                if any(kw in fname for kw in ["session", "agent", "task", "mailbus", "hermes", "openclaw"]):
+                    if now - os.path.getmtime(fpath) > max_age:
+                        os.unlink(fpath)
+            except OSError:
+                pass
+
+    # 清理 agent inbox 目录下的残留 .lock 文件
+    data_dir = DEFAULT_DATA_DIR
+    inbox_dir = os.path.join(data_dir, "inbox")
+    if os.path.isdir(inbox_dir):
+        for agent_dir in os.listdir(inbox_dir):
+            # 安全防御：拒绝路径遍历和隐藏目录
+            if agent_dir.startswith(".") or "/" in agent_dir or "\\" in agent_dir:
+                continue
+            agent_inbox = os.path.join(inbox_dir, agent_dir)
+            if os.path.isdir(agent_inbox):
+                for fname in os.listdir(agent_inbox):
+                    if fname.endswith(".lock") or fname.endswith(".tmp"):
+                        fpath = os.path.join(agent_inbox, fname)
+                        try:
+                            if now - os.path.getmtime(fpath) > max_age:
+                                os.unlink(fpath)
+                        except OSError:
+                            pass
 
 
 def _read_deepseek_key_from_openclaw_config() -> str:

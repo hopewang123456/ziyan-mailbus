@@ -149,13 +149,17 @@ def process_forward(data_dir: str, forward_data: dict) -> bool:
         priority=forward_data.get("priority", "normal"),
         attachments=forward_data.get("attachments"),
     )
-    new_msg.original_msg_id = forward_data.get("original_msg_id", "")
+    # 写入 original_msg_id（作为 dict 字段写入 inbox，不依赖 Message 类定义）
+    msg_dict = new_msg.to_dict()
+    orig_id = forward_data.get("original_msg_id", "")
+    if orig_id:
+        msg_dict["original_msg_id"] = orig_id
     
     # 写入目标 inbox
     inbox_data = json_read(target_inbox_file, {"agent": to, "has_unread": False, "messages": [], "since": _now_iso()})
     inbox = Inbox.from_dict(inbox_data)
     inbox.has_unread = True
-    inbox.messages.append(new_msg.to_dict())
+    inbox.messages.append(msg_dict)
     json_write(target_inbox_file, inbox.to_dict())
     
     return True

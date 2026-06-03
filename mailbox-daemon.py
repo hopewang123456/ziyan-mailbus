@@ -257,9 +257,7 @@ class MailboxDaemon:
             return
         self.log.info(f"发现 checkpoint: agent={ckpt.get('agent')}, "
                       f"运行中任务={len(ckpt.get('running_procs', []))}")
-        # 恢复 processing_ids 和 retry_map
-        for mid in ckpt.get("processing_ids", []):
-            self._processing_ids.add(mid)
+        # 恢复 retry_map
         self._retry_map = ckpt.get("retry_map", {})
         # 恢复任务状态（进程已死，标记为需要重试）
         for pd in ckpt.get("running_procs", []):
@@ -271,8 +269,14 @@ class MailboxDaemon:
                     mid, sender, "中断",
                     "Daemon 重启恢复: 上次 session 被信号终止，请重新派发"
                 )
-                self._mark_done(mid, "daemon 重启恢复: 被中断")
-                self._processing_ids.discard(mid)
+                try:
+                    self._mark_done(mid, "daemon 重启恢复: 被中断")
+                except Exception as e:
+                    self.log.warning(f"  ⚠️ mark_done 失败 (mid={mid}): {e}")
+        # 清空 _processing_ids：checkpoint 中记录的旧 processing_ids 可能包含
+        # 不属于任何 running_procs 的 orphan mid（消息刚加入 set 就崩了），
+        # 不清空的话它们会被永久跳过。清空后 _process_inbox 会重新评估所有消息。
+        self._processing_ids.clear()
         # 清理 checkpoint 文件（避免重复恢复）
         try:
             os.remove(ckpt_path)
@@ -468,17 +472,11 @@ class MailboxDaemon:
                 self.log.warning(f"  ⚠️ agent 唤醒失败, {len(agent_entries)} 条消息保留 pending 供下次重试")
 
     def _handle_status_ack(self, parsed: dict):
-        """处理 status_ack 类型消息：记录 ack 状态到对应消息
-        DEPRECATED: _parse_message 将 body 压平为 {'content': ..., 'raw_type': ...}，
-        ack_for_msg_id/ack_status/notes 等元数据丢失在 content 字符串中。
-        上层已通过 ack.json 机制完成追踪，此方法保留仅供兼容。
+        """处理 status_ack 类型消息（已废弃，兼容保留）
+        _parse_message 将 body 压平后，ack_for_msg_id/ack_status 等元数据已丢失，
+        上层 _process_inbox 已通过 ack.json + _auto_ack/_mark_done 完成追踪。
         """
-        body = parsed['body']
-        self.log.debug(f"  status_ack 已废弃: content={body.get('content', '')[:80]}")
-        if not updated:
-            self.log.debug(f"  未找到原始消息 {ack_for}（可能已归档）")
-
-        self._mark_done(parsed['id'], f"status_ack 处理完毕: {ack_for} → {ack_status}")
+        self.log.debug(f"  status_ack 已废弃: id={parsed.get('id', '')}")
 
     def _needs_agent(self, msg_type, priority, parsed=None, from_=None):
         # urgent 优先级必唤醒
@@ -683,12 +681,15 @@ class MailboxDaemon:
         if agent_models and agent_models[0] in models_map:
             mf = models_map[agent_models[0]].get(agent_cfg.get("type", "none"), "")
             if mf:
-                cmd = cmd.replace("MODEL", mf)
+                # 先替换完整参数格式（含前缀），再替换裸 MODEL（防止 MODEL 在参数值中二次出现）
                 cmd = cmd.replace("--model MODEL", f"--model {mf}")
                 cmd = cmd.replace("-m MODEL", f"-m {mf}")
+                cmd = cmd.replace("MODEL", mf)
             else:
-                for p in ["--model MODEL", "-m MODEL", "MODEL"]:
-                    cmd = cmd.replace(p, "")
+                # MODEL 为空值 → 从命令中移除所有出现（含 --model MODEL, -m MODEL,
+                # --model="MODEL", -m="MODEL", 裸 MODEL 等格式）
+                cmd = re.sub(r'(?:--model|-m)[=\s]+"?MODEL"?', '', cmd)
+                cmd = re.sub(r'\bMODEL\b', '', cmd)
         provider = agent_cfg.get("provider", "")
         if not provider:
             cmd = cmd.replace("--provider PROVIDER", "")

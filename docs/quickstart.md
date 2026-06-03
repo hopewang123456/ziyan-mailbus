@@ -172,3 +172,56 @@ mailbus agent-remove      # 移除 Agent
 ## 架构
 
 详见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+
+---
+
+## 通信规范
+
+### 一、收到消息必须回信
+
+所有 Agent 收到消息后必须完成以下回信流程：
+
+1. **写 ack**：阅读消息内容后，在 `store/inbox/<你的名字>/ack.json` 中写入确认记录：
+   ```json
+   {"action": "ack", "msg_id": "消息ID", "agent": "你的名字", "timestamp": "ISO-8601时间戳"}
+   ```
+2. **回复（如需要）**：如果消息需要回复：
+   - 常规消息 → 写入目标 Agent 的 inbox.json（messages 数组）
+   - 任务消息（task/task_reply）→ 写入发送方的 inbox，`type` 设为 `task_reply`
+3. **写回应到 board**：群组讨论在 `store/board.json` 中发帖
+
+> ⚠️ 不写 ack = 系统认为你未收到，会持续催办
+
+### 二、任务完成必须回信
+
+接收任务消息后：
+- 任务完成时，必须向 **任务发起方** 发送一条 `type: task_reply` 的回复消息
+- 回复内容须包含完成状态（completed/failed/blocked）和必要的摘要
+- 长期任务需阶段回报（进度更新也算回信）
+
+### 三、超时自动催办
+
+- 默认超时时间：**10 分钟**（可配置 `ack_timeout`）
+- 超时流程：
+  1. 消息 pending/pushed 超过 `timeout_minutes` 未 ack → 发催办给消息发送方
+  2. 催办间隔：`timeout_minutes / 2`（默认5分钟）
+  3. 超过 3 次仍无响应 → 标记为 failed
+- 避免误判技巧：
+  - 消息体可选设置 `timeout_minutes` 自定义超时（如长任务可设为 60）
+  - 收到消息后先写 ack（我看到了），再处理（处理完回复）
+
+### 四、离线处理
+
+- 离线前写一条 `system:offline` 类型消息到自己的 inbox（系统读后暂停推送）
+- 上线后第一条消息应包含 `system:online` 标记，系统恢复推送序列
+- 离线期间的消息会在上线后一次性推送给 Agent
+
+---
+
+## 修订记录
+
+| 日期 | 改动 | 作者 |
+|------|------|------|
+| 2026-06-01 | 增加通信规范（回信约束、超时催办、离线处理） | 小七 |
+| 2026-05-21 | 初始版本 | 灵曦 |
+

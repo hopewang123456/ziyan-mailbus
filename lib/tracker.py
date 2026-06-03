@@ -115,24 +115,52 @@ class TaskTracker:
 
     # ── 催办逻辑 ──────────────────────────────────────────────────
 
-    def check_reminders(self, agents: dict, reminder_minutes: int = 5,
+    def check_reminders(self, agents: dict, data_dir: str = None,
+                        reminder_minutes: int = 5,
                         max_reminders: int = 3) -> list:
         """
         检查所有 running 任务是否需要催办。
+        
+        如果传入了 data_dir，还会检查 inbox 中对应消息的状态，
+        如果 inbox 中消息已 done，自动同步 tracker 状态。
 
         返回需要升级通知的任务列表 [{task_id, agent, reminded_count}, ...]
         """
         escalated = []
         now = datetime.now(timezone(timedelta(hours=8)))
 
+        # 如果传了 data_dir，预加载所有 inbox 的消息状态
+        msg_states = {}  # task_id -> inbox_state
+        if data_dir:
+            from .utils import resolve_paths
+            from .models import Inbox
+            paths = resolve_paths(data_dir)
+            for name in agents:
+                inbox_file = f"{paths['inbox']}/{name}/inbox.json"
+                inbox_data = json_read(inbox_file, {})
+                if inbox_data:
+                    inbox = Inbox.from_dict(inbox_data)
+                    for m in inbox.messages:
+                        mid = inbox.msg_field(m, 'id', '')
+                        state = inbox.msg_field(m, 'state', '') or inbox.msg_field(m, 'status', '')
+                        if mid and state:
+                            msg_states[mid] = state
+
         for task in self.list_all(status_filter=TaskStatus.RUNNING):
+            task_id = task["task_id"]
+            
+            # 检查 inbox 中对应消息是否已 done
+            inbox_state = msg_states.get(task_id, "")
+            if inbox_state in ("done", "closed", "acknowledged"):
+                self.update_status(task_id, TaskStatus.SUCCESS)
+                continue
+            
             updated_str = task.get("updated_at", task["created_at"])
             updated = datetime.strptime(updated_str, "%Y-%m-%dT%H:%M:%S%z")
             elapsed_min = (now - updated).total_seconds() / 60
 
             if elapsed_min >= reminder_minutes and task["reminded_count"] < max_reminders:
                 # 需要催办
-                task_id = task["task_id"]
                 self.increment_reminder(task_id)
                 assignee = task.get("assignee", "")
                 if assignee in agents:
@@ -144,6 +172,6 @@ class TaskTracker:
                     })
             elif elapsed_min >= reminder_minutes and task["reminded_count"] >= max_reminders:
                 # 超限 → 标记 timeout
-                self.update_status(task["task_id"], TaskStatus.TIMEOUT)
+                self.update_status(task_id, TaskStatus.TIMEOUT)
 
         return escalated

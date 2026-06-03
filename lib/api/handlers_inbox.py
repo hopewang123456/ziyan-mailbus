@@ -8,6 +8,8 @@ import os
 import json
 from lib.models import Inbox, Message, MsgStatus, Priority, MsgType
 from lib.utils import json_read, json_write, resolve_paths, _now_iso, build_message
+from lib.scanner import build_queues, update_message_status
+from lib.pusher import push_messages, resolve_cli_chain
 
 
 def handle_inbox(handler, agent: str):
@@ -90,6 +92,20 @@ def handle_send_msg(handler):
     inbox.has_unread = True
     inbox.messages.append(msg.to_dict())
     json_write(inbox_file, inbox.to_dict())
+
+    # 即时推送：写完后立即扫描并推送，不等下次 cron
+    try:
+        # 获取 agent 配置和 CLI 命令
+        agent_cfg = handler.agents.get(to, {})
+        model_alias = (agent_cfg.get("models") or [""])[0]
+        cli_chain = resolve_cli_chain(agent_cfg, model_alias, handler.agent_types)
+        if cli_chain:
+            cli_cmds = [c[0] for c in cli_chain]
+            push_messages(handler.data_dir, to, [msg.to_dict()],
+                          cli_cmd=cli_cmds, auto_ack=True)
+    except Exception:
+        pass  # 推送失败不影响消息已写入
+
     handler._send_json({"status": "ok", "msg_id": msg.id})
 
 

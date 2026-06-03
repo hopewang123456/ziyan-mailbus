@@ -41,19 +41,24 @@ class _MockWebhookHandler(BaseHTTPRequestHandler):
         pass  # 静默
 
 
-def _run_server(port=19876):
+def _run_server(port=0):
     server = HTTPServer(("127.0.0.1", port), _MockWebhookHandler)
     _webhook_store["server"] = server
+    _webhook_store["port"] = server.server_address[1]  # 保存实际端口
     server.serve_forever()
 
 
-def _setup_server(port=19876):
+def _setup_server(port=0):
     _webhook_store.clear()
     _webhook_store["requests"] = []
     _webhook_store["status"] = 200
+    _webhook_store["port"] = port
     t = threading.Thread(target=_run_server, args=(port,), daemon=True)
     t.start()
-    return f"http://127.0.0.1:{port}/webhook"
+    import time
+    time.sleep(0.1)  # 等 server 启动
+    actual_port = _webhook_store.get("port", port)
+    return f"http://127.0.0.1:{actual_port}/webhook"
 
 
 # ── 测试 ────────────────────────────────────────────────────────────────

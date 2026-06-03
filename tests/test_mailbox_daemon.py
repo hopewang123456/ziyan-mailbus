@@ -120,7 +120,7 @@ def test_signal_name_maps_exit_codes():
 def test_save_checkpoint_creates_file():
     """_save_checkpoint 写入 checkpoint 文件"""
     daemon = _make_daemon()
-    ckpt_path = os.path.join(daemon.data_dir, MailboxDaemon.CHECKPOINT_FILE)
+    ckpt_path = daemon._checkpoint_path
     assert not os.path.exists(ckpt_path)
 
     mock_proc = mock.MagicMock()
@@ -140,10 +140,10 @@ def test_save_checkpoint_creates_file():
 
 
 def test_load_checkpoint_restores_state():
-    """_load_checkpoint 恢复 processing_ids + retry_map + 通知发件人"""
+    """_load_checkpoint 恢复 retry_map + 通知发件人 + 清空 processing_ids"""
     daemon = _make_daemon()
     _ensure_sender_inbox(daemon.data_dir, "lingzhao")
-    ckpt_path = os.path.join(daemon.data_dir, MailboxDaemon.CHECKPOINT_FILE)
+    ckpt_path = daemon._checkpoint_path
     ckpt = {
         "agent": "test", "timestamp": "2026-01-01T00:00:00",
         "running_procs": [{"pid": 12345, "msg_ids": ["m1"],
@@ -154,10 +154,11 @@ def test_load_checkpoint_restores_state():
     }
     json.dump(ckpt, open(ckpt_path, "w"))
     daemon._load_checkpoint()
-    # m1 在 running_procs 中 → _mark_done 后 _processing_ids.discard
+    # m1 在 running_procs 中 → _mark_done 后发回执
     assert "m1" not in daemon._processing_ids
-    # m2 不在 running_procs 中，只作为 processing_ids 恢复
-    assert "m2" in daemon._processing_ids
+    # m2 是 orphan processing_id → _load_checkpoint 末尾 clear 了，
+    # 所以 _processing_ids 为空，m2 会被 _process_inbox 重新发现
+    assert len(daemon._processing_ids) == 0
     assert daemon._retry_map == {"m1": 1}
     assert not os.path.exists(ckpt_path)
 
@@ -264,6 +265,202 @@ def test_needs_agent_comprehensive():
     assert not daemon._needs_agent("system", "normal")
 
 
+# ════════════════════════════════════════════════════════════════
+# P0#4: contextWindow 修复验证 — 延迟 ack 策略
+# ════════════════════════════════════════════════════════════════
+
+def test_process_inbox_delayed_ack_on_success():
+    """_process_inbox: agent 成功唤醒后才 ack（延迟 ack 策略）"""
+    daemon = _make_daemon()
+    _ensure_sender_inbox(daemon.data_dir, "lingzhao")
+
+    msg_id = "test-delayed-ack-001"
+    inbox = Inbox(agent="test")
+    inbox.messages.append(Message(
+        id=msg_id, from_="lingzhao", to="test", content="帮忙审查一下设计",
+        type="design_review", priority="normal",
+        status=MsgStatus.PENDING, created_at="2026-01-01"
+    ))
+    inbox.has_unread = True
+    json.dump(inbox.to_dict(), open(daemon.inbox_path, "w"))
+    json.dump([], open(daemon.ack_path, "w"))
+
+    # mock _trigger_agent_batch 返回 True（spawn 成功）
+    with mock.patch.object(daemon, '_trigger_agent_batch', return_value=True) as ms:
+        daemon._process_inbox()
+        ms.assert_called_once()
+
+    # ✅ 验证 ack 已写入（agent 唤醒成功后才 ack）
+    ack = json.load(open(daemon.ack_path))
+    ack_list = ack if isinstance(ack, list) else [ack]
+    assert any(e.get("msg_id") == msg_id for e in ack_list), \
+        "agent 唤醒成功后应写入 ack"
+
+
+def test_process_inbox_no_ack_on_spawn_failure():
+    """_process_inbox: agent 唤醒失败时不 ack，保留 pending 供下次重试"""
+    daemon = _make_daemon()
+    _ensure_sender_inbox(daemon.data_dir, "lingzhao")
+
+    msg_id = "test-delayed-ack-fail-001"
+    inbox = Inbox(agent="test")
+    inbox.messages.append(Message(
+        id=msg_id, from_="lingzhao", to="test", content="请处理这个任务",
+        type="task", priority="normal",
+        status=MsgStatus.PENDING, created_at="2026-01-01"
+    ))
+    inbox.has_unread = True
+    json.dump(inbox.to_dict(), open(daemon.inbox_path, "w"))
+    json.dump([], open(daemon.ack_path, "w"))
+
+    # mock _trigger_agent_batch 返回 False（spawn 失败）
+    # 使用 side_effect 模拟真实行为：将 msg_id 加入 _processing_ids 后再返回 False
+    def _mock_trigger_fail(entries):
+        for e in entries:
+            daemon._processing_ids.add(e["msg_id"])
+        return False
+
+    with mock.patch.object(daemon, '_trigger_agent_batch', side_effect=_mock_trigger_fail):
+        daemon._process_inbox()
+
+    # ❌ 验证 ack 未写入（spawn 失败，消息保留 pending）
+    ack = json.load(open(daemon.ack_path))
+    ack_list = ack if isinstance(ack, list) else [ack]
+    assert not any(e.get("msg_id") == msg_id for e in ack_list), \
+        "agent 唤醒失败时不应写入 ack，应保留 pending 供下次重试"
+
+    # ✅ 验证 _processing_ids 中还在（防止下次 poll 重复触发+跳过）
+    assert msg_id in daemon._processing_ids, \
+        "唤醒失败后消息应仍在 _processing_ids 中"
+
+
+def test_process_inbox_non_agent_messages_ack_immediately():
+    """_process_inbox: 非 agent 消息（report）立即 ack，无需等待 spawn"""
+    daemon = _make_daemon()
+
+    msg_id_report = "test-report-001"
+    inbox = Inbox(agent="test")
+    inbox.messages.append(Message(
+        id=msg_id_report, from_="mailbus", to="test",
+        content="System report: all good",
+        type="report", priority="normal",
+        status=MsgStatus.PENDING, created_at="2026-01-01"
+    ))
+    inbox.has_unread = True
+    json.dump(inbox.to_dict(), open(daemon.inbox_path, "w"))
+    json.dump([], open(daemon.ack_path, "w"))
+
+    with mock.patch.object(daemon, '_trigger_agent_batch') as ms:
+        daemon._process_inbox()
+        ms.assert_not_called()  # report 不应触发 agent
+
+    ack = json.load(open(daemon.ack_path))
+    ack_list = ack if isinstance(ack, list) else [ack]
+    assert any(e.get("msg_id") == msg_id_report for e in ack_list), \
+        "report 类型应直接 ack"
+
+
+def test_process_inbox_completion_receipt_ack_immediately():
+    """_process_inbox: 完成回执消息直接 ack+done，防止递归唤醒 agent"""
+    daemon = _make_daemon()
+
+    msg_id = "test-completion-001"
+    inbox = Inbox(agent="test")
+    inbox.messages.append(Message(
+        id=msg_id, from_="lingzhao", to="test",
+        content="✅ 任务完成回执: m1 已完成",
+        type="notice", priority="normal",
+        status=MsgStatus.PENDING, created_at="2026-01-01"
+    ))
+    inbox.has_unread = True
+    json.dump(inbox.to_dict(), open(daemon.inbox_path, "w"))
+    json.dump([], open(daemon.ack_path, "w"))
+
+    with mock.patch.object(daemon, '_trigger_agent_batch') as ms:
+        daemon._process_inbox()
+        ms.assert_not_called()  # 完成回执不应触发 agent
+
+    ack = json.load(open(daemon.ack_path))
+    ack_list = ack if isinstance(ack, list) else [ack]
+    assert any(e.get("msg_id") == msg_id for e in ack_list), \
+        "完成回执应直接 ack"
+
+
+def test_process_inbox_status_ack_direct():
+    """_process_inbox: status_ack 消息直接 ack+done，不走 agent"""
+    daemon = _make_daemon()
+
+    msg_id = "test-status-ack-001"
+    inbox = Inbox(agent="test")
+    inbox.messages.append(Message(
+        id=msg_id, from_="lingzhao", to="test",
+        content='{"action": "ack", "msg_id": "m1"}',
+        type="status_ack", priority="normal",
+        status=MsgStatus.PENDING, created_at="2026-01-01"
+    ))
+    inbox.has_unread = True
+    json.dump(inbox.to_dict(), open(daemon.inbox_path, "w"))
+    json.dump([], open(daemon.ack_path, "w"))
+
+    with mock.patch.object(daemon, '_handle_status_ack') as hs:
+        daemon._process_inbox()
+        hs.assert_called_once()
+
+    ack = json.load(open(daemon.ack_path))
+    ack_list = ack if isinstance(ack, list) else [ack]
+    assert any(e.get("msg_id") == msg_id for e in ack_list), \
+        "status_ack 应直接 ack"
+
+
+# ════════════════════════════════════════════════════════════════
+# P0#4: contextWindow 修复验证 — checkpoint per-agent 隔离
+# ════════════════════════════════════════════════════════════════
+
+def test_checkpoint_skip_other_agent():
+    """_load_checkpoint: 跳过属于其他 agent 的 checkpoint 并清理文件"""
+    daemon = _make_daemon()
+    ckpt_path = daemon._checkpoint_path
+
+    other_ckpt = {
+        "agent": "other_agent",
+        "timestamp": "2026-01-01T00:00:00",
+        "running_procs": [{"pid": 99999, "msg_ids": ["m1"],
+                           "senders": {"m1": "lingzhao"},
+                           "summary": "other task", "cmd": "echo", "started_at": 0}],
+        "processing_ids": ["m1"],
+        "retry_map": {},
+    }
+    json.dump(other_ckpt, open(ckpt_path, "w"))
+
+    daemon._load_checkpoint()
+
+    # ✅ checkpoint 文件应已被删除
+    assert not os.path.exists(ckpt_path), \
+        "其他 agent 的 checkpoint 文件应在加载后删除"
+    # ✅ processing_ids 应为空
+    assert len(daemon._processing_ids) == 0, \
+        "跨 agent checkpoint 不应污染 processing_ids"
+    # ✅ _running_procs 不应有恢复的任务
+    assert len(daemon._running_procs) == 0, \
+        "跨 agent checkpoint 不应恢复 _running_procs"
+
+
+def test_checkpoint_skip_other_agent_logs_warning():
+    """_load_checkpoint: 跳过其他 agent checkpoint 时打印警告"""
+    daemon = _make_daemon()
+    ckpt_path = daemon._checkpoint_path
+    other_ckpt = {"agent": "other_agent", "timestamp": "2026-01-01T00:00:00",
+                  "running_procs": [], "processing_ids": [], "retry_map": {}}
+    json.dump(other_ckpt, open(ckpt_path, "w"))
+
+    with mock.patch.object(daemon.log, 'warning') as mw:
+        daemon._load_checkpoint()
+        mw.assert_called_once()
+        log_msg = mw.call_args[0][0]
+        assert "agent=other_agent" in log_msg
+        assert "跳过" in log_msg
+
+
 def _make_daemon():
     """创建测试用 daemon 实例"""
     tmp = tempfile.mkdtemp(prefix="mailbus_test_")
@@ -282,6 +479,7 @@ def _make_daemon():
     daemon._running_procs = {}
     daemon._retry_map = {}
     daemon._processing_ids = set()
+    daemon._last_agent_awaken = {}  # 对话冷却期追踪
     
     # 初始化 inbox 文件
     json.dump({"agent": "test", "messages": [], "has_unread": False},
@@ -305,6 +503,15 @@ if __name__ == "__main__":
         ("test_reap_processes_retry_twice_then_give_up", test_reap_processes_retry_twice_then_give_up),
         ("test_handle_shutdown_saves_checkpoint", test_handle_shutdown_saves_checkpoint),
         ("test_needs_agent_comprehensive", test_needs_agent_comprehensive),
+        # P0#4: contextWindow 修复 — 延迟 ack 策略验证
+        ("test_process_inbox_delayed_ack_on_success", test_process_inbox_delayed_ack_on_success),
+        ("test_process_inbox_no_ack_on_spawn_failure", test_process_inbox_no_ack_on_spawn_failure),
+        ("test_process_inbox_non_agent_messages_ack_immediately", test_process_inbox_non_agent_messages_ack_immediately),
+        ("test_process_inbox_completion_receipt_ack_immediately", test_process_inbox_completion_receipt_ack_immediately),
+        ("test_process_inbox_status_ack_direct", test_process_inbox_status_ack_direct),
+        # P0#4: contextWindow 修复 — checkpoint per-agent 隔离验证
+        ("test_checkpoint_skip_other_agent", test_checkpoint_skip_other_agent),
+        ("test_checkpoint_skip_other_agent_logs_warning", test_checkpoint_skip_other_agent_logs_warning),
     ]
     for name, fn in tests:
         fn()
