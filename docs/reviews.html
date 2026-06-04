@@ -81,7 +81,12 @@ h1{font-size:22px;margin-bottom:4px;position:relative;z-index:1}
 
 <div id="projects"></div>
 
-<script>
+    <script>
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 async function load() {
   try {
     const res = await fetch('/api/reports/projects');
@@ -102,7 +107,7 @@ async function load() {
       card.className = 'project-card';
       const header = document.createElement('div');
       header.className = 'project-header';
-      header.innerHTML = '<span class="project-arrow">▶</span><span class="project-name">📁 ' + project + '</span><span class="project-count">' + reports.length + ' 份</span>';
+      header.innerHTML = '<span class="project-arrow">▶</span><span class="project-name">📁 ' + esc(project) + '</span><span class="project-count">' + reports.length + ' 份</span>';
       header.onclick = () => card.classList.toggle('open');
       const list = document.createElement('div');
       list.className = 'report-list';
@@ -110,7 +115,7 @@ async function load() {
       for (const r of reports) {
         const item = document.createElement('div');
         item.className = 'report-item';
-        item.innerHTML = '<span class="report-time">' + r.time + '</span><span class="report-name">' + r.file + '</span><span class="report-size">' + (r.size / 1024).toFixed(1) + ' KB</span>';
+        item.innerHTML = '<span class="report-time">' + esc(r.time) + '</span><span class="report-name">' + esc(r.file) + '</span><span class="report-size">' + (r.size / 1024).toFixed(1) + ' KB</span>';
 
         const content = document.createElement('div');
         content.className = 'report-content';
@@ -127,9 +132,9 @@ async function load() {
           try {
             const rres = await fetch('/api/reports/' + encodeURIComponent(r.file));
             const rdata = await rres.json();
-            content.innerHTML = rdata.html ? rdata.html : '<pre>' + (rdata.raw || '无内容') + '</pre>';
+            content.innerHTML = rdata.html ? rdata.html : '<pre>' + esc(rdata.raw || '无内容') + '</pre>';
           } catch (e) {
-            content.innerHTML = '<pre style="color:var(--accent-red);">加载失败: ' + e.message + '</pre>';
+            content.innerHTML = '<pre style="color:var(--accent-red);">加载失败: ' + esc(e.message) + '</pre>';
           }
         };
 
@@ -142,7 +147,7 @@ async function load() {
       container.appendChild(card);
     }
   } catch (e) {
-    document.getElementById('projects').innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>加载失败: ' + e.message + '</p></div>';
+    document.getElementById('projects').innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>加载失败: ' + esc(e.message) + '</p></div>';
   }
 }
 

@@ -49,36 +49,197 @@ body::before{
     radial-gradient(ellipse 60% 40% at 20% 80%, rgba(0,200,255,0.04) 0%, transparent 40%);
 }
 
-/* 星系粒子背景 */
+/* 星系粒子背景 — 白天/夜晚自动切换 */
 body::after {
   content: '';
   position: fixed; inset: 0;
   z-index: 0;
   pointer-events: none;
   background-image:
-    radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.3), transparent),
-    radial-gradient(1px 1px at 30% 60%, rgba(255,255,255,0.2), transparent),
-    radial-gradient(1.5px 1.5px at 50% 10%, rgba(255,255,255,0.4), transparent),
-    radial-gradient(1px 1px at 70% 40%, rgba(255,255,255,0.2), transparent),
-    radial-gradient(1px 1px at 90% 80%, rgba(255,255,255,0.3), transparent),
-    radial-gradient(1.5px 1.5px at 15% 80%, rgba(200,220,255,0.3), transparent),
-    radial-gradient(1px 1px at 45% 45%, rgba(255,255,255,0.15), transparent),
-    radial-gradient(1px 1px at 65% 70%, rgba(255,255,255,0.2), transparent),
-    radial-gradient(1px 1px at 85% 15%, rgba(200,220,255,0.25), transparent),
-    radial-gradient(1.5px 1.5px at 25% 35%, rgba(255,255,255,0.3), transparent),
-    radial-gradient(1px 1px at 55% 85%, rgba(255,255,255,0.15), transparent),
-    radial-gradient(1px 1px at 75% 55%, rgba(200,200,255,0.2), transparent),
-    radial-gradient(1px 1px at 5% 50%, rgba(255,255,255,0.2), transparent),
-    radial-gradient(1.5px 1.5px at 35% 5%, rgba(255,255,255,0.3), transparent),
-    radial-gradient(1px 1px at 60% 30%, rgba(255,255,255,0.15), transparent),
-    radial-gradient(1px 1px at 80% 90%, rgba(200,220,255,0.2), transparent),
-    radial-gradient(1px 1px at 95% 45%, rgba(255,255,255,0.25), transparent),
-    radial-gradient(1.5px 1.5px at 40% 75%, rgba(255,255,255,0.2), transparent);
-  animation: starDrift 180s linear infinite;
+    radial-gradient(1.5px 1.5px at 10% 15%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1.2px 1.2px at 25% 55%, rgba(200,220,255,0.4), transparent),
+    radial-gradient(1px 1px at 40% 25%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(2px 2px at 55% 70%, rgba(200,200,255,0.5), transparent),
+    radial-gradient(1px 1px at 70% 30%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1.5px 1.5px at 85% 60%, rgba(200,220,255,0.4), transparent),
+    radial-gradient(1px 1px at 15% 80%, rgba(255,255,255,0.25), transparent),
+    radial-gradient(1px 1px at 45% 45%, rgba(200,200,255,0.2), transparent),
+    radial-gradient(1.5px 1.5px at 60% 85%, rgba(255,255,255,0.35), transparent),
+    radial-gradient(1px 1px at 80% 15%, rgba(200,220,255,0.3), transparent),
+    radial-gradient(1px 1px at 5% 40%, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1.2px 1.2px at 35% 10%, rgba(200,200,255,0.35), transparent),
+    radial-gradient(1px 1px at 65% 50%, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1.5px 1.5px at 90% 85%, rgba(200,220,255,0.3), transparent),
+    radial-gradient(1px 1px at 50% 90%, rgba(255,255,255,0.25), transparent),
+    radial-gradient(2.5px 2.5px at 20% 30%, rgba(200,200,255,0.6), transparent),
+    radial-gradient(1px 1px at 75% 45%, rgba(255,255,255,0.15), transparent),
+    radial-gradient(1.8px 1.8px at 30% 70%, rgba(200,220,255,0.4), transparent),
+    radial-gradient(1px 1px at 95% 20%, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1.2px 1.2px at 8% 90%, rgba(200,200,255,0.3), transparent);
+  animation: starDrift 240s linear infinite;
+  transition: background-image 2s ease;
 }
+
+/* 白天模式 (6:00-18:00) — 暖色星光，淡蓝底色 */
+@media (prefers-color-scheme: light) {
+  body {
+    background: linear-gradient(180deg, #0a0a2e 0%, #1a1040 30%, #0d0a2a 70%, #0a0a1a 100%);
+  }
+  body::after {
+    background-image:
+      radial-gradient(2px 2px at 10% 15%, rgba(255,200,150,0.6), transparent),
+      radial-gradient(1.5px 1.5px at 25% 55%, rgba(200,180,255,0.5), transparent),
+      radial-gradient(1.5px 1.5px at 40% 25%, rgba(255,255,200,0.4), transparent),
+      radial-gradient(2.5px 2.5px at 55% 70%, rgba(200,200,255,0.6), transparent),
+      radial-gradient(1.5px 1.5px at 70% 30%, rgba(255,220,150,0.4), transparent),
+      radial-gradient(1.5px 1.5px at 15% 80%, rgba(200,200,255,0.35), transparent),
+      radial-gradient(2px 2px at 45% 45%, rgba(255,200,100,0.3), transparent),
+      radial-gradient(2px 2px at 60% 85%, rgba(200,220,255,0.45), transparent),
+      radial-gradient(1.5px 1.5px at 80% 15%, rgba(255,200,150,0.4), transparent),
+      radial-gradient(1.5px 1.5px at 5% 40%, rgba(200,180,255,0.3), transparent),
+      radial-gradient(2.5px 2.5px at 35% 10%, rgba(255,220,150,0.5), transparent),
+      radial-gradient(1.5px 1.5px at 65% 50%, rgba(200,200,255,0.3), transparent),
+      radial-gradient(2px 2px at 90% 85%, rgba(255,200,150,0.4), transparent),
+      radial-gradient(2px 2px at 50% 90%, rgba(200,220,255,0.35), transparent),
+      radial-gradient(3px 3px at 20% 30%, rgba(255,255,200,0.7), transparent),
+      radial-gradient(1.5px 1.5px at 75% 45%, rgba(200,180,255,0.25), transparent);
+    opacity: 0.7;
+  }
+  body::before {
+    background:
+      radial-gradient(ellipse 100% 60% at 50% 0%, rgba(100,150,255,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 50% at 80% 100%, rgba(200,150,255,0.08) 0%, transparent 50%),
+      radial-gradient(ellipse 60% 40% at 20% 80%, rgba(100,200,255,0.06) 0%, transparent 40%);
+  }
+}
+
+/* 夜晚模式 (18:00-6:00) — 冷色星光，深邃蓝黑 */
+@media (prefers-color-scheme: dark) {
+  body {
+    background: linear-gradient(180deg, #050510 0%, #0a0a1a 30%, #050510 70%, #0a0a1a 100%);
+  }
+  body::after {
+    background-image:
+      radial-gradient(1.5px 1.5px at 10% 15%, rgba(255,255,255,0.4), transparent),
+      radial-gradient(1px 1px at 25% 55%, rgba(180,200,255,0.3), transparent),
+      radial-gradient(1px 1px at 40% 25%, rgba(255,255,255,0.25), transparent),
+      radial-gradient(2px 2px at 55% 70%, rgba(150,180,255,0.4), transparent),
+      radial-gradient(1px 1px at 70% 30%, rgba(255,255,255,0.25), transparent),
+      radial-gradient(1.2px 1.2px at 85% 60%, rgba(180,200,255,0.3), transparent),
+      radial-gradient(1px 1px at 15% 80%, rgba(255,255,255,0.2), transparent),
+      radial-gradient(1px 1px at 45% 45%, rgba(150,180,255,0.15), transparent),
+      radial-gradient(1.5px 1.5px at 60% 85%, rgba(255,255,255,0.3), transparent),
+      radial-gradient(1px 1px at 80% 15%, rgba(180,200,255,0.25), transparent),
+      radial-gradient(1.5px 1.5px at 50% 90%, rgba(200,220,255,0.2), transparent),
+      radial-gradient(2px 2px at 20% 30%, rgba(150,180,255,0.5), transparent),
+      radial-gradient(1.5px 1.5px at 90% 85%, rgba(180,200,255,0.25), transparent),
+      radial-gradient(1px 1px at 30% 70%, rgba(180,200,255,0.3), transparent);
+    opacity: 0.9;
+  }
+}
+
+/* 飘动的星云光晕 */
+.nebula {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.15;
+  animation: nebulaDrift 30s ease-in-out infinite alternate;
+}
+.nebula-1 {
+  width: 400px; height: 300px;
+  background: radial-gradient(circle, rgba(100,50,200,0.15), transparent);
+  top: 10%; left: -5%;
+  animation-duration: 35s;
+}
+.nebula-2 {
+  width: 350px; height: 350px;
+  background: radial-gradient(circle, rgba(0,100,200,0.12), transparent);
+  bottom: 5%; right: 0%;
+  animation-duration: 40s;
+  animation-delay: -10s;
+}
+.nebula-3 {
+  width: 250px; height: 250px;
+  background: radial-gradient(circle, rgba(200,100,150,0.08), transparent);
+  top: 50%; left: 50%;
+  animation-duration: 45s;
+  animation-delay: -20s;
+}
+@keyframes nebulaDrift {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(30px, -20px) scale(1.1); }
+  100% { transform: translate(-20px, 10px) scale(0.9); }
+}
+
 @keyframes starDrift {
   0% { transform: translate(0, 0) rotate(0deg); }
   100% { transform: translate(20px, -10px) rotate(3deg); }
+}
+
+/* 脉冲扫描环 — 在线状态 */
+.pulse-ring {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  position: relative;
+}
+.pulse-ring.online {
+  background: var(--accent-green);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.3);
+}
+.pulse-ring.online::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  animation: pulseExpand 2s ease-out infinite;
+}
+.pulse-ring.offline {
+  background: var(--text-muted);
+}
+@keyframes pulseExpand {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+/* 全息网格 — 弹窗背景 */
+.hologrid {
+  background-image:
+    linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+  background-size: 30px 30px;
+}
+
+/* 能量护盾流光边框 — 重要弹窗 */
+.energy-shield {
+  position: relative;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+.energy-shield::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(90deg,
+    rgba(0, 212, 255, 0.15),
+    rgba(139, 92, 246, 0.15),
+    rgba(0, 212, 255, 0.15)
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  background-size: 200% 100%;
+  animation: shieldFlow 4s linear infinite;
+}
+@keyframes shieldFlow {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* 粒子画布 */
@@ -136,6 +297,11 @@ body::after {
   padding: 20px 20px 16px;
   border-bottom: 1px solid rgba(51, 65, 85, 0.15);
   position: relative;
+}
+.sidebar-logo svg {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
 }
 .sidebar-logo .logo-text {
   font-size: 15px;
@@ -233,11 +399,18 @@ body::after {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 0 0 16px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.15);
   margin-bottom: 20px;
 }
-.top-bar h1 { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+.top-bar h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.3px;
+}
 .top-bar .sub { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
-.top-bar-right { display: flex; align-items: center; gap: 8px; }
+.top-bar-right { display: flex; align-items: center; gap: 6px; }
 
 .toolbar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
 .search-input{
@@ -434,6 +607,7 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
   box-shadow:0 8px 32px rgba(0,0,0,0.2), 0 0 20px rgba(0,212,255,0.03);
   transform:translateY(-2px)
 }
+.card-title{font-size:12px;color:var(--text-secondary);margin:0 0 8px;font-weight:400}
 .stat-card h3{font-size:12px;color:var(--text-secondary);margin:0 0 8px;font-weight:400}
 
 .star-trail{position:absolute;bottom:0;left:10%;width:80%;height:1px;background:linear-gradient(90deg,transparent,rgba(0,212,255,0.1),transparent)}
@@ -496,14 +670,36 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
 <body>
 
 <div class="glow-follow" id="glowFollow"></div>
+<div class="nebula nebula-1"></div>
+<div class="nebula nebula-2"></div>
+<div class="nebula nebula-3"></div>
 <div class="galaxy-band"></div>
 
 <!-- 左侧导航 -->
 <nav class="sidebar" id="sidebarNav">
   <div class="sidebar-logo">
-    <svg viewBox="0 0 24 24" width="24" height="24" style="color:var(--accent-cyan);position:relative;z-index:1">
-      <path d="M12 2L3 20h18L12 2z" fill="none" stroke="currentColor" stroke-width="1.5"/>
-      <circle cx="12" cy="14" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+    <svg viewBox="0 0 100 100" width="32" height="32">
+      <!-- 双子星 Logo -->
+      <circle cx="35" cy="35" r="12" fill="none" stroke="var(--accent-cyan)" stroke-width="2" opacity="0.9"/>
+      <circle cx="35" cy="35" r="3" fill="var(--accent-cyan)"/>
+      <circle cx="35" cy="35" r="18" fill="none" stroke="var(--accent-cyan)" stroke-width="0.5" opacity="0.15">
+        <animate attributeName="r" values="18;24;18" dur="3s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.2;0;0.2" dur="3s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="65" cy="65" r="9" fill="none" stroke="var(--accent-purple)" stroke-width="1.5" opacity="0.9"/>
+      <circle cx="65" cy="65" r="2" fill="var(--accent-purple)"/>
+      <circle cx="65" cy="65" r="13" fill="none" stroke="var(--accent-purple)" stroke-width="0.5" opacity="0.15">
+        <animate attributeName="r" values="13;18;13" dur="3s" begin="1.5s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.2;0;0.2" dur="3s" begin="1.5s" repeatCount="indefinite"/>
+      </circle>
+      <!-- 连接线 -->
+      <path d="M47 47 Q55 38 56 56" fill="none" stroke="var(--accent-cyan)" stroke-width="0.8" stroke-dasharray="2 2" opacity="0.3">
+        <animate attributeName="stroke-dashoffset" values="0;-16" dur="2s" repeatCount="indefinite"/>
+      </path>
+      <!-- 小行星 -->
+      <circle cx="70" cy="15" r="1" fill="rgba(255,255,255,0.2)"/>
+      <circle cx="15" cy="70" r="1" fill="rgba(255,255,255,0.15)"/>
+      <circle cx="85" cy="45" r="1" fill="rgba(255,255,255,0.15)"/>
     </svg>
     <div class="logo-text">ziyan-<span>mailbus</span></div>
     <div class="orbit-ring"></div>
@@ -528,6 +724,14 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
     <div class="nav-item" data-tab="tasks-audit" onclick="switchTab('tasks-audit')">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
       任务审计
+    </div>
+    <div class="nav-item" data-tab="stats" onclick="switchTab('stats')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
+      统计
+    </div>
+    <div class="nav-item" data-tab="patrol" onclick="switchTab('patrol')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      巡检日报
     </div>
     <div class="nav-item" data-tab="heartbeat" onclick="switchTab('heartbeat')">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
@@ -557,87 +761,41 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
     <div class="sub">HTTP API: <span id="apiUrl" style="color:var(--accent-cyan)">http://localhost:9812</span></div>
   </div>
   <div class="top-bar-right">
+    <div style="display:flex;align-items:center;gap:6px;position:relative">
+      <input class="search-input" id="searchBox" placeholder="搜索消息..." style="width:160px;font-size:12px;padding:5px 10px" onkeydown="if(event.key==='Enter')doSearch()" data-i18n-placeholder="search">
+      <button class="btn btn-sm" onclick="doSearch()" title="搜索">🔍</button>
+    </div>
     <input class="search-input" id="apiInput" value="http://localhost:9812" placeholder="API 地址">
     <button class="btn btn-primary" onclick="loadAll()">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-      刷新全部
+      <span data-i18n="refresh">刷新全部</span>
     </button>
     <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-muted)">
       <input type=checkbox id="autoRefreshChk" onchange="toggleAutoRefresh()" checked style="accent-color:var(--accent-cyan)">
-      自动刷新
+      <span data-i18n="auto">自动刷新</span>
     </label>
     <button class="btn" onclick="openSendMsg()">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-      发消息
+      <span data-i18n="send">发消息</span>
     </button>
-    <button class="btn" onclick="triggerHeartbeat()">💓 心跳</button>
+    <button class="btn" onclick="triggerHeartbeat()"><span data-i18n="heartbeat">💓 心跳</span></button>
+    <select id="langSelect" onchange="switchLang(this.value)" style="font-size:12px;padding:3px 6px;background:rgba(15,23,42,0.8);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);cursor:pointer">
+      <option value="zh">中文</option>
+      <option value="en">EN</option>
+    </select>
   </div>
 </div>
-  </div>
 
-  <div class="nav-items" id="navItems">
-    <div class="nav-item active" data-tab="ziyan" onclick="switchTab('ziyan')">
-      <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 2a8 8 0 100 16 8 8 0 000-16z"/><path d="M10 6v4l3 3"/></svg>
-      子言
-    </div>
-    <div class="nav-item" data-tab="overview" onclick="switchTab('overview')">
-      <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="7" height="7" rx="1"/><rect x="11" y="2" width="7" height="7" rx="1"/><rect x="2" y="11" width="7" height="7" rx="1"/><rect x="11" y="11" width="7" height="7" rx="1"/></svg>
-      总览
-    </div>
-    <div class="nav-item" data-tab="agents" onclick="switchTab('agents')">
-      <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="3" width="12" height="9" rx="2"/><circle cx="10" cy="7.5" r="1.5"/><path d="M7 15l3 2 3-2"/></svg>
-      Agent <span class="nav-num" id="navAgentCount"></span>
-    </div>
-    <div class="nav-item" data-tab="bulletin" onclick="switchTab('bulletin')">
-      <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3v14M5 8l5-5 5 5M5 12l5 5 5-5"/></svg>
-      公告 <span class="nav-num" id="navBulletinCount"></span>
-    </div>
-    <div class="nav-item" data-tab="tasks-audit" onclick="switchTab('tasks-audit')">
-      <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 10l3 3 5-5"/><rect x="2" y="2" width="16" height="16" rx="2"/></svg>
-      任务审计
-    </div>
-    <div class="nav-item" data-tab="heartbeat" onclick="switchTab('heartbeat')">
-      <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1,10 5,10 7,4 10,16 13,7 15,10 19,10"/></svg>
-      健康状态
-    </div>
-    <div class="nav-item" data-tab="alerts" onclick="switchTab('alerts')">
-      <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 2l8 14H2l8-14z"/><line x1="10" y1="9" x2="10" y2="12"/><circle cx="10" cy="14" r="0.5" fill="currentColor"/></svg>
-      告警 <span class="nav-num" id="navAlertCount"></span>
-    </div>
-  </div>
-
-  <div class="nav-footer">
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="var(--text-muted)" stroke-width="1.2">
-      <path d="M8 1L2 14h12L8 1z"/><circle cx="8" cy="9" r="1.5"/>
-    </svg>
-    <span>系统运行中 · <span id="uptimeDisplay">第 1 天</span></span>
-  </div>
-</nav>
 
 <!-- ═══ 主内容 ═══ -->
 <main class="main">
 
-  <div class="topbar">
-    <div class="topbar-left">
-      <h1>仪表盘</h1>
-      <span class="version">v2.1.0</span>
-      <span class="api-url" id="apiUrlDisplay" onclick="toggleApiEdit()">http://localhost:9812</span>
-    </div>
-    <div class="topbar-right">
-      <input class="search-input" id="apiInput" value="http://localhost:9812" placeholder="API 地址" style="display:none;width:180px">
-      <button class="btn btn-sm" onclick="loadAll()">&#x1f504; 刷新</button>
-      <button class="btn btn-sm btn-primary" onclick="openSendMsg()">&#x2709;&#xfe0f; 发消息</button>
-      <button class="btn btn-sm" onclick="triggerHeartbeat()">&#x1f493; 心跳</button>
-      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted)">
-        <input type=checkbox id="autoRefreshChk" onchange="toggleAutoRefresh()" checked> 30s
-      </label>
-    </div>
-  </div>
-
   <div class="tab-content active" id="tab-ziyan">
+    <div id="ziyanRunningTasks"></div>
     <div id="ziyanPending"></div>
     <div id="ziyanTeam" style="margin-top:12px"></div>
     <div id="ziyanAlerts" style="margin-top:12px"></div>
+    <div id="ziyanTaskBoard" style="margin-top:12px"></div>
   </div>
 
   <div class="tab-content" id="tab-overview">
@@ -666,6 +824,22 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
       </div>
     </div>
     <div id="bulletinList"></div>
+  </div>
+
+  <div class="tab-content" id="tab-stats">
+    <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:13px;color:var(--text-secondary)">平台统计数据 · 聚合概览</span>
+      <button class="btn btn-sm" onclick="reloadData('stats')">&#x1f504; 刷新</button>
+    </div>
+    <div id="statsOverviewPanel"></div>
+  </div>
+
+  <div class="tab-content" id="tab-patrol">
+    <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:13px;color:var(--text-secondary)">灵巡每日巡检报告</span>
+      <button class="btn btn-sm" onclick="reloadData('patrol')">&#x1f504; 刷新</button>
+    </div>
+    <div id="patrolReportList"></div>
   </div>
 
   <div class="tab-content" id="tab-tasks-audit">
@@ -713,6 +887,17 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
       <button class="btn btn-sm" onclick="closeReply()">取消</button>
       <button class="btn btn-sm btn-primary" onclick="sendReply()">发送</button>
     </div>
+  </div>
+</div>
+
+<!-- 搜索弹窗 -->
+<div class="modal" id="searchModal" onclick="if(event.target===this)closeSearch()">
+  <div class="modal-inner" style="max-width:600px">
+    <div class="header">
+      <h3>🔍 搜索结果 <span id="searchResultCount" style="font-size:12px;color:var(--text-muted)"></span></h3>
+      <button class="btn btn-sm" onclick="closeSearch()">&#x2715;</button>
+    </div>
+    <div id="searchResults" style="max-height:60vh;overflow-y:auto"></div>
   </div>
 </div>
 
@@ -921,16 +1106,43 @@ async function fetchJSON(p) {
 
 function statusBadge(s) {
   if (!s) return '<span class="badge badge-gray">未知</span>';
-  if (s === 'online' || s === 'healthy' || s === 'ok' || s === 'success') return '<span class="badge badge-green">● ' + s + '</span>';
-  if (s === 'offline' || s === 'failed' || s === 'unreachable') return '<span class="badge badge-red">● ' + s + '</span>';
-  if (s === 'warn' || s === 'running' || s === 'timeout') return '<span class="badge badge-yellow">● ' + s + '</span>';
+  const e = esc(s);
+  if (s === 'online' || s === 'healthy' || s === 'ok' || s === 'success') return '<span class="badge badge-green">● ' + e + '</span>';
+  if (s === 'offline' || s === 'failed' || s === 'unreachable') return '<span class="badge badge-red">● ' + e + '</span>';
+  if (s === 'warn' || s === 'running' || s === 'timeout') return '<span class="badge badge-yellow">● ' + e + '</span>';
   if (s === 'pending') return '<span class="badge badge-yellow">⏳ 待处理</span>';
-  return '<span class="badge badge-blue">● ' + s + '</span>';
+  return '<span class="badge badge-blue">● ' + e + '</span>';
 }
 
 function esc(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// 安全编码字符串用于 JS 单引号字符串上下文（onclick 属性）
+function jsStr(s) {
+  if (!s) return '';
+  return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'\\r');
+}
+
+// 初始化全局事件委托（data-* onclick 安全模式）
+function initEventDelegation() {
+  document.addEventListener('click', function(e) {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
+    const action = target.getAttribute('data-action');
+    const arg = target.getAttribute('data-arg') || '';
+    if (action === 'showAgent') showAgent(arg);
+    else if (action === 'launchAgent') { e.stopPropagation(); launchAgent(arg, target.getAttribute('data-mode') || 'browser'); }
+    else if (action === 'launchAgentModal') launchAgentFromModal(arg, target.getAttribute('data-mode') || 'browser');
+    else if (action === 'openMailbox') { e.stopPropagation(); openMailbox(arg); }
+    else if (action === 'pingAgent') pingAgent(arg);
+    else if (action === 'closeModal') closeModal();
+    else if (action === 'switchTab') switchTab(arg);
+    else if (action === 'openReply') { var from = target.getAttribute('data-arg-from') || ''; var id = target.getAttribute('data-arg-id') || ''; var summary = target.getAttribute('data-arg-summary') || ''; openReply(from, id, summary); }
+    else if (action === 'applyMsgTemplate') { applyMsgTemplate(target.getAttribute('data-arg-tmpl') || ''); }
+    else if (action === 'markMailboxRead') { markMailboxRead(target.getAttribute('data-arg-name') || ''); }
+  });
 }
 
 function mdToHtml(md) {
@@ -958,6 +1170,74 @@ function toggleApiEdit() {
     display.style.display = 'inline-block';
     input.style.display = 'none';
   }
+}
+
+// ═══════════════ i18n ═══════════════
+
+const LANG = {
+  zh: {
+    title: 'ziyan-mailbus Platform',
+    search: '搜索消息...',
+    refresh: '刷新全部',
+    auto: '自动刷新',
+    send: '发消息',
+    heartbeat: '💓 心跳',
+    nav_ziyan: '👑 子言',
+    nav_overview: '总览',
+    nav_agents: 'Agent',
+    nav_bulletin: '公告',
+    nav_audit: '任务审计',
+    nav_stats: '统计',
+    nav_patrol: '巡检日报',
+    nav_heartbeat: '健康状态',
+    nav_alerts: '告警',
+    noData: '暂无数据',
+    loading: '加载中...',
+    stats_total: '消息',
+    stats_success: '完成',
+    stats_timeout: '超时',
+    stats_failed: '失败',
+  },
+  en: {
+    title: 'ziyan-mailbus Platform',
+    search: 'Search messages...',
+    refresh: 'Refresh All',
+    auto: 'Auto Refresh',
+    send: 'Send',
+    heartbeat: '💓 Heartbeat',
+    nav_ziyan: '👑 Ziyan',
+    nav_overview: 'Overview',
+    nav_agents: 'Agents',
+    nav_bulletin: 'Bulletin',
+    nav_audit: 'Audit',
+    nav_stats: 'Stats',
+    nav_patrol: 'Patrol',
+    nav_heartbeat: 'Health',
+    nav_alerts: 'Alerts',
+    noData: 'No Data',
+    loading: 'Loading...',
+    stats_total: 'Messages',
+    stats_success: 'Done',
+    stats_timeout: 'Timeout',
+    stats_failed: 'Failed',
+  }
+};
+
+let _lang = 'zh';
+
+function t(key) { return (LANG[_lang] && LANG[_lang][key]) || (LANG.zh[key]) || key; }
+
+function switchLang(lang) {
+  _lang = lang;
+  // 更新静态文本
+  const h1 = document.querySelector('.top-bar h1');
+  if (h1) h1.textContent = t('title');
+  const sb = document.getElementById('searchBox');
+  if (sb) sb.setAttribute('placeholder', t('search'));
+  // 更新所有带 data-i18n 的元素
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.setAttribute('placeholder', t(el.dataset.i18nPlaceholder)); });
+  toast('已切换为' + (lang === 'en' ? 'English' : '中文'), 'success');
 }
 
 // ═══════════════ 导航切换 ═══════════════
@@ -1017,6 +1297,7 @@ async function loadAll() {
     } catch(e) {}
     renderZiyanTab();
     renderTaskAuditTab();
+    renderStatsTab();
     startAutoRefresh();
   } catch(e) {
     toast('加载失败: ' + e.message, 'error');
@@ -1041,7 +1322,9 @@ async function reloadData(name) {
   const map = {
     agents: ['/api/status', '/api/agents'],
     bulletin: ['/api/bulletin'],
-    review: ['/api/reports'],
+    review: ['/api/tasks'],
+    stats: ['/api/stats'],
+    patrol: ['/api/patrol-reports'],
     'tasks-audit': ['/api/tasks', '/api/reports'],
     heartbeat: ['/api/heartbeat'],
     alerts: ['/api/alerts'],
@@ -1054,10 +1337,12 @@ async function reloadData(name) {
     }));
     if (name === 'agents') { rawData.status = results[0]; rawData.agents = results[1]; renderAgentTab(results[0], results[1]); if (results[0] && results[1] && results[1].agents) renderStats(results[1].agents, (results[0].agent_statuses||{})); }
     if (name === 'bulletin') { rawData.bulletin = results[0]; renderBulletinTab(results[0]); }
-    if (name === 'review') { rawData.reports = results[0]; renderReviewTab(results[0]); }
+    if (name === 'review') { rawData.tasks = results[0]; renderReviewTab(); }
     if (name === 'tasks-audit') { rawData.tasks = results[0]; rawData.reports = results[1]; renderTaskAuditTab(); }
     if (name === 'heartbeat') { rawData.hb = results[0]; renderHeartbeat(results[0]); }
     if (name === 'alerts') { rawData.alerts = results[0]; renderAlerts(results[0]); }
+    if (name === 'stats') { renderStatsTab(); }
+    if (name === 'patrol') { renderPatrolTab(); }
     toast(name + ' 已刷新', 'success');
   } catch(e) { toast('刷新失败', 'error'); }
 }
@@ -1095,21 +1380,22 @@ function renderAgentTab(status, agentsData) {
     const active = st.active_messages || 0;
     const unread = st.unread_count || 0;
     const color = AGENT_COLORS[v.type] || '#93c5fd';
+    const keyEnc = jsStr(k);
     return `<div class="agent-card">
-      <div class="top" style="cursor:pointer" onclick="showAgent('${k}')">
+      <div class="top" style="cursor:pointer" data-action="showAgent" data-arg="${keyEnc}">
         <div class="name">${robotSvg(color)} ${v.name || k}</div>
         <span class="type-badge" style="color:${color}">${v.type}</span>
       </div>
-      <div class="role" style="cursor:pointer" onclick="showAgent('${k}')">${v.role || '—'}</div>
+      <div class="role" style="cursor:pointer" data-action="showAgent" data-arg="${keyEnc}">${v.role || '—'}</div>
       <div style="font-size:10px;color:var(--text-muted)">${(v.models||[]).join(', ') || ''}</div>
       <div class="stats">
         <span>📨 ${active}</span>
         <span>📬 ${unread > 0 ? '<strong style="color:var(--accent-cyan)">'+unread+'</strong>' : 0}</span>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px">
-        ${v.has_browser !== false && getPerm(k,'browser') ? `<button class="btn btn-sm" onclick="event.stopPropagation();launchAgent('${k}','browser')" style="flex:1">🌐 浏览器</button>` : ''}
-        ${getPerm(k,'cli') ? `<button class="btn btn-sm" onclick="event.stopPropagation();launchAgent('${k}','cli')" style="flex:1">💻 CLI</button>` : ''}
-        ${getPerm(k,'mailbox') ? `<button class="btn btn-sm" onclick="event.stopPropagation();openMailbox('${k}')" style="${unread > 0 ? 'color:var(--accent-cyan);border-color:rgba(0,212,255,0.3)' : ''}">📬 ${unread > 0 ? unread : ''}</button>` : ''}
+        ${v.has_browser !== false && getPerm(k,'browser') ? `<button class="btn btn-sm" data-action="launchAgent" data-arg="${keyEnc}" data-mode="browser" style="flex:1">🌐 浏览器</button>` : ''}
+        ${getPerm(k,'cli') ? `<button class="btn btn-sm" data-action="launchAgent" data-arg="${keyEnc}" data-mode="cli" style="flex:1">💻 CLI</button>` : ''}
+        ${getPerm(k,'mailbox') ? `<button class="btn btn-sm" data-action="openMailbox" data-arg="${keyEnc}" style="${unread > 0 ? 'color:var(--accent-cyan);border-color:rgba(0,212,255,0.3)' : ''}">📬 ${unread > 0 ? unread : ''}</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1314,12 +1600,13 @@ async function showAgent(name) {
     const privateMsgs = msgs.filter(m => m.type !== 'system');
     const unreadPrivate = privateMsgs.filter(m => !m.read);
 
+    const nameEnc = jsStr(name);
     let html = `<div class="header">
       <h2>${robotSvg(AGENT_COLORS[cfg.type] || '#93c5fd')} ${esc(agentName)} <span style="font-size:12px;color:var(--text-muted);font-weight:400">${cfg.type || ''}</span></h2>
       <div>
-        <button class="btn btn-sm" onclick="launchAgentFromModal('${name}','browser')" style="${getPerm(name,'browser') ? '' : 'display:none'}">🌐 浏览器</button>
-        <button class="btn btn-sm" onclick="launchAgentFromModal('${name}','cli')" style="margin-left:4px;${getPerm(name,'cli') ? '' : 'display:none'}">💻 CLI</button>
-        <button class="btn btn-sm" onclick="closeModal()" style="margin-left:4px">✕</button>
+        <button class="btn btn-sm" data-action="launchAgentModal" data-arg="${nameEnc}" data-mode="browser" style="${getPerm(name,'browser') ? '' : 'display:none'}">🌐 浏览器</button>
+        <button class="btn btn-sm" data-action="launchAgentModal" data-arg="${nameEnc}" data-mode="cli" style="margin-left:4px;${getPerm(name,'cli') ? '' : 'display:none'}">💻 CLI</button>
+        <button class="btn btn-sm" data-action="closeModal" style="margin-left:4px">✕</button>
       </div>
     </div>`;
     html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">`;
@@ -1553,8 +1840,11 @@ function switchMailboxTab(filter) {
   document.querySelectorAll('.mailbox-stats .stat').forEach(s => s.classList.toggle('active', s.dataset.filter === filter));
   const container = document.getElementById('mailboxListContainer');
   if (!container) return;
-  const inbox = rawData._mailboxInbox || [];
-  container.innerHTML = renderMailboxHTML(inbox.filter(m => m.type !== 'system'));
+  const inbox = (rawData._mailboxInbox || []).filter(m => m.type !== 'system');
+  let filtered = inbox;
+  if (filter === 'unread') filtered = inbox.filter(m => m.state !== 'done' && m.state !== 'acknowledged');
+  if (filter === 'done') filtered = inbox.filter(m => m.state === 'done' || m.state === 'acknowledged');
+  container.innerHTML = renderMailboxHTML(filtered);
 }
 
 async function openMailbox(name) {
@@ -1568,11 +1858,12 @@ async function openMailbox(name) {
     _mailboxAgent = name; _mailboxFilter = '';
     let html = `<div class="mailbox-header"><div class="header">
       <h2>📬 ${esc(cfg.name || name)}</h2>
-      <div>${unreadCount > 0 ? '<button class="btn btn-sm" onclick="markMailboxRead(\'' + name + '\')" style="margin-right:4px">✅ 全部已读</button>' : ''}
+      <div>${unreadCount > 0 ? '<button class="btn btn-sm" data-action="markMailboxRead" data-arg-name="' + esc(name) + '" style="margin-right:4px">✅ 全部已读</button>' : ''}
       <button class="btn btn-sm" onclick="closeModal()">✕</button></div>
     </div><div class="mailbox-stats">
       <span class="stat active" data-filter="" onclick="switchMailboxTab('')">📬 全部 (${privateMsgs.length})</span>
-      <span class="stat" data-filter="unread" style="${unreadCount > 0 ? 'color:var(--accent-cyan)' : 'color:var(--text-muted)'}" onclick="switchMailboxTab('unread')">○ 未读 (${unreadCount})</span>
+      <span class="stat" data-filter="unread" style="${unreadCount > 0 ? 'color:var(--accent-cyan)' : 'color:var(--text-muted)'}" onclick="switchMailboxTab('unread')">○ 待处理 (${unreadCount})</span>
+      <span class="stat" data-filter="done" onclick="switchMailboxTab('done')">✅ 已完成 (${privateMsgs.length - unreadCount})</span>
     </div></div><div id="mailboxListContainer">${renderMailboxHTML(privateMsgs)}</div>`;
     document.getElementById('agentModalContent').innerHTML = html;
     document.getElementById('agentModal').classList.add('open');
@@ -1588,39 +1879,95 @@ async function markMailboxRead(name) {
   } catch(e) { toast('标记失败: ' + e.message, 'error'); }
 }
 
-// ═══════════════ 审查报告 ═══════════════
+// ═══════════════ 审查报告（从任务链读取）═══════════════
 
-function renderReviewTab(reports) {
+function renderReviewTab() {
   const el = document.getElementById('reviewList');
-  const items = (reports && reports.reports) || [];
   if (!el) return;
-  // add review tab HTML container if not exists
   if (!document.getElementById('tab-review')) {
-    const navItems = document.getElementById('navItems');
-    if (navItems) {
-      const tabDiv = document.createElement('div');
-      tabDiv.className = 'tab-content';
-      tabDiv.id = 'tab-review';
-      tabDiv.innerHTML = '<div id="reviewList"></div>';
-      document.querySelector('.main').appendChild(tabDiv);
-    }
+    const tabDiv = document.createElement('div');
+    tabDiv.className = 'tab-content';
+    tabDiv.id = 'tab-review';
+    tabDiv.innerHTML = '<div id="reviewList"></div>';
+    const main = document.querySelector('.main') || document.querySelector('main');
+    if (main) main.appendChild(tabDiv);
   }
-  if (items.length === 0) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">暂无审查报告</div>'; return; }
-  el.innerHTML = items.map((r, idx) => `<div class="msg-item" style="cursor:pointer;margin-bottom:6px" onclick="showReviewDetail(${idx})">
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:13px;font-weight:500">🔍 ${esc(r.file)}</span>
-      <span style="font-size:11px;color:var(--text-muted)">${r.time} · ${(r.size/1024).toFixed(1)}KB</span>
-    </div>
-    <div style="font-size:12px;color:var(--text-secondary);line-height:1.5;max-height:60px;overflow:hidden;margin-top:4px">${esc((r.content||'').slice(0,200))}</div>
-  </div>`).join('');
+  const tasks = (rawData.tasks && rawData.tasks.tasks) || [];
+  // 从每个任务的 chain 中提取 lingjian 的审查步骤
+  const reviewEntries = [];
+  tasks.forEach(t => {
+    const chain = t.chain || [];
+    const reviewStep = chain.find(h => h.agent === 'lingjian' && h.status === 'done');
+    if (reviewStep) {
+      reviewEntries.push({
+        task: t,
+        summary: t.summary || '',
+        reviewer: 'lingjian',
+        result: reviewStep.review_result || 'pass',
+        at: reviewStep.at || '',
+        report: reviewStep.report || reviewStep.action || ''
+      });
+    }
+  });
+  // 按时间倒序
+  reviewEntries.sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+
+  if (reviewEntries.length === 0) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px">🔍 暂无审查记录（任务链中未找到审查步骤）</div>';
+    return;
+  }
+
+  el.innerHTML = reviewEntries.map(r => {
+    const resultIcon = r.result === 'pass' ? '✅' : r.result === 'fail' ? '❌' : '⚠️';
+    const color = r.result === 'pass' ? 'var(--accent-green)' : r.result === 'fail' ? 'var(--accent-red)' : 'var(--accent-gold)';
+    return `<div class="msg-item" style="margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;font-weight:500">🔍 ${esc(r.summary.substring(0, 40))}${r.summary.length > 40 ? '...' : ''}</span>
+        <span style="font-size:11px;color:var(--text-muted)">${(r.at||'').substring(0,16)}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+        <span style="font-size:12px;color:var(--text-secondary)">🦋灵鉴 · ${resultIcon} <span style="color:${color}">${r.result}</span></span>
+        ${r.report ? `<button class="btn btn-sm" onclick="showReviewFromChain('${esc(r.task.task_id || '')}')">📄 报告</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function showReviewDetail(idx) {
-  const reports = rawData.reports && rawData.reports.reports;
-  if (!reports || !reports[idx]) return;
-  const r = reports[idx];
-  const html = `<div class="header"><h2>📄 ${esc(r.file)}</h2><button class="btn btn-sm" onclick="closeModal()">✕</button></div>
-  <div style="font-size:13px;line-height:1.7;white-space:pre-wrap;background:rgba(15,23,42,0.6);border-radius:8px;padding:16px;max-height:70vh;overflow:auto">${esc(r.content||'')}</div>`;
+function showReviewFromChain(taskId) {
+  const tasks = (rawData.tasks && rawData.tasks.tasks) || [];
+  const t = tasks.find(x => x.task_id === taskId);
+  if (!t) return;
+  const chain = t.chain || [];
+  const reviewStep = chain.find(h => h.agent === 'lingjian');
+  const report = reviewStep ? (reviewStep.report || reviewStep.action || '无详细报告') : '无详细报告';
+  const html = `<div class="header">
+    <h2>📄 审查报告 · ${esc(t.summary || '').substring(0, 50)}</h2>
+    <button class="btn btn-sm" onclick="closeModal()">✕</button>
+  </div>
+  <div style="font-size:13px;line-height:1.7;white-space:pre-wrap;background:rgba(15,23,42,0.6);border-radius:8px;padding:16px;max-height:70vh;overflow:auto">${esc(report)}</div>
+  <div style="margin-top:8px;color:var(--text-muted);font-size:11px"><a href="#" onclick="showTaskChainDetail('${esc(taskId)}');closeModal();return false">在任务面板查看完整流转链 →</a></div>`;
+  document.getElementById('agentModalContent').innerHTML = html;
+  document.getElementById('agentModal').classList.add('open');
+}
+
+function showTaskChainDetail(taskId) {
+  const tasks = (rawData.tasks && rawData.tasks.tasks) || [];
+  const t = tasks.find(x => x.task_id === taskId);
+  if (!t) return;
+  const chain = (t.chain || []).map(h => {
+    const icon = AGENT_ICONS[h.agent] || '?';
+    const s = h.status === 'done' ? '✅' : h.status === 'failed' ? '❌' : '⏳';
+    return `<div style="margin:4px 0;font-size:12px;padding:4px 8px;border-left:2px solid ${h.status === 'done' ? 'var(--accent-green)' : h.status === 'failed' ? 'var(--accent-red)' : 'var(--accent-cyan)'}">
+      <span>${s} ${icon}${h.agent}</span>
+      <span style="color:var(--text-muted);margin-left:8px">${h.action || h.status || ''}</span>
+      <span style="color:var(--text-muted);float:right">${(h.at||'').substring(0,16)}</span>
+    </div>`;
+  }).join('');
+  const html = `<div class="header">
+    <h2>📋 任务链 · ${esc((t.summary||'').substring(0,40))}</h2>
+    <button class="btn btn-sm" onclick="closeModal()">✕</button>
+  </div>
+  <div style="margin-top:8px">${chain}</div>`;
   document.getElementById('agentModalContent').innerHTML = html;
   document.getElementById('agentModal').classList.add('open');
 }
@@ -1628,9 +1975,6 @@ function showReviewDetail(idx) {
 // ═══════════════ 心跳 / 重连 ═══════════════
 
 async function pingAgent(name) {
-  const btn = document.querySelector(`.ping-btn[data-agent="${name}"]`);
-  if (!btn) return;
-  btn.disabled = true; btn.textContent = '⏳';
   try {
     const r = await fetch(apiUrl('/api/ping/' + name));
     const data = await r.json();
@@ -1638,7 +1982,6 @@ async function pingAgent(name) {
     else if (data.status === 'gateway_down') toast('❌ Gateway 启动失败: ' + (data.detail || ''), 'error');
     else toast('⏸ ' + name + ' 仍离线', 'error');
   } catch(e) { toast('重连失败: ' + e.message, 'error'); }
-  btn.disabled = false; btn.textContent = '🔄 重连';
 }
 
 async function restartAgentMemory() {
@@ -1668,7 +2011,7 @@ function renderHeartbeat(hb) {
       <td>${statusBadge(state.status)}</td>
       <td style="font-size:11px;color:var(--text-muted)">${state.last_heartbeat || '-'}</td>
       <td style="font-size:11px;color:var(--text-muted)">${state.missed_pings || 0}</td>
-      <td>${state.status === 'offline' ? '<button class="btn btn-sm ping-btn" data-agent="'+name+'" onclick="pingAgent(\''+name+'\')">🔄 重连</button>' : ''}</td>
+      <td>${state.status === 'offline' ? '<button class="btn btn-sm" data-action="pingAgent" data-agent="'+name+'">🔄 重连</button>' : ''}</td>
     </tr>`;
   }).join('');
 
@@ -1707,6 +2050,118 @@ const AUDIT_STATUS_MAP = {
   running: '⏳ 进行中', success: '✅ 成功', failed: '❌ 失败', timeout: '⏰ 超时',
   pending: '⏳ 待处理', cancelled: '🚫 已取消'
 };
+
+// ═══════════════ 统计面板 ═══════════════
+
+async function renderStatsTab() {
+  const el = document.getElementById('statsOverviewPanel');
+  if (!el) return;
+  let data = null;
+  try {
+    data = await fetchJSON('/api/stats');
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--text-muted);padding:20px">⚠️ 统计加载失败</div>';
+    return;
+  }
+
+  const totalMsgs = data.total_messages || 0;
+  const agentStats = data.agent_stats || {};
+  const taskStatuses = data.task_statuses || {};
+  const trend = data.trend || {};
+
+  const successCount = taskStatuses.success || 0;
+  const failedCount = taskStatuses.failed || 0;
+  const timeoutCount = taskStatuses.timeout || 0;
+
+  // 概览卡片
+  const overviewCards = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+      <div class="stat-card" style="text-align:center"><h3>💬 消息</h3><div style="font-size:28px;font-weight:600">${totalMsgs}</div></div>
+      <div class="stat-card" style="text-align:center"><h3>✅ 完成</h3><div style="font-size:28px;font-weight:600;color:var(--accent-green)">${successCount}</div></div>
+      <div class="stat-card" style="text-align:center"><h3>⏳ 超时</h3><div style="font-size:28px;font-weight:600;color:var(--accent-gold)">${timeoutCount}</div></div>
+      <div class="stat-card" style="text-align:center"><h3>❌ 失败</h3><div style="font-size:28px;font-weight:600;color:var(--accent-red)">${failedCount}</div></div>
+    </div>
+  `;
+
+  // Agent 排行
+  const agentEntries = Object.entries(agentStats)
+    .map(([name, s]) => ({name, total: s.total || 0, success: s.success || 0, failed: s.failed || 0, timeout: s.timeout || 0, avgRsp: s.avg_response_seconds || 0}))
+    .filter(a => a.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+  const maxTotal = Math.max(...agentEntries.map(a => a.total), 1);
+  const agentHtml = agentEntries.map(a => {
+    const pct = Math.round((a.total / maxTotal) * 100);
+    const successRate = a.total > 0 ? Math.round((a.success / a.total) * 100) : 0;
+    const avgMin = a.avgRsp ? (a.avgRsp / 60).toFixed(1) + 'm' : '-';
+    const icon = AGENT_ICONS[a.name] || '';
+    const barColor = successRate >= 80 ? 'var(--accent-green)' : successRate >= 50 ? 'var(--accent-gold)' : 'var(--accent-red)';
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
+        <span>${icon} ${a.name} <span style="color:var(--text-muted)">${a.total} 任务</span></span>
+        <span>${a.success}✅ ${a.failed}❌ ${a.timeout}⏱  ${avgMin} <span style="color:${barColor};font-weight:500">${successRate}%</span></span>
+      </div>
+      <div style="background:rgba(15,23,42,0.6);border-radius:4px;height:8px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent-cyan),var(--accent-blue));border-radius:4px;transition:width 0.3s"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // 趋势折线图
+  const dates = Object.keys(trend).sort();
+  const trendVals = dates.map(d => trend[d]);
+  const maxTrend = Math.max(...trendVals, 1);
+  const minTrend = Math.min(...trendVals, 0);
+  const range = Math.max(maxTrend - minTrend, 1);
+  const chartW = dates.length * 40;
+  const chartH = 90;
+  const padL = 20, padR = 10, padT = 12, padB = 18;
+  const drawW = chartW - padL - padR;
+  const drawH = chartH - padT - padB;
+
+  function toX(i) { return padL + (i / (dates.length - 1 || 1)) * drawW; }
+  function toY(v) { return padT + drawH - ((v - minTrend) / range) * drawH; }
+
+  const linePoints = dates.map((d, i) => `${toX(i)},${toY(trend[d])}`).join(' ');
+  const areaPoints = dates.map((d, i) => `${toX(i)},${toY(trend[d])}`).join(' ') + ` ${toX(dates.length-1)},${toY(0)} ${toX(0)},${toY(0)}`;
+
+  const chartHtml = dates.length > 0 ? `
+    <svg viewBox="0 0 ${chartW} ${chartH}" style="width:100%;height:90px" xmlns="http://www.w3.org/2000/svg">
+      <line x1="${padL}" y1="${toY(minTrend)}" x2="${chartW - padR}" y2="${toY(minTrend)}" stroke="rgba(51,65,85,0.3)" stroke-width="0.5"/>
+      <line x1="${padL}" y1="${toY(minTrend + range * 0.5)}" x2="${chartW - padR}" y2="${toY(minTrend + range * 0.5)}" stroke="rgba(51,65,85,0.3)" stroke-width="0.5"/>
+      <line x1="${padL}" y1="${toY(maxTrend)}" x2="${chartW - padR}" y2="${toY(maxTrend)}" stroke="rgba(51,65,85,0.3)" stroke-width="0.5"/>
+      <polygon points="${areaPoints}" fill="url(#trendGrad)" opacity="0.3"/>
+      <polyline points="${linePoints}" fill="none" stroke="var(--accent-cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${dates.map((d, i) => {
+        const v = trend[d];
+        const x = toX(i);
+        const y = toY(v);
+        const shortDate = d.slice(5);
+        return `<circle cx="${x}" cy="${y}" r="3" fill="var(--accent-cyan)" stroke="var(--bg-deep)" stroke-width="1.5"/><text x="${x}" y="${chartH - 2}" text-anchor="middle" font-size="8" fill="var(--text-muted)">${shortDate}</text><text x="${x}" y="${y - 6}" text-anchor="middle" font-size="9" fill="var(--accent-cyan)">${v}</text>`;
+      }).join('')}
+      <defs>
+        <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--accent-cyan)" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="var(--accent-cyan)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  ` : '<div style="color:var(--text-muted)">暂无趋势数据</div>';
+
+  el.innerHTML = `
+    ${overviewCards}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="stat-card">
+        <h3>📊 Agent 排行</h3>
+        <div style="margin-top:8px">${agentHtml}</div>
+      </div>
+      <div class="stat-card">
+        <h3>📈 消息趋势（近7天）</h3>
+        <div style="margin-top:8px">${chartHtml}</div>
+      </div>
+    </div>
+  `;
+}
 
 function switchAuditFilter(filter) {
   _auditFilter = filter;
@@ -1779,6 +2234,41 @@ async function renderZiyanTab() {
   let inboxData = null, statusData = null, alertsData = null;
   try { [inboxData, statusData, alertsData] = await Promise.all([ fetchJSON('/api/inbox/lingzhao'), fetchJSON('/api/status'), fetchJSON('/api/alerts') ]); }
   catch(e) { elPending.innerHTML = '<div style="color:var(--text-muted);font-size:13px">⚠️ 数据加载失败</div>'; return; }
+
+  // ── Running 任务 ──
+  const elRunning = document.getElementById('ziyanRunningTasks');
+  if (elRunning) {
+    try {
+      const td = await fetchJSON('/api/tasks');
+      const tasks = (td && td.tasks) || [];
+      const runningTasks = tasks.filter(t => t.status === 'running').slice(0, 10);
+      const agentStatuses = (statusData && statusData.agent_statuses) || {};
+      const now = new Date().toISOString();
+      elRunning.innerHTML = '<div class="stat-card">' +
+        '<div class="card-title">🚀 进行中任务 (' + runningTasks.length + ')</div>' +
+        (runningTasks.length === 0 ? '<div style="color:var(--accent-green);font-size:13px;padding:8px">暂无进行中任务</div>' :
+          runningTasks.map(function(t) {
+            const chain = t.chain || [];
+            const lastStep = chain[chain.length - 1] || {};
+            const currentAgent = lastStep.agent || '?';
+            const currentIcon = AGENT_ICONS[currentAgent] || '?';
+            const summary = (t.summary || '').substring(0, 50) + ((t.summary || '').length > 50 ? '...' : '');
+            const startTime = (t.created_at || t.updated_at || '').substring(0, 16);
+            const updatedAt = (t.updated_at || '').substring(0, 16);
+            const chainPath = chain.map(function(h) { return AGENT_ICONS[h.agent] || '?' + h.agent; }).join(' → ');
+            return '<div class="msg-item" style="margin-bottom:6px;border-left:3px solid var(--accent-cyan)">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center">' +
+                '<span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + esc(summary) + '</span>' +
+                '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;margin-left:8px">发起 ' + startTime + '</span>' +
+              '</div>' +
+              '<div style="font-size:11px;color:var(--accent-cyan);margin-top:2px">⏳ ' + currentIcon + currentAgent + ' · 更新 ' + updatedAt + '</div>' +
+            '</div>';
+          }).join('')
+        ) +
+      '</div>';
+    } catch(e) { elRunning.innerHTML = ''; }
+  }
+
   const agentStatuses = (statusData && statusData.agent_statuses) || {};
   let pendingMsgs = [];
   if (inboxData && inboxData.messages) {
@@ -1796,7 +2286,7 @@ async function renderZiyanTab() {
           <div class="head">${fromIcon} · ${time} ${pBadge}</div>
           <div class="body">${esc(summary)}</div>
           <div style="margin-top:6px;display:flex;gap:6px">
-            <button class="btn btn-sm" onclick="openReply('${esc(m.from || '')}','${esc(m.id || m.msg_id || '')}','${esc(summary.replace(/['"\\]/g,''))}')">💬 回复</button>
+            <button class="btn btn-sm" data-action="openReply" data-arg-from="${esc(m.from || '')}" data-arg-id="${esc(m.id || m.msg_id || '')}" data-arg-summary="${esc(summary)}">💬 回复</button>
           </div>
         </div>`;
       }).join('');
@@ -1826,7 +2316,114 @@ async function renderZiyanTab() {
     </div>`).join('');
   } else { alertHtml = '<div style="color:var(--accent-green);font-size:13px">✅ 无告警</div>'; }
   elAlerts.innerHTML = `<div class="stat-card"><div class="card-title">🔔 最近告警</div><div style="max-height:220px;overflow-y:auto">${alertHtml}</div></div>`;
+
+  // ── 子言全局任务看板 ──
+  const elBoard = document.getElementById('ziyanTaskBoard');
+  if (elBoard) {
+    try {
+      const td = await fetchJSON('/api/tasks');
+      const allTasks = (td && td.tasks) || [];
+      // 筛选子言发起的 —— 取 chain[0] 是 lingzhao 的
+      const myTasks = allTasks.filter(t => {
+        const c = t.chain || [];
+        return c.length > 0 && c[0].agent === 'lingzhao';
+      }).sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+
+      const critical = myTasks.filter(t => t.status === 'failed' || t.status === 'timeout');
+      const running = myTasks.filter(t => t.status === 'running');
+      const recentDone = myTasks.filter(t => t.status === 'success').slice(0, 5);
+
+      function renderTaskChain(task) {
+        const chain = task.chain || [];
+        const steps = chain.map((h, i) => {
+          const icon = AGENT_ICONS[h.agent] || '?';
+          const isLast = i === chain.length - 1;
+          const status = h.status || 'pending';
+          const statusIcon = status === 'done' ? '✅' : (status === 'failed' ? '❌' : (isLast && task.status === 'running' ? '⏳' : '✅'));
+          return `<span style="font-size:12px">${statusIcon} ${icon}${h.agent}</span>`;
+        }).join(' <span style="color:var(--text-muted);font-size:10px">→</span> ');
+        return `<div style="font-size:12px;color:var(--text-secondary);margin:4px 0">${steps}</div>`;
+      }
+
+      let boardHtml = '<div class="stat-card"><div class="card-title">📋 我的任务</div>';
+
+      // 过滤标签
+      boardHtml += '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">';
+      boardHtml += '<button class="btn btn-sm filter-btn active" onclick="switchMyTaskFilter(\'all\')">全部 (' + myTasks.length + ')</button>';
+      boardHtml += '<button class="btn btn-sm filter-btn" onclick="switchMyTaskFilter(\'critical\')">🔴 异常 (' + critical.length + ')</button>';
+      boardHtml += '<button class="btn btn-sm filter-btn" onclick="switchMyTaskFilter(\'running\')">🟢 进行中 (' + running.length + ')</button>';
+      boardHtml += '</div>';
+
+      boardHtml += '<div id="myTaskList">';
+
+      // 异常
+      if (critical.length > 0) {
+        boardHtml += '<div style="font-size:11px;color:var(--accent-red);margin:8px 0 4px;font-weight:500">🔴 异常</div>';
+        boardHtml += critical.map(t => renderTaskCard(t)).join('');
+      }
+      // 进行中
+      if (running.length > 0) {
+        boardHtml += '<div style="font-size:11px;color:var(--accent-green);margin:8px 0 4px;font-weight:500">🟢 进行中</div>';
+        boardHtml += running.map(t => renderTaskCard(t)).join('');
+      }
+      // 最近完成
+      boardHtml += '<div style="font-size:11px;color:var(--text-muted);margin:8px 0 4px;font-weight:500">⚪ 最近完成</div>';
+      boardHtml += '<div id="recentDoneList" style="max-height:300px;overflow:hidden">' + recentDone.map(t => renderTaskCard(t)).join('') + '</div>';
+      boardHtml += '</div></div>';
+
+      elBoard.innerHTML = boardHtml;
+    } catch(e) {
+      elBoard.innerHTML = '';
+    }
+  }
 }
+
+function renderTaskCard(task) {
+  const chain = task.chain || [];
+  const summary = (task.summary || '').substring(0, 60) + ((task.summary || '').length > 60 ? '...' : '');
+  const updatedAt = (task.updated_at || '').substring(0, 16);
+  const currentStep = chain.length > 0 ? chain[chain.length - 1] : null;
+  const currentAgent = currentStep ? currentStep.agent : '?';
+  const currentIcon = AGENT_ICONS[currentAgent] || '?';
+  const isRunning = task.status === 'running';
+
+  // 流转路径
+  const stepsHtml = chain.map((h, i) => {
+    const icon = AGENT_ICONS[h.agent] || '?';
+    const isLast = i === chain.length - 1;
+    const s = h.status || 'pending';
+    const statusIcon = s === 'done' ? '✅' : (s === 'failed' ? '❌' : '⏳');
+    return '<span style="font-size:12px;white-space:nowrap">' + statusIcon + ' ' + icon + h.agent + '</span>';
+  }).join(' <span style="color:var(--text-muted);font-size:10px">→</span> ');
+
+  const statusColor = task.status === 'failed' || task.status === 'timeout' ? 'var(--accent-red)' :
+    task.status === 'running' ? 'var(--accent-cyan)' : 'var(--text-muted)';
+
+  return '<div class="msg-item" style="margin-bottom:6px;border-left:3px solid ' + statusColor + '">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center">' +
+      '<div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + esc(summary) + '</div>' +
+      '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;margin-left:8px">' + updatedAt + '</span>' +
+    '</div>' +
+    '<div style="font-size:12px;color:var(--text-secondary);margin:4px 0;overflow-x:auto;white-space:nowrap;padding:4px 0">' + stepsHtml + '</div>' +
+    (isRunning && currentStep ? '<div style="font-size:11px;color:var(--accent-cyan)">⏳ 当前: ' + currentIcon + currentAgent + '</div>' : '') +
+  '</div>';
+}
+
+function switchMyTaskFilter(filter) {
+  document.querySelectorAll('#ziyanTaskBoard .filter-btn').forEach(b => b.classList.remove('active'));
+  const btns = document.querySelectorAll('#ziyanTaskBoard .filter-btn');
+  btns.forEach(b => { if (b.textContent.includes(filter === 'all' ? '全部' : filter === 'critical' ? '异常' : '进行中')) b.classList.add('active'); });
+  const list = document.getElementById('myTaskList');
+  if (!list) return;
+  list.querySelectorAll('div[style*="font-size:11px;color"]').forEach(s => {
+    if (filter === 'all') { s.style.display = ''; s.nextElementSibling.style.display = ''; }
+    else if (filter === 'critical' && s.textContent.includes('异常')) { s.style.display = ''; s.nextElementSibling.style.display = ''; }
+    else if (filter === 'running' && s.textContent.includes('进行中')) { s.style.display = ''; s.nextElementSibling.style.display = ''; }
+    else { s.style.display = 'none'; s.nextElementSibling.style.display = 'none'; }
+  });
+}
+
+// ═══════════════ 回复 ═══════════════
 
 // ═══════════════ 回复 ═══════════════
 
@@ -1862,6 +2459,86 @@ async function sendReply() {
       renderZiyanTab();
     } else { toast('发送失败: ' + (data.error || 'unknown'), 'error'); }
   } catch(e) { toast('发送失败: ' + e.message, 'error'); }
+}
+
+// ═══════════════ 搜索 ═══════════════
+
+let _searchAbort = null;
+
+async function doSearch() {
+  const q = document.getElementById('searchBox').value.trim();
+  if (!q) { toast('请输入搜索关键词', 'error'); return; }
+  if (_searchAbort) _searchAbort.abort();
+  _searchAbort = new AbortController();
+  try {
+    const r = await fetch(apiUrl('/api/search?q=' + encodeURIComponent(q)), {signal: _searchAbort.signal});
+    const data = await r.json();
+    const results = data.results || [];
+    const total = data.total || results.length;
+    document.getElementById('searchResultCount').textContent = total + ' 条结果';
+    const el = document.getElementById('searchResults');
+    if (results.length === 0) {
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">无匹配结果</div>';
+    } else {
+      el.innerHTML = results.map(m => {
+        const time = (m.created_at || '').substring(0, 16);
+        const contentShort = (m.content || '').substring(0, 120) + ((m.content || '').length > 120 ? '...' : '');
+        return `<div class="msg-block">
+          <div class="meta">${esc(m.from)} → ${esc(m.to)} · ${esc(m.type)} · ${esc(m.status || '')} · ${time}</div>
+          <div class="text">${esc(contentShort)}</div>
+        </div>`;
+      }).join('');
+    }
+    document.getElementById('searchModal').classList.add('open');
+  } catch(e) {
+    if (e.name !== 'AbortError') toast('搜索失败: ' + e.message, 'error');
+  }
+}
+
+function closeSearch() {
+  document.getElementById('searchModal').classList.remove('open');
+}
+
+// ── 巡检日报 ──
+async function renderPatrolTab() {
+  const el = document.getElementById('patrolReportList');
+  if (!el) return;
+  let data = null;
+  try {
+    data = await fetchJSON('/api/patrol-reports');
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--text-muted);padding:20px">⚠️ 巡检日报加载失败（API 可能还未就绪）</div>';
+    return;
+  }
+  const reports = data.reports || [];
+  if (reports.length === 0) {
+    el.innerHTML = '<div style="color:var(--text-muted);padding:20px;text-align:center">📋 暂无巡检日报</div>';
+    return;
+  }
+  el.innerHTML = reports.map(r => {
+    const date = r.date || r.created_at || '';
+    const summary = (r.summary || r.content || '').substring(0, 200);
+    var fileEnc = jsStr(r.file || '');
+    return '<div class="bulletin-item" style="cursor:pointer" onclick="showPatrolDetail(\'' + fileEnc + '\')">' +
+      '<div class="meta">' + date + '</div>' +
+      '<div class="title">📋 巡检日报 · ' + date + '</div>' +
+      '<div class="body">' + esc(summary) + '</div></div>';
+  }).join('');
+}
+
+async function showPatrolDetail(file) {
+  if (!file) return;
+  let content = '';
+  try {
+    const r = await fetch('/api/report-content/' + encodeURIComponent(file));
+    if (r.ok) content = await r.text();
+  } catch(e) {}
+  if (!content) content = '报告加载失败';
+  document.getElementById('agentModalContent').innerHTML = '<div class="header">' +
+    '<h2>📋 ' + esc(file) + '</h2>' +
+    '<button class="btn btn-sm" onclick="closeModal()">✕</button></div>' +
+    '<div style="font-size:13px;line-height:1.7;white-space:pre-wrap;background:rgba(15,23,42,0.8);border-radius:8px;padding:16px;max-height:70vh;overflow:auto">' + esc(content) + '</div>';
+  document.getElementById('agentModal').classList.add('open');
 }
 
 // ═══════════════ 心跳触发 ═══════════════
@@ -1925,7 +2602,7 @@ async function openSendMsg() {
   if (!modal) return;
   modal.classList.add('open');
   try { const data = await fetchJSON('/api/templates'); _msgTemplates = data.templates || []; } catch(e) { _msgTemplates = []; }
-  document.getElementById('msgTemplates').innerHTML = _msgTemplates.map(t => `<div class="btn btn-sm" onclick="applyMsgTemplate('${t.id}')" style="cursor:pointer;margin:2px">${t.name}</div>`).join('');
+  document.getElementById('msgTemplates').innerHTML = _msgTemplates.map(t => `<div class="btn btn-sm" data-action="applyMsgTemplate" data-arg-tmpl="${esc(t.id)}" style="cursor:pointer;margin:2px">${esc(t.name)}</div>`).join('');
   const agents = (rawData.agents && rawData.agents.agents) || {};
   const optHtml = Object.entries(agents).map(([k, v]) => `<option value="${k}">${AGENT_NAMES[k] || v.name || k}</option>`).join('');
   document.getElementById('msgTo').innerHTML = optHtml;
@@ -1969,17 +2646,9 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 // ═══════════════ 初始化 ═══════════════
 
 initParticles();
+initEventDelegation();
 loadAll();
 
-// 鼠标炫光跟随
-document.addEventListener('mousemove', (e) => {
-  const glow = document.getElementById('glowFollow');
-  if (glow) {
-    glow.style.left = e.clientX + 'px';
-    glow.style.top = e.clientY + 'px';
-  }
-});
 </script>
-</div>
 </body>
 </html>
