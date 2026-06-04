@@ -173,10 +173,14 @@ def run_housekeeping(data_dir: str, agents: dict):
     # agent 离线检测：检查所有 agent 心跳，离线超过 3 次 ping 的发送通知
     _check_offline_agents(data_dir, agents, paths)
 
-    # 自动归档：acknowledged 超过 7 天或 inbox 超过 300 条的消息
+    # 自动归档：从 config 读取天数（默认3天）和 inbox 最大消息数
     try:
         from .archiver import archive_all
-        archived = archive_all(data_dir, agents, archive_days=7, max_messages=300)
+        config_path = os.path.join(data_dir, "config.json")
+        config_data = json_read(config_path, {})
+        archive_days = config_data.get("archive_days", 3)
+        max_messages = config_data.get("archive_max_messages", 300)
+        archived = archive_all(data_dir, agents, archive_days=archive_days, max_messages=max_messages)
         if archived:
             for name, count in archived.items():
                 print(f"  📦 {name}: {count} 条已归档")
@@ -187,6 +191,12 @@ def run_housekeeping(data_dir: str, agents: dict):
     try:
         from .search import scan_and_index
         scan_and_index(data_dir, agents)
+    except Exception:
+        pass
+
+    # 规则文件变更检测：检查 store/rules/ 下文件是否被修改，变更时广播通知
+    try:
+        _check_rule_changes(data_dir, agents, paths)
     except Exception:
         pass
 
@@ -525,6 +535,79 @@ def update_message_status(data_dir: str, agent_name: str, msg_id: str, new_statu
         json_write(inbox_file, inbox.to_dict())
     
     return found
+
+
+def _check_rule_changes(data_dir: str, agents: dict, paths: dict):
+    """检测 store/rules/ 下规则文件的变更，变更时广播通知所有 agent
+    
+    使用 .rule-state.json 记录上次检测时规则文件的 mtime 和大小。
+    如果检测到变更，向所有 agent 的 inbox 写入规则更新通知。
+    """
+    rules_dir = os.path.join(data_dir, "rules")
+    if not os.path.isdir(rules_dir):
+        return
+    
+    state_file = os.path.join(data_dir, ".rule-state.json")
+    state = json_read(state_file, {})
+    now_state = {}
+    changed_files = []
+    
+    # 扫描当前规则文件状态
+    try:
+        for fname in sorted(os.listdir(rules_dir)):
+            if not fname.endswith(".md"):
+                continue
+            fpath = os.path.join(rules_dir, fname)
+            try:
+                stat = os.stat(fpath)
+                now_state[fname] = {"mtime": stat.st_mtime, "size": stat.st_size}
+                prev = state.get(fname)
+                if prev and (prev.get("mtime", 0) != stat.st_mtime or prev.get("size", 0) != stat.st_size):
+                    changed_files.append(fname)
+            except OSError:
+                pass
+    except Exception:
+        return
+    
+    if not changed_files:
+        # 无变更，更新状态文件并返回
+        json_write(state_file, now_state)
+        return
+    
+    # 有规则变更 → 发广播通知
+    import time as _time
+    ts = _now_iso()
+    now_ts = int(_time.time())
+    
+    for fname in changed_files:
+        print(f"  📢 规则变更检测: {fname}")
+        # 向每个 agent 的 inbox 写入规则更新通知
+        for agent_name in agents:
+            inbox_file = f"{paths['inbox']}/{agent_name}/inbox.json"
+            if not os.path.exists(os.path.dirname(inbox_file)):
+                continue
+            try:
+                inbox_data = json_read(inbox_file, {})
+                inbox = Inbox.from_dict(inbox_data) if inbox_data else Inbox(agent=agent_name)
+                notify_msg = {
+                    "id": f"rule-change-{fname.replace('.md','')}-{now_ts}",
+                    "from": "mailbus",
+                    "to": agent_name,
+                    "type": "notice",
+                    "priority": "normal",
+                    "state": MsgStatus.PENDING,
+                    "content": f"📢 规则更新通知：{fname} 已被修改，请重新阅读。\n"
+                               f"路径: {os.path.join(rules_dir, fname)}",
+                    "created_at": ts,
+                }
+                inbox.messages.append(notify_msg)
+                inbox.has_unread = True
+                json_write(inbox_file, inbox.to_dict())
+            except Exception:
+                pass
+    
+    # 更新状态文件
+    json_write(state_file, now_state)
 
 
 def _check_offline_agents(data_dir: str, agents: dict, paths: dict):

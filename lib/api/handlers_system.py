@@ -194,6 +194,105 @@ def handle_reports(handler):
     handler._send_json({"reports": reports})
 
 
+def handle_stats(handler):
+    """GET /api/stats — 消息统计/报表
+
+    聚合：消息总量、任务状态分布、Agent 排行、响应时间、趋势。
+    """
+    from lib.utils import resolve_paths, _now_iso
+    from lib.models import Inbox
+    from lib.tracker import TaskTracker
+    from datetime import datetime, timezone, timedelta
+
+    paths = resolve_paths(handler.data_dir)
+    tracker = TaskTracker(handler.data_dir)
+
+    # ── 1. 逐 Agent 统计 ──
+    agent_stats = {}
+    total_messages = 0
+    status_distribution = {}
+    now = datetime.now(timezone(timedelta(hours=8)))
+
+    for name in handler.agents:
+        inbox_file = f"{paths['inbox']}/{name}/inbox.json"
+        data = json_read(inbox_file, {})
+        msgs = data.get("messages", []) if data else []
+        total_messages += len(msgs)
+
+        # 状态分布
+        statuses = {"pending": 0, "pushed": 0, "acknowledged": 0,
+                     "processing": 0, "done": 0, "failed": 0, "others": 0}
+        for m in msgs:
+            s = m.get("state", "") or m.get("status", "")
+            if s in statuses:
+                statuses[s] += 1
+            else:
+                statuses["others"] += 1
+            status_distribution[s] = status_distribution.get(s, 0) + 1
+
+        # 响应时间统计（从 created_at 到 acknowledged_at）
+        response_times = []
+        for m in msgs:
+            created = m.get("created_at", "")
+            acked = m.get("acknowledged_at", "")
+            if created and acked and m.get("state") in ("done", "closed"):
+                try:
+                    t1 = datetime.fromisoformat(created)
+                    t2 = datetime.fromisoformat(acked)
+                    delta = (t2 - t1).total_seconds()
+                    if delta > 0:
+                        response_times.append(delta)
+                except (ValueError, TypeError):
+                    pass
+
+        avg_response = sum(response_times) / len(response_times) if response_times else 0
+        max_response = max(response_times) if response_times else 0
+
+        agent_stats[name] = {
+            "total": len(msgs),
+            "statuses": statuses,
+            "avg_response_seconds": round(avg_response, 1),
+            "max_response_seconds": round(max_response, 1),
+            "type": handler.agents[name].get("type", "?"),
+            "role": handler.agents[name].get("role", ""),
+        }
+
+    # ── 2. 任务追踪统计 ──
+    tasks = tracker.list_all()
+    task_statuses = {"pending": 0, "running": 0, "success": 0,
+                     "failed": 0, "timeout": 0, "cancelled": 0}
+    for t in tasks:
+        s = t.get("status", "")
+        task_statuses[s] = task_statuses.get(s, 0) + 1
+
+    # ── 3. 趋势（最近7天每天的消息量） ──
+    trend = {}
+    for i in range(6, -1, -1):
+        day = (now - timedelta(days=i)).strftime("%Y-%m-%d")
+        trend[day] = 0
+    for name in handler.agents:
+        inbox_file = f"{paths['inbox']}/{name}/inbox.json"
+        data = json_read(inbox_file, {})
+        for m in data.get("messages", []):
+            created = m.get("created_at", "")
+            try:
+                d = datetime.fromisoformat(created).strftime("%Y-%m-%d")
+                if d in trend:
+                    trend[d] += 1
+            except (ValueError, TypeError):
+                pass
+
+    handler._send_json({
+        "total_messages": total_messages,
+        "agent_stats": agent_stats,
+        "status_distribution": status_distribution,
+        "task_statuses": task_statuses,
+        "trend": trend,
+        "timestamp": _now_iso(),
+        "agent_count": len(handler.agents),
+    })
+
+
 def handle_search(handler):
     """GET /api/search — 消息检索"""
     from urllib.parse import urlparse, parse_qs
@@ -208,7 +307,7 @@ def handle_search(handler):
     except (ValueError, TypeError):
         limit = 20
     from lib.search import search
-    results = search(handler.data_dir, query=query, from_agent=from_agent,
+    results = search(handler.data_dir, query_str=query, from_agent=from_agent,
                      to_agent=to_agent, msg_type=msg_type, status=status, limit=limit)
     handler._send_json({"query": query, "total": len(results), "results": results})
 

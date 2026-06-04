@@ -45,7 +45,6 @@ def test_resolve_cli_model_with_value():
     cmd = resolve_cli(cfg, types, model_alias="deepseek-chat")
     assert "--model deepseek/deepseek-chat" in cmd
     print("  ✓ test_resolve_cli_model_with_value")
-    print("  ✓ test_resolve_cli_model_with_value")
 
 
 def test_resolve_cli_model_without_value():

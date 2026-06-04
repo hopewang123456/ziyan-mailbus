@@ -4,7 +4,7 @@
   "data_dir": "/path/to/your/store",
   "ack_timeout": 30,
   "max_retries": 3,
-  "archive_days": 7,
+  "archive_days": 3,
   "archive_max_messages": 300,
   "reminder_minutes": 5,
   "max_reminders": 3,

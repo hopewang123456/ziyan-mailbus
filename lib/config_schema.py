@@ -23,7 +23,7 @@ CONFIG_SCHEMA = {
         "data_dir": {"type": "string", "description": "数据存储目录"},
         "ack_timeout": {"type": "integer", "minimum": 1, "maximum": 300, "default": 30},
         "max_retries": {"type": "integer", "minimum": 0, "maximum": 20, "default": 3},
-        "archive_days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 7},
+        "archive_days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 3},
         "archive_max_messages": {"type": "integer", "minimum": 1, "maximum": 10000, "default": 300},
         "poll_interval": {"type": "integer", "minimum": 1, "default": 15},
         "heartbeat_interval": {"type": "integer", "minimum": 10, "default": 60},

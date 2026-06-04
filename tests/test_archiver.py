@@ -72,10 +72,10 @@ class TestArchiver:
     # ── 测试用例 ──
     
     def test_no_archive_needed(self):
-        """少于 300 条且消息未满 7 天 → 不归档"""
+        """少于 300 条且消息未满 3 天 → 不归档"""
         msg = self._make_msg("msg-noarch1", MsgStatus.ACKNOWLEDGED)
         self._write_inbox([msg])
-        count = archive_agent(self.data_dir, "agent_a", archive_days=7, max_messages=300)
+        count = archive_agent(self.data_dir, "agent_a", archive_days=3, max_messages=300)
         assert count == 0, f"预期 0，得到 {count}"
         data = self._read_inbox()
         assert len(data["messages"]) == 1

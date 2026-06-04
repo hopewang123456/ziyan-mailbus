@@ -146,8 +146,8 @@ def push_messages(
     system_context = f"""【系统上下文】ziyan-mailbus 消息总线
 agent: {agent_name}
 inbox: {data_dir}/inbox/{agent_name}/inbox.json
-写 ack 到: {data_dir}/inbox/{agent_name}/ack.json
-纪律: ack → 执行任务 → 回复发件人告知结果
+📝 ack 写入: {data_dir}/inbox/{agent_name}/ack.json
+📋 工作纪律: 写 ack → 读规则 → 执行任务 → 回复发件人
 规则: {rules_dir}/common.md
 岗位规则: {rules_dir}/<role>.md（如存在）
 ---
@@ -194,7 +194,6 @@ inbox: {data_dir}/inbox/{agent_name}/inbox.json
 
         msg_body += "\n---"
         combined_text += msg_body
-    combined_text = system_context + combined_text
     
     # 3. 多模型 fallback 推送
     # cli_cmd 如果是 list，按顺序试；如果是 str，当单条处理

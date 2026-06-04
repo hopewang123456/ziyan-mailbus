@@ -12,10 +12,52 @@ from lib.tracker import TaskTracker, TaskStatus
 
 
 def handle_tasks(handler):
-    """GET /api/tasks — 获取任务追踪列表"""
+    """GET /api/tasks — 获取任务追踪列表，支持查询参数过滤
+
+    查询参数:
+        ?status=success          — 按状态过滤
+        ?assignee=lingxiao       — 按负责人过滤
+        &audit_status=audited    — 审计状态 (audited/pending-audit)
+        &audit_status=pending-audit
+        &reviewer=lingjian       — 按审查人过滤
+        &limit=50                — 每页数量（默认 100）
+        &offset=0                — 偏移量（默认 0）
+    """
     tracker = TaskTracker(handler.data_dir)
-    tasks = tracker.list_all()
-    handler._send_json({"tasks": tasks, "count": len(tasks)})
+
+    # 检查是否有查询参数
+    from urllib.parse import urlparse, parse_qs
+    parsed = urlparse(handler.path)
+    params = parse_qs(parsed.query)
+
+    status = params.get("status", [None])[0]
+    assignee = params.get("assignee", [None])[0]
+    audit_status = params.get("audit_status", [None])[0]
+    reviewer = params.get("reviewer", [None])[0]
+
+    try:
+        limit = int(params.get("limit", ["100"])[0])
+    except (ValueError, TypeError):
+        limit = 100
+    try:
+        offset = int(params.get("offset", ["0"])[0])
+    except (ValueError, TypeError):
+        offset = 0
+
+    # 如果有任何筛选参数，使用 list_by_filters
+    if any([status, assignee, audit_status, reviewer]):
+        result = tracker.list_by_filters(
+            status=status,
+            assignee=assignee,
+            audit_status=audit_status,
+            reviewer=reviewer,
+            limit=limit,
+            offset=offset,
+        )
+        handler._send_json(result)
+    else:
+        tasks = tracker.list_all()
+        handler._send_json({"tasks": tasks, "count": len(tasks)})
 
 
 def handle_task_create(handler):
@@ -78,7 +120,21 @@ def handle_task_update(handler):
 
 
 def handle_task_audit(handler):
-    """POST /api/tasks/audit — 追加审计记录到任务"""
+    """POST /api/tasks/audit — 追加审计记录到任务
+
+    请求体示例:
+    {
+        "task_id": "xxx",
+        "reviewer": "lingjian",
+        "result": "pass|fail|warn",
+        "issues": [{"desc": "问题描述", "severity": "high", "file": "path/to/file.py", "line": 42}],
+        "summary": "审计摘要",
+        "report_file": "审查报告路径",
+        "category": "code_review|design|security|performance|other",
+        "severity": "critical|high|normal|low",
+        "affected_components": ["component_a", "component_b"]
+    }
+    """
     body = handler._read_post_body()
     task_id = body.get("task_id", "")
     reviewer = body.get("reviewer", "")
@@ -86,6 +142,9 @@ def handle_task_audit(handler):
     issues = body.get("issues", None)
     summary = body.get("summary", "")
     report_file = body.get("report_file", "")
+    category = body.get("category", "")
+    severity = body.get("severity", "normal")
+    affected_components = body.get("affected_components", None)
 
     if not task_id:
         handler._send_json({"error": "缺少 task_id"}, 400)
@@ -96,6 +155,9 @@ def handle_task_audit(handler):
     if result not in ("pass", "fail", "warn"):
         handler._send_json({"error": "result 必须是 pass/fail/warn"}, 400)
         return
+    if severity not in ("critical", "high", "normal", "low"):
+        handler._send_json({"error": "severity 必须是 critical/high/normal/low"}, 400)
+        return
 
     tracker = TaskTracker(handler.data_dir)
     task = tracker.add_audit(
@@ -105,6 +167,9 @@ def handle_task_audit(handler):
         issues=issues,
         summary=summary,
         report_file=report_file,
+        category=category,
+        severity=severity,
+        affected_components=affected_components,
     )
     if not task:
         handler._send_json({"error": f"任务 {task_id} 不存在"}, 404)
@@ -120,6 +185,95 @@ def handle_task_get(handler, task_id: str):
         handler._send_json({"error": "not_found"}, 404)
         return
     handler._send_json({"task": task})
+
+
+def handle_task_audit_trend(handler):
+    """GET /api/tasks/audit/stats/trend — 获取审计趋势（按日/周/月聚合）
+
+    查询参数:
+        ?period=day          — 聚合周期: day/week/month（默认 day）
+        ?days=30             — 回溯天数（默认 30）
+
+    返回:
+    {
+        "trend": [
+            {"period": "2026-06-01", "total": 10, "pass": 8, "fail": 1, "warn": 1, "pass_rate": 80.0},
+            ...
+        ],
+        "summary": {
+            "total_audits": 100,
+            "avg_pass_rate": 80.0,
+            "period": "day",
+            "days": 30
+        }
+    }
+    """
+    from urllib.parse import urlparse, parse_qs
+    parsed = urlparse(handler.path)
+    params = parse_qs(parsed.query)
+
+    period = params.get("period", ["day"])[0]
+    if period not in ("day", "week", "month"):
+        period = "day"
+    try:
+        days = int(params.get("days", ["30"])[0])
+    except (ValueError, TypeError):
+        days = 30
+    if days < 1:
+        days = 1
+    if days > 365:
+        days = 365
+
+    tracker = TaskTracker(handler.data_dir)
+    result = tracker.audit_trend(period=period, days=days)
+    handler._send_json(result)
+
+
+def handle_task_audit_stats(handler):
+    """GET /api/tasks/audit/stats — 获取审计聚合统计
+
+    返回:
+    {
+        "total_tasks": 100,
+        "audited_tasks": 45,
+        "pending_audit_tasks": 12,
+        "pass_count": 60,
+        "fail_count": 5,
+        "warn_count": 3,
+        "pass_rate": 88.2,
+        "total_audit_entries": 68,
+        "by_reviewer": {"lingjian": {"pass": 30, "fail": 2, "warn": 1, "total": 33}, ...},
+        "by_category": {"code_review": 40, "design": 10, ...},
+        "by_severity": {"normal": 50, "high": 10, ...},
+        "latest_audits": [...]
+    }
+    """
+    tracker = TaskTracker(handler.data_dir)
+    stats = tracker.audit_stats()
+    handler._send_json(stats)
+
+
+def handle_task_audit_pending(handler):
+    """GET /api/tasks/audit/pending — 获取待审计任务列表
+
+    查询参数:
+        ?limit=50 — 最大返回数量（默认 50）
+    """
+    from urllib.parse import urlparse, parse_qs
+    parsed = urlparse(handler.path)
+    params = parse_qs(parsed.query)
+    try:
+        limit = int(params.get("limit", ["50"])[0])
+    except (ValueError, TypeError):
+        limit = 50
+
+    tracker = TaskTracker(handler.data_dir)
+    pending = tracker.list_pending_audit(limit=limit)
+    handler._send_json({
+        "tasks": pending,
+        "count": len(pending),
+        "limit": limit,
+    })
 
 
 def handle_bulletin(handler):

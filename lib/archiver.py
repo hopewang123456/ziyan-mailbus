@@ -2,7 +2,7 @@
 ziyan-mailbus archiver
 
 将已确认的 inbox 消息归档到 archive/ 目录。
-触发条件：acknowledged 后满 7 天 或 inbox 超过 300 条。
+触发条件：acknowledged 后满 3 天 或 inbox 超过 300 条。
 每人独立归档目录，按周分文件。
 """
 
@@ -15,7 +15,7 @@ from .models import MsgStatus, Inbox
 from .utils import json_read, json_write, jsonl_append, resolve_paths, _now_iso
 
 
-def archive_agent(data_dir: str, agent_name: str, archive_days: int = 7, max_messages: int = 300) -> int:
+def archive_agent(data_dir: str, agent_name: str, archive_days: int = 3, max_messages: int = 300) -> int:
     """
     归档指定 agent 的已确认消息。
     
@@ -101,7 +101,7 @@ def archive_agent(data_dir: str, agent_name: str, archive_days: int = 7, max_mes
     return len(to_archive)
 
 
-def archive_all(data_dir: str, agents: dict, archive_days: int = 7, max_messages: int = 300) -> dict:
+def archive_all(data_dir: str, agents: dict, archive_days: int = 3, max_messages: int = 300) -> dict:
     """
     归档所有 agent 的已确认消息。
     

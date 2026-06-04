@@ -47,7 +47,8 @@ def process_ack(data_dir: str, agent_name: str, ack_data: dict) -> bool:
     if found:
         # v3.0 状态机：ack → processing（task）或 received（非 task）
         msg = inbox.get_msg(msg_id)
-        if msg and not inbox.msg_field(msg, 'state'):
+        cur_state = inbox.msg_field(msg, 'state', '')
+        if msg and cur_state in ('', MsgStatus.PENDING):
             mtype = inbox.msg_field(msg, 'type', '')
             if mtype in ("task", "task_reply"):
                 # P4: task 类型 ack 后进入 processing 态

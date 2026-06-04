@@ -337,7 +337,7 @@ class BusConfig:
     data_dir: str = field(default_factory=lambda: DEFAULT_DATA_DIR)
     ack_timeout: int = 30           # 等待 ack 超时（秒）
     max_retries: int = 3            # 最大重试次数
-    archive_days: int = 7           # 归档天数
+    archive_days: int = 3           # 归档天数
     archive_max_messages: int = 300 # inbox 最大消息数
     agents: dict = field(default_factory=dict)  # name → AgentConfig
 

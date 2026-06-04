@@ -17,7 +17,7 @@ def _valid_config() -> dict:
         "data_dir": "/tmp/store",
         "ack_timeout": 30,
         "max_retries": 3,
-        "archive_days": 7,
+        "archive_days": 3,
         "archive_max_messages": 300,
         "agents": {
             "lingxiao": {

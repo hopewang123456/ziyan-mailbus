@@ -994,7 +994,7 @@ def cmd_archive(args) -> int:
         print("✗ 没有注册的 agent")
         return 1
     
-    results = archive_all(data_dir, agents, config.get("archive_days", 7), config.get("archive_max_messages", 300))
+    results = archive_all(data_dir, agents, config.get("archive_days", 3), config.get("archive_max_messages", 300))
     
     if not results:
         print("✓ 无需归档")

@@ -983,7 +983,7 @@ class MailboxDaemon:
         try:
             from lib.archiver import archive_agent
             cfg = read_json(os.path.join(self.data_dir, "config.json"), {})
-            archive_days = cfg.get("archive_days", 7)
+            archive_days = cfg.get("archive_days", 3)
             max_msgs = cfg.get("archive_max_messages", 300)
             count = archive_agent(self.data_dir, self.agent_name, archive_days, max_msgs)
             if count > 0:
