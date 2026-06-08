@@ -28,8 +28,98 @@
   --border: rgba(51, 65, 85, 0.3);
   --border-active: rgba(0, 212, 255, 0.5);
   --nav-width: 220px;
+  --font-mono: 'JetBrains Mono','Fira Code','SF Mono',monospace;
 }
-*{margin:0;padding:0;box-sizing:border-box}
+@keyframes spin3d {
+  0%{transform:rotateY(0deg)}
+  100%{transform:rotateY(360deg)}
+}
+@keyframes warpIn {
+  0%{opacity:0;transform:translateY(12px) scale(0.96)}
+  100%{opacity:1;transform:translateY(0) scale(1)}
+}
+@keyframes scanLine {
+  0%{top:-2px;opacity:0}
+  50%{opacity:1}
+  100%{top:100%;opacity:0}
+}
+@keyframes pulseRing {
+  0%{opacity:0.6;transform:scale(0.95)}
+  50%{opacity:1;transform:scale(1.05)}
+  100%{opacity:0.6;transform:scale(0.95)}
+}
+.loading-overlay{
+  position:fixed;inset:0;z-index:9999;
+  background:var(--bg-deep);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  opacity:0;pointer-events:none;
+  transition:opacity 0.3s;
+}
+.loading-overlay::before{
+  content:'';position:fixed;inset:0;z-index:-1;
+  background-image:
+    radial-gradient(1.5px 1.5px at 10% 15%, rgba(255,255,255,0.5), transparent),
+    radial-gradient(1px 1px at 25% 55%, rgba(200,220,255,0.4), transparent),
+    radial-gradient(2px 2px at 40% 25%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 55% 70%, rgba(200,200,255,0.5), transparent),
+    radial-gradient(1.5px 1.5px at 70% 30%, rgba(255,255,255,0.3), transparent),
+    radial-gradient(1px 1px at 85% 60%, rgba(200,220,255,0.4), transparent),
+    radial-gradient(1px 1px at 15% 80%, rgba(255,255,255,0.25), transparent),
+    radial-gradient(1.5px 1.5px at 45% 45%, rgba(200,200,255,0.2), transparent),
+    radial-gradient(2.5px 2.5px at 60% 85%, rgba(255,255,255,0.35), transparent),
+    radial-gradient(1px 1px at 80% 15%, rgba(200,220,255,0.3), transparent),
+    radial-gradient(1px 1px at 5% 40%, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1.2px 1.2px at 35% 10%, rgba(200,200,255,0.35), transparent),
+    radial-gradient(1px 1px at 65% 50%, rgba(255,255,255,0.2), transparent),
+    radial-gradient(1.5px 1.5px at 90% 85%, rgba(200,220,255,0.3), transparent),
+    radial-gradient(2px 2px at 50% 90%, rgba(255,255,255,0.25), transparent);
+  animation:starDrift 240s linear infinite;
+}
+.loading-overlay.active{opacity:1;pointer-events:auto}
+.loading-overlay .icon{
+  width:40px;height:40px;
+  animation:pulseRing 2s ease-in-out infinite;
+}
+.loading-overlay .text{
+  font-size:13px;color:var(--text-muted);
+  font-family:var(--font-mono);
+  letter-spacing:2px;
+}
+.tab-content{animation:warpIn 0.3s ease-out}
+.agent-card{
+  background:var(--bg-card);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px;
+  cursor:pointer;
+  transition:all 0.2s cubic-bezier(0.4,0,0.2,1);
+  position:relative;overflow:hidden;
+}
+.agent-card:hover{
+  border-color:var(--accent-cyan);
+  box-shadow:0 0 20px var(--glow-cyan);
+  transform:translateY(-2px);
+}
+.agent-card::after{
+  content:'';position:absolute;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--accent-cyan),transparent);
+  animation:scanLine 3s ease-in-out infinite;
+  pointer-events:none;
+}
+.stat-card{
+  background:var(--bg-card);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:16px;
+  transition:all 0.2s cubic-bezier(0.4,0,0.2,1);
+  position:relative;
+}
+.stat-card:hover{
+  border-color:rgba(59,130,246,0.3);
+  box-shadow:0 0 30px var(--glow-blue);
+}
 body{
   background: var(--bg-deep);
   color: var(--text-primary);
@@ -449,9 +539,9 @@ body::after {
   backdrop-filter:blur(8px);
   border:1px solid rgba(51,65,85,0.4);
   border-radius:8px;
-  padding:8px 16px;
+  padding:5px 10px;
   color:var(--text-primary);
-  font-size:13px;
+  font-size:12px;
   cursor:pointer;
   transition:all 0.15s cubic-bezier(0.4,0,0.2,1);
   display:inline-flex;align-items:center;gap:4px
@@ -669,6 +759,40 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
 </head>
 <body>
 
+<div class="loading-overlay" id="loadingOverlay">
+  <svg class="icon" viewBox="0 0 100 100" width="48" height="48">
+    <!-- 青星 -->
+    <circle cx="35" cy="35" r="14" fill="none" stroke="var(--accent-cyan)" stroke-width="2.5" opacity="0.95">
+      <animate attributeName="r" values="13;15;13" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="35" cy="35" r="4" fill="var(--accent-cyan)" opacity="0.9"/>
+    <circle cx="35" cy="35" r="20" fill="none" stroke="var(--accent-cyan)" stroke-width="0.5" opacity="0.2">
+      <animate attributeName="r" values="20;28;20" dur="2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.25;0;0.25" dur="2s" repeatCount="indefinite"/>
+    </circle>
+    <!-- 紫星 -->
+    <circle cx="65" cy="65" r="11" fill="none" stroke="var(--accent-purple)" stroke-width="2" opacity="0.95">
+      <animate attributeName="r" values="10;12;10" dur="2s" begin="0.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="65" cy="65" r="3" fill="var(--accent-purple)" opacity="0.9"/>
+    <circle cx="65" cy="65" r="15" fill="none" stroke="var(--accent-purple)" stroke-width="0.5" opacity="0.2">
+      <animate attributeName="r" values="15;22;15" dur="2s" begin="0.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.2;0;0.2" dur="2s" begin="0.5s" repeatCount="indefinite"/>
+    </circle>
+    <!-- 轨道环 -->
+    <ellipse cx="50" cy="50" rx="32" ry="10" fill="none" stroke="rgba(0,212,255,0.1)" stroke-width="0.5" transform="rotate(-15 50 50)"/>
+    <ellipse cx="50" cy="50" rx="26" ry="8" fill="none" stroke="rgba(139,92,246,0.08)" stroke-width="0.5" transform="rotate(10 50 50)"/>
+    <!-- 连接线 -->
+    <path d="M42 42 Q52 35 56 56" fill="none" stroke="var(--accent-cyan)" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.35">
+      <animate attributeName="stroke-dashoffset" values="0;-18" dur="2s" repeatCount="indefinite"/>
+    </path>
+    <!-- 小行星 -->
+    <circle cx="75" cy="12" r="1.5" fill="rgba(255,255,255,0.25)"/>
+    <circle cx="12" cy="75" r="1.5" fill="rgba(255,255,255,0.2)"/>
+    <circle cx="88" cy="40" r="1" fill="rgba(255,255,255,0.15)"/>
+  </svg>
+  <div class="text" id="loadingText">舰桥同步中</div>
+</div>
 <div class="glow-follow" id="glowFollow"></div>
 <div class="nebula nebula-1"></div>
 <div class="nebula nebula-2"></div>
@@ -678,28 +802,44 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
 <!-- 左侧导航 -->
 <nav class="sidebar" id="sidebarNav">
   <div class="sidebar-logo">
-    <svg viewBox="0 0 100 100" width="32" height="32">
-      <!-- 双子星 Logo -->
-      <circle cx="35" cy="35" r="12" fill="none" stroke="var(--accent-cyan)" stroke-width="2" opacity="0.9"/>
-      <circle cx="35" cy="35" r="3" fill="var(--accent-cyan)"/>
-      <circle cx="35" cy="35" r="18" fill="none" stroke="var(--accent-cyan)" stroke-width="0.5" opacity="0.15">
-        <animate attributeName="r" values="18;24;18" dur="3s" repeatCount="indefinite"/>
-        <animate attributeName="opacity" values="0.2;0;0.2" dur="3s" repeatCount="indefinite"/>
+    <svg viewBox="0 0 100 100" width="40" height="40">
+      <!-- 双子星 Logo 标准版 -->
+      <circle cx="35" cy="35" r="14" fill="none" stroke="var(--accent-cyan)" stroke-width="2.5" opacity="0.95"/>
+      <circle cx="35" cy="35" r="4" fill="var(--accent-cyan)" opacity="0.9"/>
+      <circle cx="35" cy="35" r="20" fill="none" stroke="var(--accent-cyan)" stroke-width="0.5" opacity="0.2">
+        <animate attributeName="r" values="20;28;20" dur="2.5s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.25;0;0.25" dur="2.5s" repeatCount="indefinite"/>
       </circle>
-      <circle cx="65" cy="65" r="9" fill="none" stroke="var(--accent-purple)" stroke-width="1.5" opacity="0.9"/>
-      <circle cx="65" cy="65" r="2" fill="var(--accent-purple)"/>
-      <circle cx="65" cy="65" r="13" fill="none" stroke="var(--accent-purple)" stroke-width="0.5" opacity="0.15">
-        <animate attributeName="r" values="13;18;13" dur="3s" begin="1.5s" repeatCount="indefinite"/>
-        <animate attributeName="opacity" values="0.2;0;0.2" dur="3s" begin="1.5s" repeatCount="indefinite"/>
+      <circle cx="35" cy="35" r="28" fill="none" stroke="var(--accent-cyan)" stroke-width="0.3" opacity="0.1">
+        <animate attributeName="r" values="28;36;28" dur="3.5s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.15;0;0.15" dur="3.5s" repeatCount="indefinite"/>
       </circle>
+      <circle cx="65" cy="65" r="11" fill="none" stroke="var(--accent-purple)" stroke-width="2" opacity="0.95"/>
+      <circle cx="65" cy="65" r="3" fill="var(--accent-purple)" opacity="0.9"/>
+      <circle cx="65" cy="65" r="15" fill="none" stroke="var(--accent-purple)" stroke-width="0.5" opacity="0.2">
+        <animate attributeName="r" values="15;22;15" dur="2.5s" begin="1.25s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0.2;0;0.2" dur="2.5s" begin="1.25s" repeatCount="indefinite"/>
+      </circle>
+      <!-- 轨道环 -->
+      <ellipse cx="50" cy="50" rx="32" ry="10" fill="none" stroke="rgba(0,212,255,0.08)" stroke-width="0.5" transform="rotate(-15 50 50)"/>
+      <ellipse cx="50" cy="50" rx="26" ry="8" fill="none" stroke="rgba(139,92,246,0.06)" stroke-width="0.5" transform="rotate(10 50 50)"/>
       <!-- 连接线 -->
-      <path d="M47 47 Q55 38 56 56" fill="none" stroke="var(--accent-cyan)" stroke-width="0.8" stroke-dasharray="2 2" opacity="0.3">
-        <animate attributeName="stroke-dashoffset" values="0;-16" dur="2s" repeatCount="indefinite"/>
+      <path d="M42 42 Q52 35 56 56" fill="none" stroke="var(--accent-cyan)" stroke-width="0.8" stroke-dasharray="3 3" opacity="0.35">
+        <animate attributeName="stroke-dashoffset" values="0;-18" dur="2s" repeatCount="indefinite"/>
+      </path>
+      <path d="M50 50 Q58 45 60 60" fill="none" stroke="var(--accent-purple)" stroke-width="0.6" stroke-dasharray="2 2" opacity="0.25">
+        <animate attributeName="stroke-dashoffset" values="0;-12" dur="1.5s" repeatCount="indefinite"/>
       </path>
       <!-- 小行星 -->
-      <circle cx="70" cy="15" r="1" fill="rgba(255,255,255,0.2)"/>
-      <circle cx="15" cy="70" r="1" fill="rgba(255,255,255,0.15)"/>
-      <circle cx="85" cy="45" r="1" fill="rgba(255,255,255,0.15)"/>
+      <circle cx="75" cy="12" r="1.5" fill="rgba(255,255,255,0.25)"/>
+      <circle cx="12" cy="75" r="1.5" fill="rgba(255,255,255,0.2)"/>
+      <circle cx="88" cy="40" r="1" fill="rgba(255,255,255,0.15)"/>
+      <circle cx="20" cy="15" r="1" fill="rgba(255,255,255,0.15)"/>
+      <circle cx="80" cy="85" r="1" fill="rgba(255,255,255,0.12)"/>
+      <!-- 星光信号 -->
+      <line x1="35" y1="35" x2="48" y2="22" stroke="var(--accent-cyan)" stroke-width="0.4" stroke-dasharray="2 4" opacity="0.15">
+        <animate attributeName="stroke-dashoffset" values="0;-12" dur="3s" repeatCount="indefinite"/>
+      </line>
     </svg>
     <div class="logo-text">ziyan-<span>mailbus</span></div>
     <div class="orbit-ring"></div>
@@ -791,10 +931,7 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
 <main class="main">
 
   <div class="tab-content active" id="tab-ziyan">
-    <div id="ziyanRunningTasks"></div>
-    <div id="ziyanPending"></div>
-    <div id="ziyanTeam" style="margin-top:12px"></div>
-    <div id="ziyanAlerts" style="margin-top:12px"></div>
+    <div id="ziyanTeam"></div>
     <div id="ziyanTaskBoard" style="margin-top:12px"></div>
   </div>
 
@@ -1142,6 +1279,8 @@ function initEventDelegation() {
     else if (action === 'openReply') { var from = target.getAttribute('data-arg-from') || ''; var id = target.getAttribute('data-arg-id') || ''; var summary = target.getAttribute('data-arg-summary') || ''; openReply(from, id, summary); }
     else if (action === 'applyMsgTemplate') { applyMsgTemplate(target.getAttribute('data-arg-tmpl') || ''); }
     else if (action === 'markMailboxRead') { markMailboxRead(target.getAttribute('data-arg-name') || ''); }
+    else if (action === 'showReviewFromChain') showReviewFromChain(arg);
+    else if (action === 'showTaskChainDetail') showTaskChainDetail(arg);
   });
 }
 
@@ -1176,7 +1315,7 @@ function toggleApiEdit() {
 
 const LANG = {
   zh: {
-    title: 'ziyan-mailbus Platform',
+    title: '子言邮件总线平台',
     search: '搜索消息...',
     refresh: '刷新全部',
     auto: '自动刷新',
@@ -1243,16 +1382,30 @@ function switchLang(lang) {
 // ═══════════════ 导航切换 ═══════════════
 
 function switchTab(name) {
-  document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-  document.querySelector(`.nav-item[data-tab="${name}"]`).classList.add('active');
+  var ol = document.getElementById('loadingOverlay');
+  var lt = document.getElementById('loadingText');
+  if (ol && lt) {
+    var navText = '';
+    var navEl = document.querySelector('[data-tab="' + name + '"]');
+    if (navEl) navText = navEl.textContent.trim() || name;
+    lt.textContent = '跃迁至 ' + navText;
+    ol.classList.add('active');
+  }
+  document.querySelectorAll('.nav-item').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelector('.nav-item[data-tab="' + name + '"]').classList.add('active');
   document.getElementById('tab-' + name).classList.add('active');
+  setTimeout(function() { if (ol) ol.classList.remove('active'); }, 400);
 }
 
 // ═══════════════ 主加载 ═══════════════
 
 async function loadAll() {
   try {
+    var ol = document.getElementById('loadingOverlay');
+    var lt = document.getElementById('loadingText');
+    var isFirstLoad = !rawData.status;
+    if (isFirstLoad && ol && lt) { lt.textContent = '同步数据中'; ol.classList.add('active'); }
     const [status, agents, tasks, hb, alerts, bulletin, reports, replies, skillUsage] = await Promise.all([
       fetchJSON('/api/status'), fetchJSON('/api/agents'), fetchJSON('/api/tasks'),
       fetchJSON('/api/heartbeat'), fetchJSON('/api/alerts'), fetchJSON('/api/bulletin'),
@@ -1263,6 +1416,8 @@ async function loadAll() {
     renderBulletinTab(bulletin);
     renderHeartbeat(hb);
     renderAlerts(alerts);
+    try { renderPatrolTab(); } catch(e) {}
+    try { renderMyTaskBoard(); } catch(e) {}
     rawData.alerts = alerts;
     if (agents && agents.agents) {
       renderStats(agents.agents, (status && status.agent_statuses) || {});
@@ -1299,7 +1454,9 @@ async function loadAll() {
     renderTaskAuditTab();
     renderStatsTab();
     startAutoRefresh();
+    setTimeout(function() { var _o=document.getElementById('loadingOverlay'); if(_o)_o.classList.remove('active'); }, 300);
   } catch(e) {
+    setTimeout(function() { var _o=document.getElementById('loadingOverlay'); if(_o)_o.classList.remove('active'); }, 100);
     toast('加载失败: ' + e.message, 'error');
   }
 }
@@ -1349,8 +1506,33 @@ async function reloadData(name) {
 
 // ═══════════════ Agent 渲染 ═══════════════
 
-function robotSvg(color) {
-  return `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="${color || 'currentColor'}" stroke-width="1.5"><rect x="4" y="6" width="16" height="12" rx="3"/><circle cx="9" cy="12" r="1.5" fill="${color || 'currentColor'}"/><circle cx="15" cy="12" r="1.5" fill="${color || 'currentColor'}"/><rect x="7" y="3" width="2" height="4" rx="1"/><rect x="15" y="3" width="2" height="4" rx="1"/><line x1="10" y1="16" x2="14" y2="16" stroke-linecap="round"/></svg>`;
+function agentSvg(name, color) {
+  // 根据名字 hash 出独特形状
+  var h = 0, i = 0;
+  for (i = 0; i < name.length; i++) h = ((h << 5) - h) + name.charCodeAt(i);
+  var faceType = Math.abs(h) % 7;  // 7种机器人脸型
+  var eyeType = Math.abs(h >> 4) % 3;  // 3种眼睛
+  var antType = Math.abs(h >> 8) % 3;  // 3种天线
+  // 脸型
+  var facePath;
+  if (faceType === 0) facePath = '<rect x="4" y="6" width="16" height="12" rx="3"/>';
+  else if (faceType === 1) facePath = '<rect x="4" y="6" width="16" height="12" rx="6"/>';
+  else if (faceType === 2) facePath = '<rect x="5" y="6" width="14" height="12" rx="2"/>';
+  else if (faceType === 3) facePath = '<path d="M6 8h12v8a2 2 0 01-2 2H8a2 2 0 01-2-2V8z"/>';
+  else if (faceType === 4) facePath = '<rect x="4" y="7" width="16" height="10" rx="2"/>';
+  else if (faceType === 5) facePath = '<path d="M5 9l14-1v8H5V9z"/>';
+  else facePath = '<rect x="4" y="5" width="16" height="14" rx="4"/>';
+  // 眼睛
+  var eyeHtml;
+  if (eyeType === 0) eyeHtml = '<circle cx="9" cy="12" r="1.5" fill="' + color + '"/><circle cx="15" cy="12" r="1.5" fill="' + color + '"/>';
+  else if (eyeType === 1) eyeHtml = '<rect x="7.5" y="10.5" width="3" height="3" rx="0.5" fill="' + color + '"/><rect x="13.5" y="10.5" width="3" height="3" rx="0.5" fill="' + color + '"/>';
+  else eyeHtml = '<path d="M7 12l2-1 2 1 2-1 2 1" fill="none" stroke="' + color + '" stroke-width="1.2" stroke-linecap="round"/>';
+  // 天线
+  var antHtml;
+  if (antType === 0) antHtml = '<rect x="7" y="3" width="2" height="4" rx="1"/><rect x="15" y="3" width="2" height="4" rx="1"/>';
+  else if (antType === 1) antHtml = '<line x1="11" y1="5" x2="11" y2="2" stroke-linecap="round"/><line x1="13" y1="5" x2="13" y2="2" stroke-linecap="round"/><circle cx="11" cy="2" r="0.8" fill="' + color + '"/><circle cx="13" cy="2" r="0.8" fill="' + color + '"/>';
+  else antHtml = '<path d="M9 5V3h2M15 5V3h-2" fill="none" stroke-linecap="round"/>';
+  return '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="' + color + '" stroke-width="1.5"><style>.a{animation:spin3d 3s linear infinite;transform-origin:12px 12px}</style>' + facePath + antHtml + eyeHtml + '<line x1="10" y1="16" x2="14" y2="16" stroke-linecap="round"/></svg>';
 }
 
 const AGENT_COLORS = {
@@ -1368,6 +1550,77 @@ const AGENT_ICONS = {
   yige:'👨‍🔧', lingxiao:'🎯', dali:'🤖', lingjian:'🔍', lingyan:'🧪', ziyan:'👑'
 };
 
+// 赛博朋克头像 — 根据名字生成独特的机械义眼风格
+function cyberSvg(name, color, size) {
+  var h = 0;
+  for (var i = 0; i < name.length; i++) h = ((h << 5) - h) + name.charCodeAt(i);
+  var sz = size || 32;
+  var hs = sz * 0.5;
+  var rim = ['#1a1a2e','#0d0d1a','#2a1a3e','#1a0a2e','#0a1a2e','#2e1a1a','#0a2e1a'][Math.abs(h) % 7];
+  var visorColor = ['#00d4ff','#8b5cf6','#ff6b6b','#34d399','#fbbf24','#f97316','#ec4899'][Math.abs(h >> 3) % 7];
+  var lines = Math.abs(h >> 6) % 3; // 3种面纹
+  var eyes = Math.abs(h >> 8) % 3;  // 3种义眼
+  // 头型
+  var head = '<circle cx="' + hs + '" cy="' + hs + '" r="' + (hs * 0.8) + '" fill="' + rim + '" stroke="' + color + '" stroke-width="1.5" opacity="0.9"/>';
+  // 面纹
+  var lineHtml = '';
+  if (lines === 0) lineHtml = '<path d="M' + (hs * 0.4) + ' ' + (hs * 0.5) + ' L' + (hs * 0.6) + ' ' + (hs * 0.5) + '" stroke="' + color + '" stroke-width="0.5" opacity="0.3"/>';
+  else if (lines === 1) lineHtml = '<line x1="' + (hs * 0.35) + '" y1="' + (hs * 1.1) + '" x2="' + (hs * 1.65) + '" y2="' + (hs * 1.1) + '" stroke="' + color + '" stroke-width="0.3" opacity="0.2"/>';
+  else lineHtml = '<path d="M' + (hs * 0.3) + ' ' + (hs * 0.7) + ' L' + (hs * 0.5) + ' ' + (hs * 1.0) + ' L' + (hs * 1.5) + ' ' + (hs * 1.0) + ' L' + (hs * 1.7) + ' ' + (hs * 0.7) + '" fill="none" stroke="' + color + '" stroke-width="0.3" opacity="0.15"/>';
+  // 义眼
+  var eyeHtml = '';
+  if (eyes === 0) eyeHtml = '<circle cx="' + (hs * 0.7) + '" cy="' + (hs * 0.8) + '" r="' + (hs * 0.12) + '" fill="none" stroke="' + visorColor + '" stroke-width="1.2"/><circle cx="' + (hs * 0.7) + '" cy="' + (hs * 0.8) + '" r="' + (hs * 0.04) + '" fill="' + visorColor + '"/><circle cx="' + (hs * 1.3) + '" cy="' + (hs * 0.8) + '" r="' + (hs * 0.12) + '" fill="none" stroke="' + visorColor + '" stroke-width="1.2"/><circle cx="' + (hs * 1.3) + '" cy="' + (hs * 0.8) + '" r="' + (hs * 0.04) + '" fill="' + visorColor + '"/>';
+  else if (eyes === 1) eyeHtml = '<rect x="' + (hs * 0.6) + '" y="' + (hs * 0.7) + '" width="' + (hs * 0.2) + '" height="' + (hs * 0.2) + '" rx="' + (hs * 0.03) + '" fill="' + visorColor + '" opacity="0.8"/><rect x="' + (hs * 1.2) + '" y="' + (hs * 0.7) + '" width="' + (hs * 0.2) + '" height="' + (hs * 0.2) + '" rx="' + (hs * 0.03) + '" fill="' + visorColor + '" opacity="0.8"/>';
+  else eyeHtml = '<path d="M' + (hs * 0.6) + ' ' + (hs * 0.8) + ' L' + (hs * 0.7) + ' ' + (hs * 0.75) + ' L' + (hs * 0.8) + ' ' + (hs * 0.8) + '" stroke="' + visorColor + '" stroke-width="1" fill="none"/><path d="M' + (hs * 1.2) + ' ' + (hs * 0.8) + ' L' + (hs * 1.3) + ' ' + (hs * 0.75) + ' L' + (hs * 1.4) + ' ' + (hs * 0.8) + '" stroke="' + visorColor + '" stroke-width="1" fill="none"/>';
+  // 数据流线
+  var dataHtml = '<circle cx="' + (hs * 0.5) + '" cy="' + (hs * 1.3) + '" r="0.5" fill="' + color + '" opacity="0.3"/>';
+  dataHtml += '<circle cx="' + (hs * 1.5) + '" cy="' + (hs * 1.3) + '" r="0.5" fill="' + color + '" opacity="0.3"/>';
+  return '<svg viewBox="0 0 ' + sz + ' ' + sz + '" width="' + sz + '" height="' + sz + '">' + head + lineHtml + eyeHtml + dataHtml + '</svg>';
+}
+
+// ══ i18n ══
+const I18N = {
+  zh: {
+    refresh: '刷新全部', auto: '自动刷新', search: '搜索消息...',
+    nav_ziyan: '子言', nav_overview: '总览', nav_agents: 'Agent', nav_bulletin: '公告栏',
+    nav_audit: '任务审计', nav_stats: '统计', nav_patrol: '巡检日报',
+    nav_heartbeat: '健康状态', nav_alerts: '告警',
+    status_online: '在线', status_offline: '离线',
+    btn_perm: '权限', btn_refresh: '刷新',
+  },
+  en: {
+    refresh: 'Refresh', auto: 'Auto', search: 'Search...',
+    nav_ziyan: 'Ziyan', nav_overview: 'Overview', nav_agents: 'Agents', nav_bulletin: 'Bulletin',
+    nav_audit: 'Audit', nav_stats: 'Stats', nav_patrol: 'Patrol',
+    nav_heartbeat: 'Health', nav_alerts: 'Alerts',
+    status_online: 'Online', status_offline: 'Offline',
+    btn_perm: 'Perm', btn_refresh: 'Refresh',
+  },
+  ja: {
+    refresh: '更新', auto: '自動', search: '検索...',
+    nav_ziyan: '子言', nav_overview: '概要', nav_agents: 'エージェント', nav_bulletin: '掲示板',
+    nav_audit: '監査', nav_stats: '統計', nav_patrol: 'パトロール',
+    nav_heartbeat: '状態', nav_alerts: '警告',
+    status_online: 'オンライン', status_offline: 'オフライン',
+    btn_perm: '権限', btn_refresh: '更新',
+  },
+};
+
+function applyLang(lang) {
+  _lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    var key = el.dataset.i18n;
+    if (I18N[lang] && I18N[lang][key]) {
+      if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.placeholder = I18N[lang][key];
+      else el.textContent = I18N[lang][key];
+    }
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    var key = el.dataset.i18nPlaceholder;
+    if (I18N[lang] && I18N[lang][key]) el.placeholder = I18N[lang][key];
+  });
+}
+
 function renderAgentTab(status, agentsData) {
   const grid = document.getElementById('agentGrid');
   const countEl = document.getElementById('navAgentCount');
@@ -1383,7 +1636,7 @@ function renderAgentTab(status, agentsData) {
     const keyEnc = jsStr(k);
     return `<div class="agent-card">
       <div class="top" style="cursor:pointer" data-action="showAgent" data-arg="${keyEnc}">
-        <div class="name">${robotSvg(color)} ${v.name || k}</div>
+        <div class="name">${cyberSvg(k, color, 28)} ${esc(AGENT_NAMES[k] || v.name || k)}</div>
         <span class="type-badge" style="color:${color}">${v.type}</span>
       </div>
       <div class="role" style="cursor:pointer" data-action="showAgent" data-arg="${keyEnc}">${v.role || '—'}</div>
@@ -1459,7 +1712,7 @@ function openPermitManager() {
   list.innerHTML = Object.entries(agents).map(([k, v]) => `
     <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(15,23,42,0.6);border-radius:6px;margin-bottom:4px;cursor:pointer">
       <input type=checkbox value="${k}" ${bulletinPermit.includes(k) ? 'checked' : ''} style="accent-color:var(--accent-cyan)">
-      <span style="font-size:13px">${v.name || k}</span>
+      <span style="font-size:13px">${esc(AGENT_NAMES[k] || v.name || k)}</span>
       <span style="font-size:11px;color:var(--text-muted);margin-left:auto">${v.type || ''}</span>
     </label>
   `).join('');
@@ -1502,7 +1755,7 @@ async function openPermPanel() {
   Object.entries(agents).forEach(([k, v]) => {
     const perm = permissions[k] || {};
     html += `<tr>
-      <td style="position:sticky;left:0;background:rgba(15,23,42,0.8);font-weight:500;white-space:nowrap">${v.name || k}</td>
+      <td style="position:sticky;left:0;background:rgba(15,23,42,0.8);font-weight:500;white-space:nowrap">${esc(AGENT_NAMES[k] || v.name || k)}</td>
       ${permKeys.map(pk => `<td style="text-align:center"><input type=checkbox class="perm-cb" data-agent="${k}" data-key="${pk.key}" ${perm[pk.key] !== false ? 'checked' : ''} style="accent-color:var(--accent-cyan);width:16px;height:16px;cursor:pointer"></td>`).join('')}
     </tr>`;
   });
@@ -1602,7 +1855,7 @@ async function showAgent(name) {
 
     const nameEnc = jsStr(name);
     let html = `<div class="header">
-      <h2>${robotSvg(AGENT_COLORS[cfg.type] || '#93c5fd')} ${esc(agentName)} <span style="font-size:12px;color:var(--text-muted);font-weight:400">${cfg.type || ''}</span></h2>
+      <h2>${cyberSvg(agentName, AGENT_COLORS[cfg.type] || '#93c5fd', 36)} ${esc(agentName)} <span style="font-size:12px;color:var(--text-muted);font-weight:400">${cfg.type || ''}</span></h2>
       <div>
         <button class="btn btn-sm" data-action="launchAgentModal" data-arg="${nameEnc}" data-mode="browser" style="${getPerm(name,'browser') ? '' : 'display:none'}">🌐 浏览器</button>
         <button class="btn btn-sm" data-action="launchAgentModal" data-arg="${nameEnc}" data-mode="cli" style="margin-left:4px;${getPerm(name,'cli') ? '' : 'display:none'}">💻 CLI</button>
@@ -1755,7 +2008,7 @@ function renderSkillUsage(skills) {
     const totalUse = skillList.reduce((s, x) => s + (x.use_count || 0), 0);
     return `<div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:8px;padding:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-size:13px;font-weight:500">${AGENT_NAMES[agent] || agent}</span>
+        <span style="font-size:13px;font-weight:500">${esc(AGENT_NAMES[agent] || agent)}</span>
         <span style="font-size:11px;color:var(--text-muted)">${skillList.length} skill · ${totalUse}次</span>
       </div>
       ${top3.map((t, i) => {
@@ -1807,11 +2060,12 @@ function renderOrgChart() {
 
 // ═══════════════ 邮箱 ═══════════════
 
+function _isTerminalState(m) { var ts = new Set(['done','closed','rejected','failed','archived','sent']); return ts.has(m.state); }
 function renderMailboxHTML(msgs) {
   if (!msgs || msgs.length === 0) return '<div style="color:var(--text-muted);font-size:13px;padding:20px;text-align:center">📭 暂无私信</div>';
   let filtered;
-  if (_mailboxFilter === 'unread') filtered = msgs.filter(m => m.state !== 'done' && m.state !== 'acknowledged');
-  else if (_mailboxFilter === 'read') filtered = msgs.filter(m => m.state === 'done' || m.state === 'acknowledged');
+  if (_mailboxFilter === 'unread') filtered = msgs.filter(m => !_isTerminalState(m));
+  else if (_mailboxFilter === 'read') filtered = msgs.filter(m => _isTerminalState(m));
   else filtered = msgs;
   if (filtered.length === 0) return '<div style="color:var(--text-muted);font-size:13px;padding:20px;text-align:center">📭 该分类下暂无信件</div>';
   const display = filtered.slice(-100).reverse();
@@ -1824,7 +2078,7 @@ function renderMailboxHTML(msgs) {
     let label = dateStr === todayStr ? '📌 今天' : dateStr === yesterdayStr ? '📌 昨天' : '📅 ' + dateStr;
     html += `<div class="mailbox-day">${label}</div>`;
     dayMsgs.forEach(m => {
-      const isRead = m.state === 'done' || m.state === 'acknowledged';
+      const isRead = _isTerminalState(m);
       html += `<div class="mailbox-item ${isRead ? '' : 'unread'}">
         <div class="status-dot ${isRead ? 'read' : 'unread'}"></div>
         <div class="body"><div class="meta"><span class="from">${esc(m.from || '?')}</span><span class="time">${(m.created_at||'').slice(11,16)}</span></div>
@@ -1842,8 +2096,8 @@ function switchMailboxTab(filter) {
   if (!container) return;
   const inbox = (rawData._mailboxInbox || []).filter(m => m.type !== 'system');
   let filtered = inbox;
-  if (filter === 'unread') filtered = inbox.filter(m => m.state !== 'done' && m.state !== 'acknowledged');
-  if (filter === 'done') filtered = inbox.filter(m => m.state === 'done' || m.state === 'acknowledged');
+  if (filter === 'unread') filtered = inbox.filter(m => !_isTerminalState(m));
+  if (filter === 'done') filtered = inbox.filter(m => _isTerminalState(m));
   container.innerHTML = renderMailboxHTML(filtered);
 }
 
@@ -1854,7 +2108,8 @@ async function openMailbox(name) {
     rawData._mailboxInbox = msgs;
     const cfg = (rawData.agents && rawData.agents.agents && rawData.agents.agents[name]) || {};
     const privateMsgs = msgs.filter(m => m.type !== 'system');
-    const unreadCount = privateMsgs.filter(m => m.state !== 'done' && m.state !== 'acknowledged').length;
+    const _terminalStates = new Set(['done', 'closed', 'rejected', 'failed', 'archived', 'sent']);
+    const unreadCount = privateMsgs.filter(m => !_terminalStates.has(m.state)).length;
     _mailboxAgent = name; _mailboxFilter = '';
     let html = `<div class="mailbox-header"><div class="header">
       <h2>📬 ${esc(cfg.name || name)}</h2>
@@ -1927,7 +2182,7 @@ function renderReviewTab() {
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
         <span style="font-size:12px;color:var(--text-secondary)">🦋灵鉴 · ${resultIcon} <span style="color:${color}">${r.result}</span></span>
-        ${r.report ? `<button class="btn btn-sm" onclick="showReviewFromChain('${esc(r.task.task_id || '')}')">📄 报告</button>` : ''}
+        ${r.report ? `<button class="btn btn-sm" data-action="showReviewFromChain" data-arg="${jsStr(r.task.task_id || '')}">📄 报告</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1945,7 +2200,7 @@ function showReviewFromChain(taskId) {
     <button class="btn btn-sm" onclick="closeModal()">✕</button>
   </div>
   <div style="font-size:13px;line-height:1.7;white-space:pre-wrap;background:rgba(15,23,42,0.6);border-radius:8px;padding:16px;max-height:70vh;overflow:auto">${esc(report)}</div>
-  <div style="margin-top:8px;color:var(--text-muted);font-size:11px"><a href="#" onclick="showTaskChainDetail('${esc(taskId)}');closeModal();return false">在任务面板查看完整流转链 →</a></div>`;
+  <div style="margin-top:8px;color:var(--text-muted);font-size:11px"><a href="#" data-action="showTaskChainDetail" data-arg="${jsStr(taskId)}" onclick="closeModal();return false">在任务面板查看完整流转链 →</a></div>`;
   document.getElementById('agentModalContent').innerHTML = html;
   document.getElementById('agentModal').classList.add('open');
 }
@@ -2011,7 +2266,7 @@ function renderHeartbeat(hb) {
       <td>${statusBadge(state.status)}</td>
       <td style="font-size:11px;color:var(--text-muted)">${state.last_heartbeat || '-'}</td>
       <td style="font-size:11px;color:var(--text-muted)">${state.missed_pings || 0}</td>
-      <td>${state.status === 'offline' ? '<button class="btn btn-sm" data-action="pingAgent" data-agent="'+name+'">🔄 重连</button>' : ''}</td>
+      <td>${state.status === 'offline' ? '<button class="btn btn-sm" data-action="pingAgent" data-arg="'+jsStr(name)+'">🔄 重连</button>' : ''}</td>
     </tr>`;
   }).join('');
 
@@ -2052,6 +2307,23 @@ const AUDIT_STATUS_MAP = {
 };
 
 // ═══════════════ 统计面板 ═══════════════
+
+function smoothLine(points) {
+  if (points.length < 2) return '';
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i === 0 ? 0 : i - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2 >= points.length ? points.length - 1 : i + 2];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+  }
+  return d;
+}
 
 async function renderStatsTab() {
   const el = document.getElementById('statsOverviewPanel');
@@ -2108,45 +2380,85 @@ async function renderStatsTab() {
   }).join('');
 
   // 趋势折线图
+  // 去掉首尾全是0的天
   const dates = Object.keys(trend).sort();
-  const trendVals = dates.map(d => trend[d]);
+  let start = 0, end = dates.length - 1;
+  while (start < dates.length && trend[dates[start]] === 0) start++;
+  while (end >= 0 && trend[dates[end]] === 0) end--;
+  const activeDates = dates.slice(Math.max(0, start - 1), end + 2);
+  const trendVals = activeDates.map(d => trend[d]);
   const maxTrend = Math.max(...trendVals, 1);
-  const minTrend = Math.min(...trendVals, 0);
+  const minTrend = 0;
   const range = Math.max(maxTrend - minTrend, 1);
-  const chartW = dates.length * 40;
-  const chartH = 90;
-  const padL = 20, padR = 10, padT = 12, padB = 18;
+  const chartW = Math.max(activeDates.length * 55, 1200);
+  const chartH = 200;
+  const padL = 40, padR = 20, padT = 20, padB = 30;
   const drawW = chartW - padL - padR;
   const drawH = chartH - padT - padB;
 
-  function toX(i) { return padL + (i / (dates.length - 1 || 1)) * drawW; }
+  function toX(i) { return padL + (i / (activeDates.length - 1 || 1)) * drawW; }
   function toY(v) { return padT + drawH - ((v - minTrend) / range) * drawH; }
 
-  const linePoints = dates.map((d, i) => `${toX(i)},${toY(trend[d])}`).join(' ');
-  const areaPoints = dates.map((d, i) => `${toX(i)},${toY(trend[d])}`).join(' ') + ` ${toX(dates.length-1)},${toY(0)} ${toX(0)},${toY(0)}`;
+  const areaPoints = 'M ' + activeDates.map((d, i) => `${toX(i)},${toY(trend[d])}`).join(' L ') + ` L ${toX(activeDates.length-1)},${toY(0)} L ${toX(0)},${toY(0)} Z`;
 
-  const chartHtml = dates.length > 0 ? `
-    <svg viewBox="0 0 ${chartW} ${chartH}" style="width:100%;height:90px" xmlns="http://www.w3.org/2000/svg">
-      <line x1="${padL}" y1="${toY(minTrend)}" x2="${chartW - padR}" y2="${toY(minTrend)}" stroke="rgba(51,65,85,0.3)" stroke-width="0.5"/>
-      <line x1="${padL}" y1="${toY(minTrend + range * 0.5)}" x2="${chartW - padR}" y2="${toY(minTrend + range * 0.5)}" stroke="rgba(51,65,85,0.3)" stroke-width="0.5"/>
-      <line x1="${padL}" y1="${toY(maxTrend)}" x2="${chartW - padR}" y2="${toY(maxTrend)}" stroke="rgba(51,65,85,0.3)" stroke-width="0.5"/>
-      <polygon points="${areaPoints}" fill="url(#trendGrad)" opacity="0.3"/>
-      <polyline points="${linePoints}" fill="none" stroke="var(--accent-cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      ${dates.map((d, i) => {
+  const chartHtml = activeDates.length > 0 ? `
+    <svg viewBox="0 0 ${chartW} ${chartH}" style="width:100%;height:200px" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--accent-cyan)" stop-opacity="0.3"/>
+          <stop offset="100%" stop-color="var(--accent-cyan)" stop-opacity="0"/>
+        </linearGradient>
+        <filter id="trendGlow">
+          <feGaussianBlur stdDeviation="2" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <!-- 网格线 -->
+      <line x1="${padL}" y1="${toY(minTrend)}" x2="${chartW - padR}" y2="${toY(minTrend)}" stroke="rgba(51,65,85,0.15)" stroke-width="0.5" stroke-dasharray="3 3"/>
+      <line x1="${padL}" y1="${toY(minTrend + range * 0.5)}" x2="${chartW - padR}" y2="${toY(minTrend + range * 0.5)}" stroke="rgba(51,65,85,0.15)" stroke-width="0.5" stroke-dasharray="3 3"/>
+      <line x1="${padL}" y1="${toY(maxTrend)}" x2="${chartW - padR}" y2="${toY(maxTrend)}" stroke="rgba(51,65,85,0.15)" stroke-width="0.5" stroke-dasharray="3 3"/>
+      <!-- 面积填充 -->
+      <path d="${areaPoints}" fill="url(#trendGrad)"/>
+      <!-- 贝塞尔曲线 -->
+      <path d="${smoothLine(activeDates.map((d,i) => ({x: toX(i), y: toY(trend[d])})))}" fill="none" stroke="var(--accent-cyan)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" filter="url(#trendGlow)"/>
+      <!-- 数据点和标签 -->
+      ${activeDates.map((d, i) => {
         const v = trend[d];
         const x = toX(i);
         const y = toY(v);
         const shortDate = d.slice(5);
-        return `<circle cx="${x}" cy="${y}" r="3" fill="var(--accent-cyan)" stroke="var(--bg-deep)" stroke-width="1.5"/><text x="${x}" y="${chartH - 2}" text-anchor="middle" font-size="8" fill="var(--text-muted)">${shortDate}</text><text x="${x}" y="${y - 6}" text-anchor="middle" font-size="9" fill="var(--accent-cyan)">${v}</text>`;
+        return `<circle cx="${x}" cy="${y}" r="4" fill="var(--bg-deep)" stroke="var(--accent-cyan)" stroke-width="2"/><text x="${x}" y="${chartH - 4}" text-anchor="middle" font-size="10" fill="var(--text-muted)">${shortDate}</text><text x="${x}" y="${y - 10}" text-anchor="middle" font-size="11" fill="var(--accent-cyan)" font-weight="600">${v}</text>`;
       }).join('')}
-      <defs>
-        <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="var(--accent-cyan)" stop-opacity="0.35"/>
-          <stop offset="100%" stop-color="var(--accent-cyan)" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
     </svg>
   ` : '<div style="color:var(--text-muted)">暂无趋势数据</div>';
+
+  // ── Token 统计 ──
+  const MODEL_COST_CNY = { 'deepseek-chat': 7.3, 'qwen-max': 14.6, 'zhipu-4': 10.9, 'default': 7.3 };
+  const AGENT_MODELS = { lingzhao:'deepseek-chat', lingjin:'deepseek-chat', xiaoqi:'deepseek-chat', yige:'deepseek-chat', lingxiao:'deepseek-chat', dali:'deepseek-chat', lingxi:'deepseek-chat', lingjian:'deepseek-chat', lingyan:'deepseek-chat', lingxun:'deepseek-chat' };
+  const agentNames = Object.keys(AGENT_MODELS);
+  const tokenData = agentEntries.filter(a => agentNames.includes(a.name)).map(a => {
+    const estTokens = Math.round(a.total * a.avgRsp * 100 * 3);
+    const model = AGENT_MODELS[a.name] || 'default';
+    const costPM = MODEL_COST_CNY[model] || 7.3;
+    return { name: a.name, total: a.total, avgRsp: a.avgRsp, tokens: estTokens, costPerM: costPM, icon: AGENT_ICONS[a.name] || '' };
+  });
+  const totalTokens = tokenData.reduce((s, a) => s + a.tokens, 0) || 1;
+  const totalCost = tokenData.reduce((s, a) => s + (a.tokens / 1000000 * a.costPerM), 0).toFixed(2);
+  const tokenHtml = tokenData.map(a => {
+    const pct = Math.round((a.tokens / totalTokens) * 100);
+    const displayTokens = a.tokens >= 1000000 ? (a.tokens / 1000000).toFixed(1) + 'M' : a.tokens >= 1000 ? (a.tokens / 1000).toFixed(1) + 'K' : a.tokens.toString();
+    const cost = (a.tokens / 1000000 * a.costPerM).toFixed(2);
+    return `<div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
+        <span>${a.icon} ${a.name} <span style="color:var(--text-muted)">${a.total} 任务</span></span>
+        <span style="color:var(--text-secondary)">${displayTokens} · ¥${cost}</span>
+      </div>
+      <div style="background:rgba(15,23,42,0.6);border-radius:4px;height:6px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent-purple),var(--accent-cyan));border-radius:4px;transition:width 0.3s"></div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:1px">${pct}% · avg ${a.avgRsp.toFixed(1)}s/task</div>
+    </div>`;
+  }).join('');
 
   el.innerHTML = `
     ${overviewCards}
@@ -2156,10 +2468,38 @@ async function renderStatsTab() {
         <div style="margin-top:8px">${agentHtml}</div>
       </div>
       <div class="stat-card">
-        <h3>📈 消息趋势（近7天）</h3>
-        <div style="margin-top:8px">${chartHtml}</div>
+        <h3>🔋 Token 统计</h3>
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">基于 任务数×avg响应时间 估算 · 100 tokens/s · 总费 ¥${totalCost}</div>
+        <div>${tokenHtml}</div>
       </div>
     </div>
+    <div class="stat-card" style="margin-top:12px">
+      <h3>📈 消息趋势（近30天）</h3>
+      <div style="margin-top:8px;width:100%">${chartHtml}</div>
+    </div>
+    ${(function() {
+      if (activeDates.length < 2) return '';
+      var u = _lang === 'zh' ? '¥' : '$';
+      var cv = activeDates.map(function(d) { return Math.round(trend[d] * 500 * 1.5 * 7.3 / 1000000 * 100) / 100; });
+      var cm = Math.max.apply(null, cv.concat([0.01]));
+      var cw = Math.max(activeDates.length * 55, 1200), ch = 140, cp = 30, ct = 12;
+      var dw = cw - cp * 2, dh = ch - ct * 2;
+      var pts = activeDates.map(function(d, i) { var x = cp + (i / (activeDates.length - 1 || 1)) * dw; var y = ct + dh - (cv[i] / cm) * dh; return x + ',' + y; });
+      var ar = pts.join(' ') + ' ' + (cp + dw) + ',' + (ct + dh) + ' ' + cp + ',' + (ct + dh);
+      return '<div class="stat-card" style="margin-top:12px"><h3>💰 Token 花费趋势（近30天）</h3><div style="margin-top:8px;width:100%">' +
+        '<svg viewBox="0 0 ' + cw + ' ' + ch + '" style="width:100%;height:140px" xmlns="http://www.w3.org/2000/svg">' +
+        '<defs><linearGradient id="cstG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--accent-purple)" stop-opacity="0.3"/><stop offset="100%" stop-color="var(--accent-purple)" stop-opacity="0"/></linearGradient></defs>' +
+        '<line x1="' + cp + '" y1="' + (ct + dh) + '" x2="' + (cw - cp) + '" y2="' + (ct + dh) + '" stroke="rgba(51,65,85,0.15)" stroke-width="0.5"/>' +
+        '<line x1="' + cp + '" y1="' + (ct + dh * 0.5) + '" x2="' + (cw - cp) + '" y2="' + (ct + dh * 0.5) + '" stroke="rgba(51,65,85,0.15)" stroke-width="0.5" stroke-dasharray="3 3"/>' +
+        '<polygon points="' + ar + '" fill="url(#cstG)"/>' +
+        '<polyline points="' + pts.join(' ') + '" fill="none" stroke="var(--accent-purple)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+        activeDates.map(function(d, i) {
+          var x = cp + (i / (activeDates.length - 1 || 1)) * dw;
+          var y = ct + dh - (cv[i] / cm) * dh;
+          return '<circle cx="' + x + '" cy="' + y + '" r="3" fill="var(--bg-deep)" stroke="var(--accent-purple)" stroke-width="1.5"/><text x="' + x + '" y="' + (ch - 2) + '" text-anchor="middle" font-size="8" fill="var(--text-muted)">' + d.slice(5) + '</text><text x="' + x + '" y="' + (y - 5) + '" text-anchor="middle" font-size="9" fill="var(--accent-purple)">' + u + cv[i].toFixed(2) + '</text>';
+        }).join('') +
+        '</svg></div></div>';
+    })()}
   `;
 }
 
@@ -2178,7 +2518,14 @@ async function renderTaskAuditTab() {
   const tasks = (tasksData && tasksData.tasks) || [];
   let filtered = tasks;
   if (_auditFilter === 'pending-audit') {
-    filtered = tasks.filter(t => { const s = (t.status || '').toLowerCase(); return (s === 'success' || s === 'failed' || s === 'timeout') && (!t.audit_log || t.audit_log.length === 0); });
+    filtered = tasks.filter(t => { 
+      var tid = (t.task_id || t.id || '').toLowerCase();
+      if (tid.startsWith('patrol') || tid.startsWith('notice') || tid.startsWith('heartbeat') || tid.startsWith('confirm')) return false;
+      var chain = t.chain || [];
+      var hasFlow = chain.some(function(s) { return s.to_role || s.from_role; });
+      if (!hasFlow) return false;
+      var s = (t.status || '').toLowerCase(); return (s === 'success' || s === 'failed' || s === 'timeout') && (!t.audit_log || t.audit_log.length === 0); 
+    });
   } else if (_auditFilter !== 'all') {
     filtered = tasks.filter(t => (t.status || '').toLowerCase() === _auditFilter);
   }
@@ -2190,7 +2537,14 @@ async function renderTaskAuditTab() {
     const status = (task.status || 'unknown').toLowerCase(); const updatedAt = (task.updated_at || task.created_at || '').substring(0, 16);
     const chain = (task.chain || []).map(h => `${AGENT_ICONS[h.agent] || '?'}${h.agent}`).join(' → ');
     const errMsg = task.error ? (typeof task.error === 'string' ? task.error : (task.error.detail || '')) : '';
-    const hasAudit = task.audit_log && task.audit_log.length > 0;
+    // 只有 task_id 以特定前缀开头或有 to_role 的才需要审计
+    var __needsAuditTid = (task.task_id || task.id || '').toLowerCase();
+    var __needsAudit = !(__needsAuditTid.startsWith('patrol') || __needsAuditTid.startsWith('notice') || __needsAuditTid.startsWith('heartbeat') || __needsAuditTid.startsWith('confirm'));
+    if (__needsAudit) {
+      var __needsAuditChain = task.chain || [];
+      __needsAudit = __needsAuditChain.some(function(s) { return s.to_role || s.from_role; });
+    }
+    const hasAudit = __needsAudit && task.audit_log && task.audit_log.length > 0;
     const expanded = idx < defaultExpanded;
     let auditHtml = '';
     if (hasAudit) {
@@ -2206,7 +2560,7 @@ async function renderTaskAuditTab() {
           <span style="font-size:10px;color:var(--text-muted)">${expanded ? '▼' : '▶'}</span>
           <span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(summary)}</span>
           <span style="font-size:11px">${statusBadge(status)}</span>
-          ${hasAudit ? '<span style="font-size:11px;color:var(--accent-green)">✓ 已审计</span>' : '<span style="font-size:11px;color:var(--accent-gold)">⏳ 待审计</span>'}
+          ${__needsAudit ? (hasAudit ? '<span style="font-size:11px;color:var(--accent-green)">✓ 已审计</span>' : '<span style="font-size:11px;color:var(--accent-gold)">⏳ 待审计</span>') : ''}
         </div>
         <span style="font-size:11px;color:var(--text-muted);white-space:nowrap">${updatedAt}</span>
       </div>
@@ -2214,7 +2568,7 @@ async function renderTaskAuditTab() {
         <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--text-secondary);margin-bottom:6px">
           <span><span style="color:var(--text-muted)">ID:</span> ${esc(tid.substring(0, 24))}</span>
           <span><span style="color:var(--text-muted)">负责人:</span> ${AGENT_ICONS[assignee] || ''}${esc(assignee)}</span>
-          <span><span style="color:var(--text-muted)">状态:</span> ${AUDIT_STATUS_MAP[status] || status}</span>
+          <span><span style="color:var(--text-muted)">状态:</span> ${AUDIT_STATUS_MAP[status] || esc(status)}</span>
         </div>
         ${chain ? '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px"><span style="color:var(--text-muted)">追踪链:</span> '+chain+'</div>' : ''}
         ${errMsg ? '<div style="font-size:12px;color:#fca5a5;margin-bottom:6px;background:rgba(239,68,68,0.1);padding:6px 8px;border-radius:4px">❗ '+esc(errMsg)+'</div>' : ''}
@@ -2227,97 +2581,163 @@ async function renderTaskAuditTab() {
 // ═══════════════ 子言面板 ═══════════════
 
 async function renderZiyanTab() {
-  const elPending = document.getElementById('ziyanPending');
   const elTeam = document.getElementById('ziyanTeam');
-  const elAlerts = document.getElementById('ziyanAlerts');
-  if (!elPending) return;
-  let inboxData = null, statusData = null, alertsData = null;
-  try { [inboxData, statusData, alertsData] = await Promise.all([ fetchJSON('/api/inbox/lingzhao'), fetchJSON('/api/status'), fetchJSON('/api/alerts') ]); }
-  catch(e) { elPending.innerHTML = '<div style="color:var(--text-muted);font-size:13px">⚠️ 数据加载失败</div>'; return; }
-
-  // ── Running 任务 ──
-  const elRunning = document.getElementById('ziyanRunningTasks');
-  if (elRunning) {
-    try {
-      const td = await fetchJSON('/api/tasks');
-      const tasks = (td && td.tasks) || [];
-      const runningTasks = tasks.filter(t => t.status === 'running').slice(0, 10);
-      const agentStatuses = (statusData && statusData.agent_statuses) || {};
-      const now = new Date().toISOString();
-      elRunning.innerHTML = '<div class="stat-card">' +
-        '<div class="card-title">🚀 进行中任务 (' + runningTasks.length + ')</div>' +
-        (runningTasks.length === 0 ? '<div style="color:var(--accent-green);font-size:13px;padding:8px">暂无进行中任务</div>' :
-          runningTasks.map(function(t) {
-            const chain = t.chain || [];
-            const lastStep = chain[chain.length - 1] || {};
-            const currentAgent = lastStep.agent || '?';
-            const currentIcon = AGENT_ICONS[currentAgent] || '?';
-            const summary = (t.summary || '').substring(0, 50) + ((t.summary || '').length > 50 ? '...' : '');
-            const startTime = (t.created_at || t.updated_at || '').substring(0, 16);
-            const updatedAt = (t.updated_at || '').substring(0, 16);
-            const chainPath = chain.map(function(h) { return AGENT_ICONS[h.agent] || '?' + h.agent; }).join(' → ');
-            return '<div class="msg-item" style="margin-bottom:6px;border-left:3px solid var(--accent-cyan)">' +
-              '<div style="display:flex;justify-content:space-between;align-items:center">' +
-                '<span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + esc(summary) + '</span>' +
-                '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;margin-left:8px">发起 ' + startTime + '</span>' +
-              '</div>' +
-              '<div style="font-size:11px;color:var(--accent-cyan);margin-top:2px">⏳ ' + currentIcon + currentAgent + ' · 更新 ' + updatedAt + '</div>' +
-            '</div>';
-          }).join('')
-        ) +
-      '</div>';
-    } catch(e) { elRunning.innerHTML = ''; }
-  }
+  if (!elTeam) return;
+  let inboxData = null, statusData = null, alertsData = null, taskData = null;
+  try { [inboxData, statusData, alertsData, taskData] = await Promise.all([ fetchJSON('/api/inbox/lingzhao'), fetchJSON('/api/status'), fetchJSON('/api/alerts'), fetchJSON('/api/tasks') ]); }
+  catch(e) { elTeam.innerHTML = '<div style="color:var(--text-muted);font-size:13px">⚠️ 数据加载失败</div>'; return; }
 
   const agentStatuses = (statusData && statusData.agent_statuses) || {};
-  let pendingMsgs = [];
-  if (inboxData && inboxData.messages) {
-    pendingMsgs = inboxData.messages.filter(m => { const s = (m.state || m.status || '').toLowerCase(); return s === 'pending' || s === '' || s === 'new'; });
-    pendingMsgs.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  var allAgents = Object.keys(agentStatuses);
+  const alerts = (alertsData && alertsData.alerts) || [];
+  const tasks = (taskData && taskData.tasks) || [];
+  const inboxMsgs = (inboxData && inboxData.messages) || [];
+
+  // 待回复消息（与后端 handle_status 一致：排除 terminal 态）
+  const terminalStates = new Set(['done', 'closed', 'rejected', 'failed', 'archived', 'sent']);
+  const pendingMsgs = inboxMsgs.filter(function(m) {
+    var s = (m.state || m.status || '').toLowerCase();
+    return !terminalStates.has(s);
+  });
+  pendingMsgs.sort(function(a, b) { return (b.created_at || '').localeCompare(a.created_at || ''); });
+
+  // 🔧 修复: 如果 inbox 待回复为 0 但后端全局未读数 >0，说明有跨 inbox 未读消息
+  //      （后端 /api/status 统计所有 agent 的非 terminal 态消息）
+  var globalUnread = (statusData && statusData.unread_messages) || 0;
+  var pendingCount = pendingMsgs.length;
+  if (pendingCount === 0 && globalUnread > 0) {
+    pendingCount = globalUnread;
   }
-  let pendingHtml = pendingMsgs.length === 0
-    ? '<div style="padding:20px;text-align:center;color:var(--accent-green);font-size:14px">🎉 暂无待回复消息</div>'
-    : pendingMsgs.map(m => {
-        const fromIcon = AGENT_ICONS[m.from] || m.from || '?';
-        const time = m.created_at ? m.created_at.substring(0, 16) : '';
-        const summary = (m.content || '').substring(0, 80) + ((m.content || '').length > 80 ? '...' : '');
-        const pBadge = m.priority === 'urgent' ? '<span style="background:rgba(239,68,68,0.3);color:#fca5a5;font-size:11px;padding:1px 6px;border-radius:4px;margin-right:6px">紧急</span>' : '';
-        return `<div class="msg-item" style="margin-bottom:6px">
-          <div class="head">${fromIcon} · ${time} ${pBadge}</div>
-          <div class="body">${esc(summary)}</div>
-          <div style="margin-top:6px;display:flex;gap:6px">
-            <button class="btn btn-sm" data-action="openReply" data-arg-from="${esc(m.from || '')}" data-arg-id="${esc(m.id || m.msg_id || '')}" data-arg-summary="${esc(summary)}">💬 回复</button>
-          </div>
-        </div>`;
-      }).join('');
-  elPending.innerHTML = `<div class="stat-card"><div class="card-title">📩 待回复消息 <span style="color:var(--accent-cyan);font-size:12px">${pendingMsgs.length}</span></div>
-    <div style="max-height:360px;overflow-y:auto">${pendingHtml}</div></div>`;
 
-  let hb = null;
-  try { hb = await fetchJSON('/api/heartbeat'); } catch(e) {}
-  let statusHtml = '';
-  if (hb && hb.agents) {
-    const names = Object.keys(AGENT_NAMES);
-    const chips = names.map(name => {
-      const state = hb.agents[name];
-      return `<span style="display:inline-block;padding:4px 10px;margin:3px;background:rgba(30,41,59,0.6);border-radius:8px;font-size:13px">${state && state.status === 'online' ? '🟢' : '🔴'} ${AGENT_ICONS[name] || '?'}${AGENT_NAMES[name] || name}</span>`;
+  // 告警统计
+  const criticalAlerts = alerts.filter(function(a) { return a.severity === 'critical'; });
+  const warnAlerts = alerts.filter(function(a) { return a.severity === 'warn' || a.severity === 'warning'; });
+
+  // ── 1. 团队状态（最上方） ──
+  var agentsList = allAgents.map(function(a) {
+    var name = a.name || a.agent || a;
+    var status = agentStatuses[name] || {};
+    var online = status.online !== false;
+    var icon = AGENT_ICONS[name] || '?';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:rgba(15,23,42,0.5);border-radius:8px;font-size:12px">' +
+      '<div style="width:6px;height:6px;border-radius:50%;background:' + (online ? 'var(--accent-green)' : 'var(--accent-red)') + ';box-shadow:0 0 6px ' + (online ? 'rgba(16,185,129,0.4)' : 'rgba(239,68,68,0.4)') + '"></div>' +
+      icon + ' ' + esc(name) +
+      (status.role ? '<span style="color:var(--text-muted);font-size:10px">' + esc(status.role) + '</span>' : '') +
+    '</div>';
+  }).join('');
+
+  elTeam.innerHTML = '<div class="stat-card"><div class="card-title">👑 团队状态</div>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">' + agentsList + '</div>' +
+    '<div style="display:flex;gap:16px;margin-top:10px;font-size:12px">' +
+      '<span style="color:var(--text-muted);cursor:pointer" onclick="showPendingModal()">📬 待回复 <strong style="color:var(--accent-cyan)">' + pendingCount + '</strong></span>' +
+      '<span style="color:var(--text-muted);cursor:pointer" onclick="showAlertModal()">🔔 告警 <strong style="color:' + (criticalAlerts.length > 0 ? 'var(--accent-red)' : 'var(--text-muted)') + '">' + alerts.length + '</strong>' +
+        (criticalAlerts.length > 0 ? ' <span style="color:var(--accent-red)">🔴 ' + criticalAlerts.length + ' 严重</span>' : '') +
+      '</span>' +
+      '<span style="color:var(--text-muted);cursor:pointer" onclick="showRunningTasksModal()">🚀 进行中 <strong style="color:var(--accent-cyan)">' + tasks.filter(function(t) { return t.status === 'running'; }).length + '</strong></span>' +
+    '</div></div>';
+
+  // ── 2. 我的任务（合并所有状态） ──
+  var myTasks = tasks.filter(function(t) {
+    var c = t.chain || [];
+    if (c.length === 0) return false;
+    var first = c[0];
+    return first.from === 'lingzhao' || first.from_person === 'lingzhao' || first.agent === 'lingzhao';
+  }).sort(function(a, b) { return (b.updated_at || '').localeCompare(a.updated_at || ''); });
+
+  // 渲染我的任务看板
+  var elBoard = document.getElementById('ziyanTaskBoard');
+  if (elBoard && myTasks.length > 0) {
+    var critical = myTasks.filter(function(t) { return t.status === 'failed' || t.status === 'timeout'; });
+    var running = myTasks.filter(function(t) { return t.status === 'running'; });
+    var recentDone = myTasks.filter(function(t) { return t.status === 'success'; }).slice(0, 5);
+    
+    var boardHtml = '<div class="stat-card"><div class="card-title">📋 我的任务</div>';
+    boardHtml += '<div id="myTaskList">';
+    if (critical.length > 0) {
+      boardHtml += '<div style="font-size:11px;color:var(--accent-red);margin:8px 0 4px;font-weight:500">🔴 异常</div>';
+      boardHtml += critical.map(function(t) { return renderTaskCard(t); }).join('');
+    }
+    if (running.length > 0) {
+      boardHtml += '<div style="font-size:11px;color:var(--accent-green);margin:8px 0 4px;font-weight:500">🟢 进行中</div>';
+      boardHtml += running.map(function(t) { return renderTaskCard(t); }).join('');
+    }
+    boardHtml += '<div style="font-size:11px;color:var(--text-muted);margin:8px 0 4px;font-weight:500">⚪ 最近完成</div>';
+    boardHtml += '<div style="max-height:300px;overflow:hidden">' + recentDone.map(function(t) { return renderTaskCard(t); }).join('') + '</div>';
+    boardHtml += '</div></div>';
+    elBoard.innerHTML = boardHtml;
+  }
+}
+
+// ── 子言全局任务看板 ──
+var _taskBoardData = null;
+
+function showPendingModal() {
+  fetchJSON('/api/inbox/lingzhao').then(function(data) {
+    var msgs = (data && data.messages) || [];
+    var terminalStates = new Set(['done', 'closed', 'rejected', 'failed', 'archived', 'sent']);
+    var pending = msgs.filter(function(m) { var s = (m.state || m.status || '').toLowerCase(); return !terminalStates.has(s); });
+    var html = pending.slice(0, 20).map(function(m) {
+      return '<div class="msg-item" style="margin-bottom:6px">' +
+        '<div class="head">' + (AGENT_ICONS[m.from] || '?') + ' · ' + (m.created_at||'').substring(0,16) + (m.priority === 'urgent' ? ' <span style="background:rgba(239,68,68,0.3);color:#fca5a5;font-size:11px;padding:1px 6px;border-radius:4px">紧急</span>' : '') + '</div>' +
+        '<div class="body">' + esc((m.content||'').substring(0, 100)) + '</div>' +
+      '</div>';
     }).join('');
-    const unreadList = names.filter(name => { const s = agentStatuses[name]; return s && (s.has_unread || s.active_messages > 0); }).map(name => `${AGENT_ICONS[name] || '?'}${AGENT_NAMES[name]} 📩`).join(' · ');
-    statusHtml = chips + (unreadList ? '<div style="margin-top:8px;font-size:12px;color:var(--accent-gold)">未读: ' + unreadList + '</div>' : '');
-  } else { statusHtml = '<div style="color:var(--text-muted);font-size:13px">⏳ 加载中...</div>'; }
-  elTeam.innerHTML = `<div class="stat-card"><div class="card-title">🏢 团队状态</div><div>${statusHtml}</div></div>`;
+    document.getElementById('agentModalContent').innerHTML =
+      '<div class="header"><h2>📬 待回复消息 (' + pending.length + ')</h2><button class="btn btn-sm" onclick="closeModal()">✕</button></div>' +
+      '<div style="max-height:400px;overflow-y:auto;padding:8px 0">' + (html || '<div style="color:var(--text-muted);padding:16px">暂无待回复消息</div>') + '</div>';
+    document.getElementById('agentModal').classList.add('open');
+  }).catch(function() {
+    document.getElementById('agentModalContent').innerHTML = '<div class="header"><h2>📬 待回复消息</h2><button class="btn btn-sm" onclick="closeModal()">✕</button></div><div style="padding:16px;color:var(--text-muted)">暂无待回复消息</div>';
+    document.getElementById('agentModal').classList.add('open');
+  });
+}
 
-  let alertHtml = '';
-  if (alertsData && alertsData.alerts && alertsData.alerts.length > 0) {
-    const recent = alertsData.alerts.slice(-5).reverse();
-    alertHtml = recent.map(a => `<div class="msg-item" style="margin-bottom:4px;padding:8px 10px">
-      <div class="head">${a.severity === 'critical' ? '🔴' : a.severity === 'warn' ? '🟡' : '🔵'} ${a.severity} ${a.type} · ${a.agent}${a.assignee ? ' · 🔍'+AGENT_NAMES[a.assignee]||a.assignee+'处理' : ''} · ${(a.created_at||'').substring(0,16)}</div>
-      <div class="body" style="font-size:12px">${esc(a.message || '')}</div>
-    </div>`).join('');
-  } else { alertHtml = '<div style="color:var(--accent-green);font-size:13px">✅ 无告警</div>'; }
-  elAlerts.innerHTML = `<div class="stat-card"><div class="card-title">🔔 最近告警</div><div style="max-height:220px;overflow-y:auto">${alertHtml}</div></div>`;
+function showAlertModal() {
+  fetchJSON('/api/alerts').then(function(data) {
+    var alerts = (data && data.alerts) || [];
+    var criticalCount = alerts.filter(function(a) { return a.severity === 'critical'; }).length;
+    var html = alerts.slice(-10).reverse().map(function(a) {
+      return '<div class="msg-item" style="margin-bottom:4px;padding:8px 10px">' +
+        '<div class="head">' + (a.severity === 'critical' ? '🔴' : a.severity === 'warn' ? '🟡' : '🔵') + ' ' + esc(a.severity || '') + ' ' + esc(a.type || '') + ' · ' + esc(a.agent || '') + (a.assignee ? ' · 🔍' + esc(a.assignee) : '') + ' · ' + (a.created_at||'').substring(0,16) + '</div>' +
+        '<div class="body" style="font-size:12px">' + esc(a.message || '') + '</div>' +
+      '</div>';
+    }).join('');
+    document.getElementById('agentModalContent').innerHTML =
+      '<div class="header"><h2>🔔 告警 ' + (criticalCount > 0 ? '<span style="color:var(--accent-red);font-size:12px">' + criticalCount + ' 严重</span>' : '') + '</h2><button class="btn btn-sm" onclick="closeModal()">✕</button></div>' +
+      '<div style="max-height:400px;overflow-y:auto;padding:8px 0">' + (html || '<div style="color:var(--text-muted);padding:16px">无告警</div>') + '</div>';
+    document.getElementById('agentModal').classList.add('open');
+  }).catch(function() {
+    document.getElementById('agentModalContent').innerHTML = '<div class="header"><h2>🔔 告警</h2><button class="btn btn-sm" onclick="closeModal()">✕</button></div><div style="padding:16px;color:var(--text-muted)">暂无告警数据</div>';
+    document.getElementById('agentModal').classList.add('open');
+  });
+}
 
-  // ── 子言全局任务看板 ──
+function showRunningTasksModal() {
+  fetchJSON('/api/tasks').then(function(data) {
+    var tasks = (data && data.tasks) || [];
+    var running = tasks.filter(function(t) { return t.status === 'running'; }).slice(0, 20);
+    var html = running.map(function(t) {
+      var chain = t.chain || [];
+      var lastStep = chain[chain.length - 1] || {};
+      var currentAgent = lastStep.agent || lastStep.to_person || '?';
+      var summary = (t.summary || '').substring(0, 50);
+      var startTime = (t.created_at || t.updated_at || '').substring(0, 16);
+      return '<div class="msg-item" style="margin-bottom:6px;border-left:3px solid var(--accent-cyan)">' +
+        '<div style="font-size:13px;font-weight:500">' + esc(summary) + '</div>' +
+        '<div style="font-size:11px;color:var(--accent-cyan);margin-top:2px">⏳ ' + esc(currentAgent) + ' · 发起 ' + startTime + '</div>' +
+      '</div>';
+    }).join('');
+    document.getElementById('agentModalContent').innerHTML =
+      '<div class="header"><h2>🚀 进行中任务 (' + running.length + ')</h2><button class="btn btn-sm" onclick="closeModal()">✕</button></div>' +
+      '<div style="max-height:400px;overflow-y:auto;padding:8px 0">' + (html || '<div style="color:var(--text-muted);padding:16px">暂无进行中任务</div>') + '</div>';
+    document.getElementById('agentModal').classList.add('open');
+  }).catch(function() {
+    document.getElementById('agentModalContent').innerHTML = '<div class="header"><h2>🚀 进行中任务</h2><button class="btn btn-sm" onclick="closeModal()">✕</button></div><div style="padding:16px;color:var(--text-muted)">暂无进行中任务</div>';
+    document.getElementById('agentModal').classList.add('open');
+  });
+}
+
+async function renderMyTaskBoard() {
   const elBoard = document.getElementById('ziyanTaskBoard');
   if (elBoard) {
     try {
@@ -2326,7 +2746,9 @@ async function renderZiyanTab() {
       // 筛选子言发起的 —— 取 chain[0] 是 lingzhao 的
       const myTasks = allTasks.filter(t => {
         const c = t.chain || [];
-        return c.length > 0 && c[0].agent === 'lingzhao';
+        if (c.length === 0) return false;
+        const first = c[0];
+        return first.from === 'lingzhao' || first.from_person === 'lingzhao' || first.agent === 'lingzhao';
       }).sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
 
       const critical = myTasks.filter(t => t.status === 'failed' || t.status === 'timeout');
@@ -2336,13 +2758,22 @@ async function renderZiyanTab() {
       function renderTaskChain(task) {
         const chain = task.chain || [];
         const steps = chain.map((h, i) => {
-          const icon = AGENT_ICONS[h.agent] || '?';
+          const agentId = h.agent || h.to_person || h.to_role || '?';
+          const person = h.to_person || h.agent || '';
+          const role = h.to_role || '';
+          const icon = AGENT_ICONS[person] || AGENT_ICONS[agentId] || (role ? role.slice(0,2) : '?');
           const isLast = i === chain.length - 1;
           const status = h.status || 'pending';
-          const statusIcon = status === 'done' ? '✅' : (status === 'failed' ? '❌' : (isLast && task.status === 'running' ? '⏳' : '✅'));
-          return `<span style="font-size:12px">${statusIcon} ${icon}${h.agent}</span>`;
+          const isCompleted = status === 'completed' || status === 'done';
+          const statusIcon = isCompleted ? '✅' : (status === 'failed' ? '❌' : (isLast && task.status === 'running' ? '⏳' : '✅'));
+          const label = person || role || agentId;
+          const report = h.report;
+          var reportAttr = report ? '1' : '0';
+          var summaryAttr = (report && report.summary) || '';
+          var info = (role ? role : '') + (person ? '(' + person + ')' : '');
+          return '<span class="chain-step" style="font-size:12px;cursor:' + (report ? 'pointer' : 'default') + '" onclick="showChainReport(\'' + jsStr(info) + '\',\'' + jsStr(statusIcon) + '\',\'' + jsStr(summaryAttr) + '\')" title="' + esc(info) + ': ' + (report ? esc(report.conclusion || '') : '等待中') + '">' + statusIcon + ' ' + icon + label + '</span>';
         }).join(' <span style="color:var(--text-muted);font-size:10px">→</span> ');
-        return `<div style="font-size:12px;color:var(--text-secondary);margin:4px 0">${steps}</div>`;
+        return '<div style="font-size:12px;color:var(--text-secondary);margin:4px 0">' + steps + '</div>';
       }
 
       let boardHtml = '<div class="stat-card"><div class="card-title">📋 我的任务</div>';
@@ -2370,7 +2801,6 @@ async function renderZiyanTab() {
       boardHtml += '<div style="font-size:11px;color:var(--text-muted);margin:8px 0 4px;font-weight:500">⚪ 最近完成</div>';
       boardHtml += '<div id="recentDoneList" style="max-height:300px;overflow:hidden">' + recentDone.map(t => renderTaskCard(t)).join('') + '</div>';
       boardHtml += '</div></div>';
-
       elBoard.innerHTML = boardHtml;
     } catch(e) {
       elBoard.innerHTML = '';
@@ -2378,34 +2808,229 @@ async function renderZiyanTab() {
   }
 }
 
+// ═══════════════ 任务链报告弹窗 ═══════════════
+var _currentChainTask = null;
+var _currentChainIdx = -1;
+
+function showTaskReport(el) {
+  var taskData = el.dataset.task;
+  var task = null;
+  try { if (taskData) task = JSON.parse(decodeURIComponent(taskData)); } catch(e) {}
+  if (!task || !task.chain || task.chain.length === 0) {
+    document.getElementById('agentModalContent').innerHTML = '<div class=\"header\"><h2>📋 任务</h2><button class=\"btn btn-sm\" onclick=\"closeModal()\">✕</button></div><div style=\"padding:16px;color:var(--text-muted)\">暂无任务链数据</div>';
+    document.getElementById('agentModal').classList.add('open');
+    return;
+  }
+  var summary = task.summary || '任务';
+  var status = task.status || '';
+  var icon = status === 'failed' || status === 'timeout' ? '❌' : status === 'running' ? '⏳' : '✅';
+  var html = '<div class="header"><h2>' + icon + ' ' + esc(summary) + '</h2><button class="btn btn-sm" onclick="closeModal()">✕</button></div>';
+  html += '<div style="padding:12px;max-height:60vh;overflow-y:auto">';
+  if (task && task.chain) {
+    var chain = task.chain;
+    for (var si = 0; si < chain.length; si++) {
+      var h = chain[si];
+      var role = h.to_role || h.role || h.agent || '?';
+      var person = h.to_person || h.agent || '';
+      var s = h.status || 'pending';
+      var report = h.report;
+      var doneIcon = (s === 'completed' || s === 'done') ? '✅' : (s === 'failed' ? '❌' : '⏳');
+      html += '<div style="font-size:12px;padding:8px 0;border-bottom:1px solid rgba(51,65,85,0.08)">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        '<span style="color:var(--accent-cyan);font-weight:500">' + doneIcon + ' ' + esc(role) + (person ? '(' + esc(person) + ')' : '') + '</span>' +
+        '<span style="color:var(--text-muted);font-size:10px">' + esc((h.started_at||'').substring(0,10)) + '</span>' +
+        '</div>';
+      if (report) {
+        html += '<div style="margin-top:4px;font-size:11px;color:var(--text-secondary)">结论: <span style="color:var(--accent-cyan)">' + esc(report.conclusion || '') + '</span></div>';
+        if (report.summary) html += '<div style="font-size:11px;color:var(--text-muted);white-space:pre-wrap;margin-top:2px">' + esc(report.summary.substring(0, 300)) + '</div>';
+        if (report.raw_reply && report.raw_reply != report.summary) {
+          html += '<div style="margin-top:4px"><span style="font-size:11px;color:var(--accent-cyan);cursor:pointer;border-bottom:1px dashed rgba(0,212,255,0.3)" onclick="alert(\'' + esc(report.raw_reply.substring(0, 500)) + '\')">📄 查看原始回复</span></div>';
+        }
+      } else {
+        html += '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">⏳ 等待中</div>';
+      }
+      html += '</div>';
+    }
+  } else {
+    html += '<div style="color:var(--text-muted);padding:12px">暂无任务链数据</div>';
+  }
+  html += '</div>';
+  document.getElementById('agentModalContent').innerHTML = html;
+  document.getElementById('agentModal').classList.add('open');
+}
+
+function showChainReportFromAttr(el) {
+  var reportData = el.dataset.report;
+  var info = el.dataset.info || '?';
+  if (reportData) {
+    try {
+      var report = JSON.parse(decodeURIComponent(reportData));
+      showChainReport(info, '✅', report);
+    } catch(e) {
+      showChainReport(info, '✅', null);
+    }
+  } else {
+    showChainReport(info, '⏳', null);
+  }
+}
+
+function showStepReport(stepIdx) {
+  if (!_currentChainTask || !_currentChainTask.chain) return;
+  var h = _currentChainTask.chain[stepIdx];
+  if (!h) { showChainReport('?', '⏳', null); return; }
+  var info = (h.to_role || h.role || '') + ((h.to_person || h.agent) ? '(' + (h.to_person || h.agent) + ')' : '');
+  showChainReport(info, h.status === 'completed' || h.status === 'done' ? '✅' : '⏳', h.report || null);
+}
+
+function showChainReport(info, icon, report) {
+  var detailHtml = '';
+  if (report) {
+    detailHtml = '<div style="padding:12px;background:rgba(15,23,42,0.6);border-radius:8px;font-size:12px;line-height:1.7">';
+    if (report.conclusion) detailHtml += '<div style="color:var(--accent-cyan);font-weight:500;margin-bottom:8px">结论: ' + esc(report.conclusion) + '</div>';
+    if (report.summary) detailHtml += '<div style="margin-bottom:8px;white-space:pre-wrap;font-size:11px;color:var(--text-secondary)">' + esc(report.summary) + '</div>';
+    
+    // 根据模板渲染不同内容
+    var tmpl = report.template || '';
+    var det = report.details || {};
+    
+    if (!tmpl) {
+      // 没有模板类型，直接展示 summary
+      if (report.summary) {
+        detailHtml += '<div style="white-space:pre-wrap;font-size:11px;color:var(--text-secondary);background:rgba(0,0,0,0.2);padding:8px;border-radius:4px">' + esc(report.summary) + '</div>';
+      }
+    } else if (tmpl === 'review-report' || tmpl === '审查报告') {
+      // 审查报告：显示 issues 列表
+      if (det.issues && det.issues.length > 0) {
+        detailHtml += '<div style="font-weight:600;font-size:12px;color:var(--accent-gold);margin-bottom:4px">发现问题:</div>';
+        det.issues.forEach(function(iss) {
+          var sevColor = iss.severity === 'critical' ? 'var(--accent-red)' : iss.severity === 'major' ? 'var(--accent-gold)' : 'var(--accent-cyan)';
+          detailHtml += '<div style="font-size:11px;padding:4px 8px;margin:2px 0;background:rgba(15,23,42,0.4);border-radius:4px;border-left:2px solid ' + sevColor + '">' +
+            '<span style="color:' + sevColor + ';font-weight:500">[' + esc(iss.severity) + ']</span> ' +
+            (iss.file ? '<span style="color:var(--text-muted)">' + esc(iss.file) + (iss.line ? ':' + iss.line : '') + '</span> ' : '') +
+            esc(iss.desc || '') + '</div>';
+        });
+      }
+      if (det.passed_checks && det.passed_checks.length > 0) {
+        detailHtml += '<div style="margin-top:6px;font-size:11px;color:var(--accent-green)">✅ 通过检查: ' + det.passed_checks.join(', ') + '</div>';
+      }
+      if (det.review_tool) detailHtml += '<div style="margin-top:4px;font-size:11px;color:var(--text-muted)">工具: ' + esc(det.review_tool) + '</div>';
+    } else if (tmpl === 'test-report' || tmpl === '测试报告') {
+      // 测试报告：显示逐项结果
+      if (det.results && det.results.length > 0) {
+        detailHtml += '<div style="font-weight:600;font-size:12px;color:var(--accent-cyan);margin-bottom:4px">测试结果:</div>';
+        var passCount = 0, failCount = 0;
+        det.results.forEach(function(r) {
+          var passed = r.status === 'pass';
+          if (passed) passCount++; else failCount++;
+          detailHtml += '<div style="font-size:11px;padding:3px 8px;margin:1px 0;background:rgba(15,23,42,0.4);border-radius:4px">' +
+            (passed ? '✅' : '❌') + ' ' + esc(r.name || r.desc || '') + '</div>';
+        });
+        if (det.total || passCount || failCount) {
+          detailHtml += '<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">合计: ' + (det.total || (passCount + failCount)) + ' | ✅ ' + (det.passed || passCount) + ' | ❌ ' + (det.failed || failCount) + '</div>';
+        }
+      }
+      if (det.environment) detailHtml += '<div style="margin-top:4px;font-size:11px;color:var(--text-muted)">环境: ' + esc(det.environment) + '</div>';
+    } else if (tmpl === 'dev-report' || tmpl === '开发报告') {
+      // 开发报告：显示改动文件
+      if (det.changes && det.changes.length > 0) {
+        detailHtml += '<div style="font-weight:600;font-size:12px;color:var(--accent-cyan);margin-bottom:4px">改动文件:</div>';
+        det.changes.forEach(function(c) {
+          var f = c.file || c;
+          var s = c.summary || '';
+          detailHtml += '<div style="font-size:11px;padding:2px 0"><span style="color:var(--accent-cyan)">📄 ' + esc(f) + '</span>' + (s ? ' — ' + esc(s) : '') + '</div>';
+        });
+      }
+      if (det.self_test) detailHtml += '<div style="margin-top:4px;font-size:11px">自测: ' + (det.self_test === 'pass' ? '✅ 通过' : '❌ 失败') + '</div>';
+      if (det.test_output) detailHtml += '<pre style="font-size:11px;color:var(--text-muted);margin-top:4px;white-space:pre-wrap;font-family:inherit;background:rgba(0,0,0,0.2);padding:6px;border-radius:4px">' + esc(det.test_output.substring(0, 300)) + '</pre>';
+    } else if (tmpl === 'approve-report' || tmpl === '验收报告') {
+      // 验收报告：显示检查项
+      if (det.checks && det.checks.length > 0) {
+        detailHtml += '<div style="font-weight:600;font-size:12px;color:var(--accent-cyan);margin-bottom:4px">验收检查:</div>';
+        det.checks.forEach(function(c) {
+          var ok = c.status === 'yes' || c.status === 'pass';
+          detailHtml += '<div style="font-size:11px;padding:2px 0">' + (ok ? '✅' : '⬜') + ' ' + esc(c.name || '') + '</div>';
+        });
+      }
+    } else if (tmpl === 'patrol-report' || tmpl === '巡检报告') {
+      // 巡检报告
+      if (det.online_agents !== undefined) detailHtml += '<div style="font-size:11px;padding:2px 0">在线 Agent: ' + det.online_agents + '</div>';
+      if (det.pending_tasks !== undefined) detailHtml += '<div style="font-size:11px;padding:2px 0">待办任务: ' + det.pending_tasks + '</div>';
+    } else if (tmpl === 'scheme-report' || tmpl === '方案报告') {
+      if (det.design_doc) detailHtml += '<div style="font-size:11px;padding:2px 0">📄 方案文档: ' + esc(det.design_doc) + '</div>';
+      if (det.key_decisions) detailHtml += '<div style="font-size:11px;padding:2px 0">关键决策: ' + det.key_decisions.join(', ') + '</div>';
+    } else if (tmpl === 'research-report' || tmpl === '调研报告') {
+      if (det.recommendation) detailHtml += '<div style="font-size:11px;padding:2px 0;color:var(--accent-cyan)">推荐: ' + esc(det.recommendation) + '</div>';
+      if (det.candidates) detailHtml += '<div style="font-size:11px;padding:2px 0">候选方案: ' + det.candidates.length + ' 个</div>';
+    }
+    
+    // 如果有未渲染的 details 字段，兜底展示
+    if (det && typeof det === 'object') {
+      var renderedKeys = ['issues', 'passed_checks', 'review_tool', 'results', 'total', 'passed', 'failed', 'environment', 'changes', 'self_test', 'test_output', 'checks', 'online_agents', 'pending_tasks', 'design_doc', 'key_decisions', 'recommendation', 'candidates'];
+      var remaining = {};
+      var hasRemaining = false;
+      for (var k in det) {
+        if (det.hasOwnProperty(k) && renderedKeys.indexOf(k) === -1) {
+          remaining[k] = det[k];
+          hasRemaining = true;
+        }
+      }
+      if (hasRemaining) {
+        detailHtml += '<pre style="font-size:11px;color:var(--text-muted);margin-top:8px;overflow:auto;max-height:150px;background:rgba(0,0,0,0.3);padding:6px;border-radius:4px;white-space:pre-wrap;font-family:inherit">' + esc(JSON.stringify(remaining, null, 2).substring(0, 600)) + '</pre>';
+      }
+    }
+    
+    detailHtml += '</div>';
+  } else {
+    detailHtml = '<div style="color:var(--text-muted);padding:12px">该步骤暂无报告</div>';
+  }
+  document.getElementById('agentModalContent').innerHTML =
+    '<div class="header"><h2>📋 步骤详情</h2><button class="btn btn-sm" onclick="closeModal()">✕</button></div>' +
+    '<div style="padding:16px;font-size:13px;line-height:1.7">' +
+    '<div style="font-size:24px;margin-bottom:8px">' + icon + '</div>' +
+    '<div style="color:var(--accent-cyan);font-weight:600;margin-bottom:8px">' + info + '</div>' +
+    detailHtml +
+    '</div>';
+  document.getElementById('agentModal').classList.add('open');
+}
+
+// ═══════════════ 任务过滤 ═══════════════
+
 function renderTaskCard(task) {
+  _currentChainTask = task;
   const chain = task.chain || [];
   const summary = (task.summary || '').substring(0, 60) + ((task.summary || '').length > 60 ? '...' : '');
   const updatedAt = (task.updated_at || '').substring(0, 16);
   const currentStep = chain.length > 0 ? chain[chain.length - 1] : null;
-  const currentAgent = currentStep ? currentStep.agent : '?';
+  const currentAgent = currentStep ? (currentStep.to_person || currentStep.agent || '?') : '?';
   const currentIcon = AGENT_ICONS[currentAgent] || '?';
+  const currentRole = currentStep ? (currentStep.to_role || '') : '';
   const isRunning = task.status === 'running';
 
-  // 流转路径
+  // 流转路径 — 每步可点击查看报告
   const stepsHtml = chain.map((h, i) => {
-    const icon = AGENT_ICONS[h.agent] || '?';
-    const isLast = i === chain.length - 1;
+    const agent = h.agent || h.to_person || '?';
+    const role = h.to_role || '';
+    const icon = AGENT_ICONS[agent] || '?';
     const s = h.status || 'pending';
-    const statusIcon = s === 'done' ? '✅' : (s === 'failed' ? '❌' : '⏳');
-    return '<span style="font-size:12px;white-space:nowrap">' + statusIcon + ' ' + icon + h.agent + '</span>';
+    const isCompleted = s === 'completed' || s === 'done';
+    const statusIcon = isCompleted ? '✅' : (s === 'failed' ? '❌' : '⏳');
+    const hasReport = h.report ? 1 : 0;
+    var info = role ? role : agent;
+    var stepIdx = i;
+    var reportData = h.report ? encodeURIComponent(JSON.stringify(h.report)) : '';
+    return '<span style="font-size:12px;white-space:nowrap;cursor:' + (hasReport ? 'pointer' : 'default') + ';border-bottom:' + (hasReport ? '1px dashed rgba(0,212,255,0.3)' : 'none') + '" data-report=\'' + reportData + '\' data-info=\'' + jsStr(info) + '\' onclick="showChainReportFromAttr(this)" title="' + (hasReport ? '点击查看报告' : '等待中') + '">' + statusIcon + ' ' + icon + agent + '</span>';
   }).join(' <span style="color:var(--text-muted);font-size:10px">→</span> ');
 
   const statusColor = task.status === 'failed' || task.status === 'timeout' ? 'var(--accent-red)' :
     task.status === 'running' ? 'var(--accent-cyan)' : 'var(--text-muted)';
 
-  return '<div class="msg-item" style="margin-bottom:6px;border-left:3px solid ' + statusColor + '">' +
+  return '<div class="msg-item" style="margin-bottom:6px;border-left:3px solid ' + statusColor + ';cursor:pointer" data-task=\'' + encodeURIComponent(JSON.stringify({chain: task.chain || [], status: task.status, summary: task.summary})) + '\' onclick="showTaskReport(this)">' +
     '<div style="display:flex;justify-content:space-between;align-items:center">' +
       '<div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + esc(summary) + '</div>' +
       '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;margin-left:8px">' + updatedAt + '</span>' +
     '</div>' +
     '<div style="font-size:12px;color:var(--text-secondary);margin:4px 0;overflow-x:auto;white-space:nowrap;padding:4px 0">' + stepsHtml + '</div>' +
-    (isRunning && currentStep ? '<div style="font-size:11px;color:var(--accent-cyan)">⏳ 当前: ' + currentIcon + currentAgent + '</div>' : '') +
+    (isRunning && currentStep ? '<div style="font-size:11px;color:var(--accent-cyan)">⏳ 当前: ' + currentIcon + (currentRole ? '(' + currentRole + ')' : '') + '</div>' : '') +
   '</div>';
 }
 
@@ -2522,7 +3147,7 @@ async function renderPatrolTab() {
     return '<div class="bulletin-item" style="cursor:pointer" onclick="showPatrolDetail(\'' + fileEnc + '\')">' +
       '<div class="meta">' + date + '</div>' +
       '<div class="title">📋 巡检日报 · ' + date + '</div>' +
-      '<div class="body">' + esc(summary) + '</div></div>';
+      '<div class="body">' + renderMarkdown(summary) + '</div></div>';
   }).join('');
 }
 
@@ -2531,14 +3156,85 @@ async function showPatrolDetail(file) {
   let content = '';
   try {
     const r = await fetch('/api/report-content/' + encodeURIComponent(file));
-    if (r.ok) content = await r.text();
+    if (r.ok) {
+      const json = await r.json();
+      content = json.content || '';
+    }
   } catch(e) {}
   if (!content) content = '报告加载失败';
+  const mdHtml = renderMarkdown(content);
   document.getElementById('agentModalContent').innerHTML = '<div class="header">' +
     '<h2>📋 ' + esc(file) + '</h2>' +
     '<button class="btn btn-sm" onclick="closeModal()">✕</button></div>' +
-    '<div style="font-size:13px;line-height:1.7;white-space:pre-wrap;background:rgba(15,23,42,0.8);border-radius:8px;padding:16px;max-height:70vh;overflow:auto">' + esc(content) + '</div>';
+    '<div class="hologrid" style="font-size:13px;line-height:1.7;background:rgba(15,23,42,0.8);border-radius:8px;padding:16px;max-height:70vh;overflow:auto">' + mdHtml + '</div>';
   document.getElementById('agentModal').classList.add('open');
+}
+
+function renderMarkdown(md) {
+  // 转义HTML
+  let h = esc(md);
+  // 去掉字符画表格边框
+  h = h.replace(/[╔╗╚╝═║]/g, '');
+  // 分隔线
+  h = h.replace(/━+/g, '<hr style="border:none;border-top:1px solid rgba(51,65,85,0.15);margin:8px 0">');
+  h = h.replace(/─{4,}/g, '<hr style="border:none;border-top:1px solid rgba(51,65,85,0.1);margin:6px 0">');
+  
+  // 先把 Markdown 行按块处理，避免 <br> 干扰
+  var lines = h.split('\n');
+  var out = [];
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    var trimmed = line.trim();
+    
+    // 跳过空行
+    if (!trimmed) { continue; }
+    
+    // 标题
+    if (/^### (.+)/.test(trimmed)) { out.push('<h4 style="color:var(--accent-cyan);margin:10px 0 3px;font-size:13px;font-weight:600">' + trimmed.replace(/^### /, '') + '</h4>'); continue; }
+    if (/^## (.+)/.test(trimmed)) { out.push('<h3 style="color:var(--accent-cyan);margin:14px 0 5px;font-size:14px;border-bottom:1px solid rgba(51,65,85,0.15);padding-bottom:2px;font-weight:600">' + trimmed.replace(/^## /, '') + '</h3>'); continue; }
+    if (/^# (.+)/.test(trimmed)) { out.push('<h2 style="color:var(--accent-cyan);margin:18px 0 8px;font-size:16px;border-bottom:1px solid rgba(51,65,85,0.2);padding-bottom:3px;font-weight:600">' + trimmed.replace(/^# /, '') + '</h2>'); continue; }
+    // 中文数字标题：一、整体状态  二、xxx
+    if (/^[一二三四五六七八九十]+、/.test(trimmed)) { out.push('<div style="color:var(--accent-cyan);font-size:13px;font-weight:600;margin:12px 0 4px">' + trimmed + '</div>'); continue; }
+    // 统计指标行：指标 | 状态
+    if (/^[^\|]+\|/.test(trimmed) && trimmed.length < 40) { out.push('<div style="font-size:12px;font-weight:600;color:var(--text-secondary);padding:2px 0">' + trimmed + '</div>'); continue; }
+    
+    // 状态行：[角色] 数据
+    var stateMatch = trimmed.match(/^\[(.+?)\]\s{3,}(.+)/);
+    if (stateMatch) {
+      out.push('<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;border-bottom:1px solid rgba(51,65,85,0.06)"><span style="color:var(--accent-cyan)">' + stateMatch[1] + '</span><span>' + stateMatch[2] + '</span></div>');
+      continue;
+    }
+    
+    // 短标签 [xxx]
+    if (/^\[([^\]]{2,16})\]\s*$/.test(trimmed)) {
+      out.push('<strong style="color:var(--accent-cyan);font-size:12px;display:block;margin:6px 0 2px">' + trimmed + '</strong>');
+      continue;
+    }
+    
+    // 表格行 | xxx | xxx |
+    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+      var cells = trimmed.slice(1, -1).split('|').map(function(c) { return c.trim(); });
+      if (cells.every(function(c) { return /^[-:\s]+$/.test(c); })) continue;
+      // 表头检测：如果这一行所有单元格都是短文本(不含数字、不是分隔线)，则是表头
+      var isHeader = cells.every(function(c) { return c.length < 15 && !/^[-:\s]+$/.test(c) && !/\d/.test(c) && c.length > 0; });
+      var cellStyle = 'border:1px solid rgba(51,65,85,0.3);padding:3px 8px;font-size:12px';
+      if (isHeader) cellStyle += ';font-weight:600;color:var(--accent-cyan)';
+      out.push('<tr><td style="' + cellStyle + '">' + cells.join('</td><td style="' + cellStyle + '">') + '</td></tr>');
+      continue;
+    }
+    
+    // 普通段落
+    var processed = trimmed
+      .replace(/\*\*(.+?)\*\*/g, function(m, c) { return /[<>]/.test(c) ? '**' + esc(c) + '**' : '<strong style="color:var(--text-primary)">' + c + '</strong>'; })
+      .replace(/`([^`]+)`/g, function(m, c) { return /[<>]/.test(c) ? '`' + esc(c) + '`' : '<code style="background:rgba(0,212,255,0.08);color:var(--accent-cyan);padding:1px 4px;border-radius:3px;font-size:12px">' + c + '</code>'; });
+    out.push('<div style="font-size:12px;line-height:1.6;padding:1px 0">' + processed + '</div>');
+  }
+  
+  // 把连续的 <tr> 包在 <table> 里
+  var html = out.join('\n');
+  html = html.replace(/((?:<tr>.*?<\/tr>\n?)+)/g, '<table style="width:100%;border-collapse:collapse;margin:6px 0;font-size:12px"><tbody>$1</tbody></table>');
+  
+  return html;
 }
 
 // ═══════════════ 心跳触发 ═══════════════
@@ -2648,6 +3344,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 initParticles();
 initEventDelegation();
 loadAll();
+
 
 </script>
 </body>
