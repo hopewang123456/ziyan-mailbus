@@ -40,9 +40,12 @@ mailbus init --data-dir /path/to/your/store
 # 3. 注册 Agent
 mailbus agent-add agent-a --cli "your-cli --message" --role "你的角色"
 
-# 4. 启动总线（cron，每分钟扫描）
-crontab -e
-# 添加：* * * * * cd /path/to/ziyan-mailbus && mailbus scan
+# 4. 启动总线（推荐：内置 Scheduler，无需 crontab）
+mailbus serve --host 0.0.0.0 --port 9812 --data-dir /path/to/your/store
+# serve 启动后内置 SchedulerHub 自动跑 scan / memory_bridge / pipeline_watchdog 等 job
+
+# 或手动扫描：
+mailbus scan
 
 # 5. 发消息
 mailbus send agent-a --msg "你好，请处理这个任务" --from lingzhao
@@ -163,11 +166,13 @@ Agent 收到推送后，写文件回复总线（不调 CLI）：
 
 mailbus 可以自动将已 ack 的消息同步到 [AgentMemory](https://github.com/AgentMemory/AgentMemory)，保证 Agent 重启后能检索到历史消息。
 
+内置 scheduler 已包含 `memory_bridge` job（默认每 60s）；也可手动运行：
+
 ```bash
-# 先确保 AgentMemory 在 http://localhost:3111 运行
-# 然后在 cron 中 chain 调用：
-* * * * * cd /path/to/ziyan-mailbus && mailbus scan && python3 mailbus-memory-bridge.py --data-dir /path/to/store
+python3 mailbus-memory-bridge.py --data-dir /path/to/store
 ```
+
+团队规范同步：`python3 tools/sync-team-rules.py --data-dir store`（写入 bulletin + 各 agent notice；`.env.secrets` **勿提交 git**，见 `rules/team-secrets-policy.md`）
 
 消息以标签格式存入记忆：`[agent:xxx] [from:yyy] [msg_id:zzz] <消息内容>`
 
@@ -242,6 +247,21 @@ CLI 模板中用 `MODEL` 占位符，总线自动根据 agent 的 `models` 列�
 }
 ```
 
+## 三轮迭代与回归（Docker 团队）
+
+配合 `docker-agents` 编排使用时，可用以下脚本做端到端验证：
+
+```bash
+# 全流程：Round1 gate → Round2 → monitor 回归
+bash /path/to/docker-agents/mailbus-pipeline-e2e.sh
+
+# 打怪升级小游戏 smoke
+bash /path/to/docker-agents/workflow-smoke.sh
+python3 tools/run-game-lvup-e2e.py --task-id game-lvup-YYYYMMDD-HHMMSS --data-dir store
+```
+
+详见 `plans/mailbus-three-round-optimization.md` 与 `rules/iteration-protocol.md`。
+
 ## 项目结构
 
 ```
@@ -249,22 +269,20 @@ ziyan-mailbus/
 ├── bus.py                        # 入口脚本（CLI 命令入口）
 ├── mailbus-boot.sh                # 全量启动脚本（自动拉起 bus.py + 所有 Agent 进程）
 ├── lib/
-│   ├── __init__.py
-│   ├── models.py                 # 数据模型（Message / Inbox / MsgType）
-│   ├── scanner.py                # 扫描 inbox → 构建推送队列
-│   ├── pusher.py                 # CLI 推送 + 多模型 fallback
-│   ├── ack_handler.py            # 处理 Agent 回复（ack / mark_read / forward）
-│   ├── archiver.py               # 已读消息归档
-│   ├── tracker.py                # 任务追踪 + 催办
-│   ├── heartbeat.py              # 心跳检测 + 健康监控
-│   ├── search.py                 # SQLite FTS5 全文检索
-│   ├── alerter.py                # 告警系统
-│   ├── api_server.py             # HTTP API 服务
-│   └── utils.py                  # 文件锁、JSON 读写、消息构建
-├── mailbox-daemon.py             # Agent 侧守护进程（v0.5: 任务追踪+批量处理+去重）
+│   ├── scheduler.py              # 内置 SchedulerHub（替代 WSL crontab）
+│   ├── jobs.py                   # scan / bridge / watchdog 等 job
+│   ├── pipeline_trigger.py       # msg-results → 自动推进 pipeline
+│   ├── iteration_engine.py       # 三轮迭代 Round1/2/3
+│   ├── execution_orchestrator.py # 执行顺序 light 编排
+│   ├── self_heal.py              # scan 前自愈
+│   ├── scanner.py                # 扫描 inbox → 构建推送队列（P2 串行）
+│   └── ...
+├── tools/                        # 运维/回归脚本（e2e、triage、game-lvup 等）
+├── rules/                        # 团队规范（init 时复制到 store/rules/）
 ├── mailbus-memory-bridge.py      # AgentMemory 桥接（可选）
 ├── store/                        # 运行时数据目录（gitignore，不提交）
-├── tests/                        # 测试套件（10 文件，90+ 用例）
+├── plans/                        # 迭代方案与清单
+├── tests/                        # 测试套件
 ├── docs/
 │   ├── platform.html             # Web 管理界面（独立 HTML，零依赖）
 │   ├── architecture-v2.html      # 架构图

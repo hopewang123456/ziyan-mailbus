@@ -205,119 +205,130 @@ def cmd_init(args) -> int:
     return 0
 
 
-def cmd_scan(args) -> int:
-    """扫描全员 inbox → 推送未读消息"""
-    # 清理过期锁文件（超过1小时），防止 /tmp 积压
+def run_scan_once(data_dir: str, config: dict, *, quiet: bool = False) -> int:
+    """执行一轮 scan（CLI 与内置 scheduler 共用）。"""
     _cleanup_stale_locks()
 
-    config_path = _find_config(args)
-    config = load_config(config_path)
-    data_dir = config["data_dir"]
     agents = config.get("agents", {})
-    
     if not agents:
-        print("✗ 没有注册的 agent，先用 bus.py agent-add 注册")
+        if not quiet:
+            print("✗ 没有注册的 agent，先用 bus.py agent-add 注册")
         return 1
-    
-    # 1. 先处理所有 agent 的回复（ack / mark_read / forward）
+
+    tracker = TaskTracker(data_dir)
+
     ack_count = scan_ack_files(data_dir, agents)
     fwd_count = scan_forward_files(data_dir, agents)
-    if ack_count:
-        print(f"✓ 处理了 {ack_count} 条 ack")
-    if fwd_count:
-        print(f"✓ 处理了 {fwd_count} 条转发")
-    
-    # 2. 扫描 inbox → 构建队列
+    if not quiet:
+        if ack_count:
+            print(f"✓ 处理了 {ack_count} 条 ack")
+        if fwd_count:
+            print(f"✓ 处理了 {fwd_count} 条转发")
+
+    try:
+        from lib.self_heal import run_self_heal
+        healed = run_self_heal(data_dir, agents, phase="pre")
+        if healed and not quiet:
+            print(f"🔧 自愈: {', '.join(f'{k}={v}' for k, v in healed.items())}")
+    except Exception as exc:
+        if not quiet:
+            print(f"  [scan] self_heal 异常: {exc}")
+
     urgent_queue, normal_queue = build_queues(data_dir, agents)
-    
-    # 2b. 执行运维任务（超时催办 / 技能消费 / 离线检测 / 归档 / 索引）
-    run_housekeeping(data_dir, agents)
-    
     total_messages = sum(len(v) for v in urgent_queue.values()) + sum(len(v) for v in normal_queue.values())
     if total_messages == 0:
-        print("✓ 全员已读，无新消息")
+        run_housekeeping(data_dir, agents)
+        if not quiet:
+            print("✓ 全员已读，无新消息")
         return 0
-    
-    print(f"📬 发现 {total_messages} 条待推送消息")
-    if urgent_queue:
-        print(f"   ⚡ 加急: {sum(len(v) for v in urgent_queue.values())} 条")
-    if normal_queue:
-        print(f"   📨 普通: {sum(len(v) for v in normal_queue.values())} 条")
-    
-    # 3. 先推加急队列
-    # 如果有加急消息，对应的普通消息先跳过（被抢占）
+
+    if not quiet:
+        print(f"📬 发现 {total_messages} 条待推送消息")
+        if urgent_queue:
+            print(f"   ⚡ 加急: {sum(len(v) for v in urgent_queue.values())} 条")
+        if normal_queue:
+            print(f"   📨 普通: {sum(len(v) for v in normal_queue.values())} 条")
+
     preempted = set()
     if urgent_queue:
-        # 找出既在 urgent 又在 normal 的 agent
         for agent_name in urgent_queue:
             if agent_name in normal_queue:
                 preempted.add(agent_name)
-                preempted_count = len(normal_queue[agent_name])
-                print(f"   ⚡ {agent_name}: {preempted_count} 条普通消息被加急抢占")
+                if not quiet:
+                    preempted_count = len(normal_queue[agent_name])
+                    print(f"   ⚡ {agent_name}: {preempted_count} 条普通消息被加急抢占")
                 del normal_queue[agent_name]
 
     failed_urgent = _push_queue(data_dir, config, urgent_queue, "加急")
     failed_normal = _push_queue(data_dir, config, normal_queue, "普通")
-    
     all_failed = failed_urgent + failed_normal
-    if all_failed:
-        print(f"\n⚠  推送失败: {len(all_failed)} 条（已记录错误日志）")
-        for fid in all_failed[:5]:
-            print(f"   ✗ {fid}")
-        if len(all_failed) > 5:
-            print(f"   ... 还有 {len(all_failed) - 5} 条")
-    else:
-        print(f"\n✓ 全部推送完成")
-    
-    # 4. 错误回执处理
+    if not quiet:
+        if all_failed:
+            print(f"\n⚠  推送失败: {len(all_failed)} 条（已记录错误日志）")
+            for fid in all_failed[:5]:
+                print(f"   ✗ {fid}")
+            if len(all_failed) > 5:
+                print(f"   ... 还有 {len(all_failed) - 5} 条")
+        else:
+            print(f"\n✓ 全部推送完成")
+
+    run_housekeeping(data_dir, agents)
+
     reports = scan_error_reports(data_dir, agents)
     if reports:
-        print(f"\n📕 错误回执: {len(reports)} 条")
+        if not quiet:
+            print(f"\n📕 错误回执: {len(reports)} 条")
         for r in reports:
             tracker.update_status(r['task_id'], 'failed',
                                   {"code": r['error_code'], "reason": r['reason']})
-            print(f"   → {r['task_id']}: [{r['error_code']}] {r['reason'][:60]}")
+            if not quiet:
+                print(f"   → {r['task_id']}: [{r['error_code']}] {r['reason'][:60]}")
 
-    # 5. 心跳检测
     heartbeat_interval = config.get("heartbeat_interval", 300)
     hb_changes = heartbeat_scan(agents, config.get("agent_types", {}), data_dir, config=config,
                                  interval=heartbeat_interval)
-    if hb_changes:
+    if hb_changes and not quiet:
         for c in hb_changes:
             if c.get("type") == "health":
                 print(f"   🔄 AgentMemory: {c['old_status']} → {c['new_status']}")
             else:
                 icon = "🟢" if c["new_status"] == "online" else "🔴"
                 print(f"   {icon} 心跳 {c['agent']}: {c['old_status']} → {c['new_status']}")
-    
-    # 健康状态摘要（每轮 scan 显示一次）
-    hb_status = load_status(data_dir)
-    health = hb_status.get("health", {})
-    am = health.get("agentmemory", {})
-    if am.get("status") == "unreachable":
-        print(f"   ⚠️ AgentMemory 不可用")
-    inbox_warnings = health.get("inbox_warnings", [])
-    if inbox_warnings:
-        for w in inbox_warnings[:3]:
-            print(f"   ⚠️ {w['agent']}: inbox {w['count']} 条消息积压")
 
-    # 6. 催办检查
-    tracker = TaskTracker(data_dir)
-    reminder_minutes = config.get("reminder_minutes", 5)
-    max_reminders = config.get("max_reminders", 3)
-    escalated = tracker.check_reminders(agents, reminder_minutes, max_reminders)
-    if escalated:
+    if not quiet:
+        hb_status = load_status(data_dir)
+        health = hb_status.get("health", {})
+        am = health.get("agentmemory", {})
+        if am.get("status") == "unreachable":
+            print(f"   ⚠️ AgentMemory 不可用")
+        inbox_warnings = health.get("inbox_warnings", [])
+        if inbox_warnings:
+            for w in inbox_warnings[:3]:
+                print(f"   ⚠️ {w['agent']}: inbox {w['count']} 条消息积压")
+
+    from lib.constants import DEFAULT_REMINDER_MINUTES, DEFAULT_MAX_REMINDERS
+    reminder_minutes = config.get("reminder_minutes", DEFAULT_REMINDER_MINUTES)
+    max_reminders = config.get("max_reminders", DEFAULT_MAX_REMINDERS)
+    escalated = tracker.check_reminders(
+        agents, data_dir=data_dir,
+        reminder_minutes=reminder_minutes,
+        max_reminders=max_reminders,
+    )
+    if escalated and not quiet:
         print(f"\n⏰ 催办: {len(escalated)} 条任务超时")
         for e in escalated:
             print(f"   → {e['task_id']}: {e['summary'][:40]} ({e['reminded_count']}/{max_reminders})")
-            if e['reminded_count'] >= max_reminders:
-                tracker.update_status(e['task_id'], 'timeout',
-                                      {"code": "TIMEOUT", "reason": f"超过{max_reminders}次催办未响应"})
-    
-    # 7. 消息索引
-    scan_and_index(data_dir, agents)
 
+    scan_and_index(data_dir, agents)
     return 0
+
+
+def cmd_scan(args) -> int:
+    """扫描全员 inbox → 推送未读消息"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+    return run_scan_once(data_dir, config, quiet=False)
 
 
 def cmd_search(args) -> int:
@@ -416,6 +427,9 @@ def cmd_serve(args) -> int:
     """启动 HTTP API 服务"""
     config_path = _find_config(args)
     config = load_config(config_path)
+    if getattr(args, 'data_dir', None):
+        config = dict(config)
+        config["data_dir"] = args.data_dir
     data_dir = config["data_dir"]
     agents = config.get("agents", {})
     agent_types = config.get("agent_types", {})
@@ -426,7 +440,7 @@ def cmd_serve(args) -> int:
         return 1
 
     token = getattr(args, 'token', '')
-    api_serve(data_dir, agents, agent_types, host=args.host, port=port, token=token)
+    api_serve(data_dir, agents, agent_types, host=args.host, port=port, token=token, config=config)
     return 0
 
 
@@ -732,6 +746,15 @@ def cmd_send(args) -> int:
                         forward_to=getattr(args, 'forward_to', None),
                         project=project or None)
     _write_to_inbox(data_dir, to, msg)
+    # 即时推送（与 /api/send-msg 一致，不等待 cron scan）
+    try:
+        cli_chain = resolve_cli_chain(agents[to], agent_types)
+        if cli_chain:
+            cli_cmds = [c[0] for c in cli_chain]
+            push_messages(data_dir, to, [msg.to_dict()], cli_cmd=cli_cmds, auto_ack=True)
+            print("  ✓ 即时推送已触发")
+    except Exception as exc:
+        print(f"  ⚠️ 即时推送失败: {exc}")
     if msg_type in (MsgType.TASK, MsgType.TASK_REPLY):
         try:
             tracker.create(task_id=msg.id, summary=content[:80], assignee=to)
@@ -742,7 +765,6 @@ def cmd_send(args) -> int:
     print(f"  内容: {content[:60]}{'...' if len(content) > 60 else ''}")
     if project:
         print(f"  项目: {project}")
-    print(f"  下个 cron 周期将自动推送")
     return 0
 
 
@@ -1430,6 +1452,65 @@ def _read_deepseek_key_from_openclaw_config() -> str:
                 if line.startswith("DEEPSEEK_API_KEY="):
                     return line.strip().split("=", 1)[1].strip("'\"")
     return ""
+
+
+    return 0
+
+
+def cmd_iteration(args) -> int:
+    """三轮迭代：诊断 → 工单 → 自迭代协议"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+    agents = config.get("agents", {})
+
+    from lib.iteration_engine import run_round1, run_round2, run_round3, run_all, evaluate_round1_gate
+
+    r = (args.round or "1").lower()
+    force = getattr(args, "force", False)
+    if r in ("1", "r1", "diagnosis"):
+        d = run_round1(data_dir, agents)
+        gate = evaluate_round1_gate(data_dir, agents)
+        print(f"✓ Round1 诊断 → store/iterations/round-1-diagnosis.json")
+        print(f"  问题: {d['summary']['problem_count']} | 待审计: {gate.get('pending_audit_total', 0)}")
+        print(f"  主任务 {gate.get('primary_task_id')}: status={gate.get('primary_status')} audit={gate.get('primary_has_audit')}")
+        if gate.get("blockers"):
+            print(f"  ⛔ Round2 未解锁:")
+            for b in gate["blockers"]:
+                print(f"     - {b}")
+        else:
+            print(f"  ✅ Round1 通过，可运行 --round 2")
+        return 0
+    if r in ("2", "r2", "backlog"):
+        d = run_round2(data_dir, agents, force=force)
+        if d.get("status") == "blocked":
+            print(f"⛔ Round2 被门禁拦截（加 --force 可跳过）")
+            for b in d.get("blockers", []):
+                print(f"   - {b}")
+            return 1
+        print(f"✓ Round2 工单 → store/iterations/round-2-backlog.json ({len(d.get('items', []))} 条)")
+        for item in d.get("items", [])[:8]:
+            print(f"  {item['id']} [{item['priority']}] {item['owner']}: {item['title'][:50]}")
+        return 0
+    if r in ("3", "r3", "protocol"):
+        p = run_round3(data_dir, agents, force=force)
+        if p.get("status") == "blocked":
+            print(f"⛔ Round3 跳过: {p.get('reason')}")
+            return 1
+        print(f"✓ Round3 协议 → store/iterations/round-3-protocol.json")
+        st = p.get("backlog_status", {})
+        print(f"  backlog: done={st.get('done', 0)} pending={st.get('pending', 0)}")
+        return 0
+    if r in ("all", "full"):
+        result = run_all(data_dir, agents, force=force)
+        print("✓ 迭代结果:")
+        print(f"  Round1: {result['round1']}")
+        print(f"  Round1 gate: unlocked={result['round2_unlocked']}")
+        print(f"  Round2: {result.get('round2', {})}")
+        print(f"  Round3: {result.get('round3', {})}")
+        return 0 if result.get("round2_unlocked") or force else 1
+    print(f"✗ 未知 round: {args.round}（可用 1/2/3/all）")
+    return 1
 
 
 def _find_config(args) -> str:

@@ -10,10 +10,12 @@ import os
 import json
 import time
 import subprocess
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from lib.models import Inbox
-from lib.utils import json_read, json_write, resolve_paths
+from lib.utils import json_read, json_write, resolve_paths, _now_iso
 from lib.heartbeat import load_status as load_heartbeat
 from lib.alerter import get_recent_alerts
+from lib.scheduler import get_scheduler_status
 
 
 def handle_status(handler):
@@ -24,13 +26,17 @@ def handle_status(handler):
     paths = resolve_paths(handler.data_dir)
     for name in handler.agents:
         inbox_file = f"{paths['inbox']}/{name}/inbox.json"
-        data = json_read(inbox_file, {})
-        count = len(data.get("messages", [])) if data else 0
+        data = json_read(inbox_file, [])
+        if isinstance(data, list):
+            count = len(data)
+            has_unread = False
+        else:
+            count = len(data.get("messages", [])) if data else 0
+            has_unread = data.get("has_unread", False) if data else False
         total += count
-        if data and "agent" in data:
+        if isinstance(data, dict) and "agent" in data:
             try:
                 inbox = Inbox.from_dict(data)
-                # P4: 统计所有非 terminal 态消息（pending/pushed/acknowledged/processing）
                 terminal_states = {"done", "closed", "rejected", "failed", "archived", "sent"}
                 unread += sum(1 for m in inbox.messages
                               if (inbox.msg_field(m, "state") or inbox.msg_field(m, "status", ""))
@@ -39,13 +45,14 @@ def handle_status(handler):
                 pass
         agent_statuses[name] = {
             "active_messages": count,
-            "has_unread": data.get("has_unread", False) if data else False,
+            "has_unread": has_unread if isinstance(data, list) else (data.get("has_unread", False) if data else False),
             "type": handler.agents[name].get("type", "?"),
         }
     handler._send_json({
         "project": "ziyan-mailbus", "agents": len(handler.agents),
         "total_messages": total, "unread_messages": unread,
         "agent_statuses": agent_statuses,
+        "scheduler": get_scheduler_status(),
     })
 
 
@@ -194,6 +201,54 @@ def handle_reports(handler):
     handler._send_json({"reports": reports})
 
 
+def handle_report_content(handler, fname: str):
+    """GET /api/report-content/<file> — 返回巡检报告内容"""
+    import glob, os
+    from urllib.parse import unquote
+    fname = unquote(fname)
+    # 尝试 patrol_reports 和 reports 两个目录
+    for subdir in ["patrol_reports", "reports", "reports/daily"]:
+        fpath = os.path.join(handler.data_dir, subdir, fname)
+        if os.path.isfile(fpath):
+            try:
+                with open(fpath, encoding="utf-8") as f:
+                    content = f.read()
+                handler._send_json({"file": fname, "content": content})
+                return
+            except Exception as e:
+                handler._send_json({"error": str(e)}, 500)
+                return
+    handler._send_json({"error": "not_found"}, 404)
+
+
+def handle_patrol_reports(handler):
+    """GET /api/patrol-reports — 获取巡检日报列表"""
+    import glob
+    reports_dir = os.path.join(handler.data_dir, "patrol_reports")
+    reports = []
+    if os.path.isdir(reports_dir):
+        for fpath in sorted(glob.glob(f"{reports_dir}/*.md"), reverse=True)[:20]:
+            try:
+                fname = os.path.basename(fpath)
+                mtime = os.path.getmtime(fpath)
+                import datetime
+                date_str = datetime.datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+                with open(fpath, encoding="utf-8") as f:
+                    content = f.read()
+                # 取前200字做摘要
+                summary = content[:300].strip()
+                reports.append({
+                    "file": fname,
+                    "date": date_str,
+                    "created_at": date_str,
+                    "summary": summary,
+                    "content": content[:500],
+                })
+            except (OSError, IOError):
+                pass
+    handler._send_json({"reports": reports})
+
+
 def handle_stats(handler):
     """GET /api/stats — 消息统计/报表
 
@@ -215,8 +270,11 @@ def handle_stats(handler):
 
     for name in handler.agents:
         inbox_file = f"{paths['inbox']}/{name}/inbox.json"
-        data = json_read(inbox_file, {})
-        msgs = data.get("messages", []) if data else []
+        raw = json_read(inbox_file, [])
+        if isinstance(raw, list):
+            msgs = raw
+        else:
+            msgs = raw.get("messages", []) if raw else []
         total_messages += len(msgs)
 
         # 状态分布
@@ -272,8 +330,9 @@ def handle_stats(handler):
         trend[day] = 0
     for name in handler.agents:
         inbox_file = f"{paths['inbox']}/{name}/inbox.json"
-        data = json_read(inbox_file, {})
-        for m in data.get("messages", []):
+        raw2 = json_read(inbox_file, [])
+        msgs2 = raw2 if isinstance(raw2, list) else (raw2.get("messages", []) if raw2 else [])
+        for m in msgs2:
             created = m.get("created_at", "")
             try:
                 d = datetime.fromisoformat(created).strftime("%Y-%m-%d")
@@ -366,6 +425,9 @@ def handle_agent_profile(handler, agent: str):
     inbox_paths = resolve_paths(handler.data_dir)
     inbox_file = f"{inbox_paths['inbox']}/{agent}/inbox.json"
     data = json_read(inbox_file, {})
+    # v4.0: 兼容 inbox.json dict→list 格式迁移
+    if isinstance(data, list):
+        data = {"agent": agent, "has_unread": True, "messages": data, "since": _now_iso()}
     profile["messages"] = len(data.get("messages", [])) if data else 0
     profile["unread"] = 0
     if data:
@@ -378,6 +440,10 @@ def handle_agent_profile(handler, agent: str):
     hb_data = load_heartbeat(handler.data_dir)
     profile["heartbeat"] = (hb_data.get("agents", {}) or {}).get(agent, {}) if hb_data else {}
 
+    # 头像
+    profile["avatar_url"] = f"avatars/{agent}.svg"
+    profile["avatar_animated"] = f"avatars/{agent}_animated.webp"
+
     handler._send_json(profile)
 
 
@@ -389,11 +455,13 @@ def handle_ping(handler, agent: str):
 
 
 def _get_gateway_token() -> str:
-    """从 OpenClaw 配置中读取 gateway token
-    优先读 ~/.openclaw-data/openclaw.json（新版主配置），
-    fallback 到 ~/.openclaw/openclaw.json（旧版）
-    """
+    """读取 OpenClaw gateway token（与 Docker entrypoint 保持一致）"""
+    env_token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "").strip()
+    if env_token:
+        return env_token
+
     candidates = [
+        "/mnt/e/ai_tools/openclaw_space/data/.openclaw/openclaw.json",
         os.path.expanduser("~/.openclaw-data/openclaw.json"),
         os.path.expanduser("~/.openclaw/openclaw.json"),
     ]
@@ -405,10 +473,23 @@ def _get_gateway_token() -> str:
                 gw = oc.get("gateway", {})
                 auth = gw.get("auth", {})
                 if auth.get("mode") == "token":
-                    return auth.get("token", "")
+                    token = auth.get("token", "")
+                    if token:
+                        return token
         except Exception:
             pass
-    return ""
+    return "ziyan-team"
+
+
+def _with_gateway_token(url: str, token: str) -> str:
+    """把 URL 里的 token 参数统一替换成当前 gateway token"""
+    if not url or not token:
+        return url
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query, keep_blank_values=True)
+    query["token"] = [token]
+    new_query = urlencode(query, doseq=True)
+    return urlunparse(parsed._replace(query=new_query))
 
 
 def _get_launch_url(handler, agent_name: str) -> str:
@@ -426,11 +507,11 @@ def _get_launch_url(handler, agent_name: str) -> str:
     port = browser_cfg.get("gateway_port", browser_cfg.get("dashboard_port", ""))
     if url and port:
         url = url.replace("{port}", str(port))
-    # 如果 gateway 开启了 token 认证，自动追加到 URL
-    token = _get_gateway_token()
-    if token:
-        sep = "&" if "?" in url else "?"
-        url = f"{url}{sep}token={token}"
+    # 仅 OpenClaw gateway 需要 token，Hermes/Cline 等不要误加
+    tmpl_name = launch.get("template", "")
+    if tmpl_name == "openclaw_gateway" or cfg.get("type") == "openclaw":
+        token = _get_gateway_token()
+        url = _with_gateway_token(url, token)
     return url
 
 
@@ -515,7 +596,17 @@ def _launch_agentmemory(handler):
 def _check_agentmemory():
     try:
         from urllib.request import urlopen
-        resp = urlopen("http://127.0.0.1:3111/health", timeout=5)
-        return {"status": "healthy"} if resp.getcode() == 200 else {"status": "error"}
+        import os
+        base = os.environ.get("AGENTMEMORY_URL", "")
+        if not base:
+            base = "http://iii-engine:3111" if os.path.exists("/.dockerenv") else "http://127.0.0.1:3111"
+        for ep in ("/agentmemory/health", "/health", "/"):
+            try:
+                resp = urlopen(f"{base.rstrip('/')}{ep}", timeout=5)
+                if resp.getcode() in (200, 401, 404):
+                    return {"status": "healthy", "endpoint": ep}
+            except Exception:
+                continue
+        return {"status": "unreachable"}
     except Exception:
         return {"status": "unreachable"}

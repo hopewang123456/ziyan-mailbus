@@ -141,6 +141,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/bulletin/permit": lambda: self._send_json({"permit": self.bulletin_permit}),
             "/api/permission": lambda: h["tasks"].handle_permission(self),
             "/api/reports": lambda: h["system"].handle_reports(self),
+            "/api/patrol-reports": lambda: h["system"].handle_patrol_reports(self),
             "/api/reviews": lambda: h["system"].handle_code_reviews(self),
             "/api/reviews/projects": lambda: h["system"].handle_code_reviews_projects(self),
             "/api/replies": lambda: h["inbox"].handle_replies(self),
@@ -163,6 +164,9 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             h["inbox"].handle_inbox(self, path[len("/api/inbox/"):])
         elif path.startswith("/api/agent-profile/"):
             h["system"].handle_agent_profile(self, path[len("/api/agent-profile/"):])
+        elif path.startswith("/api/report-content/"):
+            fname = path[len("/api/report-content/"):]
+            h["system"].handle_report_content(self, fname)
         elif path.startswith("/api/ping/"):
             h["system"].handle_ping(self, path[len("/api/ping/"):])
         elif path.startswith("/api/reviews/"):

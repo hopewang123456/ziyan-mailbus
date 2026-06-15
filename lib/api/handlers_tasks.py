@@ -8,7 +8,27 @@ ziyan-mailbus HTTP API — 任务/公告板/Skill 相关路由处理器
 import os
 import json
 from lib.utils import json_read, json_write, _now_iso
-from lib.tracker import TaskTracker, TaskStatus
+from lib.tracker import TaskTracker, TaskStatus, SKIP_TIMEOUT_PREFIXES
+from lib.pipeline_chain import normalize_task_chain, is_pipeline_step
+
+# Dashboard 默认分页（无 query 时也生效，避免一次返回 400+ 任务拖死浏览器）
+DEFAULT_TASKS_LIMIT = 120
+
+
+def _is_noise_task_id(task_id: str) -> bool:
+    if not task_id:
+        return True
+    return any(task_id.startswith(p) for p in SKIP_TIMEOUT_PREFIXES)
+
+
+def _normalize_tasks_for_api(tasks: list) -> list:
+    """API 返回前规范化 chain 格式，并补全 audit_reviewer。"""
+    for task in tasks:
+        normalize_task_chain(task)
+        chain = task.get("chain") or []
+        if chain and is_pipeline_step(chain[0]) and not task.get("audit_reviewer"):
+            task["audit_reviewer"] = "lingjian"
+    return tasks
 
 
 def handle_tasks(handler):
@@ -20,8 +40,9 @@ def handle_tasks(handler):
         &audit_status=audited    — 审计状态 (audited/pending-audit)
         &audit_status=pending-audit
         &reviewer=lingjian       — 按审查人过滤
-        &limit=50                — 每页数量（默认 100）
+        &limit=50                — 每页数量（默认 120）
         &offset=0                — 偏移量（默认 0）
+        &exclude_noise=1         — 排除 remind-/tracker-remind- 等系统噪音（默认 1）
     """
     tracker = TaskTracker(handler.data_dir)
 
@@ -34,11 +55,13 @@ def handle_tasks(handler):
     assignee = params.get("assignee", [None])[0]
     audit_status = params.get("audit_status", [None])[0]
     reviewer = params.get("reviewer", [None])[0]
+    exclude_noise = params.get("exclude_noise", ["1"])[0].lower() not in ("0", "false", "no")
 
     try:
-        limit = int(params.get("limit", ["100"])[0])
+        limit = int(params.get("limit", [str(DEFAULT_TASKS_LIMIT)])[0])
     except (ValueError, TypeError):
-        limit = 100
+        limit = DEFAULT_TASKS_LIMIT
+    limit = max(1, min(limit, 500))
     try:
         offset = int(params.get("offset", ["0"])[0])
     except (ValueError, TypeError):
@@ -54,10 +77,25 @@ def handle_tasks(handler):
             limit=limit,
             offset=offset,
         )
+        tasks = result.get("tasks") or []
+        if exclude_noise:
+            tasks = [t for t in tasks if not _is_noise_task_id(t.get("task_id", ""))]
+        result["tasks"] = _normalize_tasks_for_api(tasks)
         handler._send_json(result)
     else:
-        tasks = tracker.list_all()
-        handler._send_json({"tasks": tasks, "count": len(tasks)})
+        all_tasks = tracker.list_all()
+        if exclude_noise:
+            all_tasks = [t for t in all_tasks if not _is_noise_task_id(t.get("task_id", ""))]
+        total = len(all_tasks)
+        page = all_tasks[offset:offset + limit]
+        handler._send_json({
+            "tasks": _normalize_tasks_for_api(page),
+            "count": len(page),
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "exclude_noise": exclude_noise,
+        })
 
 
 def handle_task_create(handler):
@@ -184,6 +222,7 @@ def handle_task_get(handler, task_id: str):
     if not task:
         handler._send_json({"error": "not_found"}, 404)
         return
+    _normalize_tasks_for_api([task])
     handler._send_json({"task": task})
 
 

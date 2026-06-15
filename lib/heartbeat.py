@@ -48,6 +48,13 @@ def _aggregate_daemon_heartbeats(data_dir: str) -> dict:
 def load_status(data_dir: str) -> dict:
     # 从 per-agent 心跳文件聚合 daemon 状态
     daemon_hb = _aggregate_daemon_heartbeats(data_dir)
+    # 容器内路径修正
+    hb_path = get_heartbeat_path(data_dir)
+    if not os.path.exists(hb_path):
+        alt = "/mailbus/store"
+        alt_path = os.path.join(alt, HEARTBEAT_STATUS_FILE)
+        if os.path.exists(alt_path):
+            data_dir = alt
     # 读取 bus 维护的共享心跳（健康检查等）
     bus_status = json_read(get_heartbeat_path(data_dir), {"agents": {}, "health": {}})
     # 合并: daemon 状态覆盖 bus 的 agent 状态
@@ -60,6 +67,11 @@ def load_status(data_dir: str) -> dict:
 
 def load_status_nolock(data_dir: str) -> dict:
     """无锁读取心跳状态（给 API server 用，避免被 cron 的锁阻塞）"""
+    # 容器内路径修正
+    if not os.path.exists(os.path.join(data_dir, HEARTBEAT_STATUS_FILE)):
+        alt = "/mailbus/store"
+        if os.path.exists(os.path.join(alt, HEARTBEAT_STATUS_FILE)):
+            data_dir = alt
     path = get_heartbeat_path(data_dir)
     try:
         with open(path) as f:
@@ -152,8 +164,13 @@ def check_api_keys(config: dict) -> list:
 
     return results
 
-def check_agentmemory(url: str = "http://localhost:3111") -> dict:
+def check_agentmemory(url: str = "") -> dict:
     """检查 AgentMemory 是否可连接（多重回退策略）"""
+    if not url:
+        import os
+        url = os.environ.get("AGENTMEMORY_URL", "")
+        if not url:
+            url = "http://iii-engine:3111" if os.path.exists("/.dockerenv") else "http://localhost:3111"
     try:
         import urllib.request
 
@@ -176,12 +193,16 @@ def check_agentmemory(url: str = "http://localhost:3111") -> dict:
         # 策略2: 所有端点都失败，检查端口是否在监听
         try:
             import socket
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            host = parsed.hostname or "localhost"
+            port = parsed.port or 3111
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(2)
-            result = sock.connect_ex(('localhost', 3111))
+            result = sock.connect_ex((host, port))
             sock.close()
             if result == 0:
-                return {"status": "degraded", "detail": "端口3111已监听但HTTP端点无响应"}
+                return {"status": "degraded", "detail": f"端口{port}已监听但HTTP端点无响应"}
         except Exception:
             pass
 
@@ -191,14 +212,21 @@ def check_agentmemory(url: str = "http://localhost:3111") -> dict:
 
 
 def check_inbox_size(data_dir: str, agents: dict, warn_limit: int = DEFAULT_INBOX_WARN_LIMIT) -> list:
-    """检查各 Agent inbox 消息数量"""
+    """检查各 Agent inbox 活跃消息数量（不含 done/archived/closed）"""
+    from .scanner import get_msg_state
+    from .models import MsgStatus
+
+    terminal = {
+        MsgStatus.DONE, MsgStatus.CLOSED, MsgStatus.ARCHIVED,
+        MsgStatus.FAILED, MsgStatus.REJECTED,
+    }
     warnings = []
     paths = resolve_paths(data_dir)
     for name in agents:
         inbox_file = f"{paths['inbox']}/{name}/inbox.json"
-        data = json_read(inbox_file, {})
-        msgs = data.get("messages", []) if data else []
-        count = len(msgs)
+        raw = json_read(inbox_file, [])
+        msgs = raw if isinstance(raw, list) else (raw.get("messages", []) if raw else [])
+        count = sum(1 for m in msgs if get_msg_state(m) not in terminal)
         if count > warn_limit:
             warnings.append({"agent": name, "count": count, "level": "warn" if count < warn_limit * 2 else "critical"})
     return warnings

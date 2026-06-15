@@ -10,6 +10,23 @@ from pathlib import Path
 
 from .models import MsgStatus, _now_iso
 from .utils import json_read, json_write, jsonl_append, resolve_paths, log_error
+from .pipeline_chain import init_pipeline_chain, is_pipeline_step, normalize_task_chain
+
+# 不参与 tracker 超时判定的 task_id 前缀（系统通知/催办噪音）
+SKIP_TIMEOUT_PREFIXES = (
+    "remind-", "tracker-remind-", "patrol-", "heartbeat-",
+    "confirm-", "rule-change-", "alert-task-",
+)
+
+# inbox 消息「进行中」态 — 有 agent 在处理时不应判 timeout
+INBOX_ACTIVE_STATES = frozenset({
+    "processing", "acknowledged", "pushed", "running", "in_progress",
+})
+
+# inbox 终态 — 对应 tracker success
+INBOX_DONE_STATES = frozenset({
+    "done", "closed", "sent", "archived",
+})
 
 
 # ── 任务状态 ──────────────────────────────────────────────────────────
@@ -68,18 +85,24 @@ class TaskTracker:
     def create(self, task_id: str, summary: str = "", assignee: str = "",
                deliverable: str = "", chain_hops: list = None) -> dict:
         """创建新任务"""
+        pipeline_chain = init_pipeline_chain(chain_hops, assignee, task_id)
         task = {
             "task_id": task_id,
             "summary": summary,
-            "assignee": assignee,
-            "status": TaskStatus.PENDING,
+            "assignee": assignee or (pipeline_chain[0].get("to_person") if pipeline_chain else ""),
+            "status": "running" if pipeline_chain else TaskStatus.PENDING,
             "deliverable": deliverable,
-            "chain": chain_hops or [],
+            "chain": pipeline_chain,
             "error": None,
             "reminded_count": 0,
             "created_at": _now_iso(),
             "updated_at": _now_iso(),
         }
+        if pipeline_chain and (
+            is_pipeline_step(pipeline_chain[0])
+            or pipeline_chain[0].get("planned_agents")
+        ):
+            task["audit_reviewer"] = "lingjian"
         json_write(self._task_path(task_id), task)
         return task
 
@@ -240,8 +263,8 @@ class TaskTracker:
     # ── 催办逻辑 ──────────────────────────────────────────────────
 
     def check_reminders(self, agents: dict, data_dir: str = None,
-                        reminder_minutes: int = 5,
-                        max_reminders: int = 3) -> list:
+                        reminder_minutes: int = 30,
+                        max_reminders: int = 12) -> list:
         """
         检查所有 running 任务是否需要催办。
         
@@ -250,55 +273,176 @@ class TaskTracker:
 
         返回需要升级通知的任务列表 [{task_id, agent, reminded_count}, ...]
         """
+        import re
         escalated = []
         now = datetime.now(timezone(timedelta(hours=8)))
 
-        # 如果传了 data_dir，预加载所有 inbox 的消息状态
-        msg_states = {}  # task_id -> inbox_state
+        msg_states = {}   # msg_id -> state
+        task_states = {}  # 逻辑 task_id -> state
         if data_dir:
-            from .utils import resolve_paths
             from .models import Inbox
             paths = resolve_paths(data_dir)
+            bracket_re = re.compile(r"【([^】]{4,120})】")
             for name in agents:
                 inbox_file = f"{paths['inbox']}/{name}/inbox.json"
                 inbox_data = json_read(inbox_file, {})
-                if inbox_data:
-                    inbox = Inbox.from_dict(inbox_data)
-                    for m in inbox.messages:
-                        mid = inbox.msg_field(m, 'id', '')
-                        state = inbox.msg_field(m, 'state', '') or inbox.msg_field(m, 'status', '')
-                        if mid and state:
-                            msg_states[mid] = state
+                if not inbox_data:
+                    continue
+                inbox = Inbox.from_dict(inbox_data)
+                for m in inbox.messages:
+                    mid = inbox.msg_field(m, 'id', '')
+                    state = (inbox.msg_field(m, 'state', '')
+                             or inbox.msg_field(m, 'status', '')).lower()
+                    if not mid:
+                        continue
+                    msg_states[mid] = state
+                    for key in (inbox.msg_field(m, 'task_id', ''), mid):
+                        if key:
+                            task_states[key] = self._pick_better_state(
+                                task_states.get(key), state)
+                    content = inbox.msg_field(m, 'content', '') or ''
+                    for match in bracket_re.finditer(content):
+                        tid = match.group(1).strip()
+                        if tid:
+                            task_states[tid] = self._pick_better_state(
+                                task_states.get(tid), state)
 
         for task in self.list_all(status_filter=TaskStatus.RUNNING):
             task_id = task["task_id"]
-            
-            # 检查 inbox 中对应消息是否已 done
-            inbox_state = msg_states.get(task_id, "")
-            if inbox_state in ("done", "closed", "acknowledged"):
+
+            if self._skip_timeout(task_id, task):
+                continue
+
+            # 已有 msg-results → 等 pipeline_trigger 推进，不判 timeout
+            if data_dir and self._has_msg_result(data_dir, task_id):
+                continue
+
+            inbox_state = task_states.get(task_id, msg_states.get(task_id, ""))
+            if not inbox_state:
+                chain = task.get("chain") or []
+                if chain and isinstance(chain[0], dict):
+                    step_tid = chain[0].get("task_id", "")
+                    if step_tid:
+                        inbox_state = task_states.get(step_tid, "")
+
+            if inbox_state in INBOX_DONE_STATES:
                 self.update_status(task_id, TaskStatus.SUCCESS)
                 continue
-            
+
+            if inbox_state in INBOX_ACTIVE_STATES:
+                # agent 已 ack/处理中 — 重置催办计数，给足执行时间
+                if task.get("reminded_count", 0) > 0:
+                    task["reminded_count"] = 0
+                    task["updated_at"] = _now_iso()
+                    json_write(self._task_path(task_id), task)
+                continue
+
             updated_str = task.get("updated_at", task["created_at"])
             updated = datetime.strptime(updated_str, "%Y-%m-%dT%H:%M:%S%z")
             elapsed_min = (now - updated).total_seconds() / 60
 
             if elapsed_min >= reminder_minutes and task["reminded_count"] < max_reminders:
-                # 需要催办
-                self.increment_reminder(task_id)
+                count = self.increment_reminder(task_id)
                 assignee = task.get("assignee", "")
                 if assignee in agents:
                     escalated.append({
                         "task_id": task_id,
                         "agent": assignee,
                         "summary": task.get("summary", ""),
-                        "reminded_count": task["reminded_count"],
+                        "reminded_count": count,
                     })
             elif elapsed_min >= reminder_minutes and task["reminded_count"] >= max_reminders:
-                # 超限 → 标记 timeout
-                self.update_status(task_id, TaskStatus.TIMEOUT)
+                self.update_status(task_id, TaskStatus.TIMEOUT, error={
+                    "code": "TIMEOUT",
+                    "reason": f"超过{max_reminders}次催办（间隔{reminder_minutes}分钟）未响应",
+                })
 
         return escalated
+
+    @staticmethod
+    def _pick_better_state(old: str, new: str) -> str:
+        """合并同一 task 的多条 inbox 消息状态，取更「进展」的一个。"""
+        rank = {
+            "": 0, "new": 1, "pending": 1, "sent": 2, "received": 2,
+            "pushed": 3, "acknowledged": 4, "processing": 5, "running": 5,
+            "in_progress": 5, "done": 10, "closed": 10, "archived": 10,
+            "failed": 9, "rejected": 9,
+        }
+        if rank.get(new, 0) >= rank.get(old or "", 0):
+            return new
+        return old or new
+
+    @staticmethod
+    def _skip_timeout(task_id: str, task: dict) -> bool:
+        if any(task_id.startswith(p) for p in SKIP_TIMEOUT_PREFIXES):
+            return True
+        summary = (task.get("summary") or "")[:80]
+        if summary.startswith("⚠️ 超时提醒") or summary.startswith("⏰ 催办提醒"):
+            return True
+        return False
+
+    @staticmethod
+    def _has_msg_result(data_dir: str, task_id: str) -> bool:
+        import glob as _glob
+        f = os.path.join(data_dir, "msg-results", f"{task_id}.json")
+        if os.path.exists(f):
+            return True
+        tail = task_id[-8:] if len(task_id) >= 8 else task_id
+        return bool(_glob.glob(os.path.join(data_dir, "msg-results", f"*{tail}*.json")))
+
+    def reopen_stale_timeouts(self, agents: dict, data_dir: str) -> int:
+        """恢复误标 timeout 的 pipeline 任务（inbox 仍在 pending/processing 时）。"""
+        import re
+        paths = resolve_paths(data_dir)
+        from .models import Inbox
+        task_states = {}
+        bracket_re = re.compile(r"【([^】]{4,120})】")
+        for name in agents:
+            inbox_data = json_read(f"{paths['inbox']}/{name}/inbox.json", {})
+            if not inbox_data:
+                continue
+            inbox = Inbox.from_dict(inbox_data)
+            for m in inbox.messages:
+                mid = inbox.msg_field(m, 'id', '')
+                state = (inbox.msg_field(m, 'state', '')
+                         or inbox.msg_field(m, 'status', '')).lower()
+                if not mid:
+                    continue
+                for key in (inbox.msg_field(m, 'task_id', ''), mid):
+                    if key:
+                        task_states[key] = self._pick_better_state(
+                            task_states.get(key), state)
+                content = inbox.msg_field(m, 'content', '') or ''
+                for match in bracket_re.finditer(content):
+                    tid = match.group(1).strip()
+                    if tid:
+                        task_states[tid] = self._pick_better_state(
+                            task_states.get(tid), state)
+
+        reopened = 0
+        for task in self.list_all(status_filter=TaskStatus.TIMEOUT):
+            task_id = task.get("task_id", "")
+            if self._skip_timeout(task_id, task):
+                continue
+            chain = task.get("chain") or []
+            if not chain:
+                continue
+            is_pipeline = is_pipeline_step(chain[0]) or chain[0].get("planned_agents")
+            if not is_pipeline:
+                continue
+            state = task_states.get(task_id, "")
+            if not state and chain[0].get("task_id"):
+                state = task_states.get(chain[0]["task_id"], "")
+            if state in INBOX_DONE_STATES or self._has_msg_result(data_dir, task_id):
+                continue
+            if state in INBOX_ACTIVE_STATES or state in ("", "pending", "sent", "new", "received"):
+                task["status"] = TaskStatus.RUNNING
+                task["reminded_count"] = 0
+                task["error"] = None
+                task["updated_at"] = _now_iso()
+                json_write(self._task_path(task_id), task)
+                reopened += 1
+        return reopened
 
     # ── 审计趋势 ──────────────────────────────────────────────────
 

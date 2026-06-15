@@ -1,7 +1,7 @@
 # 🏢 子言·AI 团队组织图
 
-> 更新日期: 2026-06-03
-> 最后更新: 新增灵鉴（代码审查）、灵验（测试验证），退役大壮
+> 更新日期: 2026-06-13
+> 最后更新: 新增灵巡（巡检官），补全成员表
 
 ---
 
@@ -36,6 +36,12 @@
 - **框架**: Hermes Profile（lingyan）
 - **技能**: 功能测试、性能测试、安全回归验证
 - **Dashboard**: http://localhost:9124/chat
+
+### 🚀 灵巡 (lingxun) — 🆕
+- **角色**: 巡检官
+- **框架**: Hermes Profile（lingxun）
+- **技能**: 系统巡检、任务链监控、催办升级、日报生成
+- **Dashboard**: http://localhost:9125/chat
 
 ### 🤖 大力 (dali)
 - **角色**: 编码工程师
@@ -118,5 +124,6 @@
 | 灵犀 | 9122 | Hermes Dashboard |
 | 灵鉴 | 9123 | Hermes Dashboard |
 | 灵验 | 9124 | Hermes Dashboard |
+| 灵巡 | 9125 | Hermes Dashboard |
 | 小七 | 18789 | OpenClaw Gateway |
 | 一哥 | 18790 | OpenClaw Gateway |

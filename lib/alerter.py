@@ -58,7 +58,7 @@ def push_alert(data_dir: str, alert_type: str, severity: str,
 
 
 def _notify_admin(data_dir: str, alert: dict):
-    """推送给管理员（灵昭）并同时通知子言"""
+    """写入 inbox；inbox_overflow 只通知当事 agent，其他告警通知灵昭/小七。不即时 CLI 推送（由 scan 串行调度）。"""
     config_path = os.path.join(data_dir, "config.json")
     config = json_read(config_path, {})
     if not config:
@@ -68,15 +68,18 @@ def _notify_admin(data_dir: str, alert: dict):
     severity_icon = {"critical": "🔴", "warn": "⚠️", "info": "ℹ️"}
     icon = severity_icon.get(alert["severity"], "ℹ️")
 
-    # 告警内容
     content = f"{icon} 【{alert['severity'].upper()}】{alert['message']}\n类型: {alert['type']}\nAgent: {alert['agent']}"
 
-    # 通知灵昭（处理人）
     from .utils import build_message, resolve_paths
     from .models import Inbox
     paths = resolve_paths(data_dir)
 
-    for name in ["lingzhao", "xiaoqi"]:
+    if alert.get("type") == "inbox_overflow":
+        targets = [alert["agent"]] if alert.get("agent") in agents else []
+    else:
+        targets = [n for n in ("lingzhao", "xiaoqi") if n in agents]
+
+    for name in targets:
         if name not in agents:
             continue
         priority = Priority.URGENT if alert["severity"] in ("critical", "warn") else Priority.NORMAL
@@ -94,20 +97,6 @@ def _notify_admin(data_dir: str, alert: dict):
         inbox.messages.append(msg.to_dict())
         json_write(inbox_file, inbox.to_dict())
 
-        # 即时推送
-        try:
-            from .pusher import push_messages, resolve_cli
-            agent_cfg = agents.get(name, {})
-            agent_types = config.get("agent_types", {})
-            cli_cmd = resolve_cli(agent_cfg, agent_types)
-            if cli_cmd:
-                push_messages(data_dir, name, [msg.to_dict()], cli_cmd=[cli_cmd],
-                              auto_ack=True, max_retries=1)
-        except Exception:
-            pass
-
-    # 记录告警到 store/alerts.json（供 dashboard 告警 tab 展示）
-    # 告警数据中标记谁负责处理
     alert["assignee"] = "lingzhao"
 
 

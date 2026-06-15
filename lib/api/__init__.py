@@ -19,8 +19,9 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 
 def serve(data_dir: str, agents: dict, agent_types: dict = None,
-          host: str = "127.0.0.1", port: int = 9812, token: str = ""):
-    """启动 HTTP API 服务器"""
+          host: str = "127.0.0.1", port: int = 9812, token: str = "",
+          config: dict = None):
+    """启动 HTTP API 服务器（可选内置 scheduler）"""
     MailbusAPIHandler.data_dir = data_dir
     MailbusAPIHandler.agents = agents
     MailbusAPIHandler.agent_types = agent_types or {}
@@ -30,6 +31,12 @@ def serve(data_dir: str, agents: dict, agent_types: dict = None,
     paths = __import__("lib.utils", fromlist=["resolve_paths"]).resolve_paths(data_dir)
     MailbusAPIHandler.bulletin_file = os.path.join(data_dir, "bulletin.json")
     MailbusAPIHandler.permission_file = os.path.join(data_dir, "permission.json")
+
+    hub = None
+    if config:
+        from lib.scheduler import SchedulerHub
+        hub = SchedulerHub(data_dir, config)
+        hub.start()
 
     server = ThreadedHTTPServer((host, port), MailbusAPIHandler)
     print(f"🌐 API 服务已启动: http://{host}:{port}")
@@ -41,5 +48,7 @@ def serve(data_dir: str, agents: dict, agent_types: dict = None,
         server.serve_forever()
     except KeyboardInterrupt:
         print("\n👋 API 服务已停止")
+        if hub:
+            hub.stop()
         server.server_close()
 

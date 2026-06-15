@@ -249,14 +249,19 @@ def resolve_cli(agent_cfg: dict, agent_types: dict, model_alias: str = None) -> 
     """
     根据 agent 配置、类型和模型别名，解析最终的 CLI 命令。
 
-    参数:
-        agent_cfg: agent 配置（含 type, profile, agent 等字段）
-        agent_types: agent 类型模板字典
-        model_alias: 使用的模型别名。为 None 时尝试从 agent_cfg.models 取第一个
-
-    返回:
-        CLI 命令字符串（'MSG' 占位符替换由调用方负责）
+    优先使用 launch.cli.command（含 --profile / --skills），否则走 agent_types 模板。
     """
+    launch_cmd = ((agent_cfg.get("launch") or {}).get("cli") or {}).get("command", "")
+    if launch_cmd:
+        cmd = launch_cmd.replace("-it ", " ").replace(" -it", "")
+        if "'MSG'" not in cmd and "MSG" not in cmd:
+            import re
+            if re.search(r"\s--yolo\s*$", cmd):
+                cmd = re.sub(r"\s--yolo\s*$", " -q 'MSG' -Q --yolo", cmd)
+            else:
+                cmd = f"{cmd} -q 'MSG' -Q"
+        return cmd.strip()
+
     atype = agent_cfg.get("type", "none")
     tmpl = agent_types.get(atype, {}).get("push", "")
     if not tmpl:
@@ -264,7 +269,8 @@ def resolve_cli(agent_cfg: dict, agent_types: dict, model_alias: str = None) -> 
 
     # 1. 先替换基础占位符
     cmd = tmpl
-    cmd = cmd.replace("PROFILE", agent_cfg.get("profile", ""))
+    profile = agent_cfg.get("profile", "") or agent_cfg.get("agent", "")
+    cmd = cmd.replace("PROFILE", profile)
     cmd = cmd.replace("AGENT", agent_cfg.get("agent", ""))
 
     # 2. 解析模型参数

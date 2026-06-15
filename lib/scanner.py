@@ -12,6 +12,7 @@ from typing import List, Tuple, Optional
 from .models import Message, MsgStatus, Priority, Inbox
 from .utils import json_read, json_write, resolve_paths, _now_iso
 from .constants import DEFAULT_ACK_TIMEOUT
+from .self_heal import agent_cli_active
 
 
 def get_msg_state(msg):
@@ -20,6 +21,225 @@ def get_msg_state(msg):
     if not state:
         state = msg.get('status', '') if isinstance(msg, dict) else getattr(msg, 'status', '')
     return state
+
+
+def _get_running_pipeline_task_ids(data_dir: str, agent_name: str) -> set:
+    """当前 agent 负责的 running pipeline 任务 ID"""
+    try:
+        from .tracker import TaskTracker
+        ids = set()
+        for t in TaskTracker(data_dir).list_all():
+            if t.get("status") != "running":
+                continue
+            chain = t.get("chain") or []
+            if not chain:
+                continue
+            cur = chain[-1]
+            if cur.get("to_person") == agent_name and cur.get("status") == "running":
+                tid = t.get("task_id") or t.get("id")
+                if tid:
+                    ids.add(tid)
+        return ids
+    except Exception:
+        return set()
+
+
+def _msg_matches_pipeline_task(content: str, pipeline_ids: set) -> bool:
+    if not content or not pipeline_ids:
+        return False
+    for tid in pipeline_ids:
+        if tid in content and ("【" in content or tid.startswith("mailbus-") or tid.startswith("msg-")):
+            return True
+    return False
+
+
+def _message_queue_priority(msg, pipeline_ids: set, data_dir: str = ""):
+    """队列排序：running pipeline 任务 > 可执行 task > 其他"""
+    content = msg.content if hasattr(msg, "content") else ""
+    mtype = msg.type if hasattr(msg, "type") else "notice"
+    action = msg.action if hasattr(msg, "action") else {}
+    execute = action.get("execute", mtype == "task") if action else (mtype == "task")
+    is_pipeline = _msg_matches_pipeline_task(content or "", pipeline_ids)
+    is_task = mtype == "task"
+    round2_defer = False
+    if is_task and data_dir and any(k in (content or "") for k in ("Round2", "round-2-backlog", "iteration-r2")):
+        gate = json_read(os.path.join(data_dir, "iterations", "round-1-gate.json"), {})
+        if not gate.get("round2_unlocked"):
+            round2_defer = True
+    if is_pipeline:
+        tier = 0
+    elif round2_defer:
+        tier = 8
+    elif is_task and execute:
+        tier = 1
+    elif is_task:
+        tier = 2
+    elif "inbox_overflow" in (content or "") or "催办提醒" in (content or ""):
+        tier = 9
+    else:
+        tier = 3
+    created = msg.created_at if hasattr(msg, "created_at") else ""
+    return (tier, created or "")
+
+
+def recover_inbox_stale_states(data_dir: str, agents: dict) -> dict:
+    """
+    回收僵尸 pushed/processing 状态，避免 notice 占满推送槽、task 卡在 processing 无法重推。
+    在 build_queues 之前调用。
+    """
+    from datetime import timezone
+    from .tracker import TaskTracker, _parse_iso_dt
+
+    paths = resolve_paths(data_dir)
+    now = __import__("datetime").datetime.now(timezone.utc)
+    stats = {}
+
+    pipeline_by_agent = {}
+    for t in TaskTracker(data_dir).list_all():
+        if t.get("status") != "running":
+            continue
+        chain = t.get("chain") or []
+        if not chain:
+            continue
+        cur = chain[-1]
+        if cur.get("status") == "running":
+            person = cur.get("to_person", "")
+            tid = t.get("task_id", "")
+            if person and tid:
+                pipeline_by_agent.setdefault(person, set()).add(tid)
+
+    for name in agents:
+        inbox_file = f"{paths['inbox']}/{name}/inbox.json"
+        inbox_data = json_read(inbox_file, {})
+        if not inbox_data:
+            continue
+        inbox = Inbox.from_dict(inbox_data)
+        pipeline_ids = pipeline_by_agent.get(name, set())
+        recovered = 0
+
+        for m_raw in inbox.messages:
+            mid = inbox.msg_field(m_raw, "id", "")
+            state = get_msg_state(m_raw)
+            mtype = inbox.msg_field(m_raw, "type", "")
+            content = inbox.msg_field(m_raw, "content", "")
+            action = inbox.msg_field(m_raw, "action", {}) or {}
+            execute = action.get("execute", mtype == "task")
+            status_field = m_raw.get("status") if isinstance(m_raw, dict) else getattr(m_raw, "status", "")
+
+            received_at = inbox.msg_field(m_raw, "received_at", "") or inbox.msg_field(m_raw, "acknowledged_at", "")
+            created_at = inbox.msg_field(m_raw, "created_at", "")
+            ref_time = received_at or created_at
+            age_min = 0.0
+            if ref_time:
+                dt = _parse_iso_dt(ref_time)
+                age_min = (now - dt.astimezone(timezone.utc)).total_seconds() / 60.0
+
+            is_pipeline_task = _msg_matches_pipeline_task(content, pipeline_ids)
+
+            # done_at 已写但 state 仍为 processing（auto_ack 覆盖）
+            if state == MsgStatus.PROCESSING and inbox.msg_field(m_raw, "done_at", ""):
+                inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, state=MsgStatus.DONE)
+                recovered += 1
+                continue
+
+            # 团队规范 notice：不占用 pipeline 推送槽
+            if pipeline_ids and state == MsgStatus.PENDING and mtype == "notice":
+                if any(x in content for x in ("团队规范已更新", "team-secrets-policy", "execution-order.md")):
+                    ts = _now_iso()
+                    inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, state=MsgStatus.DONE, done_at=ts)
+                    recovered += 1
+                    continue
+
+            # agent 有 running pipeline 时，丢弃 inbox_overflow / 催办 notice（避免抢占推送槽）
+            if pipeline_ids and state == MsgStatus.PENDING and mtype == "notice":
+                if "inbox_overflow" in content or "催办提醒" in content or mid.startswith("tracker-remind"):
+                    ts = _now_iso()
+                    inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, state=MsgStatus.DONE, done_at=ts)
+                    recovered += 1
+                    continue
+
+            # status/state 不同步或 pushed 超时
+            if status_field == MsgStatus.PUSHED and state == MsgStatus.PENDING:
+                if age_min > 30:
+                    inbox.set_msg_status(mid, MsgStatus.PENDING, state=MsgStatus.PENDING, pushed_count=0)
+                else:
+                    inbox.set_msg_status(mid, MsgStatus.PUSHED, state=MsgStatus.PUSHED)
+                recovered += 1
+                continue
+
+            if state == MsgStatus.PUSHED and age_min > 30:
+                inbox.set_msg_status(mid, MsgStatus.PENDING, state=MsgStatus.PENDING, pushed_count=0)
+                recovered += 1
+                continue
+
+            if state == MsgStatus.PUSHED and not agent_cli_active(name, agents) and age_min > 2:
+                inbox.set_msg_status(mid, MsgStatus.PENDING, state=MsgStatus.PENDING, pushed_count=0)
+                recovered += 1
+                continue
+
+            # notice / 催办 / 团队规范：auto_ack 后无需 agent 执行，快速标记 done
+            if state == MsgStatus.PROCESSING:
+                if mtype == "notice" and (
+                    not execute
+                    or any(x in content for x in ("团队规范已更新", "team-secrets-policy"))
+                ):
+                    if age_min > 3:
+                        ts = _now_iso()
+                        inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, state=MsgStatus.DONE, done_at=ts)
+                        recovered += 1
+                    continue
+                if mid.startswith("tracker-remind") or "催办提醒" in content:
+                    if age_min > 3:
+                        ts = _now_iso()
+                        inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, state=MsgStatus.DONE, done_at=ts)
+                        recovered += 1
+                    continue
+
+                # 可执行 task 卡在 processing
+                if execute and mtype == "task":
+                    primary_tid = _get_primary_pipeline_task_id(data_dir)
+                    is_primary = bool(primary_tid and primary_tid in content)
+                    result_missing = is_primary and not os.path.exists(
+                        os.path.join(data_dir, "msg-results", f"{primary_tid}.json")
+                    )
+                    # 无 CLI 进程 = 僵尸 ACK，2 分钟后释放推送槽
+                    cli_dead = not agent_cli_active(name, agents)
+                    if cli_dead and age_min > 2:
+                        inbox.set_msg_status(
+                            mid, MsgStatus.PENDING, state=MsgStatus.PENDING,
+                            acknowledged_at=None, received_at=None, pushed_count=0,
+                        )
+                        recovered += 1
+                        continue
+                    threshold = 5 if (is_pipeline_task and result_missing) else (15 if is_pipeline_task else 45)
+                    if age_min > threshold:
+                        inbox.set_msg_status(
+                            mid, MsgStatus.PENDING, state=MsgStatus.PENDING,
+                            acknowledged_at=None, received_at=None, pushed_count=0,
+                        )
+                        recovered += 1
+
+        if recovered:
+            json_write(inbox_file, inbox.to_dict())
+            stats[name] = recovered
+
+    return stats
+
+
+def _get_primary_pipeline_task_id(data_dir: str) -> str:
+    """Round1 主任务 ID（iteration-state.json），用于多 pipeline 并行时插队"""
+    state_path = os.path.join(data_dir, "iterations", "iteration-state.json")
+    state = json_read(state_path, {})
+    return state.get("primary_task_id", "") or ""
+
+
+def _pick_pipeline_head(msgs: list, primary_tid: str):
+    """多个 running pipeline 消息时，主任务优先"""
+    def key(m):
+        content = m.content if hasattr(m, "content") else ""
+        is_primary = bool(primary_tid and primary_tid in (content or ""))
+        return (0 if is_primary else 1, m.created_at if hasattr(m, "created_at") else "")
+    return sorted(msgs, key=key)[0]
 
 
 def _scan_one_agent(data_dir: str, name: str, inbox_base: str) -> Optional[Tuple[str, list, list]]:
@@ -80,7 +300,14 @@ def _scan_one_agent(data_dir: str, name: str, inbox_base: str) -> Optional[Tuple
                 urgent_msgs.append(msg)
             else:
                 normal_msgs.append(msg)
-    
+
+    # running pipeline 任务 > 可执行 task > notice，避免催办 notice 占满推送槽
+    pipeline_ids = _get_running_pipeline_task_ids(data_dir, name)
+    if normal_msgs:
+        normal_msgs = sorted(normal_msgs, key=lambda m: _message_queue_priority(m, pipeline_ids, data_dir))
+    if urgent_msgs:
+        urgent_msgs = sorted(urgent_msgs, key=lambda m: _message_queue_priority(m, pipeline_ids, data_dir))
+
     if has_pending:
         return (name, urgent_msgs, normal_msgs)
     return None
@@ -134,14 +361,40 @@ def run_housekeeping(data_dir: str, agents: dict):
     """
     paths = resolve_paths(data_dir)
 
+    # 自愈：回复回收、tracker/inbox 对齐、历史审计归档
+    try:
+        from .self_heal import run_self_heal
+        from .audit_dispatch import consume_audit_results
+        healed = run_self_heal(data_dir, agents, phase="full")
+        if healed:
+            parts = ", ".join(f"{k}={v}" for k, v in healed.items())
+            print(f"  🔧 自愈: {parts}")
+        n = consume_audit_results(data_dir)
+        if n:
+            print(f"  🔍 审计入库: {n} 条")
+    except Exception as exc:
+        print(f"  [scanner] self_heal 异常: {exc}")
+
     # 超时检测：检查所有 agent 的 inbox，超时未处理的消息自动催办
     _check_timeouts(data_dir, agents, paths['inbox'], paths)
 
     # Tracker 催办检测：检查 tracker 中 running 任务是否需要催办
     try:
         from .tracker import TaskTracker
+        from .constants import DEFAULT_REMINDER_MINUTES, DEFAULT_MAX_REMINDERS
+        config_path = os.path.join(data_dir, "config.json")
+        config_data = json_read(config_path, {})
+        reminder_minutes = config_data.get("reminder_minutes", DEFAULT_REMINDER_MINUTES)
+        max_reminders = config_data.get("max_reminders", DEFAULT_MAX_REMINDERS)
         tracker = TaskTracker(data_dir)
-        escalated = tracker.check_reminders(agents, data_dir=data_dir, reminder_minutes=5, max_reminders=3)
+        reopened = tracker.reopen_stale_timeouts(agents, data_dir)
+        if reopened:
+            print(f"  ♻️ 恢复误标 timeout 的 pipeline 任务: {reopened} 条")
+        escalated = tracker.check_reminders(
+            agents, data_dir=data_dir,
+            reminder_minutes=reminder_minutes,
+            max_reminders=max_reminders,
+        )
         if escalated:
             for e in escalated:
                 print(f"  ⏰ 催办: {e['agent']} — {e['summary'][:40]}")
@@ -178,7 +431,7 @@ def run_housekeeping(data_dir: str, agents: dict):
         from .archiver import archive_all
         config_path = os.path.join(data_dir, "config.json")
         config_data = json_read(config_path, {})
-        archive_days = config_data.get("archive_days", 3)
+        archive_days = config_data.get("archive_days", 7)
         max_messages = config_data.get("archive_max_messages", 300)
         archived = archive_all(data_dir, agents, archive_days=archive_days, max_messages=max_messages)
         if archived:
@@ -199,6 +452,34 @@ def run_housekeeping(data_dir: str, agents: dict):
         _check_rule_changes(data_dir, agents, paths)
     except Exception:
         pass
+
+    # 审计：派发待审计任务给灵鉴（自愈已 auto_close 历史噪音）
+    try:
+        from .audit_dispatch import dispatch_pending_audits
+        dispatch_pending_audits(data_dir, agents, paths)
+    except Exception as exc:
+        print(f"  [scanner] audit dispatch 异常: {exc}")
+
+    # Pipeline 自动流转：检测 msg-results 并推进任务链
+    try:
+        from .pipeline_trigger import trigger as pipeline_trigger
+        pipeline_trigger(data_dir, agents, paths)
+    except Exception as exc:
+        print(f"  [scanner] pipeline trigger 异常: {exc}")
+
+    # 迭代 Round1 诊断（每轮 scan 刷新；不自动生成 Round2）
+    try:
+        from .iteration_engine import run_round1, evaluate_round1_gate
+        summary = run_round1(data_dir, agents).get("summary", {})
+        gate = evaluate_round1_gate(data_dir, agents)
+        if not gate.get("round2_unlocked"):
+            print(f"  🔁 Round1 进行中: 主任务={gate.get('primary_status')} "
+                  f"待审计={gate.get('pending_audit_total')} "
+                  f"blockers={len(gate.get('blockers', []))}")
+        else:
+            print(f"  ✅ Round1 已通过，可 bus iteration --round 2")
+    except Exception as exc:
+        print(f"  [scanner] iteration round1 异常: {exc}")
 
 
 def _consume_skill_usage(data_dir: str):
@@ -417,10 +698,8 @@ def push_to_queue(data_dir: str, agent_name: str, messages: list, is_urgent: boo
     queue_dir = paths["queue_urgent"] if is_urgent else paths["queue_normal"]
     queue_file = f"{queue_dir}/{agent_name}.json"
     
-    existing = json_read(queue_file, [])
     msg_dicts = [m.to_dict() if hasattr(m, 'to_dict') else m for m in messages]
-    existing.extend(msg_dicts)
-    json_write(queue_file, existing)
+    json_write(queue_file, msg_dicts)
 
 
 def _has_pushed_message(inbox) -> bool:
@@ -429,6 +708,35 @@ def _has_pushed_message(inbox) -> bool:
         state = get_msg_state(m)
         if state == MsgStatus.PUSHED:
             return True
+    return False
+
+
+def _agent_has_active_work(inbox, data_dir: str, agent_name: str) -> bool:
+    """
+    agent 是否已有进行中的可执行任务（pushed/processing 且尚无 msg-results）。
+    防止 scan 连续 spawn 多个 Hermes chat 进程。
+    """
+    pipeline_ids = _get_running_pipeline_task_ids(data_dir, agent_name)
+    for m_raw in inbox.messages:
+        state = get_msg_state(m_raw)
+        if state == MsgStatus.PUSHED:
+            return True
+        if state != MsgStatus.PROCESSING:
+            continue
+        if inbox.msg_field(m_raw, "done_at", "") or inbox.msg_field(m_raw, "done_note", ""):
+            continue
+        mtype = m_raw.get("type") if isinstance(m_raw, dict) else getattr(m_raw, "type", "")
+        action = m_raw.get("action") if isinstance(m_raw, dict) else getattr(m_raw, "action", {})
+        execute = (action or {}).get("execute", mtype == "task")
+        if mtype != "task" or not execute:
+            continue
+        content = m_raw.get("content") if isinstance(m_raw, dict) else getattr(m_raw, "content", "")
+        for tid in pipeline_ids:
+            if tid in (content or ""):
+                result_path = os.path.join(data_dir, "msg-results", f"{tid}.json")
+                if not os.path.exists(result_path):
+                    return True
+        return True
     return False
 
 
@@ -442,6 +750,11 @@ def build_queues(data_dir: str, agents: dict) -> Tuple[dict, dict]:
     返回: (urgent_queue, normal_queue)
     每项: {agent_name: [Message, ...]}
     """
+    recovered = recover_inbox_stale_states(data_dir, agents)
+    if recovered:
+        for agent, count in recovered.items():
+            print(f"  ♻️ {agent}: 回收 {count} 条僵尸消息")
+
     urgent_queue = {}
     normal_queue = {}
     paths = resolve_paths(data_dir)
@@ -449,11 +762,26 @@ def build_queues(data_dir: str, agents: dict) -> Tuple[dict, dict]:
     scanned = scan_all(data_dir, agents)
     
     for name, urgent_msgs, normal_msgs in scanned:
+        # ── P0: running pipeline 任务强制插队，不被 urgent notice 淹没 ──
+        pipeline_ids = _get_running_pipeline_task_ids(data_dir, name)
+        pipeline_msgs = [
+            m for m in urgent_msgs + normal_msgs
+            if m.type == "task" and _msg_matches_pipeline_task(m.content or "", pipeline_ids)
+        ]
+        if pipeline_msgs:
+            primary_tid = _get_primary_pipeline_task_id(data_dir)
+            head = [_pick_pipeline_head(pipeline_msgs, primary_tid)]
+            urgent_queue[name] = head
+            push_to_queue(data_dir, name, head, is_urgent=True)
+            continue
+
         # ── P2 串行约束：检查该 agent 是否已有 pushed 消息 ──
         inbox_file = f"{paths['inbox']}/{name}/inbox.json"
         inbox_data = json_read(inbox_file, {})
         if inbox_data:
             inbox = Inbox.from_dict(inbox_data) if "agent" in inbox_data else None
+            if inbox and _agent_has_active_work(inbox, data_dir, name):
+                continue  # 已有 Hermes 在处理 pipeline/task，不并发推新消息
             if inbox and _has_pushed_message(inbox):
                 continue  # 有正在推送中的消息，暂不推新的
         
@@ -502,7 +830,7 @@ def mark_as_pushed(data_dir: str, agent_name: str, msg_ids: list):
     changed = False
     
     for mid in msg_ids:
-        if inbox.set_msg_status(mid, MsgStatus.PUSHED):
+        if inbox.set_msg_status(mid, MsgStatus.PUSHED, state=MsgStatus.PUSHED):
             changed = True
     
     if changed:

@@ -845,39 +845,39 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
     <div class="orbit-ring"></div>
   </div>
   <div class="sidebar-nav">
-    <div class="nav-item active" data-tab="ziyan" onclick="switchTab('ziyan')">
+    <div class="nav-item active" data-tab="ziyan" data-action="switchTab" data-arg="ziyan">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
       子言
     </div>
-    <div class="nav-item" data-tab="overview" onclick="switchTab('overview')">
+    <div class="nav-item" data-tab="overview" data-action="switchTab" data-arg="overview">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       总览
     </div>
-    <div class="nav-item" data-tab="agents" onclick="switchTab('agents')">
+    <div class="nav-item" data-tab="agents" data-action="switchTab" data-arg="agents">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="6" width="16" height="12" rx="3"/><circle cx="9" cy="12" r="1.5" fill="currentColor"/><circle cx="15" cy="12" r="1.5" fill="currentColor"/><rect x="7" y="3" width="2" height="4" rx="1"/><rect x="15" y="3" width="2" height="4" rx="1"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
       Agent <span class="nav-num" id="navAgentCount"></span>
     </div>
-    <div class="nav-item" data-tab="bulletin" onclick="switchTab('bulletin')">
+    <div class="nav-item" data-tab="bulletin" data-action="switchTab" data-arg="bulletin">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 9h10M7 13h6"/></svg>
       公告栏 <span class="nav-num" id="navBulletinCount"></span>
     </div>
-    <div class="nav-item" data-tab="tasks-audit" onclick="switchTab('tasks-audit')">
+    <div class="nav-item" data-tab="tasks-audit" data-action="switchTab" data-arg="tasks-audit">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 14l2 2 4-4"/></svg>
       任务审计
     </div>
-    <div class="nav-item" data-tab="stats" onclick="switchTab('stats')">
+    <div class="nav-item" data-tab="stats" data-action="switchTab" data-arg="stats">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>
       统计
     </div>
-    <div class="nav-item" data-tab="patrol" onclick="switchTab('patrol')">
+    <div class="nav-item" data-tab="patrol" data-action="switchTab" data-arg="patrol">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       巡检日报
     </div>
-    <div class="nav-item" data-tab="heartbeat" onclick="switchTab('heartbeat')">
+    <div class="nav-item" data-tab="heartbeat" data-action="switchTab" data-arg="heartbeat">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
       健康状态
     </div>
-    <div class="nav-item" data-tab="alerts" onclick="switchTab('alerts')">
+    <div class="nav-item" data-tab="alerts" data-action="switchTab" data-arg="alerts">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
       告警 <span class="nav-num" id="navAlertCount"></span>
     </div>
@@ -903,10 +903,10 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
   <div class="top-bar-right">
     <div style="display:flex;align-items:center;gap:6px;position:relative">
       <input class="search-input" id="searchBox" placeholder="搜索消息..." style="width:160px;font-size:12px;padding:5px 10px" onkeydown="if(event.key==='Enter')doSearch()" data-i18n-placeholder="search">
-      <button class="btn btn-sm" onclick="doSearch()" title="搜索">🔍</button>
+      <button class="btn btn-sm" data-action="doSearch" title="搜索">🔍</button>
     </div>
     <input class="search-input" id="apiInput" value="http://localhost:9812" placeholder="API 地址">
-    <button class="btn btn-primary" onclick="loadAll()">
+    <button class="btn btn-primary" data-action="loadAll">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
       <span data-i18n="refresh">刷新全部</span>
     </button>
@@ -914,11 +914,11 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
       <input type=checkbox id="autoRefreshChk" onchange="toggleAutoRefresh()" checked style="accent-color:var(--accent-cyan)">
       <span data-i18n="auto">自动刷新</span>
     </label>
-    <button class="btn" onclick="openSendMsg()">
+    <button class="btn" data-action="openSendMsg">
       <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       <span data-i18n="send">发消息</span>
     </button>
-    <button class="btn" onclick="triggerHeartbeat()"><span data-i18n="heartbeat">💓 心跳</span></button>
+    <button class="btn" data-action="triggerHeartbeat"><span data-i18n="heartbeat">💓 心跳</span></button>
     <select id="langSelect" onchange="switchLang(this.value)" style="font-size:12px;padding:3px 6px;background:rgba(15,23,42,0.8);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);cursor:pointer">
       <option value="zh">中文</option>
       <option value="en">EN</option>
@@ -944,8 +944,8 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
     <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
       <span style="font-size:13px;color:var(--text-secondary)">点击卡片查看详情</span>
       <div style="display:flex;gap:6px">
-        <button class="btn btn-sm" onclick="openPermPanel()">&#x1f510; 权限</button>
-        <button class="btn btn-sm" onclick="reloadData('agents')">&#x1f504; 刷新</button>
+        <button class="btn btn-sm" data-action="openPermPanel">&#x1f510; 权限</button>
+        <button class="btn btn-sm" data-action="reloadData" data-arg="agents">&#x1f504; 刷新</button>
       </div>
     </div>
     <div class="agent-grid" id="agentGrid"></div>
@@ -955,9 +955,9 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
     <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
       <span style="font-size:13px;color:var(--text-secondary)" id="bulletinSummary"></span>
       <div style="display:flex;gap:6px">
-        <button class="btn btn-sm" onclick="openPostBulletin()" id="btnPostBulletin" style="display:none">&#x270f;&#xfe0f; 发布公告</button>
-        <button class="btn btn-sm" onclick="openPermitManager()" id="btnPermitManager" style="display:none">&#x1f465; 权限</button>
-        <button class="btn btn-sm" onclick="reloadData('bulletin')">&#x1f504; 刷新</button>
+        <button class="btn btn-sm" data-action="openPostBulletin" id="btnPostBulletin" style="display:none">&#x270f;&#xfe0f; 发布公告</button>
+        <button class="btn btn-sm" data-action="openPermitManager" id="btnPermitManager" style="display:none">&#x1f465; 权限</button>
+        <button class="btn btn-sm" data-action="reloadData" data-arg="bulletin">&#x1f504; 刷新</button>
       </div>
     </div>
     <div id="bulletinList"></div>
@@ -966,7 +966,7 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
   <div class="tab-content" id="tab-stats">
     <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
       <span style="font-size:13px;color:var(--text-secondary)">平台统计数据 · 聚合概览</span>
-      <button class="btn btn-sm" onclick="reloadData('stats')">&#x1f504; 刷新</button>
+      <button class="btn btn-sm" data-action="reloadData" data-arg="stats">&#x1f504; 刷新</button>
     </div>
     <div id="statsOverviewPanel"></div>
   </div>
@@ -974,19 +974,19 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
   <div class="tab-content" id="tab-patrol">
     <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
       <span style="font-size:13px;color:var(--text-secondary)">灵巡每日巡检报告</span>
-      <button class="btn btn-sm" onclick="reloadData('patrol')">&#x1f504; 刷新</button>
+      <button class="btn btn-sm" data-action="reloadData" data-arg="patrol">&#x1f504; 刷新</button>
     </div>
     <div id="patrolReportList"></div>
   </div>
 
   <div class="tab-content" id="tab-tasks-audit">
     <div style="margin-bottom:12px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-sm filter-btn active" data-filter="all" onclick="switchAuditFilter('all')">全部</button>
-      <button class="btn btn-sm filter-btn" data-filter="running" onclick="switchAuditFilter('running')">&#x23f3; 进行中</button>
-      <button class="btn btn-sm filter-btn" data-filter="success" onclick="switchAuditFilter('success')">&#x2705; 已完成</button>
-      <button class="btn btn-sm filter-btn" data-filter="failed" onclick="switchAuditFilter('failed')">&#x274c; 失败</button>
-      <button class="btn btn-sm filter-btn" data-filter="pending-audit" onclick="switchAuditFilter('pending-audit')">&#x1f50d; 待审计</button>
-      <button class="btn btn-sm" onclick="reloadData('tasks-audit')" style="margin-left:auto">&#x1f504; 刷新</button>
+      <button class="btn btn-sm filter-btn active" data-filter="all" data-action="switchAuditFilter" data-arg="all">全部</button>
+      <button class="btn btn-sm filter-btn" data-filter="running" data-action="switchAuditFilter" data-arg="running">&#x23f3; 进行中</button>
+      <button class="btn btn-sm filter-btn" data-filter="success" data-action="switchAuditFilter" data-arg="success">&#x2705; 已完成</button>
+      <button class="btn btn-sm filter-btn" data-filter="failed" data-action="switchAuditFilter" data-arg="failed">&#x274c; 失败</button>
+      <button class="btn btn-sm filter-btn" data-filter="pending-audit" data-action="switchAuditFilter" data-arg="pending-audit">&#x1f50d; 待审计</button>
+      <button class="btn btn-sm" data-action="reloadData" data-arg="tasks-audit" style="margin-left:auto">&#x1f504; 刷新</button>
     </div>
     <div id="taskAuditList"></div>
   </div>
@@ -998,7 +998,7 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
   <div class="tab-content" id="tab-alerts">
     <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
       <span style="font-size:13px;color:var(--text-secondary)"><span id="alertCount"></span> 条告警</span>
-      <button class="btn btn-sm" onclick="reloadData('alerts')">&#x1f504; 刷新</button>
+      <button class="btn btn-sm" data-action="reloadData" data-arg="alerts">&#x1f504; 刷新</button>
     </div>
     <div id="alertTable"></div>
   </div>
@@ -1011,18 +1011,23 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
   <div class="modal-inner hologrid" id="agentModalContent"></div>
 </div>
 
+<!-- 完整档案子弹窗 -->
+<div class="modal" id="profileModal" onclick="if(event.target===this)closeProfileModal()">
+  <div class="modal-inner hologrid" id="profileModalContent" style="max-width:600px;max-height:80vh;overflow-y:auto"></div>
+</div>
+
 <!-- 回复弹窗 -->
 <div class="modal" id="replyModal" onclick="if(event.target===this)closeReply()">
   <div class="modal-inner" style="max-width:500px">
     <div class="header">
       <h3 id="replyTitle"></h3>
-      <button class="btn btn-sm" onclick="closeReply()">&#x2715;</button>
+      <button class="btn btn-sm" data-action="closeReply">&#x2715;</button>
     </div>
     <div id="replyOrigMsg" style="color:var(--text-muted);font-size:12px;margin-bottom:8px;padding:8px;background:rgba(15,23,42,0.5);border-radius:6px"></div>
     <textarea id="replyInput" rows=4 style="width:100%;margin:8px 0;background:rgba(15,23,42,0.8);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);padding:8px;font-size:13px;resize:vertical;font-family:inherit" placeholder="输入回复内容..."></textarea>
     <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn btn-sm" onclick="closeReply()">取消</button>
-      <button class="btn btn-sm btn-primary" onclick="sendReply()">发送</button>
+      <button class="btn btn-sm" data-action="closeReply">取消</button>
+      <button class="btn btn-sm btn-primary" data-action="sendReply">发送</button>
     </div>
   </div>
 </div>
@@ -1032,7 +1037,7 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
   <div class="modal-inner" style="max-width:600px">
     <div class="header">
       <h3>🔍 搜索结果 <span id="searchResultCount" style="font-size:12px;color:var(--text-muted)"></span></h3>
-      <button class="btn btn-sm" onclick="closeSearch()">&#x2715;</button>
+      <button class="btn btn-sm" data-action="closeSearch">&#x2715;</button>
     </div>
     <div id="searchResults" style="max-height:60vh;overflow-y:auto"></div>
   </div>
@@ -1043,7 +1048,7 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
   <div class="modal-inner" style="max-width:500px">
     <div class="header">
       <h3>&#x2709;&#xfe0f; 发送消息</h3>
-      <button class="btn btn-sm" onclick="closeSendModal()">&#x2715;</button>
+      <button class="btn btn-sm" data-action="closeSendModal">&#x2715;</button>
     </div>
     <div style="margin:8px 0">
       <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px">发送给</label>
@@ -1061,8 +1066,8 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
       <textarea id="sendContent" rows=5 style="width:100%;background:rgba(15,23,42,0.8);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);padding:8px;font-size:13px;resize:vertical;font-family:inherit" placeholder="输入消息内容..."></textarea>
     </div>
     <div style="text-align:right;display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn btn-sm" onclick="closeSendModal()">取消</button>
-      <button class="btn btn-sm btn-primary" id="sendBtn" onclick="doSend()">发送</button>
+      <button class="btn btn-sm" data-action="closeSendModal">取消</button>
+      <button class="btn btn-sm btn-primary" id="sendBtn" data-action="doSend">发送</button>
     </div>
   </div>
 </div>
@@ -1072,7 +1077,7 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
   <div class="modal-inner" style="max-width:600px">
     <div class="header">
       <h2>&#x2709;&#xfe0f; 发消息</h2>
-      <button class="btn btn-sm" onclick="document.getElementById('sendMsgModal').classList.remove('open')">&#x2715;</button>
+      <button class="btn btn-sm" data-action="closeSendMsgModal">&#x2715;</button>
     </div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">选择模板</div>
     <div id="msgTemplates" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px"></div>
@@ -1092,8 +1097,8 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">消息内容</div>
     <textarea id="msgContent" style="width:100%;background:rgba(15,23,42,0.8);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);padding:8px 10px;font-size:13px;min-height:120px;resize:vertical;font-family:inherit" placeholder="消息内容..."></textarea>
     <div style="text-align:right;margin-top:12px">
-      <button class="btn btn-sm" onclick="document.getElementById('sendMsgModal').classList.remove('open')" style="margin-right:6px">取消</button>
-      <button class="btn btn-primary" onclick="sendMsg()">发送</button>
+      <button class="btn btn-sm" data-action="closeSendMsgModal" style="margin-right:6px">取消</button>
+      <button class="btn btn-primary" data-action="sendMsg">发送</button>
     </div>
   </div>
 </div>
@@ -1103,15 +1108,15 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
   <div class="modal-inner" style="max-width:500px">
     <div class="header">
       <h2>&#x1f4e2; 发布公告</h2>
-      <button class="btn btn-sm" onclick="closePostModal()">&#x2715;</button>
+      <button class="btn btn-sm" data-action="closePostModal">&#x2715;</button>
     </div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">标题</div>
     <input id="bulletinTitle" style="width:100%;background:rgba(15,23,42,0.8);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);padding:8px 10px;font-size:13px;margin-bottom:8px;font-family:inherit" placeholder="公告标题">
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">内容</div>
     <textarea id="bulletinContent" style="width:100%;background:rgba(15,23,42,0.8);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);padding:8px 10px;font-size:13px;min-height:120px;resize:vertical;font-family:inherit" placeholder="公告内容..."></textarea>
     <div style="text-align:right;margin-top:12px">
-      <button class="btn btn-sm" onclick="closePostModal()" style="margin-right:6px">取消</button>
-      <button class="btn btn-primary btn-gold" onclick="submitBulletin()" style="background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.3);color:var(--accent-gold)">发布</button>
+      <button class="btn btn-sm" data-action="closePostModal" style="margin-right:6px">取消</button>
+      <button class="btn btn-primary btn-gold" data-action="submitBulletin" style="background:rgba(245,158,11,0.15);border-color:rgba(245,158,11,0.3);color:var(--accent-gold)">发布</button>
     </div>
   </div>
 </div>
@@ -1121,13 +1126,13 @@ td{padding:8px 10px;border-bottom:1px solid rgba(30,41,59,0.5)}
   <div class="modal-inner" style="max-width:460px">
     <div class="header">
       <h2>&#x1f465; 公告发布权限</h2>
-      <button class="btn btn-sm" onclick="closePermitModal()">&#x2715;</button>
+      <button class="btn btn-sm" data-action="closePermitModal">&#x2715;</button>
     </div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">勾选有权限发布公告的 agent</div>
     <div id="permitCheckboxList"></div>
     <div style="text-align:right;margin-top:16px">
-      <button class="btn btn-sm" onclick="closePermitModal()" style="margin-right:6px">取消</button>
-      <button class="btn btn-primary" onclick="savePermit()">保存</button>
+      <button class="btn btn-sm" data-action="closePermitModal" style="margin-right:6px">取消</button>
+      <button class="btn btn-primary" data-action="savePermit">保存</button>
     </div>
   </div>
 </div>
@@ -1228,9 +1233,12 @@ function apiUrl(p) {
   return b + p + sep + '_t=' + Date.now();
 }
 
+const TASKS_API = '/api/tasks?limit=150&exclude_noise=1';
+const INBOX_API = (agent) => '/api/inbox/' + agent + '?limit=100';
+
 async function fetchJSON(p) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 10000);
+  const timer = setTimeout(() => controller.abort(), 20000);
   try {
     const r = await fetch(apiUrl(p), {signal: controller.signal});
     clearTimeout(timer);
@@ -1262,6 +1270,44 @@ function jsStr(s) {
   return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\n/g,'\\n').replace(/\r/g,'\\r');
 }
 
+// 弹窗拖动
+function _enableDrag(modalId) {
+  const modal = document.getElementById(modalId || 'agentModal');
+  const handle = modal.querySelector('.modal-drag-handle');
+  if (!handle) return;
+  let offX = 0, offY = 0, mx = 0, my = 0;
+  function onMove(e) {
+    e.preventDefault();
+    mx = e.clientX || (e.touches && e.touches[0].clientX);
+    my = e.clientY || (e.touches && e.touches[0].clientY);
+    const dx = mx - offX, dy = my - offY;
+    offX = mx; offY = my;
+    const inner = modal.querySelector('.modal-inner');
+    if (!inner) return;
+    const ct = inner.getBoundingClientRect();
+    inner.style.left = (ct.left + dx) + 'px';
+    inner.style.top = (ct.top + dy) + 'px';
+    inner.style.position = 'fixed';
+    inner.style.margin = '0';
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onUp);
+  }
+  handle.addEventListener('mousedown', function(e) {
+    offX = e.clientX; offY = e.clientY;
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  handle.addEventListener('touchstart', function(e) {
+    offX = e.touches[0].clientX; offY = e.touches[0].clientY;
+    document.addEventListener('touchmove', onMove);
+    document.addEventListener('touchend', onUp);
+  });
+}
+
 // 初始化全局事件委托（data-* onclick 安全模式）
 function initEventDelegation() {
   document.addEventListener('click', function(e) {
@@ -1270,17 +1316,44 @@ function initEventDelegation() {
     const action = target.getAttribute('data-action');
     const arg = target.getAttribute('data-arg') || '';
     if (action === 'showAgent') showAgent(arg);
+    else if (action === 'showFullProfile') showFullProfile(arg);
     else if (action === 'launchAgent') { e.stopPropagation(); launchAgent(arg, target.getAttribute('data-mode') || 'browser'); }
     else if (action === 'launchAgentModal') launchAgentFromModal(arg, target.getAttribute('data-mode') || 'browser');
     else if (action === 'openMailbox') { e.stopPropagation(); openMailbox(arg); }
     else if (action === 'pingAgent') pingAgent(arg);
     else if (action === 'closeModal') closeModal();
+    else if (action === 'closeProfileModal') closeProfileModal();
     else if (action === 'switchTab') switchTab(arg);
     else if (action === 'openReply') { var from = target.getAttribute('data-arg-from') || ''; var id = target.getAttribute('data-arg-id') || ''; var summary = target.getAttribute('data-arg-summary') || ''; openReply(from, id, summary); }
     else if (action === 'applyMsgTemplate') { applyMsgTemplate(target.getAttribute('data-arg-tmpl') || ''); }
     else if (action === 'markMailboxRead') { markMailboxRead(target.getAttribute('data-arg-name') || ''); }
     else if (action === 'showReviewFromChain') showReviewFromChain(arg);
     else if (action === 'showTaskChainDetail') showTaskChainDetail(arg);
+    else if (action === 'doSearch') doSearch();
+    else if (action === 'loadAll') loadAll();
+    else if (action === 'openSendMsg') openSendMsg();
+    else if (action === 'triggerHeartbeat') triggerHeartbeat();
+    else if (action === 'openPermPanel') openPermPanel();
+    else if (action === 'reloadData') reloadData(arg);
+    else if (action === 'openPostBulletin') openPostBulletin();
+    else if (action === 'openPermitManager') openPermitManager();
+    else if (action === 'switchAuditFilter') switchAuditFilter(arg);
+    else if (action === 'closeReply') closeReply();
+    else if (action === 'sendReply') sendReply();
+    else if (action === 'closeSearch') closeSearch();
+    else if (action === 'closeSendModal') closeSendModal();
+    else if (action === 'doSend') doSend();
+    else if (action === 'sendMsg') sendMsg();
+    else if (action === 'closePostModal') closePostModal();
+    else if (action === 'submitBulletin') submitBulletin();
+    else if (action === 'closePermitModal') closePermitModal();
+    else if (action === 'savePermit') savePermit();
+    else if (action === 'switchMailboxTab') switchMailboxTab(arg);
+    else if (action === 'showPendingModal') showPendingModal();
+    else if (action === 'showAlertModal') showAlertModal();
+    else if (action === 'showRunningTasksModal') showRunningTasksModal();
+    else if (action === 'restartAgentMemory') restartAgentMemory();
+    else if (action === 'closeSendMsgModal') { document.getElementById('sendMsgModal').classList.remove('open'); }
   });
 }
 
@@ -1381,22 +1454,29 @@ function switchLang(lang) {
 
 // ═══════════════ 导航切换 ═══════════════
 
-function switchTab(name) {
-  var ol = document.getElementById('loadingOverlay');
-  var lt = document.getElementById('loadingText');
-  if (ol && lt) {
-    var navText = '';
-    var navEl = document.querySelector('[data-tab="' + name + '"]');
-    if (navEl) navText = navEl.textContent.trim() || name;
-    lt.textContent = '跃迁至 ' + navText;
-    ol.classList.add('active');
+window.switchTab = function switchTab(name) {
+  try {
+    var ol = document.getElementById('loadingOverlay');
+    var lt = document.getElementById('loadingText');
+    if (ol && lt) {
+      var navText = '';
+      var navEl = document.querySelector('[data-tab="' + name + '"]');
+      if (navEl) navText = navEl.textContent.trim() || name;
+      lt.textContent = '跃迁至 ' + navText;
+      ol.classList.add('active');
+    }
+    document.querySelectorAll('.nav-item').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
+    var targetNav = document.querySelector('.nav-item[data-tab="' + name + '"]');
+    if (targetNav) targetNav.classList.add('active');
+    var targetContent = document.getElementById('tab-' + name);
+    if (targetContent) targetContent.classList.add('active');
+    setTimeout(function() { if (ol) ol.classList.remove('active'); }, 400);
+  } catch(e) {
+    console.error('switchTab error:', e);
+    if (ol) ol.classList.remove('active');
   }
-  document.querySelectorAll('.nav-item').forEach(function(t) { t.classList.remove('active'); });
-  document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
-  document.querySelector('.nav-item[data-tab="' + name + '"]').classList.add('active');
-  document.getElementById('tab-' + name).classList.add('active');
-  setTimeout(function() { if (ol) ol.classList.remove('active'); }, 400);
-}
+};
 
 // ═══════════════ 主加载 ═══════════════
 
@@ -1407,7 +1487,7 @@ async function loadAll() {
     var isFirstLoad = !rawData.status;
     if (isFirstLoad && ol && lt) { lt.textContent = '同步数据中'; ol.classList.add('active'); }
     const [status, agents, tasks, hb, alerts, bulletin, reports, replies, skillUsage] = await Promise.all([
-      fetchJSON('/api/status'), fetchJSON('/api/agents'), fetchJSON('/api/tasks'),
+      fetchJSON('/api/status'), fetchJSON('/api/agents'), fetchJSON(TASKS_API),
       fetchJSON('/api/heartbeat'), fetchJSON('/api/alerts'), fetchJSON('/api/bulletin'),
       fetchJSON('/api/reports'), fetchJSON('/api/replies'), fetchJSON('/api/skill-usage'),
     ]);
@@ -1479,10 +1559,10 @@ async function reloadData(name) {
   const map = {
     agents: ['/api/status', '/api/agents'],
     bulletin: ['/api/bulletin'],
-    review: ['/api/tasks'],
+    review: [TASKS_API],
     stats: ['/api/stats'],
     patrol: ['/api/patrol-reports'],
-    'tasks-audit': ['/api/tasks', '/api/reports'],
+    'tasks-audit': [TASKS_API, '/api/reports'],
     heartbeat: ['/api/heartbeat'],
     alerts: ['/api/alerts'],
   };
@@ -1549,6 +1629,86 @@ const AGENT_ICONS = {
   lingzhao:'🪷', lingjin:'🦋', lingxi:'🔭', xiaoqi:'🦞',
   yige:'👨‍🔧', lingxiao:'🎯', dali:'🤖', lingjian:'🔍', lingyan:'🧪', ziyan:'👑'
 };
+
+const AUDIT_REVIEWER = 'lingjian';
+
+function chainStepPerson(h) {
+  return h.to_person || h.agent || h.from_person || '';
+}
+function chainStepRole(h) {
+  return h.to_role || h.role || '';
+}
+function chainStepLabel(h) {
+  var person = chainStepPerson(h);
+  var role = chainStepRole(h);
+  var icon = AGENT_ICONS[person] || (role ? role.slice(0, 2) : '?');
+  var name = person ? (AGENT_NAMES[person] || person) : role;
+  if (role && person) return icon + name + '(' + role + ')';
+  return icon + (name || role || '?');
+}
+function expandTaskChain(task) {
+  var chain = (task && task.chain) || task || [];
+  if (!chain.length) return [];
+  var steps = chain.slice();
+  var first = chain[0];
+  var planned = first.planned_agents || [];
+  planned.forEach(function(agent) {
+    var person = typeof agent === 'string' ? agent : (agent.to_person || agent.agent || '');
+    steps.push({ to_person: person, to_role: '', status: 'pending', _planned: true });
+  });
+  return steps;
+}
+function formatTaskChainArrow(taskOrChain) {
+  var chain = Array.isArray(taskOrChain) ? taskOrChain : expandTaskChain(taskOrChain);
+  return chain.map(function(h) {
+    if (h._planned) {
+      var p = chainStepPerson(h);
+      var icon = AGENT_ICONS[p] || '?';
+      return icon + (AGENT_NAMES[p] || p) + '(待)';
+    }
+    return chainStepLabel(h);
+  }).join(' → ');
+}
+function findReviewStep(chain) {
+  return (chain || []).find(function(h) {
+    return chainStepPerson(h) === 'lingjian' && (h.status === 'done' || h.status === 'completed');
+  });
+}
+function getAuditReviewer(task) {
+  if (task.audit_log && task.audit_log.length) {
+    return task.audit_log[task.audit_log.length - 1].reviewer || AUDIT_REVIEWER;
+  }
+  return task.audit_reviewer || AUDIT_REVIEWER;
+}
+function taskNeedsAudit(task) {
+  var tid = (task.task_id || task.id || '').toLowerCase();
+  if (tid.startsWith('patrol') || tid.startsWith('notice') || tid.startsWith('heartbeat') || tid.startsWith('confirm')) return false;
+  var chain = task.chain || [];
+  if (chain.some(function(s) { return s.to_role || s.from_role || s.planned_agents; })) return true;
+  return chain.some(function(s) { return s.agent; });
+}
+
+// 头像路径映射
+const AGENT_AVATARS = {
+  lingzhao:'avatars/lingzhao.png', lingjin:'avatars/lingjin.png',
+  lingxi:'avatars/lingxi.png', xiaoqi:'avatars/xiaoqi.png',
+  yige:'avatars/yige.png', lingxiao:'avatars/lingxiao.png',
+  dali:'avatars/dali.png', lingjian:'avatars/lingjian.png',
+  lingyan:'avatars/lingyan.png', lingxun:'avatars/lingxun.png'
+};
+
+// 头像组件 — 读取 SVG 文件或回退到 emoji
+function avatarSvg(name, color, size) {
+  var sz = size || 32;
+  var svgPath = AGENT_AVATARS[name];
+  if (svgPath) {
+    return '<img src="' + svgPath + '" width="' + sz + '" height="' + sz + '" style="border-radius:50%;border:2px solid ' + color + ';object-fit:cover"/>';
+  }
+  var icon = AGENT_ICONS[name] || '🤖';
+  return '<svg viewBox="0 0 ' + sz + ' ' + sz + '" width="' + sz + '" height="' + sz + '">' +
+    '<circle cx="' + (sz/2) + '" cy="' + (sz/2) + '" r="' + (sz*0.48) + '" fill="none" stroke="' + color + '" stroke-width="2" opacity="0.6"/>' +
+    '<text x="' + (sz/2) + '" y="' + (sz*0.58) + '" text-anchor="middle" font-size="' + (sz*0.55) + '">' + icon + '</text></svg>';
+}
 
 // 赛博朋克头像 — 根据名字生成独特的机械义眼风格
 function cyberSvg(name, color, size) {
@@ -1636,7 +1796,7 @@ function renderAgentTab(status, agentsData) {
     const keyEnc = jsStr(k);
     return `<div class="agent-card">
       <div class="top" style="cursor:pointer" data-action="showAgent" data-arg="${keyEnc}">
-        <div class="name">${cyberSvg(k, color, 28)} ${esc(AGENT_NAMES[k] || v.name || k)}</div>
+        <div class="name">${avatarSvg(k, color, 28)} ${esc(AGENT_NAMES[k] || v.name || k)}</div>
         <span class="type-badge" style="color:${color}">${v.type}</span>
       </div>
       <div class="role" style="cursor:pointer" data-action="showAgent" data-arg="${keyEnc}">${v.role || '—'}</div>
@@ -1852,70 +2012,111 @@ async function showAgent(name) {
     const msgs = inbox.messages || [];
     const privateMsgs = msgs.filter(m => m.type !== 'system');
     const unreadPrivate = privateMsgs.filter(m => !m.read);
-
+    const gifUrl = profile.avatar_animated || ('avatars/' + name + '_animated.webp');
     const nameEnc = jsStr(name);
-    let html = `<div class="header">
-      <h2>${cyberSvg(agentName, AGENT_COLORS[cfg.type] || '#93c5fd', 36)} ${esc(agentName)} <span style="font-size:12px;color:var(--text-muted);font-weight:400">${cfg.type || ''}</span></h2>
-      <div>
-        <button class="btn btn-sm" data-action="launchAgentModal" data-arg="${nameEnc}" data-mode="browser" style="${getPerm(name,'browser') ? '' : 'display:none'}">🌐 浏览器</button>
-        <button class="btn btn-sm" data-action="launchAgentModal" data-arg="${nameEnc}" data-mode="cli" style="margin-left:4px;${getPerm(name,'cli') ? '' : 'display:none'}">💻 CLI</button>
-        <button class="btn btn-sm" data-action="closeModal" style="margin-left:4px">✕</button>
-      </div>
-    </div>`;
-    html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px">`;
-    if (cfg.type) html += `<span class="badge badge-blue">${cfg.type}</span>`;
-    if (cfg.role) html += `<span style="color:var(--text-secondary);font-size:12px">${cfg.role}</span>`;
-    if (cfg.models) html += `<span style="color:var(--text-muted);font-size:11px">${cfg.models.join(', ')}</span>`;
-    html += `</div>`;
-    html += `<div style="display:flex;gap:16px;font-size:11px;color:var(--text-muted);margin:8px 0 4px">
-      <span>📨 总计 <strong style="color:var(--text-primary)">${inbox.total_messages || 0}</strong></span>
-      <span>📬 私信 <strong style="color:var(--accent-cyan)">${privateMsgs.length}</strong></span>
-      <span>💌 未读 <strong style="color:var(--accent-cyan)">${unreadPrivate.length}</strong></span>
-    </div>`;
-    if (profile.identity) html += `<div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin:12px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--border)">🧬 身份</div><div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:13px;line-height:1.7;max-height:200px;overflow-y:auto">${mdToHtml(profile.identity)}</div>`;
-    if (profile.soul) html += `<div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin:12px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--border)">💫 人设</div><div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:13px;line-height:1.7;max-height:200px;overflow-y:auto">${mdToHtml(profile.soul)}</div>`;
-    if (profile.skills && profile.skills.length > 0) {
-      html += `<div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin:12px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--border)">🛠 技能 (${profile.skills.length})</div><div>`;
-      profile.skills.forEach(s => { html += `<span style="display:inline-block;background:#0c1929;color:#93c5fd;padding:3px 10px;border-radius:12px;font-size:11px;margin:2px">${s}</span>`; });
-      html += `</div>`;
-    }
-    const allReplies = (rawData.replies && rawData.replies.replies) || [];
-    const agentReplies = allReplies.filter(r => r.agent === name).slice(0, 5);
-    if (agentReplies.length > 0) {
-      html += `<div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin:12px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--border)">💬 最近回复</div>`;
-      for (const r of agentReplies) {
-        const replyText = (r.reply || '').replace(/\u001b\[[0-9;]*m/g, '').slice(0, 150);
-        html += `<div class="msg-item" style="font-size:12px;margin-bottom:6px">
-          <div style="display:flex;justify-content:space-between;color:var(--text-secondary)"><span>📨 ${((r.msg_ids||[]).join(', ')).slice(0, 30)}</span><span style="font-size:10px">${(r.timestamp||'').slice(0,16)}</span></div>
-          <div style="color:var(--accent-cyan);font-size:11px;border-left:2px solid var(--accent-cyan);padding-left:8px;margin-top:2px">💬 ${esc(replyText)}</div>
-        </div>`;
-      }
-    }
-    const inboxMsgs = msgs.filter(m => m.actions && m.actions.length > 0).slice(0, 5);
-    if (inboxMsgs.length > 0) {
-      html += `<div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin:12px 0 4px;padding-bottom:4px;border-bottom:1px solid var(--border)">📋 任务进度</div>`;
-      for (const im of inboxMsgs) {
-        const actions = im.actions || [];
-        const done = actions.filter(a => a.status === 'done').length;
-        const total = actions.length;
-        const pct = Math.round((done / total) * 100);
-        html += `<div style="background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px">
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-bottom:4px"><span>📨 ${esc(im.id || '').slice(0, 24)}</span><span>${done}/${total} · ${pct}%</span></div>
-          <div style="background:rgba(30,41,59,0.8);border-radius:4px;height:4px;overflow:hidden;margin-bottom:6px"><div style="width:${pct}%;height:100%;background:linear-gradient(90deg,var(--accent-cyan),#06b6d4);border-radius:4px;transition:width .3s"></div></div>
-          ${actions.map((a) => `<div style="display:flex;align-items:center;gap:6px;font-size:11px;padding:2px 0">
-            <span>${a.status === 'done' ? '✅' : a.status === 'processing' ? '🔄' : '⬜'}</span>
-            <span style="flex:1;color:${a.status === 'done' ? '#6ee7b7' : a.status === 'processing' ? '#fbbf24' : '#475569'}">${esc(a.step)}</span>
-            <span style="font-size:9px;color:var(--text-muted)">${a.status}</span>
-          </div>`).join('')}
-        </div>`;
-      }
-    }
-    document.getElementById('agentModalContent').innerHTML = html;
+    const idText = profile.identity || '';
+
+    // 从身份文本提取字段（去掉 ** 标记）
+    var age=(idText.match(/\*\*年龄\*\*[：:]\s*(\S+)/)||[])[1]||'';
+    var z=(idText.match(/\*\*星座\*\*[：:]\s*(\S+)/)||[])[1]||'';
+    var m=(idText.match(/\*\*MBTI\*\*[：:]\s*(\S+)/)||[])[1]||'';
+    var r=(idText.match(/\*\*角色\*\*[：:]\s*(.+)/)||[])[1]||cfg.role||'';
+    var q=(idText.match(/\*\*座右铭\*\*[：:]\s*(.+)/)||[])[1]||'';
+    var gender=(idText.match(/\*\*性别\*\*[：:]\s*(\S+)/)||[])[1]||'';
+    var traits=[];
+    var tm=idText.match(/核心特质[\s\S]*?(?=##|$)/);
+    if(tm){tm[0].split('\n').forEach(function(l){var x=l.match(/-\s+\*\*(.+?)\*\*/);if(x && !x[1].match(/ENTJ|摩羯|冷脸|对子言/))traits.push(x[1]);});}
+    var work='';
+    var wm=idText.match(/##\s*职责[\s\S]*?(?=##|$)/);
+    if(wm)work=wm[0].replace(/##\s*职责[：:]*\s*/,'').trim();
+
+    var h='<div class="modal-drag-handle" style="cursor:move;padding:12px 16px;border-bottom:1px solid rgba(51,65,85,0.2);display:flex;justify-content:space-between;align-items:center;user-select:none">'
+      + '<span style="font-size:16px;font-weight:600;color:var(--text-primary)">'+esc(agentName)+' <span style="font-size:12px;color:var(--text-muted);font-weight:400">'+esc(cfg.type||'')+'</span></span>'
+      + '<button class="btn btn-sm" data-action="closeModal">✕</button></div>';
+    h+='<div style="display:flex;gap:20px;padding:16px">';
+    // 左栏：动图
+    h+='<div style="flex:0 0 380px;display:flex;flex-direction:column;align-items:center;gap:12px">'
+      + '<div style="width:340px;height:400px;border-radius:14px;overflow:hidden;border:1px solid var(--border);background:rgba(15,23,42,0.6);display:flex;align-items:center;justify-content:center">'
+      + '<img src="'+jsStr(gifUrl)+'" style="width:100%;height:100%;object-fit:contain" alt="'+esc(agentName)+'" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
+      + '<div style="display:none;align-items:center;justify-content:center;color:var(--text-muted);font-size:14px">暂无动图</div></div></div>';
+    // 右栏：名片信息
+    h+='<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:10px">';
+    // 顶部统计
+    h+='<div style="display:flex;gap:16px;font-size:12px;color:var(--text-muted);flex-wrap:wrap;padding-bottom:8px;border-bottom:1px solid rgba(51,65,85,0.15)">'
+      + '<span>📨 <strong style="color:var(--text-primary)">'+(inbox.total_messages||0)+'</strong></span>'
+      + '<span>📬 <strong style="color:var(--accent-cyan)">'+privateMsgs.length+'</strong></span>'
+      + '<span>💌 <strong style="color:var(--accent-cyan)">'+unreadPrivate.length+'</strong></span>'
+      + (cfg.models?'<span>🧠 '+cfg.models.join(', ')+'</span>':'')
+      + '</div>';
+    // 核心信息卡片
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+    if(age||z)h+='<div style="background:rgba(15,23,42,0.5);border:1px solid rgba(51,65,85,0.25);border-radius:10px;padding:10px 12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">🎂 年龄 · 星座</div><div style="font-size:16px;font-weight:600;color:var(--text-primary)">'+esc(age)+(z?' <span style="color:var(--text-secondary);font-size:13px;font-weight:400">'+esc(z)+'</span>':'')+'</div></div>';
+    if(gender)h+='<div style="background:rgba(15,23,42,0.5);border:1px solid rgba(51,65,85,0.25);border-radius:10px;padding:10px 12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">⚤ 性别</div><div style="font-size:16px;font-weight:600;color:var(--text-primary)">'+esc(gender)+'</div></div>';
+    if(m)h+='<div style="background:rgba(15,23,42,0.5);border:1px solid rgba(51,65,85,0.25);border-radius:10px;padding:10px 12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">🧠 MBTI</div><div style="font-size:16px;font-weight:600;color:var(--accent-cyan)">'+esc(m)+'</div></div>';
+    h+='</div>';
+    // 角色 + 工作内容 + 座右铭
+    if(r)h+='<div style="background:rgba(15,23,42,0.5);border:1px solid rgba(51,65,85,0.25);border-radius:10px;padding:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">🎯 角色</div><div style="font-size:15px;color:var(--text-primary)">'+esc(r)+'</div></div>';
+    if(work)h+='<div style="background:rgba(15,23,42,0.5);border:1px solid rgba(59,130,246,0.1);border-radius:10px;padding:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">🔧 工作内容</div><div style="font-size:13px;color:var(--text-secondary);line-height:1.7">'+work.replace(/\n/g,'').replace(/^- /,'• ').replace(/- /g,'<br>• ').substring(0,300)+'</div></div>';
+    if(q)h+='<div style="background:rgba(0,212,255,0.03);border:1px solid rgba(0,212,255,0.1);border-radius:10px;padding:12px"><div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">💬 座右铭</div><div style="font-size:14px;font-style:italic;color:var(--accent-cyan)">"'+esc(q)+'"</div></div>';
+    // 性格特征标签
+    if(traits.length)h+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:2px">'+traits.slice(0,4).map(function(t2){return '<span style="background:rgba(0,212,255,0.06);color:var(--accent-cyan);padding:3px 10px;border-radius:8px;font-size:12px;border:1px solid rgba(0,212,255,0.08)">'+esc(t2)+'</span>';}).join('')+'</div>';
+    h+='</div></div></div>';
+    // 左右分栏下方居中按钮
+    h+='<div style="text-align:center;padding:0 16px 4px;margin-top:-8px"><button class="btn btn-sm" data-action="showFullProfile" data-arg="'+nameEnc+'" style="padding:6px 24px;font-size:12px;background:rgba(0,212,255,0.06);border-color:rgba(0,212,255,0.15)">📄 查看完整档案</button></div>';
+
+    document.getElementById('agentModalContent').innerHTML = h;
     document.getElementById('agentModal').classList.add('open');
-  } catch(e) { toast('加载失败: ' + e.message, 'error'); }
+    // 启用拖动
+    _enableDrag();
+  } catch(e) {
+    console.error('showAgent error:', e);
+  }
+}
+
+async function showFullProfile(name) {
+  try {
+    const profile = await fetchJSON('/api/agent-profile/' + name);
+    const cfg = profile.config || {};
+    const agentName = cfg.name || name;
+    const idText = profile.identity || '';
+
+    var age=(idText.match(/\*\*年龄\*\*[：:]\s*(\S+)/)||[])[1]||'';
+    var z=(idText.match(/\*\*星座\*\*[：:]\s*(\S+)/)||[])[1]||'';
+    var m=(idText.match(/\*\*MBTI\*\*[：:]\s*(\S+)/)||[])[1]||'';
+    var r=(idText.match(/\*\*角色\*\*[：:]\s*(.+)/)||[])[1]||cfg.role||'';
+    var q=(idText.match(/\*\*座右铭\*\*[：:]\s*(.+)/)||[])[1]||'';
+    var traits=[];
+    var tm=idText.match(/核心特质[\s\S]*?(?=##|$)/);
+    if(tm){var lines=tm[0].split('\n');for(var i=0;i<lines.length;i++){var x=lines[i].match(/-\s+\*\*(.+?)\*\*/);if(x && !x[1].match(/ENTJ|摩羯|冷脸|对子言/))traits.push(x[1]);}}
+    var work='';
+    var wm=idText.match(/##\s*职责[\s\S]*?(?=##|$)/);
+    if(wm)work=wm[0].replace(/##\s*职责[：:]*\s*/,'').trim();
+
+    var h='<div class="modal-drag-handle" style="cursor:move;padding:12px 16px;border-bottom:1px solid rgba(51,65,85,0.2);display:flex;justify-content:space-between;align-items:center;user-select:none">'
+      + '<span style="font-size:18px;font-weight:600;color:var(--text-primary)">📄 '+esc(agentName)+' 完整档案</span>'
+      + '<button class="btn btn-sm" data-action="closeProfileModal">✕</button></div>';
+    h+='<div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px">';
+    if(age||z)h+='<div style="background:linear-gradient(135deg,rgba(15,23,42,0.8),rgba(20,30,50,0.6));border:1px solid rgba(51,65,85,0.3);border-radius:12px;padding:14px"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">年龄 · 星座</div><div style="font-size:18px;font-weight:600;color:var(--text-primary)">'+esc(age)+'</div>'+(z?'<div style="font-size:14px;color:var(--text-secondary);margin-top:4px">'+esc(z)+'</div>':'')+'</div>';
+    if(m)h+='<div style="background:linear-gradient(135deg,rgba(15,23,42,0.8),rgba(20,30,50,0.6));border:1px solid rgba(51,65,85,0.3);border-radius:12px;padding:14px"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">MBTI</div><div style="font-size:18px;font-weight:600;color:var(--accent-cyan)">'+esc(m)+'</div></div>';
+    h+='</div>';
+    if(r)h+='<div style="margin-top:10px;background:linear-gradient(135deg,rgba(15,23,42,0.8),rgba(20,30,50,0.6));border:1px solid rgba(51,65,85,0.3);border-radius:12px;padding:14px"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">角色</div><div style="font-size:16px;font-weight:500;color:var(--text-primary)">'+esc(r)+'</div></div>';
+    if(q)h+='<div style="margin-top:10px;background:linear-gradient(135deg,rgba(0,212,255,0.04),rgba(20,30,50,0.4));border:1px solid rgba(0,212,255,0.12);border-radius:12px;padding:14px"><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">座右铭</div><div style="font-size:15px;font-style:italic;color:var(--accent-cyan)">"'+esc(q)+'"</div></div>';
+    if(traits.length){
+      h+='<div style="margin-top:12px;background:linear-gradient(135deg,rgba(15,23,42,0.8),rgba(20,30,50,0.6));border:1px solid rgba(51,65,85,0.3);border-radius:12px;padding:16px"><div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:1px">⭐ 性格特征</div>';
+      traits.forEach(function(t,i){h+='<div style="display:flex;align-items:start;gap:10px;margin-bottom:'+(i<traits.length-1?'8px':'0')+'"><span style="color:var(--accent-cyan);font-size:16px;margin-top:1px">◆</span><div><div style="font-size:14px;color:var(--text-primary);font-weight:500">'+esc(t.split('—')[0]||t)+'</div>'+(t.indexOf('—')>0?'<div style="font-size:12px;color:var(--text-secondary);margin-top:2px">'+esc(t.split('—').slice(1).join('—'))+'</div>':'')+'</div></div>';});
+      h+='</div>';
+    }
+    if(work){
+      h+='<div style="margin-top:12px;background:linear-gradient(135deg,rgba(15,23,42,0.8),rgba(20,30,50,0.6));border:1px solid rgba(59,130,246,0.15);border-radius:12px;padding:14px"><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">🔧 工作内容</div><div style="font-size:14px;line-height:1.8;color:var(--text-secondary)">'+work.replace(/\n/g,'').replace(/^- /,'• ').replace(/- /g,'<br>• ')+'</div></div>';
+    }
+    document.getElementById('profileModalContent').innerHTML = h;
+    document.getElementById('profileModal').classList.add('open');
+    _enableDrag('profileModal');
+  } catch(e) { console.error('showFullProfile error:', e); }
 }
 
 function closeModal() { document.getElementById('agentModal').classList.remove('open'); }
+function closeProfileModal() { document.getElementById('profileModal').classList.remove('open'); }
 
 // ═══════════════ 统计图表 ═══════════════
 
@@ -2152,7 +2353,7 @@ function renderReviewTab() {
   const reviewEntries = [];
   tasks.forEach(t => {
     const chain = t.chain || [];
-    const reviewStep = chain.find(h => h.agent === 'lingjian' && h.status === 'done');
+    const reviewStep = findReviewStep(chain);
     if (reviewStep) {
       reviewEntries.push({
         task: t,
@@ -2193,7 +2394,7 @@ function showReviewFromChain(taskId) {
   const t = tasks.find(x => x.task_id === taskId);
   if (!t) return;
   const chain = t.chain || [];
-  const reviewStep = chain.find(h => h.agent === 'lingjian');
+  const reviewStep = findReviewStep(chain) || chain.find(function(h) { return chainStepPerson(h) === 'lingjian'; });
   const report = reviewStep ? (reviewStep.report || reviewStep.action || '无详细报告') : '无详细报告';
   const html = `<div class="header">
     <h2>📄 审查报告 · ${esc(t.summary || '').substring(0, 50)}</h2>
@@ -2209,13 +2410,17 @@ function showTaskChainDetail(taskId) {
   const tasks = (rawData.tasks && rawData.tasks.tasks) || [];
   const t = tasks.find(x => x.task_id === taskId);
   if (!t) return;
-  const chain = (t.chain || []).map(h => {
-    const icon = AGENT_ICONS[h.agent] || '?';
-    const s = h.status === 'done' ? '✅' : h.status === 'failed' ? '❌' : '⏳';
-    return `<div style="margin:4px 0;font-size:12px;padding:4px 8px;border-left:2px solid ${h.status === 'done' ? 'var(--accent-green)' : h.status === 'failed' ? 'var(--accent-red)' : 'var(--accent-cyan)'}">
-      <span>${s} ${icon}${h.agent}</span>
+  const chain = expandTaskChain(t).map(h => {
+    const person = chainStepPerson(h);
+    const role = chainStepRole(h);
+    const icon = AGENT_ICONS[person] || (role ? role.slice(0, 2) : '?');
+    const label = person ? (AGENT_NAMES[person] || person) : role;
+    const s = (h.status === 'done' || h.status === 'completed') ? '✅' : h.status === 'failed' ? '❌' : '⏳';
+    const ts = h.completed_at || h.started_at || h.at || '';
+    return `<div style="margin:4px 0;font-size:12px;padding:4px 8px;border-left:2px solid ${s === '✅' ? 'var(--accent-green)' : s === '❌' ? 'var(--accent-red)' : 'var(--accent-cyan)'}">
+      <span>${s} ${icon}${label}${role && person ? '(' + role + ')' : ''}${h._planned ? '(待)' : ''}</span>
       <span style="color:var(--text-muted);margin-left:8px">${h.action || h.status || ''}</span>
-      <span style="color:var(--text-muted);float:right">${(h.at||'').substring(0,16)}</span>
+      <span style="color:var(--text-muted);float:right">${ts.substring(0,16)}</span>
     </div>`;
   }).join('');
   const html = `<div class="header">
@@ -2513,18 +2718,15 @@ async function renderTaskAuditTab() {
   const el = document.getElementById('taskAuditList');
   if (!el) return;
   let tasksData = null, reportsData = null;
-  try { [tasksData, reportsData] = await Promise.all([ fetchJSON('/api/tasks'), fetchJSON('/api/reports') ]); }
+  try { [tasksData, reportsData] = await Promise.all([ fetchJSON(TASKS_API), fetchJSON('/api/reports') ]); }
   catch(e) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px">⚠️ 数据加载失败</div>'; return; }
   const tasks = (tasksData && tasksData.tasks) || [];
   let filtered = tasks;
   if (_auditFilter === 'pending-audit') {
-    filtered = tasks.filter(t => { 
-      var tid = (t.task_id || t.id || '').toLowerCase();
-      if (tid.startsWith('patrol') || tid.startsWith('notice') || tid.startsWith('heartbeat') || tid.startsWith('confirm')) return false;
-      var chain = t.chain || [];
-      var hasFlow = chain.some(function(s) { return s.to_role || s.from_role; });
-      if (!hasFlow) return false;
-      var s = (t.status || '').toLowerCase(); return (s === 'success' || s === 'failed' || s === 'timeout') && (!t.audit_log || t.audit_log.length === 0); 
+    filtered = tasks.filter(function(t) {
+      if (!taskNeedsAudit(t)) return false;
+      var s = (t.status || '').toLowerCase();
+      return (s === 'success' || s === 'failed' || s === 'timeout') && (!t.audit_log || t.audit_log.length === 0);
     });
   } else if (_auditFilter !== 'all') {
     filtered = tasks.filter(t => (t.status || '').toLowerCase() === _auditFilter);
@@ -2533,18 +2735,16 @@ async function renderTaskAuditTab() {
   if (filtered.length === 0) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px;text-align:center">📭 无匹配任务</div>'; return; }
   const defaultExpanded = 5;
   el.innerHTML = filtered.map((task, idx) => {
-    const tid = task.task_id || ''; const summary = task.summary || '-'; const assignee = task.assignee || '-';
+    const tid = task.task_id || ''; const summary = task.summary || '-';
+    const assignee = task.assignee || '-';
+    const auditor = getAuditReviewer(task);
     const status = (task.status || 'unknown').toLowerCase(); const updatedAt = (task.updated_at || task.created_at || '').substring(0, 16);
-    const chain = (task.chain || []).map(h => `${AGENT_ICONS[h.agent] || '?'}${h.agent}`).join(' → ');
+    const chain = formatTaskChainArrow(task);
     const errMsg = task.error ? (typeof task.error === 'string' ? task.error : (task.error.detail || '')) : '';
-    // 只有 task_id 以特定前缀开头或有 to_role 的才需要审计
-    var __needsAuditTid = (task.task_id || task.id || '').toLowerCase();
-    var __needsAudit = !(__needsAuditTid.startsWith('patrol') || __needsAuditTid.startsWith('notice') || __needsAuditTid.startsWith('heartbeat') || __needsAuditTid.startsWith('confirm'));
-    if (__needsAudit) {
-      var __needsAuditChain = task.chain || [];
-      __needsAudit = __needsAuditChain.some(function(s) { return s.to_role || s.from_role; });
-    }
+    var __needsAudit = taskNeedsAudit(task);
     const hasAudit = __needsAudit && task.audit_log && task.audit_log.length > 0;
+    const auditTerminal = ['success', 'failed', 'timeout'].includes(status);
+    const auditBadge = __needsAudit ? (hasAudit ? '<span style="font-size:11px;color:var(--accent-green)">✓ 已审计</span>' : (auditTerminal ? '<span style="font-size:11px;color:var(--accent-gold)">⏳ 待审计</span>' : '<span style="font-size:11px;color:var(--text-muted)">▶ 执行中</span>')) : '';
     const expanded = idx < defaultExpanded;
     let auditHtml = '';
     if (hasAudit) {
@@ -2560,14 +2760,15 @@ async function renderTaskAuditTab() {
           <span style="font-size:10px;color:var(--text-muted)">${expanded ? '▼' : '▶'}</span>
           <span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(summary)}</span>
           <span style="font-size:11px">${statusBadge(status)}</span>
-          ${__needsAudit ? (hasAudit ? '<span style="font-size:11px;color:var(--accent-green)">✓ 已审计</span>' : '<span style="font-size:11px;color:var(--accent-gold)">⏳ 待审计</span>') : ''}
+          ${auditBadge}
         </div>
         <span style="font-size:11px;color:var(--text-muted);white-space:nowrap">${updatedAt}</span>
       </div>
       <div class="audit-body" style="padding:0 12px 10px 32px;${expanded ? '' : 'display:none'}">
         <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--text-secondary);margin-bottom:6px">
           <span><span style="color:var(--text-muted)">ID:</span> ${esc(tid.substring(0, 24))}</span>
-          <span><span style="color:var(--text-muted)">负责人:</span> ${AGENT_ICONS[assignee] || ''}${esc(assignee)}</span>
+          ${__needsAudit ? '<span><span style="color:var(--text-muted)">审计负责人:</span> ' + (AGENT_ICONS[auditor] || '🔍') + esc(AGENT_NAMES[auditor] || auditor) + '</span>' : ''}
+          ${status === 'running' ? '<span><span style="color:var(--text-muted)">当前执行:</span> ' + (AGENT_ICONS[assignee] || '') + esc(AGENT_NAMES[assignee] || assignee) + '</span>' : ''}
           <span><span style="color:var(--text-muted)">状态:</span> ${AUDIT_STATUS_MAP[status] || esc(status)}</span>
         </div>
         ${chain ? '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px"><span style="color:var(--text-muted)">追踪链:</span> '+chain+'</div>' : ''}
@@ -2584,7 +2785,7 @@ async function renderZiyanTab() {
   const elTeam = document.getElementById('ziyanTeam');
   if (!elTeam) return;
   let inboxData = null, statusData = null, alertsData = null, taskData = null;
-  try { [inboxData, statusData, alertsData, taskData] = await Promise.all([ fetchJSON('/api/inbox/lingzhao'), fetchJSON('/api/status'), fetchJSON('/api/alerts'), fetchJSON('/api/tasks') ]); }
+  try { [inboxData, statusData, alertsData, taskData] = await Promise.all([ fetchJSON(INBOX_API('lingzhao')), fetchJSON('/api/status'), fetchJSON('/api/alerts'), fetchJSON(TASKS_API) ]); }
   catch(e) { elTeam.innerHTML = '<div style="color:var(--text-muted);font-size:13px">⚠️ 数据加载失败</div>'; return; }
 
   const agentStatuses = (statusData && statusData.agent_statuses) || {};
@@ -2672,7 +2873,7 @@ async function renderZiyanTab() {
 var _taskBoardData = null;
 
 function showPendingModal() {
-  fetchJSON('/api/inbox/lingzhao').then(function(data) {
+  fetchJSON(INBOX_API('lingzhao')).then(function(data) {
     var msgs = (data && data.messages) || [];
     var terminalStates = new Set(['done', 'closed', 'rejected', 'failed', 'archived', 'sent']);
     var pending = msgs.filter(function(m) { var s = (m.state || m.status || '').toLowerCase(); return !terminalStates.has(s); });
@@ -2713,7 +2914,7 @@ function showAlertModal() {
 }
 
 function showRunningTasksModal() {
-  fetchJSON('/api/tasks').then(function(data) {
+  fetchJSON(TASKS_API).then(function(data) {
     var tasks = (data && data.tasks) || [];
     var running = tasks.filter(function(t) { return t.status === 'running'; }).slice(0, 20);
     var html = running.map(function(t) {
@@ -2741,7 +2942,7 @@ async function renderMyTaskBoard() {
   const elBoard = document.getElementById('ziyanTaskBoard');
   if (elBoard) {
     try {
-      const td = await fetchJSON('/api/tasks');
+      const td = await fetchJSON(TASKS_API);
       const allTasks = (td && td.tasks) || [];
       // 筛选子言发起的 —— 取 chain[0] 是 lingzhao 的
       const myTasks = allTasks.filter(t => {
@@ -3006,19 +3207,19 @@ function renderTaskCard(task) {
   const currentRole = currentStep ? (currentStep.to_role || '') : '';
   const isRunning = task.status === 'running';
 
-  // 流转路径 — 每步可点击查看报告
-  const stepsHtml = chain.map((h, i) => {
-    const agent = h.agent || h.to_person || '?';
-    const role = h.to_role || '';
-    const icon = AGENT_ICONS[agent] || '?';
+  // 流转路径 — 含 planned_agents，每步可点击查看报告
+  const stepsHtml = expandTaskChain(task).map((h, i) => {
+    const agent = chainStepPerson(h) || '?';
+    const role = chainStepRole(h);
+    const icon = AGENT_ICONS[agent] || (role ? role.slice(0, 2) : '?');
     const s = h.status || 'pending';
     const isCompleted = s === 'completed' || s === 'done';
-    const statusIcon = isCompleted ? '✅' : (s === 'failed' ? '❌' : '⏳');
+    const statusIcon = h._planned ? '○' : (isCompleted ? '✅' : (s === 'failed' ? '❌' : '⏳'));
     const hasReport = h.report ? 1 : 0;
     var info = role ? role : agent;
-    var stepIdx = i;
+    var label = h._planned ? (AGENT_NAMES[agent] || agent) + '(待)' : (AGENT_NAMES[agent] || agent);
     var reportData = h.report ? encodeURIComponent(JSON.stringify(h.report)) : '';
-    return '<span style="font-size:12px;white-space:nowrap;cursor:' + (hasReport ? 'pointer' : 'default') + ';border-bottom:' + (hasReport ? '1px dashed rgba(0,212,255,0.3)' : 'none') + '" data-report=\'' + reportData + '\' data-info=\'' + jsStr(info) + '\' onclick="showChainReportFromAttr(this)" title="' + (hasReport ? '点击查看报告' : '等待中') + '">' + statusIcon + ' ' + icon + agent + '</span>';
+    return '<span style="font-size:12px;white-space:nowrap;cursor:' + (hasReport ? 'pointer' : 'default') + ';border-bottom:' + (hasReport ? '1px dashed rgba(0,212,255,0.3)' : 'none') + '" data-report=\'' + reportData + '\' data-info=\'' + jsStr(info) + '\' onclick="showChainReportFromAttr(this)" title="' + (hasReport ? '点击查看报告' : '等待中') + '">' + statusIcon + ' ' + icon + label + '</span>';
   }).join(' <span style="color:var(--text-muted);font-size:10px">→</span> ');
 
   const statusColor = task.status === 'failed' || task.status === 'timeout' ? 'var(--accent-red)' :
@@ -3341,9 +3542,34 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 
 // ═══════════════ 初始化 ═══════════════
 
-initParticles();
-initEventDelegation();
-loadAll();
+// 初始化（DOMContentLoaded 就绪后执行）
+function bootstrap() {
+  try { initParticles(); } catch(e) { console.warn('initParticles error:', e); }
+  try { initEventDelegation(); } catch(e) { console.warn('initEventDelegation error:', e); }
+  // 兜底：如果 loadAll 卡住，30秒后强制解除 loading overlay
+  var _safetyTimer = setTimeout(function() {
+    try { 
+      var _o = document.getElementById('loadingOverlay');
+      if (_o && _o.classList.contains('active')) {
+        _o.classList.remove('active');
+        console.warn('loading overlay safety timeout triggered');
+      }
+    } catch(e) {}
+  }, 30000);
+  loadAll().catch(function(e) {
+    console.error('loadAll error:', e);
+    try {
+      var _o = document.getElementById('loadingOverlay');
+      if (_o) _o.classList.remove('active');
+    } catch(e2) {}
+  }).then(function() { clearTimeout(_safetyTimer); });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootstrap);
+} else {
+  bootstrap();
+}
 
 
 </script>

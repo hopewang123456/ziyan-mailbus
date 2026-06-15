@@ -19,10 +19,19 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-AGENTMEMORY_URL = "http://localhost:3111"
+AGENTMEMORY_URL = os.environ.get("AGENTMEMORY_URL", "http://localhost:3111")
 
 # 已同步的消息 ID 记录文件（跟 inbox 同级，避免重复写入记忆）
 SYNC_MARKER_FILE = "sync_to_memory.json"
+
+
+def normalize_inbox(inbox_data, agent_name: str) -> list[dict]:
+    """兼容 inbox.json 的 dict / list 两种历史格式。"""
+    if isinstance(inbox_data, list):
+        return inbox_data
+    if isinstance(inbox_data, dict):
+        return inbox_data.get("messages", [])
+    return []
 
 
 def get_inboxes(data_dir: str) -> list[dict]:
@@ -45,6 +54,10 @@ def get_inboxes(data_dir: str) -> list[dict]:
         with open(inbox_file, "r", encoding="utf-8") as f:
             inbox_data = json.load(f)
 
+        messages = normalize_inbox(inbox_data, agent_name)
+        if not messages:
+            continue
+
         # 读取已同步记录
         synced_ids = set()
         if sync_marker.exists():
@@ -54,7 +67,9 @@ def get_inboxes(data_dir: str) -> list[dict]:
             except (json.JSONDecodeError, KeyError):
                 synced_ids = set()
 
-        for msg in inbox_data.get("messages", []):
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
             msg_id = msg.get("id", "")
             status = msg.get("status", "")
             content = msg.get("content", "")
@@ -116,6 +131,8 @@ def post_to_agentmemory(endpoint: str, payload: dict) -> dict:
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read().decode("utf-8"))
+    except TimeoutError:
+        return {"error": "timeout"}
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
         return {"error": f"HTTP {e.code}: {body}"}
@@ -144,9 +161,32 @@ def write_memory_to_agentmemory(agent: str, msg_id: str, content: str, from_agen
     return post_to_agentmemory("/agentmemory/remember", payload)
 
 
+SYNC_MARKER_FILE = "sync_to_memory.json"
+PENDING_DIR = "agentmemory-pending"
+
+
+def process_pending_queue(data_dir: str, limit: int = 5) -> int:
+    """处理 sync-team-rules 等写入的待同步记忆（remember 超时时入队）。"""
+    pending_dir = Path(data_dir) / PENDING_DIR
+    if not pending_dir.is_dir():
+        return 0
+    done = 0
+    for fpath in sorted(pending_dir.glob("*.json"))[:limit]:
+        data = json.loads(fpath.read_text(encoding="utf-8"))
+        payload = data.get("payload") or data
+        result = post_to_agentmemory("/agentmemory/remember", payload)
+        if result.get("success") or result.get("memory"):
+            fpath.unlink(missing_ok=True)
+            done += 1
+        elif result.get("error") == "timeout":
+            break
+    return done
+
+
 def main():
     parser = argparse.ArgumentParser(description="Sync mailbus messages to AgentMemory")
     parser.add_argument("--data-dir", required=True, help="mailbus data directory")
+    parser.add_argument("--limit", type=int, default=20, help="max messages per run (cron safety)")
     args = parser.parse_args()
 
     # 先检查 AgentMemory 是否可用
@@ -156,6 +196,10 @@ def main():
         # AgentMemory 不可用时不阻塞 mailbus scan
         print("[memory-bridge] AgentMemory 不可用，跳过同步")
         return
+
+    pending = process_pending_queue(args.data_dir, limit=5)
+    if pending:
+        print(f"[memory-bridge] pending queue: {pending} 条已写入")
 
     messages = get_inboxes(args.data_dir)
 
@@ -171,29 +215,40 @@ def main():
 
     success_count = 0
     fail_count = 0
-    # 按 agent 分组写入
-    for msg in actual_msgs:
-        result = write_memory_to_agentmemory(
-            agent=msg["agent"],
-            msg_id=msg["msg_id"],
-            content=msg["content"],
-            from_agent=msg["from"],
-            msg_type=msg["type"],
-        )
+    synced_this_run = []
+    # 按 agent 分组写入（每轮限量，避免 cron 阻塞）
+    for msg in actual_msgs[: max(args.limit, 1)]:
+        try:
+            result = write_memory_to_agentmemory(
+                agent=msg["agent"],
+                msg_id=msg["msg_id"],
+                content=msg["content"],
+                from_agent=msg["from"],
+                msg_type=msg["type"],
+            )
+        except Exception as e:
+            print(f"  [WARN] 同步异常 {msg['msg_id']}: {e}")
+            fail_count += 1
+            continue
         if result.get("success") or result.get("memory"):
             success_count += 1
+            synced_this_run.append(msg)
         else:
             print(f"  [WARN] 同步失败 {msg['msg_id']}: {result.get('error', 'unknown')}")
             fail_count += 1
 
-    # 更新同步标记文件
-    for op in sync_ops:
-        agent = op["_agent"]
-        synced = op["_synced_ids"]
-        pending = op["_pending_ids"]
-        if success_count > 0:
-            # 只把成功的标记为已同步
-            synced.update(pending)
+    # 更新同步标记文件（仅标记本轮成功的）
+    if synced_this_run:
+        by_agent: dict[str, list[str]] = {}
+        for msg in synced_this_run:
+            by_agent.setdefault(msg["agent"], []).append(msg["msg_id"])
+        for op in sync_ops:
+            agent = op["_agent"]
+            pending_ids = by_agent.get(agent)
+            if not pending_ids:
+                continue
+            synced = op["_synced_ids"]
+            synced.update(pending_ids)
             sync_file = Path(args.data_dir) / "inbox" / agent / SYNC_MARKER_FILE
             with open(sync_file, "w", encoding="utf-8") as f:
                 json.dump(sorted(synced), f, ensure_ascii=False)

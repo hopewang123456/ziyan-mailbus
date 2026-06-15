@@ -7,7 +7,12 @@ set -euo pipefail
 
 AGENT_KEY="${1:-}"
 LAUNCH_MODE="${2:-browser}"
-CONFIG_FILE="/mnt/e/ai_tools/mail/store/config.json"
+# 检测容器环境，自适应 config 路径
+if [ -f "/mailbus/store/config.json" ]; then
+  CONFIG_FILE="/mailbus/store/config.json"
+else
+  CONFIG_FILE="/mnt/e/ai_tools/mail/store/config.json"
+fi
 
 if [ -z "$AGENT_KEY" ]; then
   echo "Usage: launch-agent.sh <agent_key> [browser|cli]" >&2
@@ -20,6 +25,19 @@ PS_HELPER="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
 
 start_wsl() {
   local cmd="$1"
+  local name="${2:-${AGENT_KEY}}"
+  # 容器内：通过 watchdog queue 在宿主机弹窗
+  if [ -S /var/run/docker.sock ]; then
+    local ts=$(date +%s)
+    local queue_dir="/tmp/mailbus-launch-queue"
+    mkdir -p "$queue_dir" 2>/dev/null
+    local launch_file="${queue_dir}/${name}-${ts}.launch"
+    printf '%s\n%s\n' "$cmd" "$name" > "$launch_file"
+    chmod 666 "$launch_file" 2>/dev/null || true
+    echo "Launched $name (cli) [docker-wsl bridge, file: $launch_file]"
+    return 0
+  fi
+  # 宿主机：弹新 WSL 窗口
   local ts=$(date +%s)
   local script="/tmp/launch-window-${ts}.sh"
   cat > "$script" <<- HEREDOC
@@ -121,7 +139,9 @@ if [ "$LAUNCH_MODE" = "browser" ]; then
   case "$KIND" in
     "openclaw_gateway")
       PORT=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('gateway_port',18789))")
-      URL=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('url','http://localhost:{port}'))")
+      URL="http://localhost:${PORT}/chat"
+      TOKEN="${OPENCLAW_GATEWAY_TOKEN:-ziyan-team}"
+      URL="${URL}?token=${TOKEN}"
       URL=$(subst_vars "$URL" "port" "$PORT" "agent" "$AGENT_KEY")
       START_CMD=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('start_command',''))")
       WAIT_SEC=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('start_wait_seconds',20))")

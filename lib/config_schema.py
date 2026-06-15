@@ -54,6 +54,11 @@ CONFIG_SCHEMA = {
                                         "description": "Webhook 推送地址（可选）"},
                         "webhook_secret": {"type": "string",
                                            "description": "Webhook 签名密钥（可选）"},
+                        "max_concurrency": {"type": "integer", "minimum": 0, "maximum": 10, "default": 1},
+                        "name": {"type": "string"},
+                        "inbox": {"type": "string"},
+                        "profile_paths": {"type": "object"},
+                        "launch": {"type": "object"},
                     },
                     "additionalProperties": False
                 }
@@ -131,7 +136,8 @@ def validate_config(config: dict, config_path: str = "") -> list:
             # 检查未知字段
             allowed = {"type", "role", "profile", "agent", "agent_id", "provider",
                        "models", "webhook_url", "webhook_secret",
-                       "name", "inbox", "profile_paths", "launch"}
+                       "name", "inbox", "profile_paths", "launch",
+                       "max_concurrency"}
             extra = set(cfg.keys()) - allowed
             if extra:
                 errors.append(f"agents.{name}: 未知字段 {extra}")

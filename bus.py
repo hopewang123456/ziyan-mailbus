@@ -67,7 +67,7 @@ DEFAULT_CONFIG = {
 
 
 
-from lib.commands import load_config, save_config, cmd_init, cmd_scan, cmd_search, cmd_heartbeat, cmd_serve, cmd_send, cmd_broadcast, cmd_ack, cmd_mark_read, cmd_status, cmd_retry, cmd_archive, cmd_backup, cmd_errors, cmd_agent_add, cmd_agent_remove, cmd_review, cmd_launch, _add_data_dir_arg
+from lib.commands import load_config, save_config, cmd_init, cmd_scan, cmd_search, cmd_heartbeat, cmd_serve, cmd_send, cmd_broadcast, cmd_ack, cmd_mark_read, cmd_status, cmd_retry, cmd_archive, cmd_backup, cmd_errors, cmd_agent_add, cmd_agent_remove, cmd_review, cmd_launch, cmd_iteration, _add_data_dir_arg
 
 
 def main():
@@ -187,6 +187,12 @@ def main():
     p_sr.add_argument("--type", default="", help="按消息类型过滤")
     p_sr.add_argument("--status", default="", help="按状态过滤")
     p_sr.add_argument("--limit", type=int, default=20, help="最大返回条数")
+
+    # iteration — 三轮自迭代
+    p_it = sub.add_parser("iteration", help="三轮迭代：诊断→工单→协议")
+    _add_data_dir_arg(p_it)
+    p_it.add_argument("--round", default="1", help="1|2|3|all（默认 1，仅诊断）")
+    p_it.add_argument("--force", action="store_true", help="跳过 Round1 门禁（调试用）")
     
     args = parser.parse_args()
     
@@ -214,6 +220,7 @@ def main():
         "search": cmd_search,
         "review": cmd_review,
         "launch": cmd_launch,
+        "iteration": cmd_iteration,
     }
     
     return cmd_map[args.command](args)

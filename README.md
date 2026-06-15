@@ -40,9 +40,12 @@ mailbus init --data-dir /path/to/your/store
 # 3. Register an Agent
 mailbus agent-add agent-a --cli "your-cli --message" --role "your role"
 
-# 4. Start the bus (cron, scans every minute)
-crontab -e
-# Add: * * * * * cd /path/to/ziyan-mailbus && mailbus scan
+# 4. Start the bus (recommended: built-in Scheduler, no crontab)
+mailbus serve --host 0.0.0.0 --port 9812 --data-dir /path/to/your/store
+# SchedulerHub runs scan, memory_bridge, pipeline_watchdog automatically
+
+# Or scan manually:
+mailbus scan
 
 # 5. Send a message
 mailbus send agent-a --msg "Hello, please handle this task" --from lingzhao

@@ -17,10 +17,15 @@ def handle_inbox(handler, agent: str):
     
     支持查询参数:
         ?status_filter=pending  — 只返回待处理消息（默认返回全部）
+        ?limit=100              — 只返回最近 N 条（按 created_at 倒序，减轻 Dashboard 负载）
     """
     from urllib.parse import urlparse, parse_qs
     qs = parse_qs(urlparse(handler.path).query)
     status_filter = qs.get("status_filter", [None])[0]
+    try:
+        msg_limit = int(qs.get("limit", ["0"])[0])
+    except (ValueError, TypeError):
+        msg_limit = 0
     
     paths = resolve_paths(handler.data_dir)
     inbox_file = f"{paths['inbox']}/{agent}/inbox.json"
@@ -31,6 +36,9 @@ def handle_inbox(handler, agent: str):
     if not data:
         handler._send_json({"agent": agent, "messages": [], "has_unread": False}, 200)
         return
+    # v4.0: 兼容 inbox.json dict→list 格式迁移
+    if isinstance(data, list):
+        data = {"agent": agent, "has_unread": True, "messages": data, "since": _now_iso()}
     inbox = Inbox.from_dict(data)
     msg_count = len(inbox.messages)
     # P4: 非 terminal 态（pending/pushed/acknowledged/processing）视为未处理
@@ -39,7 +47,13 @@ def handle_inbox(handler, agent: str):
                  if (inbox.msg_field(m, "state", "") or inbox.msg_field(m, "status", ""))
                  not in terminal_states)
     msgs_out = []
-    for m in inbox.messages:
+    # limit>0：按时间倒序取最近 N 条（Dashboard 用，避免一次序列化整个 inbox）
+    source_msgs = list(inbox.messages)
+    if msg_limit > 0 and not status_filter:
+        def _ts(m):
+            return inbox.msg_field(m, "created_at", "") or inbox.msg_field(m, "received_at", "") or ""
+        source_msgs = sorted(source_msgs, key=_ts, reverse=True)[:msg_limit]
+    for m in source_msgs:
         msg = Message.from_dict(m) if isinstance(m, dict) else m
         # P4: 支持 status_filter 过滤
         if status_filter:
@@ -55,6 +69,7 @@ def handle_inbox(handler, agent: str):
     handler._send_json({
         "agent": agent, "has_unread": inbox.has_unread,
         "total": msg_count, "unread": unread, "messages": msgs_out,
+        "truncated": bool(msg_limit > 0 and msg_count > len(msgs_out)),
     })
 
 
@@ -71,6 +86,9 @@ def handle_mark_read(handler, agent: str):
     if not data:
         handler._send_json({"error": "inbox not found"}, 404)
         return
+    # v4.0: 兼容 inbox.json dict→list 格式迁移
+    if isinstance(data, list):
+        data = {"agent": agent, "has_unread": True, "messages": data, "since": _now_iso()}
     inbox = Inbox.from_dict(data)
     ts = __import__("datetime").datetime.now().isoformat()
     for mid in msg_ids:
@@ -107,6 +125,9 @@ def handle_send_msg(handler):
     paths = resolve_paths(handler.data_dir)
     inbox_file = f"{paths['inbox']}/{to}/inbox.json"
     inbox_data = json_read(inbox_file, {"agent": to, "has_unread": False, "messages": [], "since": _now_iso()})
+    # v4.0: 兼容 inbox.json dict→list 格式迁移
+    if isinstance(inbox_data, list):
+        inbox_data = {"agent": to, "has_unread": True, "messages": inbox_data, "since": _now_iso()}
     inbox = Inbox.from_dict(inbox_data)
     inbox.has_unread = True
     inbox.messages.append(msg.to_dict())
@@ -117,7 +138,7 @@ def handle_send_msg(handler):
         # 获取 agent 配置和 CLI 命令
         agent_cfg = handler.agents.get(to, {})
         model_alias = (agent_cfg.get("models") or [""])[0]
-        cli_chain = resolve_cli_chain(agent_cfg, model_alias, handler.agent_types)
+        cli_chain = resolve_cli_chain(agent_cfg, handler.agent_types)
         if cli_chain:
             cli_cmds = [c[0] for c in cli_chain]
             push_messages(handler.data_dir, to, [msg.to_dict()],
@@ -136,7 +157,12 @@ def handle_replies(handler):
     for name in handler.agents:
         inbox_file = f"{reply_base}/{name}/inbox.json"
         data = json_read(inbox_file, {})
-        if not data or "agent" not in data:
+        if not data:
+            continue
+        # v4.0: 兼容 inbox.json dict→list 格式迁移
+        if isinstance(data, list):
+            data = {"agent": name, "has_unread": True, "messages": data, "since": _now_iso()}
+        if "agent" not in data:
             continue
         try:
             inbox = Inbox.from_dict(data)
@@ -170,6 +196,9 @@ def handle_actions_update(handler, agent: str, msg_id: str):
     if not data:
         handler._send_json({"error": "inbox not found"}, 404)
         return
+    # v4.0: 兼容 inbox.json dict→list 格式迁移
+    if isinstance(data, list):
+        data = {"agent": agent, "has_unread": True, "messages": data, "since": _now_iso()}
     inbox = Inbox.from_dict(data)
     for i, m in enumerate(inbox.messages):
         mid = inbox.msg_field(m, "id", "")

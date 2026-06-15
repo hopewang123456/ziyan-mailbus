@@ -5,9 +5,11 @@ __pycache__/
 dist/
 build/
 
-# 运行数据（不提交）
+# Runtime data (do not commit)
 store/
+data/
 *.tmp
+deliverables/
 
 # 守护进程日志（运行时自动生成，不提交）
 logs/
