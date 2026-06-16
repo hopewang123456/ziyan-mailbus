@@ -1,0 +1,21 @@
+[Unit]
+Description=子言·AI 团队 Docker Agent 容器
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+# 不用 Requires=docker.service —— Docker 重启时不应触发 compose down 停掉全部容器
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=hopewang123456
+WorkingDirectory=/mnt/e/ai_tools/mail/docker-agents
+
+EnvironmentFile=-/mnt/e/ai_tools/mail/docker-agents/.env
+
+ExecStartPre=/bin/bash /mnt/e/ai_tools/mail/docker-agents/setup-container-proxy.sh
+ExecStart=/usr/bin/docker compose -f /mnt/e/ai_tools/mail/docker-agents/docker-compose.yml up -d --remove-orphans
+# 禁止 ExecStop 执行 compose down（这是 mailbus 断线的根因之一）
+ExecStop=/bin/true
+
+[Install]
+WantedBy=multi-user.target

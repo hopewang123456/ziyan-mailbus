@@ -2,7 +2,7 @@
 # ============================================================
 # mailbus-boot.sh v3.0 — 宿主机 legacy 启动器（DEPRECATED）
 #
-# Docker 部署请用: bash /mnt/e/ai_tools/docker-agents/start-team.sh
+# Docker 部署请用: bash docker-agents/start-team.sh
 # mailbus API + scan 已由容器内置 SchedulerHub 负责，勿在本机重复 bus serve。
 #
 # 用法:

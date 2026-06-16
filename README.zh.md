@@ -249,15 +249,20 @@ CLI 模板中用 `MODEL` 占位符，总线自动根据 agent 的 `models` 列�
 
 ## 三轮迭代与回归（Docker 团队）
 
-配合 `docker-agents` 编排使用时，可用以下脚本做端到端验证：
+# Docker 团队部署（仓库内 docker-agents/）
+
+配合仓库内 `docker-agents/` 编排使用时，可用以下脚本做端到端验证：
 
 ```bash
 # 全流程：Round1 gate → Round2 → monitor 回归
-bash /path/to/docker-agents/mailbus-pipeline-e2e.sh
+bash docker-agents/mailbus-pipeline-e2e.sh
 
 # 打怪升级小游戏 smoke
-bash /path/to/docker-agents/workflow-smoke.sh
+bash docker-agents/workflow-smoke.sh
 python3 tools/run-game-lvup-e2e.py --task-id game-lvup-YYYYMMDD-HHMMSS --data-dir store
+
+# 一键启动 Docker 团队（WSL）
+bash docker-agents/start-team.sh
 ```
 
 详见 `plans/mailbus-three-round-optimization.md` 与 `rules/iteration-protocol.md`。
@@ -277,6 +282,10 @@ ziyan-mailbus/
 │   ├── self_heal.py              # scan 前自愈
 │   ├── scanner.py                # 扫描 inbox → 构建推送队列（P2 串行）
 │   └── ...
+├── docker-agents/                # Docker 团队部署（compose、start-team、e2e 脚本）
+│   ├── docker-compose.yml
+│   ├── start-team.sh / stop-team.sh
+│   └── hermes-base/ openclaw-agent/ ...
 ├── tools/                        # 运维/回归脚本（e2e、triage、game-lvup 等）
 ├── rules/                        # 团队规范（init 时复制到 store/rules/）
 ├── mailbus-memory-bridge.py      # AgentMemory 桥接（可选）

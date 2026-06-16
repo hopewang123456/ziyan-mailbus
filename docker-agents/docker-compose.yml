@@ -1,0 +1,177 @@
+networks:
+  ziyan-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  mailbus-data:
+  iii-data:
+
+services:
+
+  mailbus:
+    build:
+      context: ./mailbus
+      dockerfile: Dockerfile
+    ports:
+      - "9812:9812"
+    networks:
+      - ziyan-net
+    volumes:
+      - /mnt/e/ai_tools/mail:/mailbus
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /tmp/mailbus-launch-queue:/tmp/mailbus-launch-queue
+    environment:
+      - DATA_DIR=/mailbus/store
+      - TZ=Asia/Shanghai
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-ziyan-team}
+      - AGENTMEMORY_URL=http://iii-engine:3111
+    restart: unless-stopped
+    command: ["python3", "-m", "bus", "serve", "--host", "0.0.0.0", "--port", "9812", "--data-dir", "/mailbus/store"]
+
+  iii-init:
+    image: busybox:1.36
+    user: "0:0"
+    volumes:
+      - iii-data:/data
+    entrypoint: ["sh", "-c", "chown -R 65532:65532 /data && chmod 755 /data"]
+    restart: "no"
+
+  iii-engine:
+    image: iiidev/iii:0.11.2
+    user: "65532:65532"
+    depends_on:
+      iii-init:
+        condition: service_completed_successfully
+    ports:
+      - "49134:49134"
+      - "3111:3111"
+      - "3112:3112"
+    networks:
+      - ziyan-net
+    volumes:
+      - iii-data:/data
+      - ./agentmemory/iii-config.docker.yaml:/app/config.yaml:ro
+    environment:
+      - III_ENGINE_URL=ws://localhost:49134
+    restart: unless-stopped
+
+  agentmemory:
+    image: node:22
+    user: "65532:65532"
+    depends_on:
+      iii-engine:
+        condition: service_started
+    networks:
+      - ziyan-net
+    volumes:
+      - /mnt/e/ai_tools/node_modules:/node_modules:ro
+    working_dir: /node_modules/@agentmemory/agentmemory
+    environment:
+      - NODE_PATH=/node_modules
+      - III_ENGINE_URL=ws://iii-engine:49134
+      - HOST=0.0.0.0
+    command: ["node", "dist/index.mjs"]
+    restart: unless-stopped
+
+  hermes:
+    build:
+      context: ./hermes-base
+    ports:
+      - "9120:9120"
+      - "9121:9121"
+      - "9122:9122"
+      - "9123:9123"
+      - "9124:9124"
+      - "9125:9125"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ziyan-net
+    volumes:
+      - /mnt/e/hermes-data/.hermes:/home/hermes/.hermes
+      - /mnt/e/ai_tools/mail/store/inbox:/home/hermes/inbox:ro
+      - /mnt/e/ai_tools/mail/identities:/home/hermes/identities:ro
+    environment:
+      - HERMES_HOME=/home/hermes/.hermes
+      - AGENTMEMORY_URL=http://iii-engine:3111
+      - TZ=Asia/Shanghai
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - AGENT_BROWSER_EXECUTABLE_PATH=/dev/null
+      - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
+      - HTTPS_PROXY=${CONTAINER_HTTPS_PROXY:-}
+      - NO_PROXY=localhost,127.0.0.1,::1,iii-engine,agentmemory,mailbus,172.28.0.0/16,host.docker.internal
+    restart: unless-stopped
+    depends_on:
+      - mailbus
+      - iii-engine
+    command: ["tail", "-f", "/dev/null"]
+
+  openclaw:
+    build:
+      context: ./openclaw-agent
+    ports:
+      - "18789:18789"
+      - "18790:18790"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ziyan-net
+    volumes:
+      - /mnt/e/ai_tools/openclaw_space:/workspace
+      - /mnt/e/ai_tools/mail/store/inbox:/inbox:ro
+      - /mnt/e/hermes-data/.hermes:/hermes-secrets:ro
+    environment:
+      - TZ=Asia/Shanghai
+      - HERMES_SECRETS_DIR=/hermes-secrets
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-ziyan-team}
+      - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
+      - HTTPS_PROXY=${CONTAINER_HTTPS_PROXY:-}
+      - NO_PROXY=localhost,127.0.0.1,::1,iii-engine,agentmemory,mailbus,172.28.0.0/16,host.docker.internal
+    restart: unless-stopped
+    depends_on:
+      - mailbus
+      - iii-engine
+    command: ["tail", "-f", "/dev/null"]
+
+  lingxiao:
+    build:
+      context: ./cline-agent
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ziyan-net
+    environment:
+      - TZ=Asia/Shanghai
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_BASE_URL=https://api.deepseek.com/v1
+      - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
+      - HTTPS_PROXY=${CONTAINER_HTTPS_PROXY:-}
+      - NO_PROXY=localhost,127.0.0.1,::1,iii-engine,agentmemory,mailbus,172.28.0.0/16,host.docker.internal
+    restart: unless-stopped
+    depends_on:
+      - mailbus
+    command: ["tail", "-f", "/dev/null"]
+
+  dali:
+    build:
+      context: ./opencode-agent
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ziyan-net
+    environment:
+      - TZ=Asia/Shanghai
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_BASE_URL=https://api.deepseek.com/v1
+      - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
+      - HTTPS_PROXY=${CONTAINER_HTTPS_PROXY:-}
+      - NO_PROXY=localhost,127.0.0.1,::1,iii-engine,agentmemory,mailbus,172.28.0.0/16,host.docker.internal
+    restart: unless-stopped
+    depends_on:
+      - mailbus
+    command: ["tail", "-f", "/dev/null"]

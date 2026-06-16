@@ -27,3 +27,10 @@ logs/
 # 系统
 .DS_Store
 Thumbs.db
+
+# docker-agents 敏感与运行时（勿提交）
+docker-agents/.env
+docker-agents/.env.secrets
+docker-agents/.proxy-state
+docker-agents/*.log
+docker-agents/*.env.local

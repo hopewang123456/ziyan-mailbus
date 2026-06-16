@@ -1,0 +1,35 @@
+# 子言 AI 团队 — 敏感信息勿提交
+.env
+.env.secrets
+.proxy-state
+*.env.local
+**/config.yaml
+!**/.env.example
+!**/config.yaml.example
+
+# Hermes / OpenClaw 运行时数据（含 API Key）
+hermes-data/
+**/profiles/*/auth.json
+**/profiles/*/logs/
+**/profiles/*/sessions/
+**/profiles/*/cache/
+
+# OpenClaw 运行时
+openclaw_space/data/
+
+# mailbus 运行时 inbox（可能含私密消息）
+mail/store/inbox/
+mail/store/heartbeat.json
+mail/store/*.db
+
+# 临时测试
+_test-*
+*.log
+/tmp/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db

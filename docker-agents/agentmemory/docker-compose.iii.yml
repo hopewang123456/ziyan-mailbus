@@ -1,0 +1,29 @@
+services:
+  iii-init:
+    image: busybox:1.36
+    user: "0:0"
+    volumes:
+      - iii-data:/data
+    entrypoint: ["sh", "-c", "chown -R 65532:65532 /data && chmod 755 /data"]
+    restart: "no"
+
+  iii-engine:
+    image: iiidev/iii:${AGENTMEMORY_III_VERSION:-0.11.2}
+    user: "65532:65532"
+    depends_on:
+      iii-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:49134:49134"
+      - "127.0.0.1:3111:3111"
+      - "127.0.0.1:3112:3112"
+    volumes:
+      - iii-data:/data
+      - ./iii-config.docker.yaml:/app/config.yaml:ro
+      # 挂载 agentmemory 源码
+      - /mnt/e/ai_tools/node_modules/@agentmemory/agentmemory/dist:/app/dist:ro
+      - /mnt/e/ai_tools/node_modules/@agentmemory/agentmemory/package.json:/app/package.json:ro
+    restart: unless-stopped
+
+volumes:
+  iii-data:

@@ -6,10 +6,14 @@ import subprocess
 from typing import Optional
 
 
+def _repo_root() -> str:
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 def _secrets_path() -> str:
     return os.environ.get(
         "MAILBUS_SECRETS",
-        "/mnt/e/ai_tools/docker-agents/.env.secrets",
+        os.path.join(_repo_root(), "docker-agents", ".env.secrets"),
     )
 
 
@@ -48,7 +52,7 @@ def write_via_mailbus_container(host_path: str, content: str) -> bool:
 
 
 def chown_store_path(host_path: str, user: str = "hopewang123456") -> bool:
-    wsl_sudo = "/mnt/e/ai_tools/docker-agents/wsl-sudo.sh"
+    wsl_sudo = os.path.join(_repo_root(), "docker-agents", "wsl-sudo.sh")
     if not os.path.isfile(wsl_sudo):
         return False
     pw = load_sudo_password()

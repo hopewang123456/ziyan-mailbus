@@ -1,0 +1,14 @@
+[Unit]
+Description=子言AI mailbus 终端弹窗 Watchdog
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/bin/bash /mnt/e/ai_tools/mail/mailbus-launch-watchdog.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

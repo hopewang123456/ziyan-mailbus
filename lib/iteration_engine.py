@@ -641,7 +641,7 @@ def run_round3(data_dir: str, agents: dict, backlog: Optional[dict] = None, forc
             "plan": "cd /mnt/e/ai_tools/mail && python3 -m bus iteration --round 2 --data-dir store",
             "protocol": "cd /mnt/e/ai_tools/mail && python3 -m bus iteration --round 3 --data-dir store",
             "full_cycle": "cd /mnt/e/ai_tools/mail && python3 -m bus iteration --round all --data-dir store",
-            "snapshot": "bash /mnt/e/ai_tools/docker-agents/task-flow-snapshot.sh",
+            "snapshot": "bash docker-agents/task-flow-snapshot.sh",
         },
         "backlog_status": {
             "total": len(backlog.get("items", [])),

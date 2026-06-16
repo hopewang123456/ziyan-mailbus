@@ -83,11 +83,12 @@ def check_cron_clean(data_dir: str, tail: int = 80) -> tuple[bool, list[str]]:
 
 
 def run_monitor_regression() -> tuple[bool, str]:
-    script = "/mnt/e/ai_tools/docker-agents/monitor-regression.sh"
+    da = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docker-agents")
+    script = os.path.join(da, "monitor-regression.sh")
     if not os.path.isfile(script):
         return True, "skip: no monitor script"
     try:
-        r = subprocess.run(["bash", script], capture_output=True, text=True, timeout=180, cwd="/mnt/e/ai_tools/docker-agents")
+        r = subprocess.run(["bash", script], capture_output=True, text=True, timeout=180, cwd=da)
         out = (r.stdout or "") + (r.stderr or "")
         ok = "FAIL=0" in out or (r.returncode == 0 and "FAIL: 0" in out)
         if "SUMMARY: PASS=" in out:
