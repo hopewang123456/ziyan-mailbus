@@ -1,0 +1,16 @@
+{
+  "agent_id": "mailbus",
+  "tool_id": "webhook-multi-publish",
+  "enabled": true,
+  "description": "mailbus workflow engine 默认 agent 调用多平台发布 webhook",
+  "input_map": {
+    "task_id": "task_id",
+    "content_id": "content_id",
+    "platforms": "platforms",
+    "assets": "assets",
+    "intent": "intent"
+  },
+  "output_path_template": "store/content/published/{content_id}.json",
+  "post_invoke": "write_file",
+  "notes": "live 前：n8n 导入 mailbus-multi-publish.workflow.json 并 Activate"
+}

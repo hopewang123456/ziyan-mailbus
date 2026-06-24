@@ -1,0 +1,16 @@
+{
+  "agent_id": "yige",
+  "tool_id": "coze-content-draft",
+  "enabled": true,
+  "description": "一哥：Coze 出多平台文案初稿",
+  "input_map": {
+    "angle": "angle",
+    "platform": "platform",
+    "hook": "hook",
+    "cta": "cta",
+    "content_id": "content_id"
+  },
+  "output_path_template": "/mailbus/store/content/drafts/{content_id}/script.json",
+  "post_invoke": "write_file",
+  "notes": "一哥润色后再进入发布流程；content_id 由一哥或 intake content_hint 生成"
+}

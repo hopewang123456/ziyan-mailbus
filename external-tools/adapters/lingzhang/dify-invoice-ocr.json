@@ -1,0 +1,14 @@
+{
+  "agent_id": "lingzhang",
+  "tool_id": "dify-invoice-ocr",
+  "enabled": true,
+  "description": "灵账：合同/发票 OCR，输出待复核结构化字段",
+  "input_map": {
+    "file_path": "file_path",
+    "doc_id": "doc_id",
+    "task_id": "task_id"
+  },
+  "output_path_template": "/mailbus/store/billing/parsed/{doc_id}.json",
+  "post_invoke": "write_file",
+  "notes": "OCR 结果必须经灵账人工或规则复核后写入 accounts.json"
+}

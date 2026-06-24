@@ -1,0 +1,11 @@
+{
+  "version": "0.2.0",
+  "agent_grants": {
+    "mailbus": ["image-generate", "webhook-multi-publish"],
+    "lingtuo": ["dify-lead-enrich"],
+    "lingzhang": ["dify-invoice-ocr"],
+    "yige": ["coze-content-draft", "webhook-multi-publish", "image-generate"],
+    "lingzhao": [],
+    "xiaoqi": []
+  }
+}

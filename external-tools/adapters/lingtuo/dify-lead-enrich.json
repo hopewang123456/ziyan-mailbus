@@ -1,0 +1,15 @@
+{
+  "agent_id": "lingtuo",
+  "tool_id": "dify-lead-enrich",
+  "enabled": true,
+  "description": "灵拓：对 pursue 商机调用 Dify 补背景与风险信号",
+  "input_map": {
+    "title": "title",
+    "summary": "summary",
+    "source_url": "source_url",
+    "intake_id": "intake_id"
+  },
+  "output_path_template": "/mailbus/store/leads/enriched/{intake_id}.json",
+  "post_invoke": "write_file",
+  "notes": "灵拓复核 enrichment 后再 merge 进 order-intake；勿自动改 decision"
+}

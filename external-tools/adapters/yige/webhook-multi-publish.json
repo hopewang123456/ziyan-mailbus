@@ -1,0 +1,14 @@
+{
+  "agent_id": "yige",
+  "tool_id": "webhook-multi-publish",
+  "enabled": false,
+  "description": "一哥：n8n 多平台发布（Phase2 启用）",
+  "input_map": {
+    "content_id": "content_id",
+    "platforms": "platforms",
+    "assets": "assets"
+  },
+  "output_path_template": "/mailbus/store/content/published/{content_id}.json",
+  "post_invoke": "write_file",
+  "notes": "启用前在 n8n 配好 webhook 并设置 N8N_PUBLISH_WEBHOOK_URL"
+}

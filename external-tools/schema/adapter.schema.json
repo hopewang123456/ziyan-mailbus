@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExternalToolAdapter",
+  "description": "单个 agent × tool 配对适配",
+  "type": "object",
+  "required": ["agent_id", "tool_id", "enabled"],
+  "properties": {
+    "agent_id": { "type": "string" },
+    "tool_id": { "type": "string" },
+    "enabled": { "type": "boolean" },
+    "description": { "type": "string" },
+    "input_map": {
+      "type": "object",
+      "description": "外部 API 字段名 → agent 传入 inputs 的键名",
+      "additionalProperties": { "type": "string" }
+    },
+    "output_path_template": {
+      "type": "string",
+      "description": "支持 {intake_id} {content_id} {doc_id} 等占位"
+    },
+    "post_invoke": {
+      "enum": ["none", "write_file", "merge_into_intake", "notify_inbox"],
+      "default": "write_file"
+    },
+    "notes": { "type": "string" }
+  }
+}

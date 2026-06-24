@@ -1,0 +1,61 @@
+{
+  "models": [
+    {
+      "slug": "deepseek-v4-flash",
+      "display_name": "DeepSeek V4 Flash",
+      "description": "DeepSeek chat（经 codex-deepseek-gateway，适合日常编码）",
+      "supported_reasoning_levels": [],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 0,
+      "upgrade": null,
+      "base_instructions": "",
+      "model_messages": null,
+      "supports_reasoning_summaries": false,
+      "default_reasoning_summary": "none",
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": "freeform",
+      "truncation_policy": { "mode": "tokens", "limit": 8192 },
+      "supports_parallel_tool_calls": true,
+      "supports_image_detail_original": false,
+      "context_window": 128000,
+      "auto_compact_token_limit": 96000,
+      "effective_context_window_percent": 95,
+      "experimental_supported_tools": [],
+      "input_modalities": ["text"]
+    },
+    {
+      "slug": "deepseek-reasoner",
+      "display_name": "DeepSeek Reasoner",
+      "description": "DeepSeek 推理模型（复杂架构/审查任务）",
+      "default_reasoning_level": "medium",
+      "supported_reasoning_levels": [
+        { "effort": "low", "description": "快速响应" },
+        { "effort": "medium", "description": "平衡速度与推理深度" },
+        { "effort": "high", "description": "复杂问题深度推理" }
+      ],
+      "shell_type": "shell_command",
+      "visibility": "list",
+      "supported_in_api": true,
+      "priority": 1,
+      "upgrade": null,
+      "base_instructions": "",
+      "model_messages": null,
+      "supports_reasoning_summaries": true,
+      "default_reasoning_summary": "auto",
+      "support_verbosity": false,
+      "default_verbosity": null,
+      "apply_patch_tool_type": "freeform",
+      "truncation_policy": { "mode": "tokens", "limit": 8192 },
+      "supports_parallel_tool_calls": true,
+      "supports_image_detail_original": false,
+      "context_window": 128000,
+      "auto_compact_token_limit": 96000,
+      "effective_context_window_percent": 95,
+      "experimental_supported_tools": [],
+      "input_modalities": ["text"]
+    }
+  ]
+}

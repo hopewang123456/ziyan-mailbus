@@ -54,8 +54,7 @@ _wsl_*.sh
 
 # 误生成的路径垃圾文件（勿提交）
 /C*/
-/E*/
-/;;*
+"/;; esac; done"*
 
 # 测试临时目录
 tests/_tmp_codex_home/
