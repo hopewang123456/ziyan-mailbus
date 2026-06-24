@@ -34,11 +34,12 @@ INBOX_DONE_STATES = frozenset({
 class TaskStatus:
     PENDING  = "pending"
     RUNNING  = "running"
+    PAUSED   = "paused"
     SUCCESS  = "success"
     FAILED   = "failed"
     TIMEOUT  = "timeout"
     CANCELLED = "cancelled"
-    ALL = {PENDING, RUNNING, SUCCESS, FAILED, TIMEOUT, CANCELLED}
+    ALL = {PENDING, RUNNING, PAUSED, SUCCESS, FAILED, TIMEOUT, CANCELLED}
 
 
 # ── 追踪链状态 ────────────────────────────────────────────────────────
@@ -83,26 +84,107 @@ class TaskTracker:
         return os.path.join(self.tasks_dir, f"{task_id}.json")
 
     def create(self, task_id: str, summary: str = "", assignee: str = "",
-               deliverable: str = "", chain_hops: list = None) -> dict:
+               deliverable: str = "", chain_hops: list = None,
+               requires_audit: bool = None, priority: int = 50) -> dict:
         """创建新任务"""
+        from .audit_dispatch import infer_requires_audit
+        from .task_fsm import ensure_fsm
+
         pipeline_chain = init_pipeline_chain(chain_hops, assignee, task_id)
+        req_audit = infer_requires_audit(task_id, chain_hops, requires_audit, pipeline_chain)
         task = {
             "task_id": task_id,
             "summary": summary,
-            "assignee": assignee or (pipeline_chain[0].get("to_person") if pipeline_chain else ""),
+            "assignee": assignee or (pipeline_chain[0].get("to_agent") or pipeline_chain[0].get("to_person") if pipeline_chain else ""),
             "status": "running" if pipeline_chain else TaskStatus.PENDING,
             "deliverable": deliverable,
             "chain": pipeline_chain,
+            "requires_audit": req_audit,
             "error": None,
             "reminded_count": 0,
             "created_at": _now_iso(),
             "updated_at": _now_iso(),
         }
-        if pipeline_chain and (
-            is_pipeline_step(pipeline_chain[0])
-            or pipeline_chain[0].get("planned_agents")
-        ):
+        if req_audit:
             task["audit_reviewer"] = "lingjian"
+        ensure_fsm(task, default_priority=int(priority))
+        json_write(self._task_path(task_id), task)
+        return task
+
+    def create_from_envelope(
+        self,
+        envelope: dict,
+        *,
+        planned_chain: list,
+        plan_meta: dict,
+    ) -> dict:
+        """v3 Envelope 落盘。"""
+        from .audit_dispatch import infer_requires_audit
+        from .dispatch.role_resolver import resolve_agent_for_role_type
+        from .dispatch.tier_filter import dispatch_action_from_envelope, dispatch_action_from_step
+        from .pipeline_chain import init_chain_from_planned
+        from .task_fsm import TaskFsmState, ensure_fsm
+
+        task_id = envelope["task_id"]
+        priority = int((envelope.get("fsm") or {}).get("priority", 50))
+        data_root = os.path.dirname(self.tasks_dir)
+        agents_cfg = json_read(os.path.join(data_root, "config.json"), {}).get("agents") or {}
+        env_action = dispatch_action_from_envelope(envelope)
+
+        def _resolve(rt, pin, planned_item=None):
+            step_action = dispatch_action_from_step(planned_item or {}, envelope)
+            merged = {**env_action, **step_action}
+            return resolve_agent_for_role_type(
+                data_root, rt, pin_agent=pin, action=merged, agents_cfg=agents_cfg,
+            )
+
+        pipeline_chain = init_chain_from_planned(
+            planned_chain,
+            task_id,
+            resolve_agent=_resolve,
+        )
+
+        intent = envelope.get("intent") or ""
+        first_agent = pipeline_chain[0].get("to_agent") or ""
+
+        task = {
+            "task_id": task_id,
+            "protocol_version": envelope.get("protocol_version", "mailbus-a2a/1"),
+            "intent": intent,
+            "summary": intent[:120],
+            "initiator": envelope.get("initiator", "human"),
+            "mode": envelope.get("mode"),
+            "tier": envelope.get("tier"),
+            "task_type": envelope.get("task_type"),
+            "assignee": first_agent,
+            "status": "pending",
+            "chain": pipeline_chain,
+            "extensions": envelope.get("extensions") or {},
+            "constraints": envelope.get("constraints") or {},
+            "acceptance": envelope.get("acceptance") or {},
+            "artifacts_in": envelope.get("artifacts_in") or [],
+            "plan_meta": plan_meta,
+            "requires_audit": infer_requires_audit(
+                task_id, None, None, pipeline_chain,
+            ),
+            "error": None,
+            "reminded_count": 0,
+            "created_at": _now_iso(),
+            "updated_at": _now_iso(),
+        }
+        if task["requires_audit"]:
+            task["audit_reviewer"] = "lingjian"
+
+        ensure_fsm(task, default_priority=priority)
+        fsm = task["fsm"]
+        sub = (envelope.get("fsm") or {}).get("substate")
+        if sub:
+            fsm["substate"] = sub
+        if fsm.get("state") == TaskFsmState.EXECUTING.value:
+            task["status"] = "running"
+        elif fsm.get("state") == TaskFsmState.CREATED.value:
+            task["status"] = "pending"
+
         json_write(self._task_path(task_id), task)
         return task
 
@@ -196,6 +278,9 @@ class TaskTracker:
             if audit_status == "pending-audit":
                 term_statuses = {TaskStatus.SUCCESS, TaskStatus.FAILED, TaskStatus.TIMEOUT}
                 if task.get("status") not in term_statuses or has_audit:
+                    continue
+                from .audit_dispatch import task_requires_audit
+                if not task_requires_audit(task):
                     continue
 
             # 审查人过滤
@@ -326,6 +411,14 @@ class TaskTracker:
                         inbox_state = task_states.get(step_tid, "")
 
             if inbox_state in INBOX_DONE_STATES:
+                from .audit_dispatch import task_requires_audit
+                from .pipeline_chain import is_pipeline_step
+                chain = task.get("chain") or []
+                multi_step = len(chain) > 1 or (
+                    chain and isinstance(chain[0], dict) and chain[0].get("planned_agents")
+                )
+                if multi_step or (task_requires_audit(task) and not task.get("audit_log")):
+                    continue
                 self.update_status(task_id, TaskStatus.SUCCESS)
                 continue
 
@@ -337,8 +430,8 @@ class TaskTracker:
                     json_write(self._task_path(task_id), task)
                 continue
 
-            updated_str = task.get("updated_at", task["created_at"])
-            updated = datetime.strptime(updated_str, "%Y-%m-%dT%H:%M:%S%z")
+            updated_str = task.get("updated_at", task.get("created_at", ""))
+            updated = _parse_iso_dt(updated_str)
             elapsed_min = (now - updated).total_seconds() / 60
 
             if elapsed_min >= reminder_minutes and task["reminded_count"] < max_reminders:
@@ -383,12 +476,7 @@ class TaskTracker:
 
     @staticmethod
     def _has_msg_result(data_dir: str, task_id: str) -> bool:
-        import glob as _glob
-        f = os.path.join(data_dir, "msg-results", f"{task_id}.json")
-        if os.path.exists(f):
-            return True
-        tail = task_id[-8:] if len(task_id) >= 8 else task_id
-        return bool(_glob.glob(os.path.join(data_dir, "msg-results", f"*{tail}*.json")))
+        return os.path.isfile(os.path.join(data_dir, "msg-results", f"{task_id}.json"))
 
     def reopen_stale_timeouts(self, agents: dict, data_dir: str) -> int:
         """恢复误标 timeout 的 pipeline 任务（inbox 仍在 pending/processing 时）。"""
@@ -611,7 +699,9 @@ class TaskTracker:
             else:
                 status = (task.get("status", "") or "").lower()
                 if status in ("success", "failed", "timeout"):
-                    stats["pending_audit_tasks"] += 1
+                    from .audit_dispatch import task_requires_audit
+                    if task_requires_audit(task):
+                        stats["pending_audit_tasks"] += 1
 
         # 最新审计记录按时间倒序
         stats["latest_audits"].sort(key=lambda x: x.get("at", ""), reverse=True)
@@ -637,7 +727,9 @@ class TaskTracker:
         pending = []
         for task in self.list_all():
             if task.get("status") in terminal_statuses and not task.get("audit_log"):
-                pending.append(task)
+                from .audit_dispatch import task_requires_audit
+                if task_requires_audit(task):
+                    pending.append(task)
         pending.sort(
             key=lambda t: _parse_iso_dt(t.get("updated_at", t.get("created_at", ""))),
             reverse=True,

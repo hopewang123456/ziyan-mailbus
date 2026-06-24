@@ -6,14 +6,17 @@ ziyan-mailbus pusher
 
 import os
 import subprocess
+import sys
 import time
 import random
 from typing import Optional
 from pathlib import Path
 
 from .models import Message, MsgStatus, Priority, MsgType
+from .constants import DEFAULT_CLI_MSG_MAX_CHARS
 from .utils import json_read, json_write, jsonl_append, log_error, resolve_paths, _now_iso
 from .scanner import mark_as_pushed, update_message_status
+from .mbus_log import debug, warn
 
 # ── API Key 注入 ─────────────────────────────────────────────────────
 # P0: 统一从 .env 文件加载所有 API Key，注入子进程
@@ -51,7 +54,10 @@ def _load_env():
     bus_dir = Path(__file__).resolve().parent.parent  # mailbus/lib/ → mailbus/
     candidates = [
         bus_dir / ".env",
+        Path("/run/hermes/.env"),
+        Path("/home/hermes/.hermes/.env"),
         Path("/home/administrator/.hermes/.env"),
+        Path("/mnt/e/hermes-data/.hermes/.env"),
         Path.home() / ".hermes" / ".env",
     ]
     for env_path in candidates:
@@ -82,6 +88,12 @@ def get_env_for_cli(cmd: str = "") -> dict:
         if key in _ALL_ENV_KEYS:
             extra_env[key] = _ALL_ENV_KEYS[key]
     return extra_env
+
+
+def _truncate_cli_text(text: str, max_chars: int = DEFAULT_CLI_MSG_MAX_CHARS) -> str:
+    if not text or len(text) <= max_chars:
+        return text or ""
+    return text[:max_chars] + "\n...(内容已截断，完整见 inbox / msg-files)"
 
 
 def push_messages(
@@ -143,57 +155,76 @@ def push_messages(
     # 系统上下文精简为7行核心信息，不再嵌入长说明
     # 规则文档路径引用由 store/rules/ 外部文件提供
     rules_dir = f"{data_dir}/rules"
-    system_context = f"""【系统上下文】ziyan-mailbus 消息总线
-agent: {agent_name}
-inbox: {data_dir}/inbox/{agent_name}/inbox.json
-📝 ack 写入: {data_dir}/inbox/{agent_name}/ack.json
-📋 工作纪律: 写 ack → 读规则 → 执行任务 → 回复发件人
-规则: {rules_dir}/common.md
-岗位规则: {rules_dir}/<role>.md（如存在）
----
-"""
+    system_context = (
+        f"mailbus | agent={agent_name}\n"
+        f"inbox={data_dir}/inbox/{agent_name}/inbox.json\n"
+        f"ack={data_dir}/inbox/{agent_name}/ack.json\n"
+        f"rules={rules_dir}/\n---\n"
+    )
     combined_text = system_context
+
+    cfg = json_read(os.path.join(data_dir, "config.json"), {})
+    agents_cfg = cfg.get("agents", {})
+    from .token_budget import load_token_budget
+    tb = load_token_budget(cfg)
+    per_msg_max = int(
+        (agents_cfg.get(agent_name) or {}).get("cli_msg_max_chars")
+        or tb.get("cli_msg_max_chars")
+        or DEFAULT_CLI_MSG_MAX_CHARS
+    )
+    combined_max = int(tb.get("cli_combined_max_chars") or 4000)
 
     for msg_entry in messages:
         from_ = msg_entry.get("from", "?") if isinstance(msg_entry, dict) else msg_entry.from_
         content = msg_entry.get("content", "") if isinstance(msg_entry, dict) else msg_entry.content
+        raw_content = content or ""
+        content = _truncate_cli_text(raw_content, max_chars=per_msg_max)
         msg_id = msg_entry.get("id", "") if isinstance(msg_entry, dict) else msg_entry.id
         action_raw = msg_entry.get("action", {}) if isinstance(msg_entry, dict) else (msg_entry.action or MsgType.default_action(msg_entry.type))
         msg_type = msg_entry.get("type", "notice") if isinstance(msg_entry, dict) else msg_entry.type
         fwd_chain = msg_entry.get("forward_chain") if isinstance(msg_entry, dict) else msg_entry.forward_chain
 
-        ack_path = f"{data_dir}/inbox/{agent_name}/ack.json"
+        entry_dict = msg_entry if isinstance(msg_entry, dict) else msg_entry.to_dict()
+        agent_cfg_entry = agents_cfg.get(agent_name) or {}
+        agent_type = agent_cfg_entry.get("type", "")
+        from .file_task_push import (
+            build_file_task_push_body,
+            ensure_file_task_work_order,
+            should_file_task_push,
+        )
+        if should_file_task_push(agent_type, agent_cfg_entry, entry_dict, raw_content):
+            _, wo_path, rf_path = ensure_file_task_work_order(data_dir, agent_name, entry_dict)
+            msg_body = build_file_task_push_body(
+                from_=from_, msg_id=msg_id, msg_type=msg_type,
+                wo_path=wo_path, result_path=rf_path,
+            )
+        else:
+            # 追踪链
+            chain_text = ""
+            if fwd_chain and fwd_chain.get("hops"):
+                hops = fwd_chain["hops"]
+                chain_text = " | ".join([f"{h.get('agent','?')}:{h.get('action','?')}" for h in hops])
+                chain_text = f" [链: {chain_text}]"
 
-        # 追踪链
-        chain_text = ""
-        if fwd_chain and fwd_chain.get("hops"):
-            hops = fwd_chain["hops"]
-            chain_text = " | ".join([f"{h.get('agent','?')}:{h.get('action','?')}" for h in hops])
-            chain_text = f" [链: {chain_text}]"
+            # 精简消息体
+            msg_body = f"📬 {msg_type} | {from_} | id={msg_id}{chain_text}\n{content}\n"
 
-        # 精简消息体（移除 ASCII 盒和冗长说明）
-        msg_body = f"""📬 新消息
-类型: {msg_type}  来自: {from_}  消息ID: {msg_id}{chain_text}
-内容: {content}
-📝 ack 写入: {ack_path}
-📋 工作纪律: 写 ack → 读规则 → 执行任务 → 回复发件人"""
+            reply_to = action_raw.get("reply_to", "") if action_raw else ""
+            if reply_to and reply_to not in ("mailbus", "broadcast", "system", "manual", "mailbus-test", "test", ""):
+                reply_path = f"{data_dir}/inbox/{reply_to}/inbox.json"
+                msg_body += f"▶ 回复 {reply_to} → {reply_path}\n"
 
-        reply_to = action_raw.get("reply_to", "") if action_raw else ""
-        if reply_to and reply_to not in ("mailbus", "broadcast", "system", "manual", "mailbus-test", "test", ""):
-            reply_path = f"{data_dir}/inbox/{reply_to}/inbox.json"
-            reply_msg_id = f"reply-{msg_id}"
-            msg_body += f"""
-▶ 需回复发件人 {reply_to}
-  写入: {reply_path} 追加 {{id:"{reply_msg_id}",from:"{agent_name}",to:"{reply_to}",type:"reply",state:"pending",content:"<回复>",created_at:"<ISO>"}}"""
+            forward_to = action_raw.get("forward_to", []) if action_raw else []
+            if forward_to:
+                targets = [t for t in forward_to if t != agent_name]
+                if targets:
+                    msg_body += f"\n▶ 需转发至: {', '.join(targets)}"
 
-        forward_to = action_raw.get("forward_to", []) if action_raw else []
-        if forward_to:
-            targets = [t for t in forward_to if t != agent_name]
-            if targets:
-                msg_body += f"\n▶ 需转发至: {', '.join(targets)}"
-
-        msg_body += "\n---"
+            msg_body += "\n---"
+        from .pipeline_task import pipeline_completion_block
+        msg_body += pipeline_completion_block(data_dir, raw_content, agent_name)
         combined_text += msg_body
+    combined_text = _truncate_cli_text(combined_text, max_chars=combined_max)
     
     # 3. 多模型 fallback 推送
     # cli_cmd 如果是 list，按顺序试；如果是 str，当单条处理
@@ -211,14 +242,14 @@ inbox: {data_dir}/inbox/{agent_name}/inbox.json
         
         reply_dir = f"{data_dir}/replies" if data_dir else ""
         
-        success = _invoke_cli(cmd, agent_name=agent_name, msg_ids=msg_ids, reply_dir=reply_dir)
+        success = _invoke_cli(cmd, agent_name=agent_name, msg_ids=msg_ids, reply_dir=reply_dir, data_dir=data_dir, messages=messages)
         if not success:
             for attempt in range(1, max_retries + 1):
                 # 指数退避 + jitter: base 2s, 乘 2^attempt, 加 ±1s 抖动
                 delay = 2 ** attempt + random.uniform(-1, 1)
                 delay = max(0.5, min(delay, 30))  # 钳制在 [0.5, 30] 秒
                 time.sleep(delay)
-                success = _invoke_cli(cmd, agent_name=agent_name, msg_ids=msg_ids, reply_dir=reply_dir)
+                success = _invoke_cli(cmd, agent_name=agent_name, msg_ids=msg_ids, reply_dir=reply_dir, data_dir=data_dir, messages=messages)
                 if success:
                     break
         
@@ -227,16 +258,34 @@ inbox: {data_dir}/inbox/{agent_name}/inbox.json
             break
     
     if used_model:
+        agents_cfg = json_read(os.path.join(data_dir, "config.json"), {}).get("agents", {})
+        agent_cfg = agents_cfg.get(agent_name, {})
+        from .agent_adapters import should_mark_processing_on_push
+
         for mid in msg_ids:
+            entry = next(
+                (m for m in messages if (m.get("id") if isinstance(m, dict) else m.id) == mid),
+                {},
+            )
+            entry_dict = entry if isinstance(entry, dict) else entry.to_dict()
             if auto_ack:
-                update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
+                from .scanner import finalize_auto_ack
+                finalize_auto_ack(data_dir, agent_name, mid, entry_dict)
+            elif should_mark_processing_on_push(agent_cfg, entry_dict):
+                from .scanner import finalize_processing_on_push
+                finalize_processing_on_push(data_dir, agent_name, mid, entry_dict)
             else:
                 update_message_status(data_dir, agent_name, mid, MsgStatus.PUSHED)
         return []
 
     for mid in msg_ids:
         if auto_ack:
-            update_message_status(data_dir, agent_name, mid, MsgStatus.ACKNOWLEDGED)
+            entry = next(
+                (m for m in messages if (m.get("id") if isinstance(m, dict) else m.id) == mid),
+                {},
+            )
+            from .scanner import finalize_auto_ack
+            finalize_auto_ack(data_dir, agent_name, mid, entry if isinstance(entry, dict) else entry.to_dict())
         else:
             update_message_status(data_dir, agent_name, mid, MsgStatus.FAILED)
             log_error(paths["errors"], mid, agent_name,
@@ -245,64 +294,43 @@ inbox: {data_dir}/inbox/{agent_name}/inbox.json
     return msg_ids
 
 
-def resolve_cli(agent_cfg: dict, agent_types: dict, model_alias: str = None) -> str:
-    """
-    根据 agent 配置、类型和模型别名，解析最终的 CLI 命令。
+def resolve_cli(
+    agent_cfg: dict,
+    agent_types: dict,
+    model_alias: str = None,
+    agent_name: str = "",
+) -> str:
+    """根据 agent 配置解析 push CLI（委托 agent_adapters 适配层）。"""
+    from .agent_adapters import resolve_push_cli
 
-    优先使用 launch.cli.command（含 --profile / --skills），否则走 agent_types 模板。
-    """
-    launch_cmd = ((agent_cfg.get("launch") or {}).get("cli") or {}).get("command", "")
-    if launch_cmd:
-        cmd = launch_cmd.replace("-it ", " ").replace(" -it", "")
-        if "'MSG'" not in cmd and "MSG" not in cmd:
-            import re
-            if re.search(r"\s--yolo\s*$", cmd):
-                cmd = re.sub(r"\s--yolo\s*$", " -q 'MSG' -Q --yolo", cmd)
-            else:
-                cmd = f"{cmd} -q 'MSG' -Q"
-        return cmd.strip()
+    name = agent_name or agent_cfg.get("profile") or agent_cfg.get("agent") or ""
+    return resolve_push_cli(name, agent_cfg, agent_types, model_alias)
 
-    atype = agent_cfg.get("type", "none")
-    tmpl = agent_types.get(atype, {}).get("push", "")
-    if not tmpl:
+
+def resolve_cli_for_message(
+    agent_cfg: dict,
+    agent_types: dict,
+    msg,
+    agent_name: str,
+    *,
+    primary_task_id: str = "",
+) -> str:
+    """按单条消息解析 CLI（含模型档位）。"""
+    from .model_router import pick_model_alias, is_no_llm_notice
+
+    if is_no_llm_notice(msg):
         return ""
-
-    # 1. 先替换基础占位符
-    cmd = tmpl
-    profile = agent_cfg.get("profile", "") or agent_cfg.get("agent", "")
-    cmd = cmd.replace("PROFILE", profile)
-    cmd = cmd.replace("AGENT", agent_cfg.get("agent", ""))
-
-    # 2. 解析模型参数
-    models_map = agent_types.get("models", {})
-    if not model_alias:
-        agent_models = agent_cfg.get("models", [])
-        model_alias = agent_models[0] if agent_models else None
-
-    model_flag = ""
-    if model_alias and model_alias in models_map:
-        model_flag = models_map[model_alias].get(atype, "")
-
-    # 3. 替换 MODEL 占位符
-    if model_flag:
-        cmd = cmd.replace("MODEL", model_flag)
-        cmd = cmd.replace("--model MODEL", model_flag)
-        cmd = cmd.replace("-m MODEL", model_flag)
-    else:
-        cmd = cmd.replace("--model MODEL", "").replace("-m MODEL", "")
-        cmd = cmd.replace("'MODEL'", "").replace("MODEL", "")
-
-    # 4. 替换 PROVIDER 占位符
-    provider = agent_cfg.get("provider", "")
-    if not provider and model_alias and model_alias in models_map:
-        provider = models_map[model_alias].get(atype, "")
-    if provider:
-        cmd = cmd.replace("PROVIDER", provider)
-        cmd = cmd.replace("--provider PROVIDER", provider)
-    else:
-        cmd = cmd.replace("--provider PROVIDER", "").replace("PROVIDER", "")
-
-    return cmd.strip()
+    alias = pick_model_alias(msg, agent_name, agent_cfg, primary_task_id=primary_task_id)
+    action = msg.get("action", {}) if isinstance(msg, dict) else (getattr(msg, "action", None) or {})
+    if isinstance(action, dict) and action.get("model_tier") == "flash":
+        alias = "deepseek-flash"
+    elif isinstance(action, dict) and action.get("model_tier") == "pro":
+        from .model_router import TIER_PRO, _pro_allowed
+        if _pro_allowed(agent_cfg):
+            alias = TIER_PRO
+        else:
+            alias = "deepseek-flash"
+    return resolve_cli(agent_cfg, agent_types, model_alias=alias, agent_name=agent_name)
 
 
 def resolve_cli_chain(agent_cfg: dict, agent_types: dict) -> list:
@@ -329,7 +357,7 @@ def resolve_cli_chain(agent_cfg: dict, agent_types: dict) -> list:
     return results
 
 
-def _invoke_cli(cmd: str, agent_name: str = "", msg_ids: list = None, reply_dir: str = "") -> bool:
+def _invoke_cli(cmd: str, agent_name: str = "", msg_ids: list = None, reply_dir: str = "", data_dir: str = "", messages: list = None) -> bool:
     """
     执行 CLI 命令将消息推送给 agent。
     
@@ -368,9 +396,23 @@ def _invoke_cli(cmd: str, agent_name: str = "", msg_ids: list = None, reply_dir:
         
         # 异步读取回复并保存
         if reply_file and agent_name:
-            def _save_reply(proc, fpath, a_name, mids):
+            msg_entries = [
+                m if isinstance(m, dict) else (m.to_dict() if hasattr(m, "to_dict") else m)
+                for m in (messages or [])
+            ]
+            from .pipeline_task import is_pipeline_execute_message
+            from .agent_adapters import push_timeout_for
+
+            agents_cfg_pre = json_read(os.path.join(data_dir, "config.json"), {}).get("agents", {})
+            agent_cfg_pre = agents_cfg_pre.get(agent_name, {})
+            pipeline_msg = any(
+                is_pipeline_execute_message(e, data_dir) for e in msg_entries
+            )
+            cli_timeout = push_timeout_for(agent_cfg_pre, pipeline=pipeline_msg)
+
+            def _save_reply(proc, fpath, a_name, mids, dd, entries, timeout):
                 try:
-                    stdout, _ = proc.communicate(timeout=120)
+                    stdout, _ = proc.communicate(timeout=timeout)
                     reply_text = stdout.decode("utf-8", errors="replace").strip()
                     if reply_text and len(reply_text) > 5:
                         from datetime import datetime, timezone, timedelta
@@ -385,15 +427,82 @@ def _invoke_cli(cmd: str, agent_name: str = "", msg_ids: list = None, reply_dir:
                         os.makedirs(os.path.dirname(fpath), exist_ok=True)
                         with open(fpath, "w") as f:
                             json.dump(reply_data, f, ensure_ascii=False, indent=2)
+                    # pipeline 落盘验收（CLI 结束后，拒绝 phantom completion）
+                    import time
+                    time.sleep(2)
+                    from .self_heal import agent_cli_active
+                    from .pipeline_task import (
+                        is_pipeline_execute_message,
+                        verify_pipeline_step_delivery,
+                    )
+                    from .scanner import update_message_status
+                    from .models import MsgStatus
+                    from .utils import json_read as _json_read
+
+                    agents_cfg = _json_read(os.path.join(dd, "config.json"), {}).get("agents", {})
+                    agent_cfg_entry = agents_cfg.get(a_name) or {}
+                    agent_type = agent_cfg_entry.get("type", "")
+
+                    for entry in entries or []:
+                        from .file_task_push import should_file_task_push, verify_file_task_delivery
+                        from .pipeline_task import is_pipeline_execute_message
+
+                        is_pipe = is_pipeline_execute_message(entry, dd)
+                        raw = entry.get("content", "") if isinstance(entry, dict) else ""
+                        is_file = should_file_task_push(agent_type, agent_cfg_entry, entry, raw) and not is_pipe
+                        if not is_pipe and not is_file:
+                            continue
+                        reply_phantom = False
+                        if reply_text:
+                            from .phantom_detect import is_phantom_reply_text
+                            reply_phantom = is_phantom_reply_text(reply_text)
+                        if is_file:
+                            ok, reason = verify_file_task_delivery(
+                                dd, a_name, entry, reply_text=reply_text,
+                            )
+                        else:
+                            ok, reason = verify_pipeline_step_delivery(dd, a_name, entry)
+                        if reply_phantom and ok:
+                            ok, reason = False, "phantom_reply_text"
+                        if ok:
+                            continue
+                        mid = entry.get("id") if isinstance(entry, dict) else ""
+                        if agent_cli_active(a_name, agents_cfg):
+                            debug(
+                                f"[pusher] pipeline-delivery {a_name} msg={mid}: "
+                                f"{reason} — CLI active, skip reset"
+                            )
+                            continue
+                        warn(
+                            f"[pusher] pipeline-delivery {a_name} msg={mid}: "
+                            f"{reason} — reset pending"
+                        )
+                        update_message_status(dd, a_name, mid, MsgStatus.PENDING)
+                except subprocess.TimeoutExpired:
+                    from .models import MsgStatus
+                    from .scanner import update_message_status
+                    from .file_task_push import is_executable_task
+                    from .utils import json_read as _json_read
+                    for entry in entries or []:
+                        if not is_executable_task(entry if isinstance(entry, dict) else {}):
+                            continue
+                        mid = entry.get("id") if isinstance(entry, dict) else ""
+                        if mid:
+                            warn(f"[pusher] CLI timeout {a_name} msg={mid} — reset pending")
+                            update_message_status(dd, a_name, mid, MsgStatus.PENDING)
                 except Exception:
                     pass
             import threading
-            t = threading.Thread(target=_save_reply, args=(process, reply_file, agent_name, msg_ids), daemon=True)
+            t = threading.Thread(
+                target=_save_reply,
+                args=(process, reply_file, agent_name, msg_ids, data_dir, msg_entries, cli_timeout),
+                daemon=True,
+            )
             t.start()
         
         return True
     except Exception as e:
-        print(f"[pusher] CLI 后台启动失败: {e}", file=sys.stderr)
+        warn(f"[pusher] CLI background start failed: {e}")
         return False
 
 

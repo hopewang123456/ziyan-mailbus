@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "updated_at": "2026-06-25",
+  "defaults": {
+    "unknown_task_type_workflow": "llm_adaptive"
+  },
+  "workflows": {
+    "coding-dual": {
+      "id": "coding-dual",
+      "title": "双开发并行编码",
+      "description": "action.dual_coding 或 constraints.dispatch.dual_coding 时：灵云 + 大力并行首步",
+      "task_types": ["feature", "bugfix"],
+      "phases": [
+        {"id": "dual_dev", "role_types": [8], "collab": "dual_coding"}
+      ],
+      "gates": []
+    },
+    "coding-peer-review": {
+      "id": "coding-peer-review",
+      "title": "开发互审",
+      "description": "action.peer_review 时：编码完成后另一开发工程师 PR 互审",
+      "task_types": ["feature", "security_review"],
+      "phases": [
+        {"id": "dev", "role_types": [8]},
+        {"id": "peer_review", "role_types": [8], "collab": "peer_review"}
+      ],
+      "gates": []
+    }
+  }
+}

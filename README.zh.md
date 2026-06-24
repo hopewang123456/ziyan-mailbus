@@ -13,7 +13,7 @@ ziyan-mailbus 是一个独立、解耦、轻量的**文件级消息中间件**�
 - **双向确认** — CLI 推送 + Agent 主动 ack，不搞"推送即送达"的幻觉
 - **先队列再推送** — 加急排队优先，普通排队顺序，同 Agent 批量推送
 - **故障隔离** — 推送失败 3 次 → 写错误日志 → 监控 Agent 扫日志找修复方案
-- **Agent 类型抽象** — 统一 `agent_types` 配置，支持 Hermes / OpenClaw / Cline / OpenCode 等框架
+- **Agent 类型抽象** — 统一 `agent_types` 配置，支持 Hermes / OpenClaw / Cline / OpenCode / Codex 等框架
 - **即插即用** — 不入侵 Agent 代码，CLI 是唯一契约
 
 ## 前置条件
@@ -21,10 +21,10 @@ ziyan-mailbus 是一个独立、解耦、轻量的**文件级消息中间件**�
 - **Python ≥ 3.10**（核心运行环境）
 - **各 Agent 的 CLI 工具**（Hermes / OpenClaw / Cline / OpenCode 等，按需安装）
 - **API Key**（通过 `.env` 文件配置，见 `examples/config.example.json` 的说明）
-- **AgentMemory**（可选）— 用于消息持久化记忆，确保 Agent 重启后能检索历史消息
-  - 安装: `npm install -g @agentmemory/agentmemory`
-  - 启动: `agentmemory`（默认监听 http://localhost:3111）
-  - 桥接: mailbus 自动将已 ack 的消息同步到 AgentMemory
+- **AgentMemory**（可选增强层）— MCP 语义检索；**主记忆**为 `team-memory.db`（见下）
+  - Docker 部署：`docker-agents/` 内 `iii-engine` + `agentmemory` 容器（端口 **3111**）
+  - **禁止**在 Windows 计划任务中裸跑 AgentMemory；仅 WSL Docker 或 Linux 原生 Docker
+  - 桥接: mailbus 双写 — 必写 SQLite，AgentMemory best-effort
 
 ## 快速开始
 
@@ -41,7 +41,7 @@ mailbus init --data-dir /path/to/your/store
 mailbus agent-add agent-a --cli "your-cli --message" --role "你的角色"
 
 # 4. 启动总线（推荐：内置 Scheduler，无需 crontab）
-mailbus serve --host 0.0.0.0 --port 9812 --data-dir /path/to/your/store
+mailbus serve --host 0.0.0.0 --port 9814 --data-dir /path/to/your/store
 # serve 启动后内置 SchedulerHub 自动跑 scan / memory_bridge / pipeline_watchdog 等 job
 
 # 或手动扫描：
@@ -55,6 +55,135 @@ mailbus broadcast --msg "系统维护通知"
 mailbus status
 mailbus status --failed
 ```
+
+## 跨平台部署
+
+mailbus 是 **纯 Python + 文件系统**，在 **Linux / macOS 上可直接原生运行**，无需 WSL 或 Windows 专用桥接。默认 API 端口 **9814**（`lib/constants.py`）。
+
+### 端口对照
+
+| 部署方式 | API 端口 | 说明 |
+|----------|----------|------|
+| 原生 `mailbus serve` | **9814** | Linux / macOS / Windows 本机 |
+| Docker `mailbus` 服务 | **9812** | `docker-agents/` 容器内网；与原生 9814 并存 |
+| n8n webhook | **5678** | 可选；视频发布演练 |
+| AgentMemory | **3111** | 可选 |
+| 灵云 Claude ttyd | **9260** | WSL 宿主机 · Claude Code pro |
+| 灵验 Claude ttyd | **9261** | WSL 宿主机 · Claude Code 测试 |
+
+### 开发工程师 tier 派发（2026-06-25）
+
+`role_type=8` 工单：**先按 model_tier 过滤候选人，再 least_load + 轮询**。
+
+| tier | 派给谁 |
+|------|--------|
+| `pro`（需 `MAILBUS_ALLOW_PRO=1`） | 灵云 lingyun |
+| `flash` / 默认 | 大力 dali、灵霄 lingxiao |
+
+Envelope 示例：`constraints.dispatch.model_tier: "pro"`。离线 agent 自动 failover。详见 [`rules/model-routing.md`](rules/model-routing.md)。
+
+
+同机 n8n / ComfyUI 直接用 `http://127.0.0.1:5678`、`8188`，**不需要** `wsl_bridge`。
+
+```bash
+# 1. 安装
+git clone https://github.com/hopewang123456/ziyan-mailbus.git
+cd ziyan-mailbus
+python3 -m venv .venv && source .venv/bin/activate   # 可选
+pip install -e .
+
+# 2. 初始化
+mailbus init --data-dir ./store
+cp examples/config.example.json store/config.json   # 再编辑 agents / 密钥
+
+# 3. 环境变量（项目根 .env，勿提交 git）
+cat >> .env <<'EOF'
+MAILBUS_API_TOKEN=你的密钥
+GITHUB_TOKEN=ghp_...                    # 可选：platform-scout GitHub 源
+N8N_PUBLISH_WEBHOOK_URL=http://127.0.0.1:5678/webhook/mailbus-multi-publish
+EOF
+
+# 4. 启动总线（内置 Scheduler：scan / platform-scout / pipeline-repair 等）
+mailbus serve --host 127.0.0.1 --port 9814 --data-dir ./store
+# 或后台重启：
+bash tools/restart-mailbus.sh 9814
+
+# 5. 可选：n8n 侧车
+bash docker-agents/start-n8n.sh
+bash tools/setup-n8n.sh
+
+# 6. 验收
+python3 tools/run-final-acceptance.py
+python3 tools/validate-order-intake.py --data-dir store
+# Dashboard：浏览器打开 docs/index.html（默认 API http://127.0.0.1:9814）
+```
+
+**systemd（可选）：** 见 `docker-agents/install-systemd.sh`、`docker-agents/docker-agents.service`。
+
+### Windows（本机 Python + 可选 WSL Docker）
+
+**mailbus 跑在 Windows、n8n 跑在 WSL Docker** 时，`localhost:5678` 可能不可达 — mailbus 会自动走 `lib/n8n/wsl_bridge.py`。
+
+```powershell
+pip install -e .
+mailbus init --data-dir store
+# 配置 .env（变量同 Linux）
+
+.\tools\restart-mailbus.ps1      # 默认 9814
+.\tools\setup-n8n.ps1            # 或 -Reset 重建 workflow 卷
+# 或：wsl bash docker-agents/start-n8n.sh
+
+python tools\run-final-acceptance.py
+```
+
+提示：可开 **WSL mirrored 网络** 或端口转发，减少对 WSL 桥接的依赖。Docker Desktop 全团队：`wsl bash docker-agents/start-team.sh`。
+
+### Docker 全 Agent 团队
+
+Hermes / OpenClaw / Cline 容器共享 `store/` 卷：
+
+```bash
+cd docker-agents
+cp .env.example .env
+bash start-team.sh
+bash mailbus-pipeline-e2e.sh
+```
+
+容器内 mailbus API 为 **9812**（`docker-compose.yml`），`docker-agents/*.sh` 使用该端口是预期行为，与原生 **9814** 不同。
+
+### 可选组件
+
+| 组件 | 用途 | 安装 |
+|------|------|------|
+| **n8n** | 多渠道发布（video drill） | `setup-n8n.sh` / `setup-n8n.ps1` |
+| **ComfyUI** | 生图步骤 | `docker-agents/start-comfyui-gpu.sh` |
+| **AgentMemory** | 长期消息记忆 | `npm i -g @agentmemory/agentmemory && agentmemory` |
+
+### 验收清单
+
+```bash
+python3 tests/run_all.py
+python3 tools/validate-scheduler.py --url http://127.0.0.1:9814
+python3 tools/smoke-platform-scout.py --data-dir store
+python3 tools/validate-order-intake.py --data-dir store
+python3 tools/run-final-acceptance.py
+```
+
+### 方案对照 — 仍待完善（见 `plans/`）
+
+不阻塞 Linux 原生部署：
+
+| 项 | 状态 |
+|----|------|
+| platform-scout → lingtuo task notify | ✅ `after_scout_notify_agent` |
+| order-intake schema 校验脚本 | ✅ `tools/validate-order-intake.py` |
+| 灵霄 auto-ack / chat `-q` 超时 | ✅ 文件任务推送 + phantom 检测 + CLI 超时重置 |
+| Agent 权限持久化 | ✅ `permission.json` + API 规范化 |
+| Token 统计 Dashboard | ✅ `/api/stats` token_estimates |
+| 商前 role-flow（灵拓→灵昭） | ✅ role-flow.json pursue 转换 + intake 闸门 |
+| 灵拓 Hermes profile 9126 | ✅ init-profiles.sh + config.json |
+| Dashboard i18n 中英文 | ✅ `docs/js/dashboard-i18n.js` |
+| 机器人 Agent 头像 | ✅ `docs/avatars/*.svg` + `tools/gen-robot-avatars.py` |
 
 ## 核心特性
 
@@ -85,9 +214,21 @@ mailbus status --failed
 | `openclaw` | `openclaw agent --local --agent AGENT --message 'MSG'` | OpenClaw Gateway |
 | `cline` | `cline 'MSG' --provider openai-compatible` | Cline CLI |
 | `opencode` | `opencode run 'MSG' --dangerously-skip-permissions MODEL` | OpenCode |
+| `codex` | `codex exec 'MSG' -m MODEL`（非交互 + 文件任务） | Codex CLI |
 | `none` | 纯文件通信，无 CLI 推送 | 手动调度 |
 
 > 新增框架只需在 `agent_types` 加一条 CLI 模板，代码零改动。
+
+### 子言·AI 团队编制（12 人）
+
+完整组织图见 [`ORGANIZATION.md`](ORGANIZATION.md)，机器可读表见 [`store/roles/json/roster.json`](store/roles/json/roster.json)。
+
+| 域 | 成员 |
+|----|------|
+| 决策 | 灵昭（男） |
+| 商前 | 灵犀（女）、灵拓（男）、一哥（男） |
+| 交付 | 灵霄（男）、大力（男）、灵瑾（女）、灵鉴（男）、灵验（女）、灵巡（男）、小七（女） |
+| 商后 | 灵账（女） |
 
 ## CLI 命令总览
 
@@ -107,7 +248,7 @@ mailbus agent-add <名>              # 注册新 Agent
 mailbus agent-remove <名>           # 移除 Agent
 mailbus heartbeat                   # 心跳检测（检测所有 Agent 在线状态）
 mailbus search                      # 消息全文检索（--query/--from/--to/--type/--status）
-mailbus serve [--host] [--port]      # 启动 HTTP API 服务（默认 127.0.0.1:9812）
+mailbus serve [--host] [--port]      # 启动 HTTP API 服务（默认 127.0.0.1:9814）
 mailbus launch                       # 启动所有 Agent 常驻进程（Gateway / Dashboard）
 mailbus launch --status              # 查看 Agent 进程运行状态
 mailbus launch --stop                # 停止所有 Agent 进程
@@ -120,7 +261,7 @@ mailbus 自带一个独立 Web 管理界面 **ziyan-mailbus Platform**，零依�
 
 ```bash
 # 1. 启动 HTTP API
-mailbus serve --host 127.0.0.1 --port 9812 --data-dir /path/to/store
+mailbus serve --host 127.0.0.1 --port 9814 --data-dir /path/to/store
 
 # 2. 浏览器打开 docs/platform.html（或用任意静态服务器托管）
 #    页面自动从 API 加载数据
@@ -162,19 +303,35 @@ Agent 收到推送后，写文件回复总线（不调 CLI）：
 **转发给其他 Agent：**
 直接写目标 Agent 的 `inbox.json`（追加到 `messages` 数组 + 设 `has_unread: true`）
 
-## AgentMemory 记忆同步（可选）
+## 记忆同步（双写：SQLite 主 + AgentMemory 辅）
 
-mailbus 可以自动将已 ack 的消息同步到 [AgentMemory](https://github.com/AgentMemory/AgentMemory)，保证 Agent 重启后能检索到历史消息。
+mailbus 将已 ack 的消息**必写** [`team-memory.db`](/mnt/e/hermes-data/.hermes/shared-memory/team-memory.db)（与各 agent 启动脚本 `memory.py search` 共用），并 **best-effort** 同步到 [AgentMemory](https://github.com/rohitg00/agentmemory)（MCP 语义检索 / Codex hooks）。
 
-内置 scheduler 已包含 `memory_bridge` job（默认每 60s）；也可手动运行：
+内置 scheduler jobs：
+- `memory_bridge`（默认每 120s）— 双写桥接
+- `agentmemory_watchdog`（默认每 180s）— AM 连续不可达时 docker 重启
+
+手动运行：
 
 ```bash
 python3 mailbus-memory-bridge.py --data-dir /path/to/store
+python3 /mnt/e/hermes-data/.hermes/scripts/memory.py search mailbus
+python3 tools/check-agentmemory-persistence.py --dry-run   # 探针（加 --dry-run 跳过重启）
 ```
 
-团队规范同步：`python3 tools/sync-team-rules.py --data-dir store`（写入 bulletin + 各 agent notice；`.env.secrets` **勿提交 git**，见 `rules/team-secrets-policy.md`）
+环境变量：
 
-消息以标签格式存入记忆：`[agent:xxx] [from:yyy] [msg_id:zzz] <消息内容>`
+| 变量 | 默认 | 含义 |
+|------|------|------|
+| `MEMORY_BRIDGE_SQLITE` | `1` | 写 team-memory.db |
+| `MEMORY_BRIDGE_AGENTMEMORY` | `1` | 写 AgentMemory |
+| `TEAM_MEMORY_DB` | 见 compose | SQLite 路径 |
+
+团队规范同步：`python3 tools/sync-team-rules.py --data-dir store`（bulletin + team-memory.db + 各 agent notice；AgentMemory 可选）
+
+消息 SQLite 格式：`[agent:xxx] [from:yyy] [type:zzz] <内容>`，key=`mailbus:{msg_id}`
+
+**运行约束**：AgentMemory 仅通过 WSL Docker（`docker-agents/start-team.sh`）运行；原生 Windows 不部署 AM，记忆走 SQLite + mailbus inbox 文件。
 
 ## 多模型 Fallback
 

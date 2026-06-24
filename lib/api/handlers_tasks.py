@@ -22,12 +22,19 @@ def _is_noise_task_id(task_id: str) -> bool:
 
 
 def _normalize_tasks_for_api(tasks: list) -> list:
-    """API 返回前规范化 chain 格式，并补全 audit_reviewer。"""
+    """API 返回前规范化 chain 格式，并补全 audit_reviewer / needs_audit / fsm。"""
+    from lib.audit_dispatch import task_requires_audit
+    from lib.task_fsm import ensure_fsm, fsm_summary
+
     for task in tasks:
         normalize_task_chain(task)
         chain = task.get("chain") or []
         if chain and is_pipeline_step(chain[0]) and not task.get("audit_reviewer"):
             task["audit_reviewer"] = "lingjian"
+        task["needs_audit"] = task_requires_audit(task)
+        if chain and is_pipeline_step(chain[0]):
+            ensure_fsm(task)
+            task["fsm"] = fsm_summary(task)
     return tasks
 
 
@@ -99,34 +106,92 @@ def handle_tasks(handler):
 
 
 def handle_task_create(handler):
-    """POST /api/tasks/create — 创建新任务"""
-    body = handler._read_post_body()
-    task_id = body.get("task_id", "")
-    summary = body.get("summary", "")
-    assignee = body.get("assignee", "")
-    deliverable = body.get("deliverable", "")
-    chain_hops = body.get("chain", None)
-
-    if not task_id:
-        handler._send_json({"error": "缺少 task_id"}, 400)
-        return
-    if not summary:
-        handler._send_json({"error": "缺少 summary"}, 400)
-        return
-
-    tracker = TaskTracker(handler.data_dir)
-    existing = tracker.get(task_id)
-    if existing:
-        handler._send_json({"error": f"任务 {task_id} 已存在"}, 409)
-        return
-
-    task = tracker.create(
-        task_id=task_id,
-        summary=summary,
-        assignee=assignee,
-        deliverable=deliverable,
-        chain_hops=chain_hops,
+    """POST /api/tasks/create — v3 A2A Envelope（Legacy → 410）。"""
+    from lib.router.envelope_validate import is_legacy_create_body, validate_envelope
+    from lib.router.planner import PlanError, needs_plan_approval, plan_task
+    from lib.router.dispatch import (
+        dispatch_first_step,
+        set_await_plan_approval,
+        start_executing,
     )
+
+    body = handler._read_post_body()
+    data_dir = handler.data_dir
+
+    if is_legacy_create_body(body):
+        handler._send_json({
+            "status": "error",
+            "error": "legacy_deprecated",
+            "message": "Use A2A Envelope; see store/rules/a2a-task-create-api.md",
+        }, 410)
+        return
+
+    errors = validate_envelope(body, data_dir=data_dir)
+    if errors:
+        handler._send_json({
+            "status": "error",
+            "error": "schema_invalid",
+            "details": errors,
+        }, 400)
+        return
+
+    task_id = body.get("task_id", "")
+    tracker = TaskTracker(data_dir)
+    if tracker.get(task_id):
+        handler._send_json({
+            "status": "error",
+            "error": "task_exists",
+            "message": f"任务 {task_id} 已存在",
+        }, 409)
+        return
+
+    try:
+        if body.get("mode") == "explicit":
+            planned = body["planned_chain"]
+            plan_meta = {
+                "method": "rules",
+                "task_type_guess": body.get("task_type"),
+                "confidence": 1.0,
+                "provider_used": "rules",
+            }
+            from lib.dispatch.collab_plan import expand_planned_chain_for_collab
+            planned = expand_planned_chain_for_collab(planned, body)
+        else:
+            config = json_read(os.path.join(data_dir, "config.json"), {})
+            out = plan_task(body, data_dir=data_dir, config=config)
+            planned = out["planned_chain"]
+            plan_meta = out["plan_meta"]
+            from lib.dispatch.collab_plan import expand_planned_chain_for_collab
+            planned = expand_planned_chain_for_collab(planned, body)
+    except PlanError as e:
+        handler._send_json({
+            "status": "error",
+            "error": e.code,
+            "message": str(e),
+        }, 400)
+        return
+
+    task = tracker.create_from_envelope(
+        body, planned_chain=planned, plan_meta=plan_meta,
+    )
+
+    from lib.workflow.engine import bind_workflow
+    bind_workflow(task, body, data_dir=data_dir)
+    json_write(tracker._task_path(task_id), task)
+
+    config = json_read(os.path.join(data_dir, "config.json"), {})
+    if needs_plan_approval(body, config):
+        set_await_plan_approval(task)
+        from lib.human_queue import enqueue_plan_approval
+
+        hq_id = enqueue_plan_approval(data_dir, task)
+        task["fsm"]["human_queue_id"] = hq_id
+        json_write(tracker._task_path(task_id), task)
+        handler._send_json({"status": "ok", "task": task, "human_queue_id": hq_id}, 201)
+        return
+
+    start_executing(task)
+    dispatch_first_step(data_dir, task)
     handler._send_json({"status": "ok", "task": task}, 201)
 
 
@@ -192,6 +257,9 @@ def handle_task_audit(handler):
         return
     if result not in ("pass", "fail", "warn"):
         handler._send_json({"error": "result 必须是 pass/fail/warn"}, 400)
+        return
+    if reviewer not in ("lingjian", "lingyan"):
+        handler._send_json({"error": "reviewer 不在白名单（lingjian/lingyan）"}, 403)
         return
     if severity not in ("critical", "high", "normal", "low"):
         handler._send_json({"error": "severity 必须是 critical/high/normal/low"}, 400)
@@ -361,11 +429,17 @@ def handle_permission(handler):
     if handler.command == "POST":
         body = handler._read_post_body()
         perm_data = json_read(handler.permission_file, {})
-        perm_data.update(body)
+        if "permissions" in body and isinstance(body["permissions"], dict):
+            perm_data["permissions"] = body["permissions"]
+        if "bulletin" in body and isinstance(body["bulletin"], list):
+            perm_data["bulletin"] = body["bulletin"]
+        perm_data["updated_at"] = _now_iso()
         json_write(handler.permission_file, perm_data)
-        handler._send_json({"status": "ok"})
+        handler._send_json({"status": "ok", "permissions": perm_data.get("permissions", {})})
     else:
         data = json_read(handler.permission_file, {})
+        if "permissions" not in data:
+            data = {"permissions": data, "bulletin": data.get("bulletin", [])}
         handler._send_json(data)
 
 
@@ -493,3 +567,177 @@ def handle_skill_use(handler):
         handler._send_json({"status": "ok"})
     else:
         handle_skill_usage(handler)
+
+
+def handle_task_fsm_get(handler, task_id: str):
+    """GET /api/tasks/<task_id>/fsm — 状态机摘要（Dashboard 用）。"""
+    from lib.task_fsm import ensure_fsm, fsm_summary
+
+    tracker = TaskTracker(handler.data_dir)
+    task = tracker.get(task_id)
+    if not task:
+        handler._send_json({"error": "not_found"}, 404)
+        return
+    ensure_fsm(task)
+    handler._send_json({"status": "ok", "fsm": fsm_summary(task)})
+
+
+def handle_human_queue(handler):
+    """GET /api/human-queue — 人工待办列表。"""
+    from lib.human_queue import list_items
+    from urllib.parse import parse_qs, urlparse
+
+    parsed = urlparse(handler.path)
+    qs = parse_qs(parsed.query or "")
+    status = (qs.get("status") or ["pending"])[0]
+    qtype = (qs.get("type") or [""])[0]
+    task_id = (qs.get("task_id") or [""])[0]
+    intake_id = (qs.get("intake_id") or [""])[0]
+    try:
+        limit = int((qs.get("limit") or ["50"])[0])
+        offset = int((qs.get("offset") or ["0"])[0])
+    except ValueError:
+        handler._send_json({"error": "invalid limit/offset"}, 400)
+        return
+
+    items, meta = list_items(
+        handler.data_dir,
+        status=status,
+        qtype=qtype,
+        task_id=task_id,
+        intake_id=intake_id,
+        limit=limit,
+        offset=offset,
+    )
+    handler._send_json({
+        "status": "ok",
+        "version": meta["version"],
+        "updated_at": meta["updated_at"],
+        "total": meta["total"],
+        "items": items,
+    })
+
+
+def handle_task_fsm_action(handler, task_id: str, action: str):
+    """POST /api/tasks/<id>/fsm/{rollback|skip|cancel|pause|priority}"""
+    from lib.task_fsm import (
+        apply_cancel,
+        apply_pause,
+        apply_rollback,
+        apply_skip,
+        ensure_fsm,
+        fsm_summary,
+    )
+
+    tracker = TaskTracker(handler.data_dir)
+    task = tracker.get(task_id)
+    if not task:
+        handler._send_json({"error": "not_found"}, 404)
+        return
+
+    body = handler._read_post_body() if handler.command == "POST" else {}
+    reason = body.get("reason", "")
+
+    if action == "approve-plan":
+        from lib.fsm_actions import apply_approve_plan
+
+        outcome = apply_approve_plan(task, body, data_dir=handler.data_dir)
+        if not outcome.get("ok"):
+            code = 400
+            handler._send_json({"status": "error", **outcome}, code)
+            return
+        json_write(os.path.join(handler.data_dir, "tasks", f"{task_id}.json"), task)
+        handler._send_json({
+            "status": "ok",
+            "fsm": fsm_summary(task),
+            "dispatch_ok": outcome.get("dispatch_ok"),
+            "action": outcome.get("action"),
+        })
+        return
+
+    if action == "accept":
+        from lib.fsm_actions import apply_accept
+        from lib.fsm_dispatch import dispatch_fsm_step
+        from lib.task_fsm import mark_step_dispatched
+
+        outcome = apply_accept(task, body, data_dir=handler.data_dir)
+        if not outcome.get("ok"):
+            handler._send_json({"status": "error", **outcome}, 400)
+            return
+        json_write(os.path.join(handler.data_dir, "tasks", f"{task_id}.json"), task)
+        dispatch_ok = None
+        nxt = outcome.get("next_step")
+        if nxt:
+            dispatch_ok = dispatch_fsm_step(
+                handler.data_dir, task_id, nxt,
+                summary=body.get("reason") or task.get("summary", ""),
+            )
+            if dispatch_ok:
+                mark_step_dispatched(nxt)
+                json_write(os.path.join(handler.data_dir, "tasks", f"{task_id}.json"), task)
+        handler._send_json({
+            "status": "ok",
+            "fsm": fsm_summary(task),
+            "action": outcome.get("action"),
+            "dispatch_ok": dispatch_ok,
+        })
+        return
+
+    if action == "rollback":
+        outcome = apply_rollback(
+            task,
+            to_step=body.get("to_step"),
+            to_person=body.get("to_agent") or body.get("to_person"),
+            reason=reason,
+        )
+    elif action == "skip":
+        outcome = apply_skip(task, reason=reason)
+    elif action == "cancel":
+        outcome = apply_cancel(task, reason=reason)
+    elif action == "pause":
+        outcome = apply_pause(task, reason=reason)
+    elif action == "priority":
+        ensure_fsm(task)
+        p = body.get("priority")
+        if p is None:
+            handler._send_json({"error": "missing priority"}, 400)
+            return
+        task["fsm"]["priority"] = int(p)
+        outcome = {"ok": True, "action": "priority", "task": task}
+    else:
+        handler._send_json({"error": f"unknown action: {action}"}, 400)
+        return
+
+    if not outcome.get("ok"):
+        handler._send_json({"status": "error", **outcome}, 400)
+        return
+
+    task_path = os.path.join(handler.data_dir, "tasks", f"{task_id}.json")
+    json_write(task_path, task)
+
+    dispatch_ok = None
+    if action == "rollback" and outcome.get("next_step"):
+        from lib.fsm_dispatch import dispatch_fsm_step
+        from lib.task_fsm import mark_step_dispatched
+
+        nxt = outcome["next_step"]
+        dispatch_ok = dispatch_fsm_step(
+            handler.data_dir,
+            task_id,
+            nxt,
+            summary=reason or task.get("summary", ""),
+        )
+        if dispatch_ok:
+            mark_step_dispatched(nxt)
+            json_write(task_path, task)
+        else:
+            from lib.mbus_log import warn
+            warn(f"[api] rollback dispatch failed task={task_id[:24]}")
+
+    handler._send_json({
+        "status": "ok",
+        "action": outcome.get("action"),
+        "fsm": fsm_summary(task),
+        "next_step": outcome.get("next_step"),
+        "dispatch_ok": dispatch_ok,
+    })

@@ -35,6 +35,18 @@
         "skills_dirs": []
       }
     },
+    "lingyun": {
+      "name": "灵云",
+      "role": "开发工程师 · Claude Code pro",
+      "type": "claude_code",
+      "models": ["deepseek-pro"],
+      "max_concurrency": 1,
+      "file_task_for_executable": true,
+      "launch": {
+        "browser_ports": {"lingyun": 9260},
+        "default_project_roots": {"lingyun": "/mnt/e/ai_tools"}
+      }
+    },
     "agent-c": {
       "name": "Agent C",
       "role": "调度",
@@ -62,19 +74,41 @@
       "push": "openclaw agent --local --agent AGENT --message 'MSG' MODEL --timeout 120",
       "description": "OpenClaw Gateway agent"
     },
-    "cline": {
-      "push": "cline 'MSG' PROVIDER --timeout 120",
-      "description": "Cline CLI"
-    },
     "opencode": {
       "push": "opencode run 'MSG' --dangerously-skip-permissions MODEL",
-      "description": "OpenCode CLI"
+      "description": "OpenCode CLI（大力 dali）"
+    },
+    "codex": {
+      "push": "codex exec 'MSG'",
+      "description": "Codex CLI（灵霄 lingxiao / 灵鉴 lingjian，Docker codex-agent）"
+    },
+    "cline": {
+      "push": "cline 'MSG' PROVIDER --timeout 120",
+      "description": "Cline CLI（legacy：仅 WSL 宿主机直连；Docker lingxiao/lingjian 已迁移 codex）"
+    },
+    "claude_code": {
+      "push": "claude -p 'MSG'",
+      "description": "Claude Code CLI（宿主机 headless，Windows/Linux 可选）"
     },
     "none": {
       "push": "",
       "description": "纯文件通信（无 CLI 推送）"
     },
     "models": {
+      "deepseek-flash": {
+        "opencode": "--model deepseek/deepseek-chat",
+        "cline": "--provider openai-compatible",
+        "openclaw": "--model deepseek/deepseek-chat",
+        "hermes": "--model deepseek-chat",
+        "hermes_profile": "--model deepseek-chat"
+      },
+      "deepseek-pro": {
+        "opencode": "--model deepseek/deepseek-reasoner",
+        "cline": "--provider openai-compatible",
+        "openclaw": "--model deepseek/deepseek-reasoner",
+        "hermes": "--model deepseek-v4-pro",
+        "hermes_profile": "--model deepseek-v4-pro"
+      },
       "deepseek-chat": {
         "opencode": "--model deepseek/deepseek-chat",
         "cline": "--provider openai-compatible",
@@ -95,6 +129,72 @@
         "openclaw": "--model zhipu/glm-4",
         "hermes": "",
         "hermes_profile": ""
+      },
+      "minimax-m2": {
+        "claude_code": "--model MiniMax-M2.7"
+      }
+    },
+    "launch_templates": {
+      "codex_docker": {
+        "cli": {"kind": "shell", "start_wait_seconds": 5},
+        "browser": {
+          "kind": "codex_docker",
+          "url": "http://127.0.0.1:{port}/",
+          "web_port": "9240",
+          "ttyd_url": "http://127.0.0.1:9250/",
+          "start_wait_seconds": 15
+        },
+        "desktop": {"enabled": false, "kind": "codex_desktop"}
+      },
+      "claude_host": {
+        "cli": {"kind": "shell", "start_wait_seconds": 0},
+        "browser": {
+          "kind": "claude_ttyd",
+          "url": "http://127.0.0.1:{port}/",
+          "web_port": "9260",
+          "start_wait_seconds": 15
+        },
+        "desktop": {"enabled": false, "kind": "claude_interactive"}
+      }
+    }
+  },
+  "mailbus_codex": {
+    "platform": "auto",
+    "windows": {
+      "sync_on_launch": true,
+      "ensure_gateway_container": true
+    },
+    "linux": {
+      "sync_on_launch": true,
+      "ensure_gateway_container": true
+    }
+  },
+  "mailbus_claude": {
+    "platform": "auto",
+    "windows": {
+      "enabled": true,
+      "claude_home": "C:\\Users\\hopew\\.claude",
+      "claude_bin": "claude",
+      "default_project_dir": "E:\\ai_tools",
+      "ttyd_bin": "ttyd",
+      "ensure_on_launch": true,
+      "browser_ports": {"lingyun": 9260, "lingyan": 9261},
+      "default_project_roots": {
+        "lingyun": "E:\\ai_tools",
+        "lingyan": "E:\\ai_tools"
+      }
+    },
+    "linux": {
+      "enabled": false,
+      "claude_home": "/home/administrator/.claude",
+      "claude_bin": "claude",
+      "default_project_dir": "/mnt/e/ai_tools",
+      "ttyd_bin": "ttyd",
+      "ensure_on_launch": true,
+      "browser_ports": {"lingyun": 9260, "lingyan": 9261},
+      "default_project_roots": {
+        "lingyun": "/mnt/e/ai_tools",
+        "lingyan": "/mnt/e/ai_tools"
       }
     }
   }

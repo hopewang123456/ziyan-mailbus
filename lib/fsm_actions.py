@@ -1,0 +1,247 @@
+"""FSM 人工口动作 — approve-plan · accept · accepting 流转。"""
+
+from __future__ import annotations
+
+import os
+from typing import Any, Dict, Optional
+
+from .human_queue import close_by_task, enqueue_final_acceptance, enqueue_plan_approval
+from .pipeline_step import step_role_type
+from .task_fsm import TaskFsmState, _append_history, ensure_fsm, step_result_dir
+from .utils import _now_iso, json_write
+
+
+def _task_envelope(task: dict) -> dict:
+    return {
+        "protocol_version": task.get("protocol_version", "mailbus-a2a/1"),
+        "task_id": task.get("task_id") or task.get("id"),
+        "intent": task.get("intent") or task.get("summary", ""),
+        "initiator": task.get("initiator", "human"),
+        "mode": "auto",
+        "tier": task.get("tier") or "M",
+        "task_type": task.get("task_type") or "unknown",
+        "constraints": task.get("constraints") or {},
+    }
+
+
+def enter_accepting_or_succeed(task: dict, result: dict, *, data_dir: str) -> str:
+    """链走完：S+验收员自动终验，否则 entering accepting + human-queue。"""
+    ensure_fsm(task)
+    tier = (task.get("tier") or "M").upper()
+    conclusion = (result.get("conclusion") or "").lower()
+    chain = task.get("chain") or []
+    last_rt = step_role_type(chain[-1]) if chain else None
+
+    if tier == "S" and last_rt == 12 and conclusion == "approved":
+        _write_acceptance(
+            data_dir, task,
+            decision="approved",
+            reviewer=result.get("agent") or chain[-1].get("to_agent") or "",
+            method="auto",
+            comment="S-tier auto acceptance (role_type=12, approved)",
+        )
+        task["fsm"]["state"] = TaskFsmState.SUCCEEDED.value
+        task["status"] = "success"
+        task["fsm"].pop("substate", None)
+        task["fsm"].pop("human_queue_id", None)
+        _append_history(task, "auto_accept", {"method": "auto"})
+        return "auto_accept"
+
+    task["fsm"]["state"] = TaskFsmState.ACCEPTING.value
+    task["fsm"].pop("substate", None)
+    task["status"] = "pending"
+    hq_id = enqueue_final_acceptance(data_dir, task)
+    task["fsm"]["human_queue_id"] = hq_id
+    _append_history(task, "accepting", {"human_queue_id": hq_id})
+    return "accepting"
+
+
+def _write_acceptance(
+    data_dir: str,
+    task: dict,
+    *,
+    decision: str,
+    reviewer: str,
+    method: str = "manual",
+    comment: str = "",
+    reason: str = "",
+    attachments: Optional[list] = None,
+) -> str:
+    tid = task.get("task_id") or task.get("id") or ""
+    out_dir = step_result_dir(data_dir, tid)
+    os.makedirs(out_dir, exist_ok=True)
+    path = os.path.join(out_dir, "acceptance.json")
+    payload = {
+        "task_id": tid,
+        "decision": decision,
+        "reviewer": reviewer,
+        "method": method,
+        "comment": comment,
+        "reason": reason,
+        "attachments": attachments or [],
+        "timestamp": _now_iso(),
+    }
+    json_write(path, payload)
+    task.setdefault("acceptance_record", payload)
+    return path
+
+
+def apply_approve_plan(task: dict, body: dict, *, data_dir: str) -> Dict[str, Any]:
+    ensure_fsm(task)
+    fsm = task["fsm"]
+    tid = task.get("task_id") or task.get("id") or ""
+
+    if fsm.get("state") != TaskFsmState.CREATED.value:
+        return {"ok": False, "error": "invalid_fsm_state"}
+    if fsm.get("substate") != "await_plan_approval":
+        return {"ok": False, "error": "invalid_fsm_state"}
+
+    decision = (body.get("decision") or "").lower()
+    reviewer = body.get("reviewer") or "human"
+    resolution = {
+        "decision": decision,
+        "reviewer": reviewer,
+        "comment": body.get("comment", ""),
+        "reason": body.get("reason", ""),
+    }
+
+    if decision == "approved":
+        from .router.dispatch import dispatch_first_step, start_executing
+
+        fsm.pop("substate", None)
+        start_executing(task)
+        dispatch_ok = dispatch_first_step(data_dir, task)
+        close_by_task(data_dir, tid, "plan_approval", resolution)
+        fsm.pop("human_queue_id", None)
+        _append_history(task, "approve_plan", {"reviewer": reviewer, "dispatch_ok": dispatch_ok})
+        return {"ok": True, "action": "approve_plan", "dispatch_ok": dispatch_ok, "task": task}
+
+    if decision == "denied":
+        reason = (body.get("reason") or "").strip()
+        if not reason:
+            return {"ok": False, "error": "missing_reason"}
+        close_by_task(data_dir, tid, "plan_approval", resolution)
+        action = body.get("action") or "replan"
+        if action == "replan":
+            from .dispatch.collab_plan import expand_planned_chain_for_collab
+            from .dispatch.role_resolver import resolve_agent_for_role_type
+            from .dispatch.tier_filter import dispatch_action_from_envelope, dispatch_action_from_step
+            from .pipeline_chain import init_chain_from_planned
+            from .router.dispatch import set_await_plan_approval
+            from .router.planner import plan_replan
+            from .utils import json_read
+
+            envelope = _task_envelope(task)
+            constraints = dict(envelope.get("constraints") or {})
+            constraints["replan_reason"] = reason
+            envelope["constraints"] = constraints
+            out = plan_replan(envelope, data_dir=data_dir)
+            planned = expand_planned_chain_for_collab(out["planned_chain"], envelope)
+            agents_cfg = json_read(os.path.join(data_dir, "config.json"), {}).get("agents") or {}
+            env_action = dispatch_action_from_envelope(envelope)
+
+            def _resolve(rt, pin, planned_item=None):
+                step_action = dispatch_action_from_step(planned_item or {}, envelope)
+                merged = {**env_action, **step_action}
+                return resolve_agent_for_role_type(
+                    data_dir, rt, pin_agent=pin, action=merged, agents_cfg=agents_cfg,
+                )
+
+            pipeline_chain = init_chain_from_planned(
+                planned,
+                tid,
+                resolve_agent=_resolve,
+            )
+            task["chain"] = pipeline_chain
+            task["plan_meta"] = out["plan_meta"]
+            set_await_plan_approval(task)
+            hq_id = enqueue_plan_approval(data_dir, task)
+            task["fsm"]["human_queue_id"] = hq_id
+            _append_history(task, "deny_replan", {"reason": reason, "human_queue_id": hq_id})
+            return {"ok": True, "action": "deny_replan", "task": task}
+
+        task["fsm"]["state"] = TaskFsmState.CANCELLED.value
+        task["fsm"].pop("substate", None)
+        task["status"] = "cancelled"
+        task["error"] = {"reason": reason, "action": action}
+        _append_history(task, "deny_cancel", {"reason": reason})
+        return {"ok": True, "action": "deny_cancel", "task": task}
+
+    return {"ok": False, "error": "invalid_decision"}
+
+
+def apply_accept(task: dict, body: dict, *, data_dir: str) -> Dict[str, Any]:
+    ensure_fsm(task)
+    fsm = task["fsm"]
+    tid = task.get("task_id") or task.get("id") or ""
+
+    if fsm.get("state") != TaskFsmState.ACCEPTING.value:
+        return {"ok": False, "error": "invalid_fsm_state"}
+
+    decision = (body.get("decision") or "").lower()
+    reviewer = body.get("reviewer") or "human"
+    attachments = body.get("attachments") or []
+
+    if decision == "approved":
+        _write_acceptance(
+            data_dir, task,
+            decision="approved",
+            reviewer=reviewer,
+            method="manual",
+            comment=body.get("comment", ""),
+            attachments=attachments,
+        )
+        fsm["state"] = TaskFsmState.SUCCEEDED.value
+        task["status"] = "success"
+        close_by_task(data_dir, tid, "final_acceptance", {
+            "decision": "approved",
+            "reviewer": reviewer,
+            "comment": body.get("comment", ""),
+            "attachments": attachments,
+        })
+        fsm.pop("human_queue_id", None)
+        _append_history(task, "accept", {"reviewer": reviewer})
+        return {"ok": True, "action": "accept", "task": task}
+
+    if decision == "denied":
+        reason = (body.get("reason") or "").strip()
+        if not reason:
+            return {"ok": False, "error": "missing_reason"}
+        _write_acceptance(
+            data_dir, task,
+            decision="denied",
+            reviewer=reviewer,
+            method="manual",
+            reason=reason,
+            attachments=attachments,
+        )
+        close_by_task(data_dir, tid, "final_acceptance", {
+            "decision": "denied",
+            "reviewer": reviewer,
+            "reason": reason,
+            "attachments": attachments,
+        })
+        action = body.get("action") or "rollback"
+        if action == "rollback":
+            from .task_fsm import apply_rollback
+
+            outcome = apply_rollback(
+                task,
+                to_step=body.get("rollback_to_step"),
+                to_person=body.get("target_agent") or body.get("to_agent"),
+                reason=reason,
+            )
+            if not outcome.get("ok"):
+                return outcome
+            fsm.pop("human_queue_id", None)
+            _append_history(task, "accept_deny_rollback", {"reason": reason})
+            return {"ok": True, "action": "accept_deny_rollback", "task": task, "next_step": outcome.get("next_step")}
+
+        fsm["state"] = TaskFsmState.BLOCKED.value
+        task["status"] = "failed"
+        task["error"] = {"reason": reason, "action": action}
+        fsm.pop("human_queue_id", None)
+        _append_history(task, "accept_deny", {"reason": reason})
+        return {"ok": True, "action": "accept_deny", "task": task}
+
+    return {"ok": False, "error": "invalid_decision"}

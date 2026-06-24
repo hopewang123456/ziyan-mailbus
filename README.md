@@ -41,7 +41,7 @@ mailbus init --data-dir /path/to/your/store
 mailbus agent-add agent-a --cli "your-cli --message" --role "your role"
 
 # 4. Start the bus (recommended: built-in Scheduler, no crontab)
-mailbus serve --host 0.0.0.0 --port 9812 --data-dir /path/to/your/store
+mailbus serve --host 0.0.0.0 --port 9814 --data-dir /path/to/your/store
 # SchedulerHub runs scan, memory_bridge, pipeline_watchdog automatically
 
 # Or scan manually:
@@ -55,6 +55,139 @@ mailbus broadcast --msg "System maintenance notice"
 mailbus status
 mailbus status --failed
 ```
+
+## Cross-Platform Deployment
+
+mailbus is **pure Python + filesystem** — on **Linux and macOS** you can run it natively without WSL or any Windows-specific bridge. The default API port is **9814** (`lib/constants.py`).
+
+### Port reference
+
+| Deployment | API port | Notes |
+|------------|----------|-------|
+| Native `mailbus serve` | **9814** | Linux / macOS / Windows |
+| Docker `mailbus` service | **9812** | Inside `docker-agents/` compose network; host mapping may differ |
+| n8n webhook | **5678** | Optional; video publish drill |
+| AgentMemory | **3111** | Optional |
+| Lingyun Claude ttyd | **9260** | WSL host · Claude Code pro |
+| Lingyan Claude ttyd | **9261** | WSL host · Claude Code QA |
+
+### Developer tier dispatch (2026-06-25)
+
+For `role_type=8` (developer): **filter candidates by `model_tier`, then least_load + round-robin**.
+
+| tier | Agents |
+|------|--------|
+| `pro` (requires `MAILBUS_ALLOW_PRO=1`) | lingyun |
+| `flash` / default | dali, lingxiao |
+
+Set `constraints.dispatch.model_tier` on the task envelope. Offline agents are auto-excluded with failover. See [`rules/model-routing.md`](rules/model-routing.md).
+
+### Linux / macOS (recommended)
+
+No WSL bridge required — n8n/ComfyUI on the same machine use `http://127.0.0.1:5678` / `8188` directly.
+
+```bash
+# 1. Install
+git clone https://github.com/hopewang123456/ziyan-mailbus.git
+cd ziyan-mailbus
+python3 -m venv .venv && source .venv/bin/activate   # optional
+pip install -e .
+
+# 2. Initialize data dir
+mailbus init --data-dir ./store
+cp examples/config.example.json store/config.json   # then edit agents / keys
+
+# 3. Environment (.env in project root — do not commit)
+cat >> .env <<'EOF'
+MAILBUS_API_TOKEN=your-secret-token
+GITHUB_TOKEN=ghp_...                    # optional: platform-scout github_issues
+N8N_PUBLISH_WEBHOOK_URL=http://127.0.0.1:5678/webhook/mailbus-multi-publish
+EOF
+
+# 4. Start bus (built-in SchedulerHub: scan, platform-scout, pipeline-repair, …)
+mailbus serve --host 127.0.0.1 --port 9814 --data-dir ./store
+# Or background:
+bash tools/restart-mailbus.sh 9814
+
+# 5. Optional: n8n sidecar
+bash docker-agents/start-n8n.sh
+bash tools/setup-n8n.sh
+
+# 6. Acceptance
+python3 tools/run-final-acceptance.py
+python3 tools/validate-order-intake.py --data-dir store
+# Dashboard: open docs/index.html (API base defaults to http://127.0.0.1:9814)
+```
+
+**systemd (optional):** see `docker-agents/install-systemd.sh` and `docker-agents/docker-agents.service`.
+
+### Windows (native Python + optional WSL Docker)
+
+When **mailbus runs on Windows** and **n8n runs in WSL Docker**, `localhost:5678` may be unreachable from Python — mailbus uses `lib/n8n/wsl_bridge.py` automatically as fallback.
+
+```powershell
+pip install -e .
+mailbus init --data-dir store
+# Configure .env (same vars as Linux)
+
+# Start / restart native serve (default 9814)
+.\tools\restart-mailbus.ps1
+
+# n8n in WSL Docker
+.\tools\setup-n8n.ps1          # or -Reset to rebuild workflow volume
+# Or: wsl bash docker-agents/start-n8n.sh
+
+python tools\run-final-acceptance.py
+```
+
+Tips:
+- Prefer **WSL mirrored networking** or port forwarding if you want to avoid the WSL bridge.
+- Docker Desktop on Windows: full team stack via `wsl bash docker-agents/start-team.sh`.
+
+### Docker full agent team
+
+For Hermes / OpenClaw / Cline containers sharing one `store/` volume:
+
+```bash
+cd docker-agents
+cp .env.example .env          # fill API keys
+bash start-team.sh            # compose up + health checks
+bash mailbus-pipeline-e2e.sh  # end-to-end regression
+```
+
+Inside the mailbus container the API listens on **9812** (see `docker-compose.yml`). Host scripts under `docker-agents/*.sh` use that port — this is intentional and different from native **9814**.
+
+### Optional components
+
+| Component | Purpose | Setup |
+|-----------|---------|-------|
+| **n8n** | Multi-channel publish (video drill) | `setup-n8n.sh` / `setup-n8n.ps1` |
+| **ComfyUI** | Image generation step | `docker-agents/start-comfyui-gpu.sh` |
+| **AgentMemory** | Long-term message memory | `npm i -g @agentmemory/agentmemory && agentmemory` |
+
+### Verification checklist
+
+```bash
+python3 tests/run_all.py                          # unit tests
+python3 tools/validate-scheduler.py --url http://127.0.0.1:9814
+python3 tools/smoke-platform-scout.py --data-dir store
+python3 tools/validate-order-intake.py --data-dir store
+python3 tools/run-final-acceptance.py
+```
+
+### Roadmap gaps (see `plans/`)
+
+Still tracked but not blocking native Linux deploy:
+
+| Item | Status |
+|------|--------|
+| Phase1 `platform-scout` → lingtuo task notify | Done (`after_scout_notify_agent`) |
+| `validate-order-intake.py` | Done |
+| Lingxiao auto-ack / chat `-q` timeout | Done (file-task push + phantom + CLI timeout reset) |
+| Agent permission persistence | Done (`permission.json` + API normalize) |
+| Token stats Dashboard | Done (`/api/stats` token_estimates) |
+| Commercial role-flow (lingtuo → lingzhao) | Done (role-flow pursue + intake gates) |
+| Lingtuo Hermes profile 9126 | Done (`init-profiles.sh` + config) |
 
 ## Core Features
 
@@ -96,10 +229,13 @@ mailbus status --failed
 | `lingzhao` | 🪷 灵昭 | Solution Design | Hermes |
 | `lingjin` | 🦋 灵瑾 | Network Security | Hermes Profile |
 | `lingxi` | 🔭 灵犀 | Tech Radar | Hermes Profile |
+| `lingtuo` | 🧭 灵拓 | Market Expansion | Hermes Profile |
 | `lingjian` | 🔍 灵鉴 | Code Review | Hermes Profile |
 | `lingyan` | 🧪 灵验 | Testing & QA | Hermes Profile |
+| `lingxun` | 🔦 灵巡 | Patrol & Daily Report | Hermes Profile |
+| `lingzhang` | 🧾 灵账 | Billing & Collections | Hermes Profile |
 | `xiaoqi` | 🦞 小七 | Dispatch | OpenClaw |
-| `yige` | 👨‍🔧 一哥 | Operations | OpenClaw |
+| `yige` | 👨‍🔧 一哥 | Operations & Content | OpenClaw |
 | `lingxiao` | 🎯 灵霄 | Tech Lead | Cline CLI |
 | `dali` | 🤖 大力 | Coding | OpenCode |
 
@@ -129,7 +265,7 @@ mailbus agent-add <name>            # Register a new agent
 mailbus agent-remove <name>         # Remove an agent
 mailbus heartbeat                   # Heartbeat detection (check all agent online status)
 mailbus search                      # Full-text message search
-mailbus serve [--host] [--port]      # Start HTTP API server (default 127.0.0.1:9812)
+mailbus serve [--host] [--port]      # Start HTTP API server (default 127.0.0.1:9814)
 mailbus launch                       # Start all agent processes (Gateways / Dashboards)
 mailbus launch --status              # View agent process running status
 mailbus launch --stop                # Stop all agent processes
@@ -142,7 +278,7 @@ mailbus ships with a standalone web management interface — **ziyan-mailbus Pla
 
 ```bash
 # 1. Start the HTTP API
-mailbus serve --host 127.0.0.1 --port 9812 --data-dir /path/to/store
+mailbus serve --host 127.0.0.1 --port 9814 --data-dir /path/to/store
 
 # 2. Open docs/platform.html in your browser (or serve with any static server)
 ```

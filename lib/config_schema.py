@@ -38,7 +38,7 @@ CONFIG_SCHEMA = {
                     "properties": {
                         "type": {
                             "type": "string",
-                            "enum": ["hermes", "hermes_profile", "openclaw", "cline", "opencode", "none"]
+                            "enum": ["hermes", "hermes_profile", "openclaw", "cline", "opencode", "codex", "claude_code", "none"]
                         },
                         "role": {"type": "string", "maxLength": 500},
                         "profile": {"type": "string"},
@@ -131,16 +131,41 @@ def validate_config(config: dict, config_path: str = "") -> list:
                 continue
             if "type" not in cfg:
                 errors.append(f"agents.{name}: 缺少必需字段 type")
-            elif cfg["type"] not in ("hermes", "hermes_profile", "openclaw", "cline", "opencode", "none"):
+            elif cfg["type"] not in ("hermes", "hermes_profile", "openclaw", "cline", "opencode", "codex", "claude_code", "none"):
                 errors.append(f"agents.{name}.type: 不支持的 agent 类型 ({cfg['type']})")
             # 检查未知字段
             allowed = {"type", "role", "profile", "agent", "agent_id", "provider",
                        "models", "webhook_url", "webhook_secret",
                        "name", "inbox", "profile_paths", "launch",
-                       "max_concurrency"}
+                       "max_concurrency", "push", "push_timeout_seconds", "model",
+                       "max_turns", "claude", "docker", "cwd", "file_task_for_executable",
+                       "file_task_content_threshold"}
             extra = set(cfg.keys()) - allowed
             if extra:
                 errors.append(f"agents.{name}: 未知字段 {extra}")
+
+    tb = config.get("token_budget")
+    if tb is not None:
+        if not isinstance(tb, dict):
+            errors.append("token_budget: 期望 object 类型")
+        else:
+            for field, lo, hi in [
+                ("scan_interval_idle_seconds", 60, 3600),
+                ("scan_interval_active_seconds", 60, 3600),
+                ("scan_interval_urgent_seconds", 30, 1800),
+                ("cli_msg_max_chars", 100, 10000),
+                ("cli_combined_max_chars", 500, 50000),
+                ("memory_bridge_limit", 1, 100),
+                ("memory_bridge_interval_seconds", 30, 3600),
+            ]:
+                val = tb.get(field)
+                if val is not None and (not isinstance(val, int) or val < lo or val > hi):
+                    errors.append(f"token_budget.{field}: 值 {val!r} 超出范围 [{lo}, {hi}]")
+
+    max_pushes = config.get("max_pushes_per_message")
+    if max_pushes is not None:
+        if not isinstance(max_pushes, int) or max_pushes < 1 or max_pushes > 20:
+            errors.append(f"max_pushes_per_message: 值 {max_pushes!r} 超出范围 [1, 20]")
 
     return errors
 
