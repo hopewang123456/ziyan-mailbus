@@ -127,8 +127,8 @@ def _has_old_archivable(inbox: Inbox, archive_days: int) -> bool:
 
 
 def _is_old(inbox: Inbox, msg, archive_days: int) -> bool:
-    """检查消息是否超过归档天数（通过 Inbox 访问器）"""
-    ack_at = inbox.msg_field(msg, 'acknowledged_at', '')
+    """检查消息是否超过归档天数（acknowledged_at 或 done_at）。"""
+    ack_at = inbox.msg_field(msg, "acknowledged_at", "") or inbox.msg_field(msg, "done_at", "")
     if not ack_at:
         return False
     return _is_old_msg(ack_at, archive_days)

@@ -18,7 +18,7 @@
 - [ ] 未知字段过滤
 
 ### 2. tests/test_pusher.py — 推送逻辑
-- [ ] resolve_cli_chain 基础替换
+- [x] resolve_cli_chain 基础替换（见 tests/test_task_completion.py）
 - [ ] MODEL 占位符替换（有值/无值）
 - [ ] PROVIDER 占位符替换
 - [ ] 多模型 fallback 链生成
@@ -38,6 +38,7 @@
 - [ ] load_status / save_status
 - [ ] is_online（在线/离线/无记录）
 - [ ] check_agentmemory（mock HTTP）
+- [x] test_memory_bridge_dual — SQLite 主写 + AM 辅写、marker v2 迁移（见 tests/test_memory_bridge_dual.py）
 - [ ] check_inbox_size（正常/告警）
 - [ ] check_disk_space（正常/告警）
 - [ ] ping_agent（mock subprocess）

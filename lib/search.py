@@ -77,7 +77,7 @@ def index_message(data_dir: str, msg: dict):
 
 
 def scan_and_index(data_dir: str, agents: dict):
-    """扫描所有 inbox 并索引新消息"""
+    """扫描所有 inbox 并索引新消息；同步 catalog（外部工具等）。"""
     paths = resolve_paths(data_dir)
     for name in agents:
         inbox_file = f"{paths['inbox']}/{name}/inbox.json"
@@ -94,6 +94,12 @@ def scan_and_index(data_dir: str, agents: dict):
                     index_message(data_dir, msg.to_dict())
         except (FileNotFoundError, json.JSONDecodeError):
             pass
+
+    try:
+        from .catalog_search import index_catalog
+        index_catalog(data_dir, agents)
+    except Exception as exc:
+        print(f"[search] catalog index 跳过: {exc}")
 
 
 def search(data_dir: str, query_str: str = "", from_agent: str = "",

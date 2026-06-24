@@ -42,7 +42,18 @@ def push_alert(data_dir: str, alert_type: str, severity: str,
         "agent": agent,
         "message": message,
         "created_at": now,
+        "status": "active",
     }
+
+    # 同类型+同 agent 已有 active 告警 → 不重复写 inbox（防 key_missing 刷屏）
+    for existing in reversed(alerts["alerts"]):
+        if (
+            existing.get("status", "active") == "active"
+            and existing.get("type") == alert_type
+            and existing.get("agent") == agent
+        ):
+            return
+
     alerts["alerts"].append(alert)
     alerts["last_alert_at"] = now
 
@@ -104,3 +115,19 @@ def get_recent_alerts(data_dir: str, limit: int = 10) -> list:
     """获取最近告警"""
     alerts = load_alerts(data_dir)
     return alerts["alerts"][-limit:]
+
+
+def resolve_alert(data_dir: str, alert_id: str, reason: str = "manual") -> bool:
+    """将告警标记为 resolved。"""
+    alerts = load_alerts(data_dir)
+    found = False
+    for a in alerts["alerts"]:
+        if a.get("id") == alert_id:
+            a["status"] = "resolved"
+            a["resolved_at"] = _now_iso()
+            a["resolved_reason"] = reason
+            found = True
+            break
+    if found:
+        save_alerts(data_dir, alerts)
+    return found

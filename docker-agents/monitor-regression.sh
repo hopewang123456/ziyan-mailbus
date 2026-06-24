@@ -89,7 +89,16 @@ sys.exit(1)
 PY
 if [ $? -eq 0 ]; then pass "mailbus built-in scheduler"; else fail "mailbus scheduler inactive"; fi
 
-log "========== 7. mailbus 最近日志 =========="
+log "========== 7. 待审计 =========="
+docker exec docker-agents-mailbus-1 python3 /mailbus/tools/flush-pending-audits.py --data-dir /mailbus/store 2>&1 | while read -r line; do echo "  $line"; done
+pending=$(docker exec docker-agents-mailbus-1 python3 -c "
+import sys; sys.path.insert(0,'/mailbus')
+from lib.audit_dispatch import list_pending_audit_tasks
+print(len(list_pending_audit_tasks('/mailbus/store', 500)))
+" 2>/dev/null || echo "?")
+if [ "$pending" = "0" ]; then pass "pending audit: 0"; else fail "pending audit: $pending (run flush-pending-audits.py)"; fi
+
+log "========== 8. mailbus 最近日志 =========="
 docker logs docker-agents-mailbus-1 --tail 8 2>&1 | head -8 | while read -r line; do echo "  $line"; done
 
 log "========== SUMMARY: PASS=$PASS FAIL=$FAIL WARN=$WARN =========="

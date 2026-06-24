@@ -155,6 +155,8 @@
 | 安全审计师 | lingjin | 唯一 |
 | 技术研究员 | lingxi | 唯一 |
 | 巡检官 | lingxun | 唯一 |
+| 市场拓展官 | lingtuo | 唯一 |
+| 财务跟进官 | lingzhang | 唯一 |
 | 运营 | yige | 唯一 |
 | 验收员 | xiaoqi | 唯一（调度员兼任）|
 
@@ -170,6 +172,8 @@ ROLE_MAP = {
     "安全审计师": ["lingjin"],
     "技术研究员": ["lingxi"],
     "巡检官":    ["lingxun"],
+    "市场拓展官": ["lingtuo"],
+    "财务跟进官": ["lingzhang"],
     "运营":      ["yige"],
     "验收员":    ["xiaoqi"],
 }

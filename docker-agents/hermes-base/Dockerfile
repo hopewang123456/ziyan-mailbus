@@ -1,10 +1,15 @@
 FROM python:3.12
 
-ARG PROXY=http://172.17.0.1:7898
+ARG PROXY=
 ENV HTTP_PROXY=$PROXY HTTPS_PROXY=$PROXY NO_PROXY=localhost,127.0.0.1,::1
 
+ARG HERMES_VERSION=
 RUN pip config set global.timeout 600
-RUN pip install --no-cache-dir hermes-agent
+RUN if [ -n "$HERMES_VERSION" ]; then \
+      pip install --no-cache-dir "hermes-agent==${HERMES_VERSION}"; \
+    else \
+      pip install --no-cache-dir hermes-agent; \
+    fi
 
 # 预装 Chromium 和 Node.js，避免首次启动交互提示
 RUN apt-get update && apt-get install -y -qq chromium nodejs npm 2>&1 | tail -5; \

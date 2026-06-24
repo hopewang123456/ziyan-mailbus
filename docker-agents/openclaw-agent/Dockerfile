@@ -1,9 +1,14 @@
 FROM node:22
 
-ARG PROXY=http://172.17.0.1:7898
+ARG PROXY=
 ENV HTTP_PROXY=$PROXY HTTPS_PROXY=$PROXY NO_PROXY=localhost,127.0.0.1,::1
 
-RUN npm install -g openclaw
+ARG OPENCLAW_VERSION=
+RUN if [ -n "$OPENCLAW_VERSION" ]; then \
+      npm install -g "openclaw@${OPENCLAW_VERSION}"; \
+    else \
+      npm install -g openclaw; \
+    fi
 
 ENV HTTP_PROXY= HTTPS_PROXY= NO_PROXY=
 

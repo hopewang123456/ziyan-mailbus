@@ -7,6 +7,11 @@ import subprocess
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(TESTS_DIR)
+sys.path.insert(0, PROJECT_DIR)
+
+from lib.utils import configure_stdio_utf8
+
+configure_stdio_utf8()
 
 
 def run_test_file(name: str) -> bool:
@@ -15,11 +20,25 @@ def run_test_file(name: str) -> bool:
     print(f"\n{'='*50}")
     print(f"  {name}")
     print(f"{'='*50}")
+    env = os.environ.copy()
+    env["PYTHONPATH"] = PROJECT_DIR + os.pathsep + env.get("PYTHONPATH", "")
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    launcher = (
+        "import runpy, sys; "
+        f"sys.path.insert(0, {PROJECT_DIR!r}); "
+        "from lib.utils import configure_stdio_utf8; "
+        "configure_stdio_utf8(); "
+        f"runpy.run_path({path!r}, run_name='__main__')"
+    )
     result = subprocess.run(
-        [sys.executable, path],
+        [sys.executable, "-c", launcher],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         cwd=PROJECT_DIR,
+        env=env,
     )
     print(result.stdout)
     if result.stderr:

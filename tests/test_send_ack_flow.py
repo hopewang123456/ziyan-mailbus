@@ -19,6 +19,10 @@ import http.client
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from lib.utils import configure_stdio_utf8
+
+configure_stdio_utf8()
+
 from lib.models import Message, Inbox, MsgStatus, Priority, MsgType
 from lib.utils import json_read, json_write, resolve_paths, _now_iso, build_message
 from lib.scanner import build_queues, update_message_status
@@ -118,7 +122,7 @@ def test_send_msg_api_writes_inbox():
     from lib.api.handlers_inbox import handle_send_msg
 
     mh = MockHandler(tmp, agents, "POST", "/api/send-msg")
-    mh._post_body = {"to": "test_agent", "content": "回归自测消息", "from": "lingyan"}
+    mh._post_body = {"to": "test_agent", "content": "回归自测消息", "from": "lingyan", "type": "task"}
     mh._read_post_body = lambda: mh._post_body
     handle_send_msg(mh)
 
@@ -200,7 +204,7 @@ def test_scan_builds_queue():
     """Scenario 5: scan 识别 pending 消息进入队列"""
     print("\n[Scenario 5] 扫描队列构建")
     tmp, agents = _make_temp_env()
-    msg = build_message("lingyan", "test_agent", "待扫描消息")
+    msg = build_message("lingyan", "test_agent", "待扫描消息", msg_type=MsgType.TASK)
 
     inbox_path = os.path.join(tmp, "inbox", "test_agent", "inbox.json")
     inbox_data = json_read(inbox_path, {})

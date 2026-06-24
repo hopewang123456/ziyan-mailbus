@@ -1,40 +1,30 @@
 #!/bin/bash
-# mailbus 工作流冒烟：创建任务链 + 推送 inbox 消息
+# mailbus 工作流冒烟：Envelope 创建 + 推送 inbox
 set -euo pipefail
 
 BASE="http://127.0.0.1:9812"
 TS=$(date +%Y%m%d-%H%M%S)
 TASK_ID="game-lvup-${TS}"
+MAIL="/mnt/e/ai_tools/mail"
 
 log() { echo "[workflow] $*"; }
 
-create_task() {
-  curl -s -X POST "${BASE}/api/tasks/create" \
-    -H "Content-Type: application/json" \
-    -d "{\"task_id\":\"${TASK_ID}\",\"summary\":\"打怪升级小游戏 MVP\",\"assignee\":\"lingzhao\",\"deliverable\":\"方案文档\",\"chain\":[\"lingzhao\",\"xiaoqi\",\"lingxiao\",\"dali\",\"lingjian\",\"lingyan\"]}" \
-    | head -c 400
-  echo
-}
-
-push_inbox() {
-  local agent="$1"
-  local msg="$2"
-  cd /mnt/e/ai_tools/mail
-  python3 -m bus send "$agent" --data-dir store --from mailbus --type task \
-    --msg "$msg" 2>&1 | tail -3
-}
-
 log "=== workflow test ${TASK_ID} ==="
-log "1. create task"
-create_task
+log "1. create task (Envelope)"
+cd "$MAIL"
+python3 tools/task-create-envelope.py \
+  --api "${BASE}" \
+  --task-id "${TASK_ID}" \
+  --intent "打怪升级小游戏 MVP" \
+  --task-type feature \
+  --tier M \
+  --planned-chain "1,9,8,8,5,6"
 
-log "2. push to lingzhao (design)"
-push_inbox lingzhao "【${TASK_ID}】请输出打怪升级小游戏 MVP 方案要点（3条以内），完成后 mailbus 回复。"
+log "2. push to lingzhao"
+python3 -m bus send lingzhao --data-dir store --from mailbus --type task \
+  --msg "【${TASK_ID}】请输出打怪升级小游戏 MVP 方案要点（3条以内），完成后写 msg-results。"
 
 log "3. list tasks"
-curl -s "${BASE}/api/tasks" | python3 -c "import sys,json; d=json.load(sys.stdin); t=[x for x in d.get('tasks',[]) if x.get('task_id','').startswith('game-lvup')]; print('tasks', len(t)); print(t[-1] if t else 'none')" 2>/dev/null || echo "tasks api ok"
-
-log "4. mailbus status"
-curl -s -o /dev/null -w "mailbus=%{http_code}\n" "${BASE}/"
+curl -s "${BASE}/api/tasks" | python3 -c "import sys,json; d=json.load(sys.stdin); t=[x for x in d.get('tasks',[]) if x.get('task_id','').startswith('game-lvup')]; print('tasks', len(t)); print(t[-1].get('task_id') if t else 'none')" 2>/dev/null || true
 
 log "=== workflow smoke done ==="

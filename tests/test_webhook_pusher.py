@@ -169,3 +169,12 @@ class TestWebhookPusher:
             max_retries=1,
         )
         assert failed == []
+
+
+if __name__ == "__main__":
+    cls = TestWebhookPusher()
+    cls.setup_class()
+    for _name in sorted(n for n in dir(cls) if n.startswith("test_")):
+        getattr(cls, _name)()
+        print(f"  ok {_name}")
+    print("ok webhook_pusher")

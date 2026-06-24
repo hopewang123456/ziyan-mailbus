@@ -319,7 +319,7 @@ def main():
     print(f"  backlog status={backlog.get('status')}")
     print(f"  xiaoqi pending={inbox_stats.get('xiaoqi')}")
     print(f"  monitor={monitor_ok} cron={cron_ok}")
-    return 0 if monitor_ok and cron_ok else 0  # 非阻塞，主流程已闭环
+    return 0 if monitor_ok and cron_ok else 1
 
 
 if __name__ == "__main__":

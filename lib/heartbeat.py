@@ -111,12 +111,15 @@ def check_api_keys(config: dict) -> list:
     """
     results = []
     env_paths = [
+        Path("/run/hermes/.env"),
+        Path("/home/hermes/.hermes/.env"),
         Path("/home/administrator/.hermes/.env"),
+        Path("/mnt/e/hermes-data/.hermes/.env"),
         Path.home() / ".hermes" / ".env",
     ]
 
-    # 读取所有环境变量
-    env_vars = {}
+    # 读取所有环境变量（含容器注入）
+    env_vars = {k: v for k, v in os.environ.items() if k.endswith("_API_KEY")}
     for ep in env_paths:
         if ep.exists():
             with open(ep) as f:

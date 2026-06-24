@@ -19,18 +19,37 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
 
 
 def serve(data_dir: str, agents: dict, agent_types: dict = None,
-          host: str = "127.0.0.1", port: int = 9812, token: str = "",
+          host: str = "127.0.0.1", port: int = None, token: str = "",
           config: dict = None):
     """启动 HTTP API 服务器（可选内置 scheduler）"""
+    from lib.constants import DEFAULT_API_PORT
+    from lib.utils import configure_stdio_utf8
+
+    configure_stdio_utf8()
+    if port is None:
+        port = DEFAULT_API_PORT
     MailbusAPIHandler.data_dir = data_dir
     MailbusAPIHandler.agents = agents
     MailbusAPIHandler.agent_types = agent_types or {}
     MailbusAPIHandler.auth_token = token
+    MailbusAPIHandler.require_api_auth = bool((config or {}).get("require_api_auth", False))
 
     # 公告板 + 权限文件路径
     paths = __import__("lib.utils", fromlist=["resolve_paths"]).resolve_paths(data_dir)
     MailbusAPIHandler.bulletin_file = os.path.join(data_dir, "bulletin.json")
     MailbusAPIHandler.permission_file = os.path.join(data_dir, "permission.json")
+    if not os.path.isfile(MailbusAPIHandler.permission_file):
+        from lib.utils import json_write, _now_iso
+        default_perms = {
+            name: {"browser": True, "desktop": True, "cli": True, "mailbox": True,
+                   "bulletin": name in ("lingzhao", "xiaoqi", "lingxiao")}
+            for name in agents
+        }
+        json_write(MailbusAPIHandler.permission_file, {
+            "permissions": default_perms,
+            "bulletin": ["lingzhao", "xiaoqi"],
+            "updated_at": _now_iso(),
+        })
 
     hub = None
     if config:

@@ -61,6 +61,8 @@ Round3: backlog 全 done → protocol 更新
 | Agent | 当前阶段动作 |
 |-------|----------------|
 | 灵昭 | 写 `msg-results/{primary_task_id}.json`，推进 pipeline |
+| 灵拓 | 更新 `order-intake.json`；pursue/高分通知灵昭或一哥 |
+| 灵账 | 验收后维护 `billing/accounts.json`；账期提醒 |
 | 灵鉴 | 处理 audit-req，POST `/api/tasks/audit` |
 | 小七 | gate 通过后再调度 Round2 |
 | 灵霄/灵验/灵鉴 | Round2 工单 gate 后再执行 |

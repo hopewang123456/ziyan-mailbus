@@ -11,7 +11,10 @@ def test_create():
         t = TaskTracker(td)
         task = t.create("task-test-001", summary="测试", assignee="小七")
         assert task["task_id"] == "task-test-001"
-        assert task["status"] == "pending"
+        # 有 assignee 时会初始化 pipeline chain，任务直接进入 running 且需审计
+        assert task["status"] == "running"
+        assert task.get("requires_audit") is True
+        assert task.get("chain") and len(task["chain"]) == 1
         assert task["summary"] == "测试"
         assert task["assignee"] == "小七"
     print("  ✓ test_create")
@@ -54,7 +57,19 @@ def test_update_status_with_error():
 def test_add_hop():
     with tempfile.TemporaryDirectory() as td:
         t = TaskTracker(td)
-        t.create("task-hop-001", chain_hops=[{"agent": "灵瑾", "action": "发起"}])
+        # add_hop 仍写 legacy {agent, action} 格式；首跳手动写入避免 pipeline 规范化
+        from lib.utils import json_write, _now_iso
+        ts = _now_iso()
+        json_write(t._task_path("task-hop-001"), {
+            "task_id": "task-hop-001",
+            "summary": "",
+            "assignee": "灵瑾",
+            "status": "running",
+            "chain": [{"agent": "灵瑾", "action": "发起", "status": "done", "at": ts}],
+            "requires_audit": False,
+            "created_at": ts,
+            "updated_at": ts,
+        })
         t.add_hop("task-hop-001", "小七", "转发给一哥")
         t.add_hop("task-hop-001", "一哥", "执行并回复")
         task = t.get("task-hop-001")
@@ -125,6 +140,7 @@ def test_list_all():
         t = TaskTracker(td)
         t.create("task-la-001")
         t.create("task-la-002")
+        t.update_status("task-la-001", "success")
         t.update_status("task-la-002", "running")
         all_tasks = t.list_all()
         assert len(all_tasks) == 2

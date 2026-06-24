@@ -39,7 +39,7 @@ from lib.utils import (
     build_message, _now_iso, _ensure_dir, file_lock,
 )
 from lib.scanner import build_queues, run_housekeeping, update_message_status
-from lib.pusher import push_messages, resolve_cli_chain
+from lib.pusher import push_messages, resolve_cli_chain, resolve_cli_for_message
 from lib.webhook_pusher import push_via_webhook
 from lib.ack_handler import scan_ack_files, scan_forward_files, scan_error_reports
 from lib.archiver import archive_all
@@ -197,6 +197,21 @@ def cmd_init(args) -> int:
         "board": [],
         "created_at": _now_iso(),
     })
+
+    # 默认权限（Dashboard 持久化）
+    default_perms = {}
+    for name in config.get("agents", {}):
+        default_perms[name] = {
+            "browser": True,
+            "cli": True,
+            "mailbox": True,
+            "bulletin": name in ("lingzhao", "xiaoqi", "lingxiao"),
+        }
+    json_write(f"{data_dir}/permission.json", {
+        "permissions": default_perms,
+        "bulletin": ["lingzhao", "xiaoqi"],
+        "updated_at": _now_iso(),
+    })
     
     print(f"✓ ziyan-mailbus 已初始化")
     print(f"  数据目录: {data_dir}")
@@ -207,6 +222,21 @@ def cmd_init(args) -> int:
 
 def run_scan_once(data_dir: str, config: dict, *, quiet: bool = False) -> int:
     """执行一轮 scan（CLI 与内置 scheduler 共用）。"""
+    from .env_bootstrap import load_mailbus_env
+
+    load_mailbus_env()
+    from lib.utils import named_lock
+
+    with named_lock("mailbus-scan", blocking=False) as acquired:
+        if not acquired:
+            if not quiet:
+                print("⏭ scan 跳过（另一实例正在运行，锁 mailbus-scan）")
+            return 0
+        return _run_scan_once_body(data_dir, config, quiet=quiet)
+
+
+def _run_scan_once_body(data_dir: str, config: dict, *, quiet: bool = False) -> int:
+    """scan 主逻辑（已持有 mailbus-scan 锁）。"""
     _cleanup_stale_locks()
 
     agents = config.get("agents", {})
@@ -234,7 +264,7 @@ def run_scan_once(data_dir: str, config: dict, *, quiet: bool = False) -> int:
         if not quiet:
             print(f"  [scan] self_heal 异常: {exc}")
 
-    urgent_queue, normal_queue = build_queues(data_dir, agents)
+    urgent_queue, normal_queue = build_queues(data_dir, agents, config)
     total_messages = sum(len(v) for v in urgent_queue.values()) + sum(len(v) for v in normal_queue.values())
     if total_messages == 0:
         run_housekeeping(data_dir, agents)
@@ -306,20 +336,8 @@ def run_scan_once(data_dir: str, config: dict, *, quiet: bool = False) -> int:
             for w in inbox_warnings[:3]:
                 print(f"   ⚠️ {w['agent']}: inbox {w['count']} 条消息积压")
 
-    from lib.constants import DEFAULT_REMINDER_MINUTES, DEFAULT_MAX_REMINDERS
-    reminder_minutes = config.get("reminder_minutes", DEFAULT_REMINDER_MINUTES)
-    max_reminders = config.get("max_reminders", DEFAULT_MAX_REMINDERS)
-    escalated = tracker.check_reminders(
-        agents, data_dir=data_dir,
-        reminder_minutes=reminder_minutes,
-        max_reminders=max_reminders,
-    )
-    if escalated and not quiet:
-        print(f"\n⏰ 催办: {len(escalated)} 条任务超时")
-        for e in escalated:
-            print(f"   → {e['task_id']}: {e['summary'][:40]} ({e['reminded_count']}/{max_reminders})")
+    # 催办由 run_housekeeping → check_reminders 统一处理（含 inbox 写入），此处不再重复调用
 
-    scan_and_index(data_dir, agents)
     return 0
 
 
@@ -332,19 +350,65 @@ def cmd_scan(args) -> int:
 
 
 def cmd_search(args) -> int:
-    """消息检索"""
+    """消息 / 目录全文检索"""
     config_path = _find_config(args)
     config = load_config(config_path)
     data_dir = config["data_dir"]
+    agents = config.get("agents", {})
+
+    query = getattr(args, "query", "") or ""
+    scope = getattr(args, "scope", "messages") or "messages"
+    limit = getattr(args, "limit", 20)
+
+    if scope in ("all", "catalog"):
+        from lib.catalog_search import index_catalog, search_catalog, search_all
+        index_catalog(data_dir, agents)
+
+    if scope == "all":
+        bundle = search_all(data_dir, query_str=query, limit=limit, agents=agents)
+        msgs = bundle["messages"]
+        cats = bundle["catalog"]
+        if not msgs and not cats:
+            print("无匹配结果")
+            return 0
+        print(f"\n🔍 查询「{query}」\n")
+        if cats:
+            print(f"📦 目录/外部工具 ({len(cats)}):\n")
+            for r in cats:
+                print(f"  [{r['kind']}] {r['title']}")
+                if r.get("agent_id") or r.get("tool_id"):
+                    print(f"   agent={r.get('agent_id','')} tool={r.get('tool_id','')} provider={r.get('provider','')}")
+                print(f"   {r['body'][:120]}")
+                print(f"   {r.get('path','')}\n")
+        if msgs:
+            print(f"📬 消息 ({len(msgs)}):\n")
+            for r in msgs:
+                print(f"  [{r['status']}] {r['msg_id']}")
+                print(f"   {r['from']} → {r['to']} ({r['type']})")
+                print(f"   {r['content'][:120]}")
+                print()
+        return 0
+
+    if scope == "catalog":
+        results = search_catalog(data_dir, query_str=query, limit=limit)
+        if not results:
+            print("无匹配目录项")
+            return 0
+        print(f"\n📦 找到 {len(results)} 条目录项:\n")
+        for r in results:
+            print(f"  [{r['kind']}] {r['title']}")
+            print(f"   {r['body'][:120]}")
+            print(f"   {r.get('path','')}\n")
+        return 0
 
     results = search(
         data_dir,
-        query_str=getattr(args, 'query', ''),
-        from_agent=getattr(args, 'from_agent', ''),
-        to_agent=getattr(args, 'to_agent', ''),
-        msg_type=getattr(args, 'type', ''),
-        status=getattr(args, 'status', ''),
-        limit=getattr(args, 'limit', 20),
+        query_str=query,
+        from_agent=getattr(args, "from_agent", ""),
+        to_agent=getattr(args, "to_agent", ""),
+        msg_type=getattr(args, "type", ""),
+        status=getattr(args, "status", ""),
+        limit=limit,
     )
 
     if not results:
@@ -425,21 +489,39 @@ def cmd_heartbeat(args) -> int:
 
 def cmd_serve(args) -> int:
     """启动 HTTP API 服务"""
+    from .env_bootstrap import load_mailbus_env
+
+    load_mailbus_env()
     config_path = _find_config(args)
     config = load_config(config_path)
     if getattr(args, 'data_dir', None):
         config = dict(config)
         config["data_dir"] = args.data_dir
     data_dir = config["data_dir"]
+
+    try:
+        from lib.internal_llm.startup import maybe_rebuild_rag_on_start
+
+        rag_result = maybe_rebuild_rag_on_start(data_dir)
+        if rag_result and rag_result.get("rebuilt"):
+            print(f"  📚 RAG rebuild_on_start: {rag_result['chunks']} chunks indexed")
+    except Exception as exc:
+        print(f"  ⚠️ RAG rebuild_on_start skipped: {exc}")
+    from lib.constants import DEFAULT_API_PORT
+
     agents = config.get("agents", {})
     agent_types = config.get("agent_types", {})
-    port = getattr(args, 'port', 9812)
+    port = getattr(args, "port", None) or DEFAULT_API_PORT
 
     if not agents:
         print("✗ 没有注册的 agent")
         return 1
 
-    token = getattr(args, 'token', '')
+    token = getattr(args, 'token', '') or config.get("api_token", "") or os.environ.get("MAILBUS_API_TOKEN", "")
+    if token:
+        print("  🔑 API 认证已启用（Bearer / X-API-Key）")
+    elif config.get("require_api_auth"):
+        print("  ⚠️ require_api_auth=true 但未配置 api_token — 写操作 API 将返回 503")
     api_serve(data_dir, agents, agent_types, host=args.host, port=port, token=token, config=config)
     return 0
 
@@ -639,8 +721,12 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
         webhook_url = agent_cfg.get("webhook_url", "")
         if webhook_url:
             print(f"   🌐 {agent_name} ({label}): {len(messages)} 条 [Webhook]")
-            # auto_ack 判定：OpenClaw 等不写 ack 的类型直接标记已读
-            auto_ack_types_for_webhook = ("hermes", "hermes_profile", "openclaw")
+            # auto_ack 判定：pipeline 步骤禁止 auto_ack
+            from .pipeline_task import should_auto_ack_message
+            msg0 = messages[0] if messages else {}
+            auto_ack = should_auto_ack_message(
+                msg0, data_dir, agent_cfg.get("type", ""),
+            ) if agent_cfg.get("type") in ("hermes", "hermes_profile", "openclaw") else False
             failed = push_via_webhook(
                 data_dir=data_dir,
                 agent_name=agent_name,
@@ -648,23 +734,55 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
                 webhook_url=webhook_url,
                 webhook_secret=agent_cfg.get("webhook_secret", ""),
                 max_retries=config.get("max_retries", 3),
-                auto_ack=agent_cfg.get("type") in auto_ack_types_for_webhook,
+                auto_ack=auto_ack,
             )
         else:
-            chain = resolve_cli_chain(agent_cfg, agent_types)
-            cli_cmds = [c[0] for c in chain]  # 只取命令，不要别名
-            print(f"   → {agent_name} ({label}): {len(messages)} 条" + (f' [{len(cli_cmds)} models]' if len(cli_cmds) > 1 else ''))
-            
-            # auto_ack 判定：Hermes/OpenClaw 类型直接标记已读（OpenClaw CLI push 不写 ack 文件）
+            from .model_router import is_no_llm_notice
+            from .scanner import _get_primary_pipeline_task_id
+
+            primary_tid = _get_primary_pipeline_task_id(data_dir)
+            # 零 token：系统 notice 直接 done，不 spawn Hermes
+            skip_msgs = [m for m in messages if is_no_llm_notice(m)]
+            if skip_msgs:
+                paths = resolve_paths(data_dir)
+                inbox_file = f"{paths['inbox']}/{agent_name}/inbox.json"
+                inbox_data = json_read(inbox_file, {})
+                if inbox_data:
+                    inbox = Inbox.from_dict(inbox_data)
+                    ts = _now_iso()
+                    for m in skip_msgs:
+                        mid = m.get("id") if isinstance(m, dict) else m.id
+                        inbox.set_msg_status(
+                            mid, MsgStatus.ACKNOWLEDGED, state=MsgStatus.DONE,
+                            done_at=ts, done_note="auto: no-llm notice",
+                        )
+                    json_write(inbox_file, inbox.to_dict())
+                messages = [m for m in messages if not is_no_llm_notice(m)]
+                if not messages:
+                    print(f"     ✓ {len(skip_msgs)} 条 notice 已自动消化（零 token）")
+                    continue
+
+            msg0 = messages[0]
+            cli_cmd = resolve_cli_for_message(
+                agent_cfg, agent_types, msg0, agent_name, primary_task_id=primary_tid,
+            )
+            if not cli_cmd:
+                print(f"   → {agent_name} ({label}): 跳过（无需 LLM）")
+                continue
+            print(f"   → {agent_name} ({label}): {len(messages)} 条")
             auto_ack_types = ("hermes", "hermes_profile", "openclaw")
+            from .pipeline_task import should_auto_ack_message
+            auto_ack = should_auto_ack_message(
+                msg0, data_dir, agent_cfg.get("type", ""),
+            )
             failed = push_messages(
                 data_dir=data_dir,
                 agent_name=agent_name,
                 messages=messages,
-                cli_cmd=cli_cmds,
+                cli_cmd=cli_cmd,
                 ack_timeout=config.get("ack_timeout", 30),
                 max_retries=config.get("max_retries", 3),
-                auto_ack=agent_cfg.get("type") in auto_ack_types,  # Hermes/OpenClaw 类型直接标记已读
+                auto_ack=auto_ack,
             )
         all_failed.extend(failed)
         
@@ -719,7 +837,7 @@ def cmd_send(args) -> int:
             _write_to_inbox(data_dir, target, msg)
             if msg_type in (MsgType.TASK, MsgType.TASK_REPLY):
                 try:
-                    tracker.create(task_id=msg.id, summary=content[:80], assignee=target)
+                    tracker.create(task_id=msg.id, summary=content[:80], assignee=target, requires_audit=False)
                 except Exception as e:
                     print(f"  ⚠️ 任务追踪创建失败: {e}")
             success_count += 1
@@ -745,37 +863,60 @@ def cmd_send(args) -> int:
     msg = build_message(from_, to, content, msg_type, priority,
                         forward_to=getattr(args, 'forward_to', None),
                         project=project or None)
-    _write_to_inbox(data_dir, to, msg)
+    msg_dict = msg.to_dict()
+    from .pipeline_task import extract_task_id
+    ptid = extract_task_id(content)
+    if ptid and not ptid.startswith("msg-"):
+        msg_dict["task_id"] = ptid
+    _write_to_inbox(data_dir, to, msg_dict)
     # 即时推送（与 /api/send-msg 一致，不等待 cron scan）
     try:
-        cli_chain = resolve_cli_chain(agents[to], agent_types)
-        if cli_chain:
-            cli_cmds = [c[0] for c in cli_chain]
-            push_messages(data_dir, to, [msg.to_dict()], cli_cmd=cli_cmds, auto_ack=True)
-            print("  ✓ 即时推送已触发")
+        from .model_router import is_no_llm_notice
+        from .scanner import finalize_auto_ack
+
+        if is_no_llm_notice(msg_dict):
+            finalize_auto_ack(data_dir, to, msg_dict["id"], msg_dict)
+            print("  ✓ notice 已自动消化（零 token）")
+        else:
+            cli_chain = resolve_cli_chain(agents[to], agent_types)
+            if cli_chain:
+                cli_cmds = [c[0] for c in cli_chain]
+                from .pipeline_task import should_auto_ack_message
+                auto_ack = should_auto_ack_message(
+                    msg_dict, data_dir, agents[to].get("type", ""),
+                )
+                push_messages(data_dir, to, [msg_dict], cli_cmd=cli_cmds, auto_ack=auto_ack)
+                print("  ✓ 即时推送已触发")
     except Exception as exc:
         print(f"  ⚠️ 即时推送失败: {exc}")
     if msg_type in (MsgType.TASK, MsgType.TASK_REPLY):
-        try:
-            tracker.create(task_id=msg.id, summary=content[:80], assignee=to)
-        except Exception as e:
-            print(f"  ⚠️ 任务追踪创建失败: {e}")
+        from .pipeline_task import extract_task_id, should_create_tracker_for_send
+
+        if should_create_tracker_for_send(content, data_dir):
+            try:
+                tracker.create(task_id=msg_dict["id"], summary=content[:80], assignee=to, requires_audit=False)
+            except Exception as e:
+                print(f"  ⚠️ 任务追踪创建失败: {e}")
+        else:
+            tid = extract_task_id(content)
+            print(f"  ℹ️ 跳过重复 tracker（已存在 pipeline task {tid}）")
     print(f"✓ 消息已写入 {to} 的 inbox")
-    print(f"  ID: {msg.id}")
+    print(f"  ID: {msg_dict['id']}")
     print(f"  内容: {content[:60]}{'...' if len(content) > 60 else ''}")
     if project:
         print(f"  项目: {project}")
     return 0
 
 
-def _write_to_inbox(data_dir: str, agent_name: str, msg: Message):
-    """将消息写入指定 agent 的 inbox"""
+def _write_to_inbox(data_dir: str, agent_name: str, msg):
+    """将消息写入指定 agent 的 inbox（Message 或 dict）。"""
     paths = resolve_paths(data_dir)
     inbox_file = f"{paths['inbox']}/{agent_name}/inbox.json"
     inbox_data = json_read(inbox_file, {"agent": agent_name, "has_unread": False, "messages": [], "since": _now_iso()})
     inbox = Inbox.from_dict(inbox_data)
     inbox.has_unread = True
-    inbox.messages.append(msg.to_dict())
+    entry = msg.to_dict() if hasattr(msg, "to_dict") else msg
+    inbox.messages.append(entry)
     json_write(inbox_file, inbox.to_dict())
 
 
@@ -948,7 +1089,28 @@ def cmd_status(args) -> int:
         
         parts = [f"{s}: {c}" for s, c in sorted(statuses.items())]
         print(f"  {name}: {', '.join(parts) if parts else '空'}")
-    
+
+    bridge_file = os.path.join(data_dir, "system", "memory-bridge-last.json")
+    bridge_stats = json_read(bridge_file, {})
+    if bridge_stats:
+        print()
+        print("  记忆桥接 (末次):")
+        print(f"    sqlite: {bridge_stats.get('sqlite_ok', 0)} ok, "
+              f"{bridge_stats.get('sqlite_fail', 0)} fail")
+        print(f"    agentmemory: {bridge_stats.get('agentmemory_ok', 0)} ok, "
+              f"{bridge_stats.get('agentmemory_skip', 0)} skip")
+        print(f"    更新: {bridge_stats.get('updated_at', '?')}")
+
+    wd_file = os.path.join(data_dir, "system", "agentmemory-watchdog.json")
+    wd_stats = json_read(wd_file, {})
+    if wd_stats:
+        print("  AgentMemory 看门狗:")
+        print(f"    状态: {wd_stats.get('last_status', '?')} "
+              f"(streak={wd_stats.get('fail_streak', 0)})")
+        if wd_stats.get("last_restart_attempt"):
+            print(f"    末次重启: {wd_stats.get('last_restart_attempt')} "
+                  f"ok={wd_stats.get('last_restart_ok')}")
+
     return 0
 
 
@@ -1371,16 +1533,19 @@ def cmd_review(args) -> int:
 # ── 辅助函数 ──────────────────────────────────────────────────────────
 
 def _cleanup_stale_locks(max_age: int = 300):
-    """清理 /tmp 中超过 max_age 秒的 mailbus 锁文件和 session 锁文件
+    """清理锁目录中超过 max_age 秒的 mailbus 锁文件和 session 锁文件
 
     默认 max_age=300（5分钟），每次 scan 周期都会执行。
     也清理遗留的 session 级 .lock 文件和 .db-shm/.db-wal 文件。
     """
     import glob
+    from .utils import get_lock_root
+
     now = time.time()
+    lock_root = get_lock_root()
 
     # 清理 mailbus 锁文件
-    for fpath in glob.glob("/tmp/ziyan-mailbus-*.lock"):
+    for fpath in glob.glob(os.path.join(lock_root, "ziyan-mailbus-*.lock")):
         try:
             if now - os.path.getmtime(fpath) > max_age:
                 os.unlink(fpath)
@@ -1388,7 +1553,10 @@ def _cleanup_stale_locks(max_age: int = 300):
             pass
 
     # 清理 agentmemory 残留锁文件
-    for pattern in ["/tmp/agentmemory*.sock", os.path.expanduser("~/.agentmemory/*.lock")]:
+    for pattern in [
+        os.path.join(lock_root, "agentmemory*.sock"),
+        os.path.join(os.path.expanduser("~/.agentmemory"), "*.lock"),
+    ]:
         for fpath in glob.glob(pattern):
             try:
                 if now - os.path.getmtime(fpath) > max_age:
@@ -1396,11 +1564,14 @@ def _cleanup_stale_locks(max_age: int = 300):
             except OSError:
                 pass
 
-    # ── Bug 4 修复：清理 session 级 .lock 文件 + .db-shm/.db-wal 残留 ──
-    for pattern in ["/tmp/*.lock", "/tmp/*.db-shm", "/tmp/*.db-wal"]:
+    # 清理 session 级 .lock 文件 + .db-shm/.db-wal 残留
+    for pattern in [
+        os.path.join(lock_root, "*.lock"),
+        os.path.join(lock_root, "*.db-shm"),
+        os.path.join(lock_root, "*.db-wal"),
+    ]:
         for fpath in glob.glob(pattern):
             try:
-                # 只清理 mailbus/agentmemory 相关会话锁
                 fname = os.path.basename(fpath).lower()
                 if any(kw in fname for kw in ["session", "agent", "task", "mailbus", "hermes", "openclaw"]):
                     if now - os.path.getmtime(fpath) > max_age:
@@ -1452,9 +1623,6 @@ def _read_deepseek_key_from_openclaw_config() -> str:
                 if line.startswith("DEEPSEEK_API_KEY="):
                     return line.strip().split("=", 1)[1].strip("'\"")
     return ""
-
-
-    return 0
 
 
 def cmd_iteration(args) -> int:

@@ -31,6 +31,8 @@ fi
 # 3. triage 快照
 log "--- triage ---"
 python3 tools/triage-tasks.py --data-dir store 2>&1 | tee -a "$LOG"
+log "--- reconcile audits ---"
+docker exec docker-agents-mailbus-1 python3 /mailbus/tools/flush-pending-audits.py --data-dir /mailbus/store 2>&1 | tee -a "$LOG" || true
 
 # 4. monitor-regression
 log "--- monitor-regression ---"

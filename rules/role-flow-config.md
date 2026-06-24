@@ -1,5 +1,15 @@
 # 角色流转配置（Role Flow Config）
 
+> ⚠️ **已废止（2026-06-18）** — 请勿在新代码或文档中引用本文件。  
+> **机器可读 SoT**: [`store/roles/json/role-flow.json`](../store/roles/json/role-flow.json)  
+> **人类审阅表**: [`store/roles/md/flow-guide.md`](../store/roles/md/flow-guide.md)（`python tools/gen-role-docs.py` 生成）  
+> **role_type 整数**: [`store/roles/json/role-types.json`](../store/roles/json/role-types.json)  
+> v3 流转以 **Workflow Engine + FSM** 为准，见 [`store/rules/workflow-pipeline.md`](../store/rules/workflow-pipeline.md)。
+
+---
+
+# ~~角色流转配置（Legacy）~~
+
 > mailbus 各角色的分配规则和下一步流转规则。
 > 所有 agent 在写结果文件时，`next_role` 必须从此文件中选择。
 > pipeline 引擎也读取此文件进行自动流转。
@@ -12,9 +22,9 @@
 |------|------|---------|---------|
 | 方案设计师 | 方案设计、架构决策 | 灵昭(lingzhao) | 30 分钟 |
 | 调度员 | 任务调度、拆分工单 | 小七(xiaoqi) | 10 分钟 |
-| 开发工程师 | 编码实现 | 灵霄(lingxiao)、大力(dali) | 30 分钟 |
+| 开发工程师 | 编码实现 | 灵霄(lingxiao)、大力(dali)、灵云(lingyun) | 30 分钟 |
 | 审查官 | 代码审查 | 灵鉴(lingjian) | 15 分钟 |
-| 测试工程师 | 功能测试、回归测试 | 灵验(lingyan) | 30 分钟 |
+| 测试工程师 | 功能测试、回归测试 | 灵验(lingyan) · Claude Code | 30 分钟 |
 | 验收员 | 验收确认 | 小七(xiaoqi) | 10 分钟 |
 | 安全审计师 | 网络安全审计 | 灵瑾(lingjin) | 30 分钟 |
 | 技术研究员 | 技术调研 | 灵犀(lingxi) | 60 分钟 |

@@ -30,7 +30,8 @@ SEVERITY_ICON = {"critical": "🔴", "warn": "⚠️", "info": "ℹ️"}
 def _scheduler_snapshot() -> dict:
     try:
         import urllib.request
-        with urllib.request.urlopen("http://127.0.0.1:9812/api/status", timeout=5) as r:
+        from lib.constants import DEFAULT_API_BASE
+        with urllib.request.urlopen(f"{DEFAULT_API_BASE}/api/status", timeout=5) as r:
             return json.loads(r.read()).get("scheduler") or {}
     except Exception:
         return {}

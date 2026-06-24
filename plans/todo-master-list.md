@@ -7,9 +7,9 @@
 | 优先级 | # | 问题 | 说明 |
 |--------|---|------|------|
 | P0 | B1 | 灵霄(Cline) auto-ack 不执行 | 收到任务回完成回执但不改代码 |
-| P0 | B2 | 灵验/灵鉴 chat -q 超时退出 | 推送消息被 auto-ack 但实际没处理 |
+| P0 | B2 | 灵验/灵鉴 chat -q 超时退出 | 灵鉴已迁 Codex；灵验 per-agent timeout 600s + 大任务 msg-files 工单化 |
 | P0 | B3 | Agent 权限设置不保存 | 前端保存后刷新丢失 |
-| P1 | B4 | 推送消息太大导致超时 | 消息体含完整方案文档，agent 处理不完 |
+| P1 | B4 | 推送消息太大导致超时 | 灵验 `file_task_content_threshold:800` + `cli_msg_max_chars:4000` |
 
 ## 二、流程缺陷
 

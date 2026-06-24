@@ -1,129 +1,110 @@
 # 🏢 子言·AI 团队组织图
 
-> 更新日期: 2026-06-13
-> 最后更新: 新增灵巡（巡检官），补全成员表
+> 更新日期: 2026-06-24  
+> 机器可读编制表: [`store/roles/json/roster.json`](store/roles/json/roster.json)（13 人，含 gender）
 
 ---
 
-## 成员一览
+## 性别一览
 
-### 🪷 灵昭 (lingzhao)
-- **角色**: 方案设计师，团队二把手
-- **框架**: Hermes（本地）
-- **技能**: 塔罗、占星、设计、方案架构
-- **Dashboard**: http://localhost:9120/chat
+| ID | 姓名 | 性别 |
+|----|------|------|
+| lingzhao | 灵昭 | 男 |
+| lingjin | 灵瑾 | 女 |
+| lingxi | 灵犀 | 女 |
+| lingtuo | 灵拓 | 男 |
+| lingjian | 灵鉴 | 男 |
+| lingyan | 灵验 | 女 |
+| lingxun | 灵巡 | 男 |
+| lingxiao | 灵霄 | 男 |
+| dali | 大力 | 男 |
+| lingyun | 灵云 | 女 |
+| xiaoqi | 小七 | 女 |
+| yige | 一哥 | 男 |
+| lingzhang | 灵账 | 女 |
 
-### 🦋 灵瑾 (lingjin)
-- **角色**: 网络安全专家
-- **框架**: Hermes Profile（lingjin）
-- **技能**: 安全审计、渗透测试
-- **Dashboard**: http://localhost:9121/chat
+---
 
-### 🔭 灵犀 (lingxi)
-- **角色**: 前沿技术研究员
-- **框架**: Hermes Profile（lingxi）
-- **技能**: 技术调研、GitHub 扫描
-- **Dashboard**: http://localhost:9122/chat
+## 成员一览（13 人）
 
-### 🔍 灵鉴 (lingjian) — 🆕
-- **角色**: 代码审查官
-- **框架**: Hermes Profile（lingjian）
-- **技能**: 代码审查、review.py、Semgrep
-- **Dashboard**: http://localhost:9123/chat
+### 决策与方案
 
-### 🧪 灵验 (lingyan) — 🆕
-- **角色**: 测试工程师
-- **框架**: Hermes Profile（lingyan）
-- **技能**: 功能测试、性能测试、安全回归验证
-- **Dashboard**: http://localhost:9124/chat
+| | 灵昭 (lingzhao) |
+|---|-----------------|
+| **性别** | 男 |
+| **角色** | 方案设计师，团队二把手 |
+| **框架** | Hermes Profile |
+| **Dashboard** | http://localhost:9120/chat |
 
-### 🚀 灵巡 (lingxun) — 🆕
-- **角色**: 巡检官
-- **框架**: Hermes Profile（lingxun）
-- **技能**: 系统巡检、任务链监控、催办升级、日报生成
-- **Dashboard**: http://localhost:9125/chat
+### 商前（调研 · 商机 · 获客）
 
-### 🤖 大力 (dali)
-- **角色**: 编码工程师
-- **框架**: OpenCode CLI
-- **技能**: Python、前端、功能实现
-- **启动**: `dali-start.bat`
+| | 灵犀 (lingxi) | 灵拓 (lingtuo) | 一哥 (yige) |
+|---|---------------|----------------|-------------|
+| **性别** | 女 | 男 | 男 |
+| **角色** | 前沿技术研究员 | 市场拓展官 | 首席运营 · 内容获客 |
+| **框架** | Hermes :9122 | Hermes :9126 | OpenClaw :18790 |
+| **分工** | 趋势/雷达 | intake 研判、防烂单 | outbound 内容、多平台发布 |
 
-### 🎯 灵霄 (lingxiao)
-- **角色**: 技术负责人、主力编码
-- **框架**: Cline CLI
-- **技能**: 架构、编码、PR 管理
-- **启动**: `灵霄启动.bat`
+### 交付链（开发 · 质量 · 调度）
 
-### 🦞 小七 (xiaoqi)
-- **角色**: 大管家、调度
-- **框架**: OpenClaw Gateway
-- **技能**: 调度、报表、文档、验收测试
-- **Dashboard**: http://localhost:18789/chat
+| | 灵霄 | 大力 | 灵云 | 灵瑾 | 灵鉴 | 灵验 | 灵巡 | 小七 |
+|---|------|------|------|------|------|------|------|------|
+| **id** | lingxiao | dali | lingyun | lingjin | lingjian | lingyan | lingxun | xiaoqi |
+| **性别** | 男 | 男 | 女 | 女 | 男 | 女 | 男 | 女 |
+| **角色** | 技术负责人 | flash 编码 | pro 精细编码 | 网络安全 | 代码审查 | 测试 | 巡检 | 调度·验收 |
+| **框架** | Codex | OpenCode | Claude Code | Hermes :9121 | Codex | Claude Code | Hermes :9125 | OpenClaw :18789 |
 
-### 👨‍🔧 一哥 (yige)
-- **角色**: 运营
-- **框架**: OpenClaw Gateway
-- **技能**: 日常运营
-- **Dashboard**: http://localhost:18790/chat
+### 商后（回款）
+
+| | 灵账 (lingzhang) |
+|---|---------------------|
+| **性别** | 女 |
+| **角色** | 财务跟进官 — 账期、开票提醒、回款 |
+| **框架** | Hermes Profile |
+| **Dashboard** | http://localhost:9127/chat |
+
+---
+
+## 端到端流程
+
+```
+【商前】平台/线索 → 灵拓研判 → 灵昭 brief → 小七拆工单
+                    ↘ 一哥内容获客（content_hint）
+
+【交付】灵霄/大力/灵云 → 灵鉴 → 灵验 → 小七验收 → 上线
+        （灵瑾安全 · 灵巡巡检 横切）
+
+【商后】验收 approved → 灵账建账期 → 回款提醒
+```
 
 ---
 
 ## 已退役成员
 
-| 成员 | 原角色 | 退役原因 | 替代方案 |
-|------|--------|---------|---------|
-| ~~💪 大壮 (dazhuang)~~ | ~~代码审查~~ | Aider 太慢，无法通过 mailbus 调度 | review.py + Semgrep 自动化审查；灵鉴专职代码审查 |
-
----
-
-## 代码上线流程（重要）
-
-```
-灵霄/大力 提交代码
-    ↓
-🔍 灵鉴 审查代码（通过 mailbus 通知）
-    ↓ 审查通过
-🧪 灵验 测试验证（功能/性能/安全回归）
-    ↓ 测试通过
-🦞 小七 验收 → 通知子言上线
-```
-
-**关键规则：**
-1. 灵鉴不通过 → 代码打回修改，不上线
-2. 灵验不通过 → 代码打回修改，不上线
-3. 小七未验收 → 不上线
-4. 每一步完成后必须回复发件人告知结果
-5. 禁止只 ACK 不执行、禁止执行完不回复
-
----
-
-## mailbus 通信规则
-
-所有成员通过 ziyan-mailbus 消息总线通信。
-
-**收到消息三部曲：**
-1. 写 ACK → 2. 执行任务 → 3. 回复发件人
-
-**禁止行为：**
-- ❌ 只 ACK 不执行
-- ❌ 执行完不回复
-- ❌ 回复「完成回执」无实质内容
-- ❌ 多项任务只回最新一条
+| 成员 | 原角色 | 替代 |
+|------|--------|------|
+| ~~大壮 (dazhuang)~~ | 代码审查 | 灵鉴 + review.py |
 
 ---
 
 ## 基础设施端口
 
-| 服务 | 端口 | 说明 |
-|------|------|------|
-| AgentMemory | 3111 | 持久记忆 |
-| mailbus API | 9812 | 消息总线 + Dashboard |
-| 灵昭 | 9120 | Hermes Dashboard |
-| 灵瑾 | 9121 | Hermes Dashboard |
-| 灵犀 | 9122 | Hermes Dashboard |
-| 灵鉴 | 9123 | Hermes Dashboard |
-| 灵验 | 9124 | Hermes Dashboard |
-| 灵巡 | 9125 | Hermes Dashboard |
-| 小七 | 18789 | OpenClaw Gateway |
-| 一哥 | 18790 | OpenClaw Gateway |
+| 服务 | 端口 |
+|------|------|
+| mailbus API | 9814（Windows 本机默认；Docker 容器内仍可为 9812） |
+| 灵昭–灵巡 Hermes | 9120–9123, 9125–9126（灵验已迁 Claude Code，:9124 可停用） |
+| 灵拓 / 灵账 | 9126 / 9127 |
+| 小七 / 一哥 OpenClaw | 18789 / 18790 |
+
+---
+
+## Agent 框架说明
+
+- **灵霄 / 灵鉴**：Docker `codex-agent`，config `type=codex`；看板 **Web** → codexapp（9240/9241），备用 ttyd（9250/9251）；**勿用 Codex Desktop**（DeepSeek 网关）
+- **大力**：Docker `opencode-agent`，config `type=opencode`
+- **灵云 / 灵验**：宿主机 Claude Code，config `type=claude_code`（`mailbus_claude`）；看板 **Web** → WSL ttyd（9260/9261）；**勿用 Claude Desktop**
+- **Cline**：legacy，仅 WSL 宿主机直连场景
+
+## mailbus 通信规则
+
+收到消息：**ack → 执行 → 回复发件人**。禁止只 ACK 不执行。

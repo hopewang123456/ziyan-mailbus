@@ -7,8 +7,13 @@ import os, sys, json, tempfile, time, glob
 from unittest import mock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from lib.utils import configure_stdio_utf8
+
+configure_stdio_utf8()
+
 from lib.commands import _cleanup_stale_locks
 from lib.constants import DEFAULT_DATA_DIR
+from lib.utils import get_lock_root
 
 
 # ════════════════════════════════════════════════════════════════
@@ -17,9 +22,10 @@ from lib.constants import DEFAULT_DATA_DIR
 
 
 def _create_tmp_lock(prefix: str, suffix: str = ".lock", age: float = 0) -> str:
-    """在 /tmp 创建一个测试锁文件，返回路径"""
-    fpath = f"/tmp/{prefix}{suffix}"
-    with open(fpath, "w") as f:
+    """在锁目录创建一个测试锁文件，返回路径"""
+    fname = prefix if suffix and prefix.endswith(suffix) else f"{prefix}{suffix}"
+    fpath = os.path.join(get_lock_root(), fname)
+    with open(fpath, "w", encoding="utf-8") as f:
         f.write("test")
     old_time = time.time() - age
     os.utime(fpath, (old_time, old_time))
@@ -128,8 +134,13 @@ def test_cleanup_stale_handles_nonexistent_inbox():
 
 def test_cleanup_stale_no_files_to_clean():
     """_cleanup_stale_locks: 无文件时静默通过"""
-    for pattern in ["/tmp/ziyan-mailbus-*.lock", "/tmp/session-*.lock",
-                    "/tmp/hermes-*.db-shm", "/tmp/agentmemory-*.sock"]:
+    lock_root = get_lock_root()
+    for pattern in [
+        os.path.join(lock_root, "ziyan-mailbus-*.lock"),
+        os.path.join(lock_root, "session-*.lock"),
+        os.path.join(lock_root, "hermes-*.db-shm"),
+        os.path.join(lock_root, "agentmemory-*.sock"),
+    ]:
         for f in glob.glob(pattern):
             try: os.unlink(f)
             except OSError: pass

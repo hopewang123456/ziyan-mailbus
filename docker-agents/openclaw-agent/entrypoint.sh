@@ -18,6 +18,13 @@ cd /workspace
 
 bash /init-openclaw-profiles.sh
 
+if [ -x /mailbus/tools/sync-openclaw-framework-skill.sh ]; then
+  for agent in xiaoqi yige; do
+    OPENCLAW_AGENT="$agent" OPENCLAW_SKILLS_DIR="/workspace/skills" \
+      bash /mailbus/tools/sync-openclaw-framework-skill.sh || true
+  done
+fi
+
 echo "[entrypoint] Starting OpenClaw gateways..."
 OPENCLAW_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-ziyan-team}"
 

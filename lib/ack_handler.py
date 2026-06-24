@@ -246,7 +246,8 @@ def scan_error_reports(data_dir: str, agents: dict) -> list:
                         "reported_at": _now_iso(),
                     })
                 except Exception as e:
-                    print(f"[ack_handler] tracker 更新失败: {e}")
+                    from .mbus_log import warn
+                    warn(f"[ack_handler] tracker update failed: {e}")
                 reports.append({
                     "task_id": task_id,
                     "agent": name,

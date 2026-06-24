@@ -2,6 +2,7 @@
 
 在 run_housekeeping 中被调用。扫描所有活跃告警并检测解除条件。
 """
+import os
 import time as _time
 from .alerter import load_alerts, save_alerts, resolve_alert
 from .tracker import TaskTracker
@@ -73,5 +74,13 @@ def _check_condition(atype, agent_name, alert, data_dir, paths, now_ts):
         aid = alert.get("id", "0").replace("alert-", "") or "0"
         if now_ts - int(aid) > 300:
             return True
+
+    elif atype == "key_missing":
+        from .heartbeat import check_api_keys
+        config = json_read(os.path.join(data_dir, "config.json"), {})
+        if config:
+            for k in check_api_keys(config):
+                if k.get("agent") == agent_name and k.get("key_status") == "valid":
+                    return True
 
     return False

@@ -44,7 +44,7 @@
       "file_task_for_executable": true,
       "launch": {
         "browser_ports": {"lingyun": 9260},
-        "default_project_roots": {"lingyun": "/mnt/e/ai_tools"}
+        "default_project_roots": {"lingyun": "/path/to/your/workspace"}
       }
     },
     "agent-c": {
@@ -173,7 +173,7 @@
     "platform": "auto",
     "windows": {
       "enabled": true,
-      "claude_home": "C:\\Users\\hopew\\.claude",
+      "claude_home": "C:\\Users\\yourname\\.claude",
       "claude_bin": "claude",
       "default_project_dir": "E:\\ai_tools",
       "ttyd_bin": "ttyd",
@@ -188,13 +188,13 @@
       "enabled": false,
       "claude_home": "/home/administrator/.claude",
       "claude_bin": "claude",
-      "default_project_dir": "/mnt/e/ai_tools",
+      "default_project_dir": "/path/to/your/workspace",
       "ttyd_bin": "ttyd",
       "ensure_on_launch": true,
       "browser_ports": {"lingyun": 9260, "lingyan": 9261},
       "default_project_roots": {
-        "lingyun": "/mnt/e/ai_tools",
-        "lingyan": "/mnt/e/ai_tools"
+        "lingyun": "/path/to/your/workspace",
+        "lingyan": "/path/to/your/workspace"
       }
     }
   }

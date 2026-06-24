@@ -136,6 +136,8 @@ CRITICAL_PROCESSES = {
     "lingjian":     { "port": 9123, "type": "port" },
     "lingyan":      { "port": 9124, "type": "port" },
     "lingxun":      { "port": 9125, "type": "port" },
+    "lingtuo":      { "port": 9126, "type": "port" },
+    "lingzhang":    { "port": 9127, "type": "port" },
     "xiaoqi":       { "port": 18789, "type": "port" },
     "yige":         { "port": 18790, "type": "port" },
 }

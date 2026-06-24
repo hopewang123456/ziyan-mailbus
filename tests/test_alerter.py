@@ -51,9 +51,20 @@ def test_push_to_admin_missing():
     print("  ✓ test_push_to_admin_missing")
 
 
+def test_alert_dedupe():
+    """同 type+agent 的 active 告警不重复写入"""
+    with tempfile.TemporaryDirectory() as td:
+        push_alert(td, "key_missing", "critical", "大力", "API Key 缺失")
+        push_alert(td, "key_missing", "critical", "大力", "API Key 缺失 again")
+        alerts = load_alerts(td)
+        assert len(alerts["alerts"]) == 1
+    print("  ✓ test_alert_dedupe")
+
+
 if __name__ == "__main__":
     test_push_and_get()
     test_multiple_alerts()
     test_alerts_cap()
     test_push_to_admin_missing()
-    print(f"\n✓ 全部 {4} 个测试通过")
+    test_alert_dedupe()
+    print(f"\n✓ 全部 {5} 个测试通过")

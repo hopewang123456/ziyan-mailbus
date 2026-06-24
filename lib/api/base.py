@@ -20,10 +20,26 @@ def _get_handlers():
         from . import handlers_inbox
         from . import handlers_system
         from . import handlers_tasks
+        from . import handlers_gates
+        from . import handlers_internal_llm
+        from . import handlers_intake
+        from . import handlers_workflows
+        from . import handlers_attachments
+        from . import handlers_step_result
+        from . import handlers_settings
+        from . import handlers_drill
         _handlers = {
             "inbox": handlers_inbox,
             "system": handlers_system,
             "tasks": handlers_tasks,
+            "internal_llm": handlers_internal_llm,
+            "gates": handlers_gates,
+            "intake": handlers_intake,
+            "workflows": handlers_workflows,
+            "attachments": handlers_attachments,
+            "step_result": handlers_step_result,
+            "settings": handlers_settings,
+            "drill": handlers_drill,
         }
     return _handlers
 
@@ -36,6 +52,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     agents = {}
     agent_types = {}
     auth_token: Optional[str] = None
+    require_api_auth: bool = False
     bulletin_permit = []
     bulletin_authors = {}
     bulletin_file = ""
@@ -43,7 +60,13 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
 
     # ── 认证 ────────────────────────────────────────────────────────────
 
-    def _check_auth(self) -> bool:
+    def _check_auth(self, *, write: bool = False) -> bool:
+        if write and self.require_api_auth and not self.auth_token:
+            self._send_json({
+                "error": "write_auth_required",
+                "hint": "配置 store/config.json 的 api_token 或环境变量 MAILBUS_API_TOKEN",
+            }, 503)
+            return False
         if not self.auth_token:
             return True
         auth = self.headers.get("Authorization", "")
@@ -148,15 +171,64 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/skill-usage": lambda: h["tasks"].handle_skill_usage(self),
             "/api/skill-use": lambda: h["tasks"].handle_skill_use(self),
             "/api/templates": lambda: h["system"].handle_templates(self),
+            "/api/external-tools": lambda: h["system"].handle_external_tools(self),
+            "/api/clinic/tools": lambda: h["system"].handle_clinic_tools(self),
+            "/api/workload": lambda: h["system"].handle_workload(self),
             "/api/send-msg": lambda: h["inbox"].handle_send_msg(self),
+            "/api/internal-llm/status": lambda: h["internal_llm"].handle_internal_llm_status(self),
+            "/api/internal-llm/health": lambda: h["internal_llm"].handle_internal_llm_health(self),
+            "/api/workflows": lambda: h["workflows"].handle_workflows_list(self),
+            "/api/intake": lambda: h["intake"].handle_intake_list(self),
+            "/api/settings/sections": lambda: h["settings"].handle_settings_sections(self),
+            "/api/settings/env": lambda: h["settings"].handle_settings_env_get(self),
         }
 
         if path in routes:
             routes[path]()
+        elif path.startswith("/api/workflows/"):
+            wf_id = path[len("/api/workflows/"):].strip("/")
+            if wf_id:
+                h["workflows"].handle_workflow_get(self, wf_id)
+            else:
+                h["workflows"].handle_workflows_list(self)
+        elif path.startswith("/api/intake/"):
+            rest = path[len("/api/intake/"):].strip("/")
+            parts = rest.split("/")
+            if len(parts) == 1 and parts[0]:
+                h["intake"].handle_intake_get(self, parts[0])
+            elif len(parts) == 2 and parts[0] and parts[1] == "tasks":
+                h["intake"].handle_intake_tasks(self, parts[0])
+            elif len(parts) == 2 and parts[0] and parts[1] == "spawn":
+                self._send_json({"error": "method_not_allowed", "use": "POST"}, 405)
+            else:
+                self._send_json({"error": "not_found"}, 404)
+        elif path.startswith("/api/settings/section/"):
+            section = path[len("/api/settings/section/"):].strip("/")
+            if section:
+                h["settings"].handle_settings_section_get(self, section)
+            else:
+                self._send_json({"error": "not_found"}, 404)
+        elif path.startswith("/api/human-queue"):
+            h["tasks"].handle_human_queue(self)
         elif path.startswith("/api/tasks/"):
-            task_id = path[len("/api/tasks/"):]
-            if task_id:
-                h["tasks"].handle_task_get(self, task_id)
+            rest = path[len("/api/tasks/"):]
+            if rest.endswith("/fsm"):
+                tid = rest[:-4].rstrip("/")
+                if tid:
+                    h["tasks"].handle_task_fsm_get(self, tid)
+                else:
+                    h["tasks"].handle_tasks(self)
+            elif "/fsm/" in rest:
+                parts = rest.split("/fsm/", 1)
+                tid, sub = parts[0], parts[1].split("/")[0]
+                if tid and sub in ("rollback", "skip", "cancel", "pause", "priority", "approve-plan", "accept"):
+                    self._send_json({"error": "method_not_allowed", "use": "POST"}, 405)
+                elif tid:
+                    h["tasks"].handle_task_fsm_get(self, tid)
+                else:
+                    h["tasks"].handle_tasks(self)
+            elif rest:
+                h["tasks"].handle_task_get(self, rest)
             else:
                 h["tasks"].handle_tasks(self)
         
@@ -192,7 +264,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     # ── HTTP POST 路由 ─────────────────────────────────────────────────
 
     def do_POST(self):
-        if not self._check_auth():
+        if not self._check_auth(write=True):
             return
         path = self._read_path()
         h = _get_handlers()
@@ -213,8 +285,74 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             h["tasks"].handle_task_update(self)
         elif path == "/api/tasks/audit":
             h["tasks"].handle_task_audit(self)
+        elif path == "/api/intake/spawn-analyze":
+            h["intake"].handle_intake_spawn_analyze(self)
+        elif path.startswith("/api/intake/") and path.endswith("/spawn"):
+            rest = path[len("/api/intake/"):].rstrip("/")
+            intake_id = rest[: -len("/spawn")].strip("/")
+            if intake_id:
+                h["intake"].handle_intake_spawn(self, intake_id)
+            else:
+                self._send_json({"error": "not_found"}, 404)
+        elif path.startswith("/api/intake/") and "/gates/" in path:
+            rest = path[len("/api/intake/"):]
+            parts = rest.split("/")
+            if len(parts) >= 4 and parts[1] == "gates" and parts[3] in ("approve", "deny"):
+                if parts[3] == "approve":
+                    h["intake"].handle_intake_gate_approve(self, parts[0], parts[2])
+                else:
+                    h["intake"].handle_intake_gate_deny(self, parts[0], parts[2])
+            else:
+                self._send_json({"error": "not_found"}, 404)
+        elif path.startswith("/api/tasks/") and "/gates/" in path:
+            rest = path[len("/api/tasks/"):]
+            parts = rest.split("/")
+            if len(parts) >= 4 and parts[1] == "gates" and parts[3] in ("approve", "deny"):
+                h["gates"].handle_gate_approve(self, parts[0], parts[2]) if parts[3] == "approve" else h["gates"].handle_gate_deny(self, parts[0], parts[2])
+            else:
+                self._send_json({"error": "not_found"}, 404)
+        elif path.startswith("/api/tasks/") and "/fsm/" in path:
+            rest = path[len("/api/tasks/"):]
+            parts = rest.split("/fsm/", 1)
+            tid, action = parts[0], parts[1].split("/")[0]
+            h["tasks"].handle_task_fsm_action(self, tid, action)
         elif path == "/api/send-msg":
             h["inbox"].handle_send_msg(self)
+        elif path == "/api/internal-llm/dry-run":
+            h["internal_llm"].handle_internal_llm_dry_run(self)
+        elif path == "/api/internal-llm/rebuild-rag":
+            h["internal_llm"].handle_internal_llm_rebuild_rag(self)
+        elif path == "/api/attachments/upload":
+            h["attachments"].handle_attachment_upload(self)
+        elif path.startswith("/api/agents/") and path.endswith("/step-result"):
+            agent_id = path[len("/api/agents/"): -len("/step-result")].strip("/")
+            if agent_id:
+                h["step_result"].handle_agent_step_result(self, agent_id)
+            else:
+                self._send_json({"error": "not_found"}, 404)
+        elif path == "/api/clinic/run":
+            h["system"].handle_clinic_run(self)
+        elif path == "/api/drill/video-publish":
+            h["drill"].handle_drill_video_publish(self)
+        elif path == "/api/agents/recruit":
+            h["system"].handle_agent_recruit(self)
+        elif path.startswith("/api/workflows/") and path.endswith("/delete"):
+            wf_id = path[len("/api/workflows/"): -len("/delete")].strip("/")
+            h["workflows"].handle_workflow_delete(self, wf_id)
+        elif path.startswith("/api/workflows/"):
+            wf_id = path[len("/api/workflows/"):].strip("/")
+            if wf_id and wf_id not in ("delete",):
+                h["workflows"].handle_workflow_save(self, wf_id)
+            else:
+                self._send_json({"error": "not_found"}, 404)
+        elif path == "/api/settings/env":
+            h["settings"].handle_settings_env_patch(self)
+        elif path.startswith("/api/settings/section/"):
+            section = path[len("/api/settings/section/"):].strip("/")
+            if section:
+                h["settings"].handle_settings_section_patch(self, section)
+            else:
+                self._send_json({"error": "not_found"}, 404)
         elif path.startswith("/api/actions/update/"):
             parts = path.split("/")
             if len(parts) >= 5:

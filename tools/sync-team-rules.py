@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""将团队规范同步到：公告板 + AgentMemory（全员）+ 各 agent notice。
+"""将团队规范同步到：公告板 + team-memory.db + AgentMemory（best-effort）+ 各 agent notice。
 
 用法:
   python3 tools/sync-team-rules.py --data-dir store
@@ -18,6 +18,7 @@ import urllib.request
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.utils import json_read, json_write, _now_iso
+from lib.team_memory_store import store_memory
 
 AGENTMEMORY_URL = os.environ.get(
     "AGENTMEMORY_URL",
@@ -114,6 +115,21 @@ def sync_bulletin(data_dir: str, title: str, content: str) -> None:
     print(f"  bulletin: {entry['id']}")
 
 
+def sync_team_memory(data_dir: str) -> int:
+    """团队规范写入 team-memory.db（不依赖 AgentMemory）。"""
+    ok = 0
+    for stem, title in RULE_FILES:
+        body = _read_rule(data_dir, stem)
+        if not body:
+            continue
+        key = f"team-rule:{stem}"
+        tagged = f"[team-rule:{stem}] [scope:all-agents] {title}\n\n{body[:8000]}"
+        if store_memory(key, tagged, category="decision", author="mailbus"):
+            ok += 1
+            print(f"  team-memory: {stem}")
+    return ok
+
+
 def sync_agentmemory(agents: list[str], data_dir: str) -> int:
     try:
         with urllib.request.urlopen(f"{AGENTMEMORY_URL}/agentmemory/health", timeout=5) as r:
@@ -196,6 +212,7 @@ def main():
     parser.add_argument("--data-dir", default=os.environ.get("MAILBUS_DATA", "store"))
     parser.add_argument("--no-notice", action="store_true", help="不发送 inbox notice")
     parser.add_argument("--no-memory", action="store_true", help="不写 AgentMemory")
+    parser.add_argument("--no-sqlite", action="store_true", help="不写 team-memory.db")
     args = parser.parse_args()
 
     config = json_read(os.path.join(args.data_dir, "config.json"), {})
@@ -208,10 +225,15 @@ def main():
     combined = NOTICE_SUMMARY + "\n\n详见 store/rules/*.md"
     sync_bulletin(args.data_dir, "📢 团队规范：密钥安全 + 执行顺序", combined)
 
+    if not args.no_sqlite:
+        nsql = sync_team_memory(args.data_dir)
+        if nsql == 0:
+            print("  team-memory 写入失败或 rules 为空")
+
     if not args.no_memory:
         nmem = sync_agentmemory(agents, args.data_dir)
         if nmem == 0:
-            print("  AgentMemory 写入失败或不可用；规范已写入 bulletin + inbox，ack 后 memory_bridge 会重试")
+            print("  AgentMemory 写入失败或不可用（best-effort）；规范已写入 bulletin + team-memory")
 
     if not args.no_notice:
         n = send_notices(args.data_dir, agents)

@@ -22,6 +22,11 @@ sleep 1
 
 COMPOSE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$COMPOSE_DIR"
+
+if [ -x "$COMPOSE_DIR/stop-claude-agents.sh" ]; then
+  bash "$COMPOSE_DIR/stop-claude-agents.sh" 2>/dev/null || true
+fi
+
 docker compose down
 
 echo "All containers stopped"

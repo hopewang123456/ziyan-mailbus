@@ -40,7 +40,9 @@ def _task_assignee(task: dict) -> str:
 def _is_business_pipeline(task: dict) -> bool:
     tid = task.get("task_id", "")
     if tid.startswith("msg-"):
-        return True
+        return False
+    if task.get("requires_audit") is False and not task.get("chain"):
+        return False
     return bool(task.get("chain"))
 
 
@@ -243,10 +245,8 @@ def reconcile_execution_order(data_dir: str, agents: dict, *, mode: str = "light
                 continue
             if not any(k in content for k in _ROUND2_MARKERS):
                 continue
+            # 已完成/已关闭的 Round2 不再 reset — 否则会每轮 scan 重推 LLM（token 黑洞）
             if state in (MsgStatus.DONE, MsgStatus.ARCHIVED, MsgStatus.CLOSED):
-                mid = inbox.msg_field(m, "id", "")
-                if _reset_inbox_to_pending(data_dir, name, mid, "restore: round2 deferred"):
-                    stats["reset_inbox"] += 1
                 continue
             round2_msgs.append(m)
 

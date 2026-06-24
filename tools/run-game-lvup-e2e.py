@@ -100,13 +100,15 @@ def write_game_files(data_dir: str, task_id: str) -> str:
     return game_path
 
 
-def write_msg_results(data_dir: str, task_id: str, *, conclusion: str, summary: str, next_role: str, extra: dict | None = None) -> None:
+def write_msg_results(data_dir: str, task_id: str, *, conclusion: str, summary: str, next_role: str, extra: dict | None = None, pipeline_step: int = 1) -> None:
     payload = {
         "template": "report",
         "conclusion": conclusion,
         "task": task_id,
+        "task_id": task_id,
         "summary": summary,
         "next_role": next_role,
+        "pipeline_step": pipeline_step,
         "agent": "mailbus-e2e",
         "timestamp": _now_iso(),
     }
@@ -176,10 +178,16 @@ def run_e2e(data_dir: str, task_id: str, max_scans: int = 12) -> dict:
             break
         chain = task.get("chain") or []
         step = chain[-1] if chain else {}
+        if step.get("status") != "running" or step.get("result_consumed"):
+            run_scan_once(data_dir, config, quiet=True)
+            continue
+        step_num = step.get("step") or len(chain) or 1
         role = step.get("to_role", "方案设计师")
         con, summary, nxt = step_payload_for_role(role, task_id, game_path)
-        write_msg_results(data_dir, task_id, conclusion=con, summary=summary, next_role=nxt or role,
-                          extra={"game_path": game_path})
+        write_msg_results(
+            data_dir, task_id, conclusion=con, summary=summary, next_role=nxt or "",
+            extra={"game_path": game_path}, pipeline_step=step_num,
+        )
         run_scan_once(data_dir, config, quiet=True)
         task = tr.get(task_id) or {}
         print(f"  scan {i+1}: status={task.get('status')} step={role}({step.get('status')})")

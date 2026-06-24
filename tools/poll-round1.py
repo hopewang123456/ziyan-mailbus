@@ -7,9 +7,10 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from lib.utils import json_read
+from lib.iteration_engine import load_primary_task_id
 
-DATA = "store"
-TASK = "mailbus-hardening-20260616"
+DATA = os.environ.get("MAILBUS_DATA", "store")
+TASK = load_primary_task_id(os.path.abspath(DATA))
 RESULT = f"{DATA}/msg-results/{TASK}.json"
 agents = json_read(f"{DATA}/config.json", {}).get("agents", {})
 

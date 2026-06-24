@@ -29,8 +29,38 @@ logs/
 Thumbs.db
 
 # docker-agents 敏感与运行时（勿提交）
+.env
 docker-agents/.env
 docker-agents/.env.secrets
 docker-agents/.proxy-state
 docker-agents/*.log
 docker-agents/*.env.local
+
+# 角色人设 / 本地 sync 副本（勿提交）
+identities/
+roles/
+adapters/.sync/
+
+# 运行时消息与本地操作脚本
+bus/send/
+outbox/
+patrol_reports/
+mnt/
+_git_ops*.txt
+_git_ops*.sh
+_agent_git_ops.sh
+_run_*.sh
+_wsl_*.sh
+
+# 误生成的路径垃圾文件（勿提交）
+/C*/
+/E*/
+/;;*
+
+# 测试临时目录
+tests/_tmp_codex_home/
+tools/tmp-launch-resp.json
+tools/tmp-*.json
+
+# pytest
+.pytest_cache/

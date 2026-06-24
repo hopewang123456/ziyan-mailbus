@@ -31,9 +31,9 @@ _vs = _load_validate_scheduler()
 build_msg_results = _vs.build_msg_results
 validate_scheduler = _vs.validate_scheduler
 
-from lib.audit_dispatch import consume_audit_results
+from lib.audit_dispatch import submit_audit_result
 from lib.commands import load_config, run_scan_once
-from lib.iteration_engine import evaluate_round1_gate, run_round1, run_round2, run_round3
+from lib.iteration_engine import evaluate_round1_gate, run_round1, run_round2, run_round3, load_primary_task_id as _load_primary
 from lib.models import Inbox, MsgStatus
 from lib.scanner import recover_inbox_stale_states
 from lib.tracker import TaskTracker, TaskStatus
@@ -52,8 +52,7 @@ def log(msg: str) -> None:
 
 
 def load_primary_task_id(data_dir: str) -> str:
-    st = json_read(os.path.join(data_dir, "iterations", "iteration-state.json"), {})
-    return st.get("primary_task_id") or DEFAULT_PRIMARY
+    return _load_primary(data_dir)
 
 
 def unblock_inbox(data_dir: str, agents: dict, primary: str) -> dict:
@@ -101,11 +100,17 @@ def unblock_inbox(data_dir: str, agents: dict, primary: str) -> dict:
     return {**stats, **extra}
 
 
-def write_msg_results(data_dir: str, task_id: str, base_url: str) -> str:
+def write_msg_results(data_dir: str, task_id: str, base_url: str, *, pipeline_step: int = 1, role: str = "") -> str:
+    from lib.role_flow import get_next_role
+
     ok, report = validate_scheduler(base_url)
     if not ok:
         log(f"WARN: scheduler validation partial: {report.get('error') or report.get('checks')}")
-    payload = build_msg_results(task_id, report)
+    payload = build_msg_results(task_id, report, pipeline_step=pipeline_step)
+    if role:
+        nxt = get_next_role(role, "done")
+        payload["next_role"] = nxt or ""
+        payload["conclusion"] = "done"
     out_dir = os.path.join(data_dir, "msg-results")
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{task_id}.json")
@@ -113,10 +118,19 @@ def write_msg_results(data_dir: str, task_id: str, base_url: str) -> str:
     return out_path
 
 
-def advance_pipeline(data_dir: str, config: dict, task_id: str, max_scans: int = 6) -> dict:
+def advance_pipeline(data_dir: str, config: dict, task_id: str, base_url: str, max_scans: int = 12) -> dict:
     agents = config.get("agents", {})
     tr = TaskTracker(data_dir)
     for i in range(max_scans):
+        task = tr.get(task_id) or {}
+        if task.get("status") == TaskStatus.SUCCESS:
+            return task
+        chain = task.get("chain") or []
+        step = chain[-1] if chain else {}
+        step_num = step.get("step") or len(chain) or 1
+        role = step.get("to_role", "")
+        if step.get("status") == "running" and not step.get("result_consumed"):
+            write_msg_results(data_dir, task_id, base_url, pipeline_step=step_num, role=role)
         run_scan_once(data_dir, config, quiet=True)
         task = tr.get(task_id) or {}
         status = task.get("status")
@@ -125,7 +139,7 @@ def advance_pipeline(data_dir: str, config: dict, task_id: str, max_scans: int =
         log(f"scan {i + 1}: status={status} step={step.get('to_role')}/{step.get('to_person')} ({step.get('status')})")
         if status == TaskStatus.SUCCESS:
             return task
-        time.sleep(1)
+        time.sleep(0.5)
     task = tr.get(task_id) or {}
     if task.get("status") != TaskStatus.SUCCESS:
         raise StepError(f"pipeline 未在 {max_scans} 轮 scan 内 success（当前 {task.get('status')}）")
@@ -133,38 +147,20 @@ def advance_pipeline(data_dir: str, config: dict, task_id: str, max_scans: int =
 
 
 def submit_audit(data_dir: str, task_id: str) -> None:
-    audit_path = os.path.join(data_dir, "msg-results", f"audit-{task_id}.json")
-    if os.path.exists(audit_path):
-        tr = TaskTracker(data_dir)
-        if tr.get(task_id) and tr.get(task_id).get("audit_log"):
-            return
-    payload = {
-        "audit": True,
-        "task_id": task_id,
-        "reviewer": "lingjian",
-        "result": "warn",
-        "summary": (
+    submit_audit_result(
+        data_dir,
+        task_id,
+        result="warn",
+        summary=(
             f"Round1 scheduler-validation 回归审计：内置 SchedulerHub 运行正常，"
             f"pipeline 已通过 msg-results 推进至 success（e2e regression）。"
         ),
-        "issues": [
+        issues=[
             "msg-results 由 validate-scheduler + pipeline-e2e-regression 写入",
             "AgentMemory remember API 仍可能超时，规范已通过 bulletin/inbox 同步",
         ],
-        "timestamp": _now_iso(),
-    }
-    json_write(audit_path, payload)
-    n = consume_audit_results(data_dir)
-    if n == 0:
-        tr = TaskTracker(data_dir)
-        tr.add_audit(
-            task_id=task_id,
-            reviewer="lingjian",
-            result="warn",
-            issues=payload["issues"],
-            summary=payload["summary"],
-            category="code_review",
-        )
+        category="code_review",
+    )
 
 
 def assert_gate(data_dir: str, agents: dict) -> dict:
@@ -193,7 +189,7 @@ def run_regression(data_dir: str, *, base_url: str, skip_round2: bool) -> int:
 
     step("unblock inbox", lambda: unblock_inbox(data_dir, agents, primary))
     step("validate scheduler + write msg-results", lambda: write_msg_results(data_dir, primary, base_url))
-    step("advance pipeline", lambda: advance_pipeline(data_dir, config, primary))
+    step("advance pipeline", lambda: advance_pipeline(data_dir, config, primary, base_url))
     step("submit audit", lambda: submit_audit(data_dir, primary))
     gate = step("evaluate gate", lambda: assert_gate(data_dir, agents))
     step("run round1 diagnosis", lambda: run_round1(data_dir, agents))
@@ -230,7 +226,8 @@ def run_regression(data_dir: str, *, base_url: str, skip_round2: bool) -> int:
 def main():
     parser = argparse.ArgumentParser(description="mailbus pipeline E2E regression")
     parser.add_argument("--data-dir", default=os.environ.get("MAILBUS_DATA", "store"))
-    parser.add_argument("--url", default=os.environ.get("MAILBUS_URL", "http://127.0.0.1:9812"))
+    from lib.constants import DEFAULT_API_BASE
+    parser.add_argument("--url", default=os.environ.get("MAILBUS_URL", DEFAULT_API_BASE))
     parser.add_argument("--skip-round2", action="store_true")
     args = parser.parse_args()
     data_dir = os.path.abspath(args.data_dir)

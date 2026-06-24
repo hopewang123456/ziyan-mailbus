@@ -30,6 +30,10 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from lib.utils import configure_stdio_utf8
+
+configure_stdio_utf8()
+
 from lib.models import (
     Message, MsgStatus, Priority, MsgType, Inbox, AgentConfig, BusConfig,
 )
@@ -171,7 +175,7 @@ def main():
     p_sv = sub.add_parser("serve", help="启动 HTTP API 服务（用于 Web 看板）")
     _add_data_dir_arg(p_sv)
     p_sv.add_argument("--host", default="127.0.0.1", help="监听地址（默认 127.0.0.1）")
-    p_sv.add_argument("--port", type=int, default=9812, help="监听端口（默认 9812）")
+    p_sv.add_argument("--port", type=int, default=None, help="监听端口（默认见 lib.constants.DEFAULT_API_PORT）")
     p_sv.add_argument("--token", default="", help="API 认证 token（留空不启用认证）")
     
     # backup
@@ -182,6 +186,8 @@ def main():
     p_sr = sub.add_parser("search", help="消息全文检索")
     _add_data_dir_arg(p_sr)
     p_sr.add_argument("--query", default="", help="搜索关键词（FTS5 语法）")
+    p_sr.add_argument("--scope", default="messages", choices=["messages", "catalog", "all"],
+                      help="messages=仅消息 catalog=外部工具/目录 all=两者")
     p_sr.add_argument("--from", dest="from_agent", default="", help="按发件人过滤")
     p_sr.add_argument("--to", dest="to_agent", default="", help="按收件人过滤")
     p_sr.add_argument("--type", default="", help="按消息类型过滤")

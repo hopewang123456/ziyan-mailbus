@@ -139,6 +139,7 @@ class Message:
     reply_format: Optional[dict] = None
     status: str = MsgStatus.PENDING
     pushed_count: int = 0
+    last_pushed_at: Optional[str] = None
     created_at: str = ""            # ISO 时间
     acknowledged_at: Optional[str] = None
     # v2.0 新增字段
@@ -219,7 +220,7 @@ class Message:
             if _dict_field in d and not isinstance(d[_dict_field], dict):
                 d[_dict_field] = {}
         known = {"id", "from_", "to", "priority", "type", "content",
-                 "attachments", "reply_format", "status", "pushed_count",
+                 "attachments", "reply_format", "status", "pushed_count", "last_pushed_at",
                  "created_at", "acknowledged_at", "action", "task", "forward_chain",
                  "project",
                  "state", "state_history", "actions", "received_at", "done_at",
@@ -274,21 +275,23 @@ class Inbox:
         return None
 
     def set_msg_status(self, msg_id: str, status: str, **extra) -> bool:
-        """安全更新消息状态（同时更新 dict 和 Message 对象）"""
+        """安全更新消息状态（同时更新 dict 和 Message 对象；同 id 重复条目全部更新）。"""
+        changed = False
         for i, m in enumerate(self.messages):
             mid = m.get("id") if isinstance(m, dict) else m.id
-            if mid == msg_id:
-                if isinstance(m, dict):
-                    m["status"] = status
-                    for k, v in extra.items():
-                        m[k] = v
-                else:
-                    m.status = status
-                    for k, v in extra.items():
-                        if hasattr(m, k):
-                            setattr(m, k, v)
-                return True
-        return False
+            if mid != msg_id:
+                continue
+            if isinstance(m, dict):
+                m["status"] = status
+                for k, v in extra.items():
+                    m[k] = v
+            else:
+                m.status = status
+                for k, v in extra.items():
+                    if hasattr(m, k):
+                        setattr(m, k, v)
+            changed = True
+        return changed
 
     def has_unread_messages(self) -> bool:
         """检查是否有未读消息（优先检查 state，回退读 status）

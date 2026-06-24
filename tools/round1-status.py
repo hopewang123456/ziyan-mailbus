@@ -2,11 +2,11 @@
 import json, os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from lib.tracker import TaskTracker
-from lib.iteration_engine import evaluate_round1_gate
+from lib.iteration_engine import evaluate_round1_gate, load_primary_task_id
 from lib.utils import json_read
 
-DATA = "store"
-TASK = "mailbus-hardening-20260616"
+DATA = os.environ.get("MAILBUS_DATA", "store")
+TASK = load_primary_task_id(os.path.abspath(DATA))
 t = TaskTracker(DATA).get(TASK)
 print("=== Round1 状态 ===")
 print("task status:", (t or {}).get("status", "NOT FOUND"))

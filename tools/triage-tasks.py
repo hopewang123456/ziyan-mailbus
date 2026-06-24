@@ -10,6 +10,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from lib.utils import json_read, resolve_paths
 
 DATA = os.environ.get("MAILBUS_DATA", "store")
+from lib.audit_dispatch import list_pending_audit_tasks
+
 SKIP_PREFIX = (
     "remind-", "tracker-remind-", "patrol-", "heartbeat-",
     "confirm-", "rule-change-", "alert-task-",
@@ -61,6 +63,7 @@ def load_round2_messages(data_dir: str) -> dict[str, str]:
 
 
 def load_tasks():
+    pending_ids = {t["task_id"] for t in list_pending_audit_tasks(DATA, 500)}
     out = {"pending_audit": [], "running": [], "pending": [], "terminal": []}
     for f in sorted(glob.glob(os.path.join(DATA, "tasks", "*.json"))):
         t = json.load(open(f, encoding="utf-8"))
@@ -81,7 +84,7 @@ def load_tasks():
             "has_audit": has_audit,
             "has_msg_results": os.path.exists(os.path.join(DATA, "msg-results", f"{tid}.json")),
         }
-        if st in ("success", "failed", "timeout") and not has_audit:
+        if st in ("success", "failed", "timeout") and not has_audit and tid in pending_ids:
             out["pending_audit"].append(row)
         elif st == "running":
             out["running"].append(row)

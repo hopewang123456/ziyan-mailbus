@@ -19,6 +19,10 @@ def handle_inbox(handler, agent: str):
         ?status_filter=pending  — 只返回待处理消息（默认返回全部）
         ?limit=100              — 只返回最近 N 条（按 created_at 倒序，减轻 Dashboard 负载）
     """
+    from lib.api.security import validate_agent_name
+    if not validate_agent_name(agent, handler.agents):
+        handler._send_json({"error": f"未知 agent: {agent}"}, 404)
+        return
     from urllib.parse import urlparse, parse_qs
     qs = parse_qs(urlparse(handler.path).query)
     status_filter = qs.get("status_filter", [None])[0]
@@ -121,7 +125,10 @@ def handle_send_msg(handler):
     if to not in handler.agents:
         handler._send_json({"error": f"agent '{to}' 未注册"}, 404)
         return
-    msg = build_message(from_, to, content, msg_type, priority)
+    msg_dict = build_message(from_, to, content, msg_type, priority).to_dict()
+    task_id = body.get("task_id", "").strip()
+    if task_id:
+        msg_dict["task_id"] = task_id
     paths = resolve_paths(handler.data_dir)
     inbox_file = f"{paths['inbox']}/{to}/inbox.json"
     inbox_data = json_read(inbox_file, {"agent": to, "has_unread": False, "messages": [], "since": _now_iso()})
@@ -130,23 +137,31 @@ def handle_send_msg(handler):
         inbox_data = {"agent": to, "has_unread": True, "messages": inbox_data, "since": _now_iso()}
     inbox = Inbox.from_dict(inbox_data)
     inbox.has_unread = True
-    inbox.messages.append(msg.to_dict())
+    inbox.messages.append(msg_dict)
     json_write(inbox_file, inbox.to_dict())
 
     # 即时推送：写完后立即扫描并推送，不等下次 cron
     try:
-        # 获取 agent 配置和 CLI 命令
-        agent_cfg = handler.agents.get(to, {})
-        model_alias = (agent_cfg.get("models") or [""])[0]
-        cli_chain = resolve_cli_chain(agent_cfg, handler.agent_types)
-        if cli_chain:
-            cli_cmds = [c[0] for c in cli_chain]
-            push_messages(handler.data_dir, to, [msg.to_dict()],
-                          cli_cmd=cli_cmds, auto_ack=True)
+        from ..model_router import is_no_llm_notice
+        from ..scanner import finalize_auto_ack
+
+        if is_no_llm_notice(msg_dict):
+            finalize_auto_ack(handler.data_dir, to, msg_dict["id"], msg_dict)
+        else:
+            agent_cfg = handler.agents.get(to, {})
+            cli_chain = resolve_cli_chain(agent_cfg, handler.agent_types)
+            if cli_chain:
+                cli_cmds = [c[0] for c in cli_chain]
+                from ..pipeline_task import should_auto_ack_message
+                auto_ack = should_auto_ack_message(
+                    msg_dict, handler.data_dir, agent_cfg.get("type", ""),
+                )
+                push_messages(handler.data_dir, to, [msg_dict],
+                              cli_cmd=cli_cmds, auto_ack=auto_ack)
     except Exception:
         pass  # 推送失败不影响消息已写入
 
-    handler._send_json({"status": "ok", "msg_id": msg.id})
+    handler._send_json({"status": "ok", "msg_id": msg_dict["id"]})
 
 
 def handle_replies(handler):

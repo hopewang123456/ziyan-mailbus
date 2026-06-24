@@ -43,6 +43,17 @@
 
 ---
 
+## 2.1 Task FSM（2026-06）
+
+闭环 pipeline 使用 **Task + Step 双层显式状态机**（`lib/task_fsm.py`），规范见 `store/rules/task-fsm.md`。
+
+- 每步结果：`msg-results/{task_id}/step-{step_id}.json`
+- 推进：`pipeline_trigger` → `apply_submit`
+- 回退/暂停/优先级：`POST /api/tasks/{id}/fsm/*`
+- Dashboard：任务 API 返回 `fsm` 摘要字段
+
+---
+
 ## 3. 目录结构
 
 ```
@@ -55,6 +66,9 @@
 │   ├── models.py             # 数据模型定义（消息/队列/状态常量）
 │   ├── scanner.py            # 扫描 inbox → 构建推送队列
 │   ├── pusher.py             # CLI 推送 + ack 等待 + 重试
+│   ├── task_fsm.py           # Task/Step 显式状态机（2026-06）
+│   ├── pipeline_trigger.py   # FSM 驱动的 pipeline 推进
+│   ├── pipeline_result_check.py  # per-step msg-results 校验
 │   ├── ack_handler.py        # 处理 agent 回复（ack / forward / mark_read）
 │   ├── archiver.py           # 已读消息归档
 │   └── utils.py              # 文件锁、日志、ID 生成等通用工具

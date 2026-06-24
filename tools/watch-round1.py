@@ -12,10 +12,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from lib.utils import json_read, resolve_paths
 from lib.scanner import get_msg_state, build_queues, recover_inbox_stale_states
 from lib.tracker import TaskTracker
-from lib.iteration_engine import evaluate_round1_gate
+from lib.iteration_engine import evaluate_round1_gate, load_primary_task_id
 
 DATA = os.environ.get("MAILBUS_DATA", "store")
-TASK = "mailbus-hardening-20260616"
+TASK = load_primary_task_id(os.path.abspath(DATA))
 
 
 def hermes_chat_count(profile: str = "") -> int:

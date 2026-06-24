@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import urllib.error
 import urllib.request
 
@@ -18,7 +19,8 @@ def fetch_status(base_url: str, timeout: int = 8) -> dict:
 
 
 def validate_scheduler(base_url: str | None = None) -> tuple[bool, dict]:
-    base = base_url or os.environ.get("MAILBUS_URL", "http://127.0.0.1:9812")
+    from lib.constants import DEFAULT_API_BASE
+    base = base_url or os.environ.get("MAILBUS_URL", DEFAULT_API_BASE)
     status = fetch_status(base)
     if status.get("error"):
         return False, {"ok": False, "error": status["error"]}
@@ -33,6 +35,9 @@ def validate_scheduler(base_url: str | None = None) -> tuple[bool, dict]:
         "scan_last_rc_ok": scan.get("last_rc", 1) == 0,
         "memory_bridge_job": "memory_bridge" in jobs,
         "pipeline_watchdog_job": "pipeline_watchdog" in jobs,
+        "pipeline_repair_job": "pipeline-repair" in jobs,
+        "platform_scout_job": "platform-scout" in jobs,
+        "intake_bridge_job": "intake-bridge" in jobs,
     }
     ok = checks["scheduler_running"] and checks["scan_has_last_run"]
     report = {
@@ -49,7 +54,10 @@ def validate_scheduler(base_url: str | None = None) -> tuple[bool, dict]:
     return ok, report
 
 
-def build_msg_results(task_id: str, report: dict) -> dict:
+def build_msg_results(task_id: str, report: dict, *, pipeline_step: int = 1) -> dict:
+    from datetime import datetime, timezone, timedelta
+
+    ts = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%dT%H:%M:%S+0800")
     checks = report.get("checks") or {}
     summary_parts = [
         f"SchedulerHub running={checks.get('scheduler_running')}",
@@ -61,8 +69,11 @@ def build_msg_results(task_id: str, report: dict) -> dict:
         "template": "report",
         "conclusion": "done",
         "task": task_id,
+        "task_id": task_id,
         "summary": "；".join(summary_parts),
         "next_role": "调度员",
+        "pipeline_step": pipeline_step,
+        "timestamp": ts,
         "result": {
             "message": "scheduler validation passed" if report.get("ok") else "scheduler validation partial",
             "validation": report,
@@ -76,13 +87,20 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--url", default=os.environ.get("MAILBUS_URL", "http://127.0.0.1:9812"))
+    from lib.constants import DEFAULT_API_BASE
+    parser.add_argument("--url", default=os.environ.get("MAILBUS_URL", DEFAULT_API_BASE))
     parser.add_argument("--task-id", default="mailbus-scheduler-validation-20260616")
     parser.add_argument("--write", metavar="DATA_DIR", help="写入 msg-results/{task_id}.json")
     args = parser.parse_args()
 
     ok, report = validate_scheduler(args.url)
     print(json.dumps(report, ensure_ascii=False, indent=2))
+    sched = report.get("scheduler") or {}
+    print(
+        f"summary: ok={report.get('ok')} running={sched.get('running')} "
+        f"scan_rc={sched.get('scan_last_rc')}",
+        file=sys.stderr,
+    )
     if args.write:
         out_dir = os.path.join(args.write, "msg-results")
         os.makedirs(out_dir, exist_ok=True)

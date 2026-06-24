@@ -3,15 +3,14 @@
 > **硬规则：Round1 执行 success + 灵鉴 audit 通过 → 才允许 Round2。**  
 > scan 每轮只刷新 Round1 诊断，**不会**自动生成 Round2 工单。
 
-## 为什么「待审计」一直清不掉？
+## 审计与「待审计」
 
-Dashboard「待审计」= 任务终态（success/failed/timeout）且 **无 `audit_log`**。  
-此前 **没有任何机制** 把审计任务派给灵鉴，也 **零条** `audit_log` 入库。
+Dashboard「待审计」= **根 pipeline 任务**终态且无 `audit_log`。
 
-现已补齐：
-- 每轮 `bus scan` → 派 `audit-req-{task_id}` 给 **lingjian** inbox（每轮最多 2 条）
-- 灵鉴须 `POST /api/tasks/audit` 或写 `store/msg-results/audit-{task_id}.json`
-- scan 自动 `consume_audit_results` 写入 `audit_log`
+- `msg-*` 投递 tracker、`game-lvup-*` 回归：**不要求**侧链审计（`requires_audit=false`）
+- pipeline **审查官步骤**完成 → 自动写入 `audit_log`（与 chain 一体，非侧链）
+- Round1 主任务未经审查官 → scan 派 `audit-req-*` 给灵鉴（每轮最多 2 条）
+- 灵鉴也可 `POST /api/tasks/audit` 或写 `audit-{task_id}.json`
 
 **仅 ACK 不算审计完成。**
 
@@ -51,7 +50,7 @@ Round 1 执行+审计     Round 2  stabilization      Round 3 自迭代
 - 处理 inbox 中 `audit-req-*` 消息
 - 提交审计：
 ```bash
-curl -X POST http://127.0.0.1:9812/api/tasks/audit \
+curl -X POST http://127.0.0.1:9814/api/tasks/audit \
   -H 'Content-Type: application/json' \
   -d '{"task_id":"mailbus-hardening-20260616","reviewer":"lingjian","result":"pass","summary":"..."}'
 ```

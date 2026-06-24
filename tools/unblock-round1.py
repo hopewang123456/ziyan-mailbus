@@ -10,10 +10,12 @@ from lib.scanner import recover_inbox_stale_states, build_queues
 from lib.utils import json_read, json_write, resolve_paths, _now_iso
 from lib.models import Inbox, Priority, MsgStatus
 
-TASK_ID = "mailbus-hardening-20260616"
+from lib.iteration_engine import load_primary_task_id
+
+DATA_DIR = os.environ.get("MAILBUS_DATA", "store")
+TASK_ID = load_primary_task_id(os.path.abspath(DATA_DIR))
 DUPLICATE_MSG = "msg-20260615-66049"
 PRIMARY_MSG = "msg-20260615-04794"
-DATA_DIR = os.environ.get("MAILBUS_DATA", "store")
 
 
 def dedupe_hardening_messages(data_dir: str):

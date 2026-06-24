@@ -23,7 +23,15 @@ from .pipeline_chain import is_pipeline_step
 TZ = timezone(timedelta(hours=8))
 ITER_DIR = "iterations"
 STATE_FILE = "iteration-state.json"
-DEFAULT_PRIMARY_TASK = "mailbus-hardening-20260616"
+DEFAULT_PRIMARY_TASK = "mailbus-scheduler-validation-20260616"
+
+
+def load_primary_task_id(data_dir: str) -> str:
+    """从 iteration-state 读取主任务 ID，缺省用 DEFAULT_PRIMARY_TASK。"""
+    st = json_read(_state_path(data_dir), None)
+    if st and st.get("primary_task_id"):
+        return st["primary_task_id"]
+    return DEFAULT_PRIMARY_TASK
 
 # 系统噪音 task 前缀 — 不计入「业务任务健康度」
 NOISE_PREFIXES = (
@@ -62,8 +70,8 @@ def evaluate_round1_gate(data_dir: str, agents: dict = None) -> dict:
     from .audit_dispatch import list_pending_audit_tasks
 
     tracker = TaskTracker(data_dir)
+    primary = load_primary_task_id(data_dir)
     state = load_iteration_state(data_dir)
-    primary = state.get("primary_task_id", DEFAULT_PRIMARY_TASK)
     task = tracker.get(primary)
     pending = list_pending_audit_tasks(data_dir, 500)
 
@@ -471,7 +479,7 @@ def run_round2(data_dir: str, agents: dict, diagnosis: Optional[dict] = None, fo
                     "bus scan 一轮，确认 reopen_stale_timeouts 日志",
                 ],
                 acceptance=[
-                    "mailbus-hardening-20260616 status=running",
+                    f"{load_primary_task_id(data_dir)} status=running",
                     "false_timeout 列表为空",
                 ],
                 priority="P0",
@@ -540,7 +548,7 @@ def run_round2(data_dir: str, agents: dict, diagnosis: Optional[dict] = None, fo
         title="Round2 回归验证",
         actions=[
             "bash docker-agents/monitor-regression.sh",
-            "bash docker-agents/task-flow-snapshot.sh mailbus-hardening-20260616",
+            f"bash docker-agents/task-flow-snapshot.sh {load_primary_task_id(data_dir)}",
         ],
         acceptance=["monitor 9/9", "pipeline step >= 2 或 msg-results 存在"],
         priority="P0",
@@ -686,7 +694,7 @@ def _task_assignee(data_dir: str, task_id: str) -> Optional[str]:
 def _role_for_agent(agent_id: str) -> str:
     mapping = {
         "lingzhao": "方案设计师", "xiaoqi": "调度员", "lingxiao": "开发工程师",
-        "dali": "开发工程师", "lingjian": "审查官", "lingyan": "测试工程师",
+        "dali": "开发工程师", "lingyun": "开发工程师", "lingjian": "审查官", "lingyan": "测试工程师",
         "lingjin": "安全审计师", "lingxi": "技术研究员",
     }
     return mapping.get(agent_id, "开发工程师")

@@ -6,16 +6,36 @@ ziyan-mailbus 工具函数
 
 import json
 import os
-import fcntl
+import sys
 import shutil
 import copy
 import time
 import contextlib
+import tempfile
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Any
 
+if sys.platform == "win32":
+    import msvcrt
+else:
+    import fcntl
+
 from .models import Message, MsgStatus, Priority, MsgType, Level, generate_msg_id
 from .constants import _now_iso
+
+
+def configure_stdio_utf8() -> None:
+    """Windows GBK 控制台输出 emoji/Unicode 时避免 UnicodeEncodeError。"""
+    if sys.platform != "win32":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        if stream is None:
+            continue
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, OSError, ValueError):
+            pass
+
 
 # ── 路径常量 ──────────────────────────────────────────────────────────
 
@@ -23,6 +43,64 @@ def _ensure_dir(path: str) -> str:
     """确保目录存在，返回原路径"""
     os.makedirs(path, exist_ok=True)
     return path
+
+
+def to_wsl_path(path: str) -> str:
+    """Windows 绝对路径 → WSL /mnt/ 路径（供 wsl -e bash 调用脚本）。"""
+    p = (path or "").strip().replace("\\", "/")
+    if len(p) >= 2 and p[1] == ":":
+        return "/mnt/" + p[0].lower() + p[2:]
+    p = os.path.abspath(p).replace("\\", "/")
+    if len(p) >= 2 and p[1] == ":":
+        return "/mnt/" + p[0].lower() + p[2:]
+    return p
+
+
+def resolve_mailbus_path(data_dir: str, ref: str) -> str:
+    """将 config 中的 Docker/WSL 路径解析为本地绝对路径。"""
+    if not ref or not isinstance(ref, str):
+        return ""
+    ref = ref.strip().replace("\\", "/")
+    if os.path.isfile(ref):
+        return ref
+    root = os.path.dirname(os.path.abspath(data_dir))
+    # WSL: /mnt/e/... → E:\...
+    if ref.startswith("/mnt/e/"):
+        win = "E:" + ref[7:].replace("/", os.sep)
+        if os.path.isfile(win):
+            return win
+        # mail 仓库内 identities 回退
+        tail = ref.split("/ai_tools/mail/", 1)[-1] if "/ai_tools/mail/" in ref else ref.split("/mailbus/", 1)[-1] if "/mailbus/" in ref else ""
+        if tail:
+            cand = os.path.join(root, tail.replace("/", os.sep))
+            if os.path.isfile(cand):
+                return cand
+    if ref.startswith("/mailbus/store/"):
+        return os.path.join(data_dir, ref[len("/mailbus/store/"):].replace("/", os.sep))
+    if ref.startswith("/mailbus/"):
+        return os.path.join(root, ref[len("/mailbus/"):].replace("/", os.sep))
+    if ref.startswith("store/"):
+        return os.path.join(root, ref.replace("/", os.sep))
+    local = os.path.join(root, ref.lstrip("/").replace("/", os.sep))
+    return local
+
+
+def identity_candidates(data_dir: str, agent: str, configured: str = "") -> list[str]:
+    """identity 文件候选路径（Docker / WSL / 本地）。"""
+    root = os.path.dirname(os.path.abspath(data_dir))
+    cands: list[str] = []
+    if configured:
+        cands.append(resolve_mailbus_path(data_dir, configured))
+    cands.extend([
+        os.path.join(root, "identities", f"{agent}.md"),
+        os.path.join(root, "identities", agent, "IDENTITY.md"),
+    ])
+    out, seen = [], set()
+    for p in cands:
+        if p and p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
 
 
 def resolve_paths(data_dir: str) -> dict:
@@ -46,51 +124,79 @@ def resolve_paths(data_dir: str) -> dict:
 
 import hashlib
 
-GLOBAL_LOCK_FILE = "/tmp/ziyan-mailbus.lock"
+_LOCK_ROOT = os.environ.get("MAILBUS_LOCK_DIR") or (
+    tempfile.gettempdir() if sys.platform == "win32" else "/tmp"
+)
+GLOBAL_LOCK_FILE = os.path.join(_LOCK_ROOT, "ziyan-mailbus.lock")
+
+
+def get_lock_root() -> str:
+    """Mailbus 文件锁根目录（Windows 为 %TEMP%，Unix 为 /tmp）。"""
+    return _LOCK_ROOT
 
 
 def _lock_path(path: str = "") -> str:
-    """生成锁文件路径：有 path 用 per-file 锁，否则用全局锁"""
+    """生成锁文件路径：有 path 用 per-file 锁，否则用全局锁。"""
     if path:
         h = hashlib.sha256(path.encode()).hexdigest()[:16]
-        return f"/tmp/ziyan-mailbus-{h}.lock"
+        return os.path.join(_LOCK_ROOT, f"ziyan-mailbus-{h}.lock")
     return GLOBAL_LOCK_FILE
+
+
+def _try_acquire_lock(lock_fd, *, non_blocking: bool = True) -> bool:
+    if sys.platform == "win32":
+        try:
+            msvcrt.locking(
+                lock_fd.fileno(),
+                msvcrt.LK_NBLCK if non_blocking else msvcrt.LK_LOCK,
+                1,
+            )
+            return True
+        except OSError:
+            return False
+    flags = fcntl.LOCK_EX | (fcntl.LOCK_NB if non_blocking else 0)
+    try:
+        fcntl.flock(lock_fd, flags)
+        return True
+    except BlockingIOError:
+        return False
+
+
+def _release_lock(lock_fd) -> None:
+    if sys.platform == "win32":
+        try:
+            msvcrt.locking(lock_fd.fileno(), msvcrt.LK_UNLCK, 1)
+        except OSError:
+            pass
+    else:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
 
 
 @contextlib.contextmanager
 def file_lock(timeout: float = 10.0, path: str = ""):
-    """文件锁 — 防止多个进程同时写同一份文件（带超时，防死锁）
-    
-    Args:
-        timeout: 获取锁超时秒数
-        path: 目标文件路径，传此参数会用 per-file 锁；不传用全局锁
-    """
+    """文件锁 — 防止多个进程同时写同一份文件（带超时，防死锁）"""
+    os.makedirs(_LOCK_ROOT, exist_ok=True)
     lock_file = _lock_path(path)
     lock_fd = open(lock_file, "w")
     deadline = time.time() + timeout
     acquired = False
     try:
         while time.time() < deadline:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            if _try_acquire_lock(lock_fd, non_blocking=True):
                 acquired = True
                 break
-            except BlockingIOError:
-                time.sleep(0.1)
+            time.sleep(0.1)
         if not acquired:
-            # 超时后降级为全局锁（兼容旧行为）
             fallback = GLOBAL_LOCK_FILE
             if lock_file != fallback:
                 lock_fd.close()
                 lock_fd = open(fallback, "w")
                 deadline2 = time.time() + 5.0
                 while time.time() < deadline2:
-                    try:
-                        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    if _try_acquire_lock(lock_fd, non_blocking=True):
                         acquired = True
                         break
-                    except BlockingIOError:
-                        time.sleep(0.1)
+                    time.sleep(0.1)
             if not acquired:
                 raise TimeoutError(f"无法获取文件锁 (path={path}, timeout={timeout}s)")
         yield
@@ -98,14 +204,38 @@ def file_lock(timeout: float = 10.0, path: str = ""):
         raise
     finally:
         if acquired:
-            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            _release_lock(lock_fd)
         lock_fd.close()
-        # 清理锁文件（非全局锁），防止 /tmp 积压
         if lock_file != GLOBAL_LOCK_FILE:
             try:
                 os.unlink(lock_file)
             except OSError:
                 pass
+
+
+@contextlib.contextmanager
+def named_lock(name: str, *, blocking: bool = False, timeout: float = 10.0):
+    """进程级命名锁（如 mailbus-scan）。"""
+    os.makedirs(_LOCK_ROOT, exist_ok=True)
+    path = os.path.join(_LOCK_ROOT, f"{name}.lock")
+    lock_fd = open(path, "w")
+    acquired = False
+    deadline = time.time() + (timeout if blocking else 0.0)
+    try:
+        while True:
+            if _try_acquire_lock(lock_fd, non_blocking=not blocking):
+                acquired = True
+                break
+            if not blocking:
+                break
+            if time.time() >= deadline:
+                break
+            time.sleep(0.05)
+        yield acquired
+    finally:
+        if acquired:
+            _release_lock(lock_fd)
+        lock_fd.close()
 
 
 # ── JSON 读写 ─────────────────────────────────────────────────────────
@@ -136,28 +266,34 @@ def _cleanup_bak_files(filepath: str, max_keep: int = 5):
 
 def json_read(filepath: str, default: Any = None, ttl: float = 5.0) -> Any:
     """读 JSON 文件（带锁 + 内存缓存），遇到损坏 JSON 尝试修复"""
-    # 检查缓存
     now = time.time()
     cached = _JSON_CACHE.get(filepath)
     if cached is not None:
-        data, expiry = cached
+        data, expiry, cached_mtime = cached
         if now < expiry:
-            # 返回 deep-copy，避免调用方修改缓存数据（如 Inbox.from_dict 会 pop 'from'）
-            return copy.deepcopy(data)
+            try:
+                current_mtime = os.path.getmtime(filepath)
+            except OSError:
+                current_mtime = None
+            if current_mtime == cached_mtime:
+                return copy.deepcopy(data)
 
     with file_lock(path=filepath):
         try:
-            with open(filepath) as f:
+            file_mtime = os.path.getmtime(filepath)
+        except OSError:
+            file_mtime = None
+        try:
+            with open(filepath, encoding="utf-8") as f:
                 data = json.load(f)
-            # 写入缓存（缓存原始对象，返回 deep-copy 防止调用方误改）
-            _JSON_CACHE[filepath] = (data, now + ttl)
+            _JSON_CACHE[filepath] = (data, now + ttl, file_mtime)
             return copy.deepcopy(data)
         except FileNotFoundError:
             return default
         except json.JSONDecodeError:
             # JSON 损坏 → 尝试修复（常见问题：content 里有未转义的双引号）
             try:
-                with open(filepath) as f:
+                with open(filepath, encoding="utf-8") as f:
                     raw = f.read()
                 # 尝试用 strict=False 模式解析
                 import re
@@ -183,7 +319,7 @@ def json_write(filepath: str, data: Any, indent: int = 2):
         # 确保目标目录存在（防止并发删除导致的 FileNotFoundError）
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         try:
-            with open(tmp, "w") as f:
+            with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=indent)
                 f.flush()
                 os.fsync(f.fileno())

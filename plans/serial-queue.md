@@ -28,6 +28,8 @@ mailbus 一次性把多条消息推给同一个人。agent 无法同时处理，
     "lingjian":  { "type": "hermes_profile", "max_concurrency": 2 },
     "lingyan":   { "type": "hermes_profile", "max_concurrency": 2 },
     "lingxun":   { "type": "hermes_profile", "max_concurrency": 1 },
+    "lingtuo":   { "type": "hermes_profile", "max_concurrency": 1 },
+    "lingzhang": { "type": "hermes_profile", "max_concurrency": 1 },
     "lingxiao":  { "type": "cline", "max_concurrency": 1 },
     "dali":      { "type": "opencode", "max_concurrency": 3 },
     "xiaoqi":    { "type": "openclaw", "max_concurrency": 1 },
