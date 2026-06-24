@@ -13,13 +13,13 @@ ziyan-mailbus 是一个独立、解耦、轻量的**文件级消息中间件**�
 - **双向确认** — CLI 推送 + Agent 主动 ack，不搞"推送即送达"的幻觉
 - **先队列再推送** — 加急排队优先，普通排队顺序，同 Agent 批量推送
 - **故障隔离** — 推送失败 3 次 → 写错误日志 → 监控 Agent 扫日志找修复方案
-- **Agent 类型抽象** — 统一 `agent_types` 配置，支持 Hermes / OpenClaw / Cline / OpenCode / Codex 等框架
+- **Agent 类型抽象** — 统一 `agent_types` 配置，支持 Hermes / OpenClaw / Cline / OpenCode / **Codex** / **Claude Code** 等 8 种运行时（见下方）
 - **即插即用** — 不入侵 Agent 代码，CLI 是唯一契约
 
 ## 前置条件
 
 - **Python ≥ 3.10**（核心运行环境）
-- **各 Agent 的 CLI 工具**（Hermes / OpenClaw / Cline / OpenCode 等，按需安装）
+- **各 Agent 的 CLI 工具**（Hermes / OpenClaw / OpenCode / Codex / Claude Code 等，按需安装）
 - **API Key**（通过 `.env` 文件配置，见 `examples/config.example.json` 的说明）
 - **AgentMemory**（可选增强层）— MCP 语义检索；**主记忆**为 `team-memory.db`（见下）
   - Docker 部署：`docker-agents/` 内 `iii-engine` + `agentmemory` 容器（端口 **3111**）
@@ -140,7 +140,7 @@ python tools\run-final-acceptance.py
 
 ### Docker 全 Agent 团队
 
-Hermes / OpenClaw / Cline 容器共享 `store/` 卷：
+Hermes / OpenClaw / Codex / OpenCode 容器共享 `store/` 卷；Claude Code（灵云/灵验）跑在 WSL 宿主机 ttyd：
 
 ```bash
 cd docker-agents
@@ -194,7 +194,7 @@ python3 tools/run-final-acceptance.py
 | **消息协议** | type + action 结构化字段，Agent 不猜自然语言 |
 | **任务追踪** | pending → running → success/failed/timeout，全链路追踪 |
 | **优先级队列** | 加急消息优先推送，支持抢占 |
-| **Agent 类型抽象** | 统一配置模板，支持 6 种 Agent 框架（见下方） |
+| **Agent 类型抽象** | 统一配置模板，内置 **8 种** Agent 运行时（见下方） |
 | **多模型 Fallback** | 模型别名系统，按顺序试，不通自动换下一个 |
 | **公告板** | `broadcast` 一键全员推送 |
 | **催办** | 超时自动重推 + 升级通知 |
@@ -207,17 +207,21 @@ python3 tools/run-final-acceptance.py
 
 ### 支持的 Agent 框架
 
-| 类型 | CLI 模板 | 框架 |
-|------|----------|------|
-| `hermes` | `hermes chat -q 'MSG' -Q` | Hermes Agent |
-| `hermes_profile` | `hermes chat -q 'MSG' -Q --profile PROFILE` | Hermes 多 Profile |
-| `openclaw` | `openclaw agent --local --agent AGENT --message 'MSG'` | OpenClaw Gateway |
-| `cline` | `cline 'MSG' --provider openai-compatible` | Cline CLI |
-| `opencode` | `opencode run 'MSG' --dangerously-skip-permissions MODEL` | OpenCode |
-| `codex` | `codex exec 'MSG' -m MODEL`（非交互 + 文件任务） | Codex CLI |
-| `none` | 纯文件通信，无 CLI 推送 | 手动调度 |
+`config.json` → `agents.<id>.type` 与 `agent_types` 模板一一对应；Adapter 实现见 [`lib/agent_adapters.py`](lib/agent_adapters.py)，L0/L1 Skill 见 [`adapters/README.md`](adapters/README.md)。
 
-> 新增框架只需在 `agent_types` 加一条 CLI 模板，代码零改动。
+| 类型 | CLI 模板 | 框架 | 典型部署 |
+|------|----------|------|----------|
+| `hermes` | `hermes chat -q 'MSG' -Q` | Hermes Agent | Docker `hermes-base` |
+| `hermes_profile` | `hermes chat -q 'MSG' -Q --profile PROFILE` | Hermes 多 Profile | Docker，端口 9120–9127 |
+| `openclaw` | `openclaw agent --local --agent AGENT --message 'MSG'` | OpenClaw Gateway | Docker，端口 18789/18790 |
+| `opencode` | `opencode run 'MSG' --dangerously-skip-permissions MODEL` | OpenCode CLI | Docker `dali` 或 WSL |
+| `codex` | `codex exec 'MSG'`（`--json` + 文件任务） | OpenAI Codex CLI | Docker `codex-agent`（灵霄/灵鉴） |
+| `claude_code` | `claude -p 'MSG'` | Claude Code CLI | **WSL 宿主机** ttyd（灵云 9260 / 灵验 9261） |
+| `cline` | `cline 'MSG' PROVIDER --timeout 120` | Cline CLI（**legacy**） | 仅 WSL 直连；Docker 灵霄/灵鉴已迁 **codex** |
+| `none` | 无 CLI | 纯文件通信 | 手动调度 / 外部触发 |
+
+> **Cursor**（`adapters/cursor/`）为设计 stub，尚未接入 `agent_adapters` 推送链；复杂编码可走 Cursor 直连或见 [`docs/cursor-adapter-design.md`](docs/cursor-adapter-design.md)。  
+> 扩展新框架：在 `agent_types` 增加 CLI 模板 + 可选 `BaseAdapter` 子类；Skill 规范见 [`adapters/README.md`](adapters/README.md)。
 
 ### 子言·AI 团队编制（12 人）
 
@@ -227,8 +231,28 @@ python3 tools/run-final-acceptance.py
 |----|------|
 | 决策 | 灵昭（男） |
 | 商前 | 灵犀（女）、灵拓（男）、一哥（男） |
-| 交付 | 灵霄（男）、大力（男）、灵瑾（女）、灵鉴（男）、灵验（女）、灵巡（男）、小七（女） |
+| 交付 | 灵霄（男）、大力（男）、**灵云**（女）、灵瑾（女）、灵鉴（男）、**灵验**（女）、灵巡（男）、小七（女） |
 | 商后 | 灵账（女） |
+
+### 已注册 Agent 与框架（v2.1.0）
+
+| Agent | 名称 | 职责 | 框架 |
+|-------|------|------|------|
+| `lingzhao` | 🪷 灵昭 | 方案设计 | Hermes |
+| `lingjin` | 🦋 灵瑾 | 网络安全 | OpenClaw |
+| `lingxi` | 🔭 灵犀 | 技术雷达 | Hermes Profile |
+| `lingtuo` | 🧭 灵拓 | 市场拓展 | Hermes Profile |
+| `lingjian` | 🔍 灵鉴 | 代码审查 | **Codex** |
+| `lingyan` | 🧪 灵验 | 测试 QA | **Claude Code** |
+| `lingxun` | 🔦 灵巡 | 巡检日报 | Hermes Profile |
+| `lingzhang` | 🧾 灵账 | 账单催收 | Hermes Profile |
+| `xiaoqi` | 🦞 小七 | 调度 | OpenClaw |
+| `yige` | 👨‍🔧 一哥 | 运营内容 | OpenClaw |
+| `lingxiao` | 🎯 灵霄 | 技术负责人（flash） | **Codex** |
+| `dali` | 🤖 大力 | 编码（flash） | OpenCode |
+| `lingyun` | ☁️ 灵云 | Pro 编码（Claude） | **Claude Code** |
+
+> 💪 大壮（Aider 审查）已退役，由灵鉴 + review.py + Semgrep 替代。Cline 为 legacy，Docker 灵霄/灵鉴已迁 **Codex**。
 
 ## CLI 命令总览
 
@@ -471,7 +495,7 @@ ziyan-mailbus/
 
 ziyan-mailbus 的目标是实现真正的 **A2A（Agent-to-Agent）** 通信，打破不同 Agent 框架之间的交互壁垒。
 
-无论你用的是 Hermes、OpenClaw、Cline、OpenCode、Aider 还是其他 AI Agent 框架——mailbus 都能让它们无缝对话。
+无论你用的是 Hermes、OpenClaw、OpenCode、**Codex**、**Claude Code**、Cline（legacy）还是其他 AI Agent 框架——mailbus 都能让它们无缝对话。
 
 欢迎各位大佬一起参与：
 - **提 Issue** — 发现 bug、建议新功能

@@ -13,13 +13,13 @@ ziyan-mailbus is an independent, decoupled, lightweight **file-based message bus
 - **Bidirectional Confirmation** — CLI push + Agent writes ACK. No "fire and forget" illusion.
 - **Queue-then-Push** — Urgent messages first, normal messages queued, batched per agent.
 - **Fault Isolation** — 3 failed push attempts → error log → monitoring agent scans logs for recovery.
-- **Agent Type Abstraction** — Unified `agent_types` config. Supports Hermes, OpenClaw, Cline, OpenCode, and more.
+- **Agent Type Abstraction** — Unified `agent_types` config. Supports Hermes, OpenClaw, OpenCode, **Codex**, **Claude Code**, Cline (legacy), and 8 runtime types (see below).
 - **Plug and Play** — Zero agent code modification. The CLI is the only contract.
 
 ## Prerequisites
 
 - **Python ≥ 3.10**
-- **CLI tools** for your agents (Hermes, OpenClaw, Cline, OpenCode, etc.)
+- **CLI tools** for your agents (Hermes, OpenClaw, OpenCode, Codex, Claude Code, etc.)
 - **API Keys** — configured via `.env` file (see `examples/config.example.json`)
 - **AgentMemory** (optional) — persistent memory for message history
   - Install: `npm install -g @agentmemory/agentmemory`
@@ -146,7 +146,7 @@ Tips:
 
 ### Docker full agent team
 
-For Hermes / OpenClaw / Cline containers sharing one `store/` volume:
+For Hermes / OpenClaw / Codex / OpenCode containers sharing one `store/` volume:
 
 ```bash
 cd docker-agents
@@ -198,7 +198,7 @@ Still tracked but not blocking native Linux deploy:
 | **Message Protocol** | Structured `type` + `action` fields. Agents don't guess intent from natural language. |
 | **Task Tracking** | `pending → running → success/failed/timeout`. Full chain tracing. |
 | **Priority Queue** | Urgent messages first, with preemption support. |
-| **Agent Type Abstraction** | Single config template, 6 frameworks built-in (see below). |
+| **Agent Type Abstraction** | Single config template, **8** runtimes built-in (see below). |
 | **Multi-Model Fallback** | Model alias system. Tries models in order, falls through automatically. |
 | **Broadcast** | `broadcast` command pushes to all agents at once. |
 | **Reminders** | Auto-retry on timeout + escalation notifications. |
@@ -211,33 +211,39 @@ Still tracked but not blocking native Linux deploy:
 
 ### Supported Agent Frameworks
 
-| Type | CLI Template | Framework |
-|------|-------------|-----------|
-| `hermes` | `hermes chat -q 'MSG' -Q` | Hermes Agent |
-| `hermes_profile` | `hermes chat -q 'MSG' -Q --profile PROFILE` | Hermes Multi-Profile |
-| `openclaw` | `openclaw agent --local --agent AGENT --message 'MSG'` | OpenClaw Gateway |
-| `cline` | `cline 'MSG' --provider openai-compatible` | Cline CLI |
-| `opencode` | `opencode run 'MSG' --dangerously-skip-permissions MODEL` | OpenCode |
-| `none` | File-only communication, no CLI push | Manual dispatch |
+`config.json` → `agents.<id>.type` maps to `agent_types` templates. Adapter implementations: [`lib/agent_adapters.py`](lib/agent_adapters.py). L0/L1 skills: [`adapters/README.md`](adapters/README.md).
 
-> Adding a new framework? Just add one CLI template to `agent_types`. Zero code changes.
+| Type | CLI Template | Framework | Typical deployment |
+|------|-------------|-----------|-------------------|
+| `hermes` | `hermes chat -q 'MSG' -Q` | Hermes Agent | Docker `hermes-base` |
+| `hermes_profile` | `hermes chat -q 'MSG' -Q --profile PROFILE` | Hermes Multi-Profile | Docker, ports 9120–9127 |
+| `openclaw` | `openclaw agent --local --agent AGENT --message 'MSG'` | OpenClaw Gateway | Docker, ports 18789/18790 |
+| `opencode` | `opencode run 'MSG' --dangerously-skip-permissions MODEL` | OpenCode CLI | Docker `dali` or WSL |
+| `codex` | `codex exec 'MSG'` (`--json` + file tasks) | OpenAI Codex CLI | Docker `codex-agent` (lingxiao / lingjian) |
+| `claude_code` | `claude -p 'MSG'` | Claude Code CLI | **WSL host** ttyd (lingyun :9260 / lingyan :9261) |
+| `cline` | `cline 'MSG' PROVIDER --timeout 120` | Cline CLI (**legacy**) | WSL direct only; Docker lingxiao/lingjian migrated to **codex** |
+| `none` | No CLI | File-only | Manual dispatch / external trigger |
+
+> **Cursor** (`adapters/cursor/`) is a design stub — not yet wired into `agent_adapters` push. See [`docs/cursor-adapter-design.md`](docs/cursor-adapter-design.md).  
+> To add a framework: extend `agent_types` + optional `BaseAdapter` subclass; see [`adapters/README.md`](adapters/README.md).
 
 ### Registered Agents (v2.1.0)
 
 | Agent | Name | Role | Framework |
 |-------|------|------|-----------|
 | `lingzhao` | 🪷 灵昭 | Solution Design | Hermes |
-| `lingjin` | 🦋 灵瑾 | Network Security | Hermes Profile |
+| `lingjin` | 🦋 灵瑾 | Network Security | OpenClaw |
 | `lingxi` | 🔭 灵犀 | Tech Radar | Hermes Profile |
 | `lingtuo` | 🧭 灵拓 | Market Expansion | Hermes Profile |
-| `lingjian` | 🔍 灵鉴 | Code Review | Hermes Profile |
-| `lingyan` | 🧪 灵验 | Testing & QA | Hermes Profile |
+| `lingjian` | 🔍 灵鉴 | Code Review | **Codex** |
+| `lingyan` | 🧪 灵验 | Testing & QA | **Claude Code** |
 | `lingxun` | 🔦 灵巡 | Patrol & Daily Report | Hermes Profile |
 | `lingzhang` | 🧾 灵账 | Billing & Collections | Hermes Profile |
 | `xiaoqi` | 🦞 小七 | Dispatch | OpenClaw |
 | `yige` | 👨‍🔧 一哥 | Operations & Content | OpenClaw |
-| `lingxiao` | 🎯 灵霄 | Tech Lead | Cline CLI |
-| `dali` | 🤖 大力 | Coding | OpenCode |
+| `lingxiao` | 🎯 灵霄 | Tech Lead (flash) | **Codex** |
+| `dali` | 🤖 大力 | Coding (flash) | OpenCode |
+| `lingyun` | ☁️ 灵云 | Pro coding (Claude) | **Claude Code** |
 
 > 💪 大壮 (Code Review, Aider) — 已退役，由灵鉴 + review.py + Semgrep 替代
 
@@ -448,7 +454,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ziyan-mailbus aims to achieve true **A2A (Agent-to-Agent)** communication — breaking down the barriers between different AI agent frameworks.
 
-Whether you use Hermes, OpenClaw, Cline, OpenCode, Aider, or any other AI agent framework — mailbus makes them talk to each other seamlessly.
+Whether you use Hermes, OpenClaw, OpenCode, **Codex**, **Claude Code**, Cline (legacy), or any other AI agent framework — mailbus makes them talk to each other seamlessly.
 
 Contributions welcome:
 - **File an Issue** — bug reports, feature requests
