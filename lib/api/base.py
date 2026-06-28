@@ -221,7 +221,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             elif "/fsm/" in rest:
                 parts = rest.split("/fsm/", 1)
                 tid, sub = parts[0], parts[1].split("/")[0]
-                if tid and sub in ("rollback", "skip", "cancel", "pause", "priority", "approve-plan", "accept"):
+                if tid and sub in ("rollback", "skip", "cancel", "pause", "priority", "approve-plan", "accept", "continue"):
                     self._send_json({"error": "method_not_allowed", "use": "POST"}, 405)
                 elif tid:
                     h["tasks"].handle_task_fsm_get(self, tid)
@@ -309,6 +309,12 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             parts = rest.split("/")
             if len(parts) >= 4 and parts[1] == "gates" and parts[3] in ("approve", "deny"):
                 h["gates"].handle_gate_approve(self, parts[0], parts[2]) if parts[3] == "approve" else h["gates"].handle_gate_deny(self, parts[0], parts[2])
+            else:
+                self._send_json({"error": "not_found"}, 404)
+        elif path.startswith("/api/human-queue/") and path.endswith("/resolve"):
+            item_id = path[len("/api/human-queue/"): -len("/resolve")].strip("/")
+            if item_id:
+                h["tasks"].handle_human_queue_resolve(self, item_id)
             else:
                 self._send_json({"error": "not_found"}, 404)
         elif path.startswith("/api/tasks/") and "/fsm/" in path:

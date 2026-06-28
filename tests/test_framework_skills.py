@@ -1,4 +1,4 @@
-"""Tests for mail/adapters framework runtime skills and L0-L2 layers."""
+"""Tests for mail/skills framework runtime (v3 SoT)."""
 from __future__ import annotations
 
 import json
@@ -10,8 +10,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-ADAPTERS = ROOT / "adapters"
-ROLES = ROOT / "roles"
+SKILLS = ROOT / "skills"
 INDEX = ROOT / "store" / "agents" / "json" / "skills-index.json"
 CONFIG = ROOT / "store" / "config.json"
 
@@ -30,43 +29,51 @@ MAX_SKILL_LINES = 120
 MAX_REF_LINES = 200
 
 
+def _framework_skill_path(fw: str) -> Path:
+    return SKILLS / "frameworks" / fw / "SKILL.md"
+
+
+def _shared_skill(name: str) -> Path:
+    return SKILLS / "common" / name / "SKILL.md"
+
+
 @pytest.mark.parametrize("fw", FRAMEWORKS)
 def test_framework_skill_exists(fw: str) -> None:
-    skill = ADAPTERS / fw / "framework-runtime" / "SKILL.md"
-    assert skill.is_file(), f"missing {skill}"
+    skill = _framework_skill_path(fw)
+    assert skill.is_file(), f"missing framework skill for {fw}: {skill}"
 
 
 @pytest.mark.parametrize("fw", FRAMEWORKS)
 def test_framework_skill_line_budget(fw: str) -> None:
-    skill = ADAPTERS / fw / "framework-runtime" / "SKILL.md"
+    skill = _framework_skill_path(fw)
     lines = skill.read_text(encoding="utf-8").splitlines()
     assert len(lines) <= MAX_SKILL_LINES, f"{fw} SKILL.md too long: {len(lines)}"
 
 
 def test_agent_universal_exists() -> None:
-    skill = ADAPTERS / "_shared" / "agent-universal" / "SKILL.md"
+    skill = _shared_skill("agent-universal")
     assert skill.is_file()
     assert "layer: L0" in skill.read_text(encoding="utf-8")
 
 
 def test_shared_protocol_exists() -> None:
-    skill = ADAPTERS / "_shared" / "mailbus-file-protocol" / "SKILL.md"
+    skill = _shared_skill("mailbus-file-protocol")
     assert skill.is_file()
 
 
 def test_shared_protocol_line_budget() -> None:
-    skill = ADAPTERS / "_shared" / "mailbus-file-protocol" / "SKILL.md"
+    skill = _shared_skill("mailbus-file-protocol")
     assert len(skill.read_text(encoding="utf-8").splitlines()) <= 80
 
 
 def test_shared_protocol_no_framework_delivery_table() -> None:
-    text = (ADAPTERS / "_shared" / "mailbus-file-protocol" / "SKILL.md").read_text(encoding="utf-8")
+    text = _shared_skill("mailbus-file-protocol").read_text(encoding="utf-8")
     assert "opencode (dali)" not in text
 
 
 @pytest.mark.parametrize("fw", FRAMEWORKS)
 def test_framework_frontmatter(fw: str) -> None:
-    text = (ADAPTERS / fw / "framework-runtime" / "SKILL.md").read_text(encoding="utf-8")
+    text = _framework_skill_path(fw).read_text(encoding="utf-8")
     assert text.startswith("---\n")
     assert "type: framework_skill" in text or fw in ("cline", "cursor")
     assert f"framework: {fw}" in text or fw in ("cline", "cursor")
@@ -78,8 +85,11 @@ _LINK_RE = re.compile(r"\]\(([^)]+)\)")
 
 @pytest.mark.parametrize("fw", FRAMEWORKS)
 def test_framework_internal_links(fw: str) -> None:
-    skill_dir = ADAPTERS / fw / "framework-runtime"
-    text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+    skill = _framework_skill_path(fw)
+    if not skill.is_file():
+        pytest.skip(f"no skill for {fw}")
+    skill_dir = skill.parent
+    text = skill.read_text(encoding="utf-8")
     for match in _LINK_RE.finditer(text):
         href = match.group(1).split("#")[0]
         if not href or href.startswith("http"):
@@ -89,9 +99,11 @@ def test_framework_internal_links(fw: str) -> None:
 
 
 def test_reference_files_line_budget() -> None:
-    for ref in ADAPTERS.rglob("references/*.md"):
-        n = len(ref.read_text(encoding="utf-8").splitlines())
-        assert n <= MAX_REF_LINES, f"{ref} too long: {n}"
+    if not SKILLS.is_dir():
+        pytest.skip("skills/ missing")
+    for ref in SKILLS.rglob("references/*.md"):
+            n = len(ref.read_text(encoding="utf-8").splitlines())
+            assert n <= MAX_REF_LINES, f"{ref} too long: {n}"
 
 
 @pytest.fixture
@@ -109,19 +121,19 @@ def config_agents() -> dict:
     return cfg.get("agents") or {}
 
 
+def _resolve_skill_path(path: str) -> Path:
+    path = path.replace("\\", "/")
+    if not path.startswith("mail/skills/"):
+        raise AssertionError(f"skills-index must use mail/skills/ paths: {path}")
+    return ROOT / path.replace("mail/", "", 1)
+
+
 def test_all_roster_agents_have_layer_skills(skills_index: dict, config_agents: dict) -> None:
     agents = skills_index.get("agents") or {}
     roster = {
         "lingzhao", "lingjin", "lingxi", "lingtuo", "lingjian", "lingyan",
         "lingxun", "lingxiao", "dali", "xiaoqi", "yige", "lingzhang", "lingyun",
     }
-    expected_prefix = [
-        "agent-universal",
-        "mailbus-file-protocol",
-        None,  # framework-runtime-*
-        None,  # role-* archetype
-        None,  # role-overlay-*
-    ]
     for agent_id in roster:
         assert agent_id in agents, f"missing index entry: {agent_id}"
         skills = agents[agent_id].get("skills") or []
@@ -134,9 +146,8 @@ def test_all_roster_agents_have_layer_skills(skills_index: dict, config_agents: 
         assert skills[4].get("id") == f"role-overlay-{agent_id}"
         fw = agents[agent_id].get("framework") or config_agents.get(agent_id, {}).get("type")
         assert skills[2].get("framework") == fw, f"{agent_id}: framework mismatch"
-        path = skills[2].get("path", "")
-        rel = path.replace("mail/adapters/", "")
-        assert (ROOT / "adapters" / rel).is_file(), f"{agent_id}: skill path missing"
+        rel = skills[2].get("path", "")
+        assert _resolve_skill_path(rel).is_file(), f"{agent_id}: skill path missing: {rel}"
 
 
 def test_patch_check_passes() -> None:

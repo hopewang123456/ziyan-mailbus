@@ -1,0 +1,26 @@
+{
+  "schema": "mailbus-agent-v3",
+  "agent_id": "lingxi",
+  "framework": "hermes_profile",
+  "archetype": "tech-radar",
+  "skills": [
+    "mail/skills/common/agent-universal",
+    "mail/skills/common/mailbus-file-protocol",
+    "mail/skills/frameworks/hermes_profile",
+    "mail/skills/roles/archetypes/tech-radar",
+    "mail/skills/roles/overlays/lingxi"
+  ],
+  "rules": [
+    "mail/rules/common/execution-order.md",
+    "mail/rules/common/task-fsm.md",
+    "mail/rules/common/team-secrets-policy.md",
+    "mail/rules/frameworks/hermes_profile/delivery.md",
+    "mail/rules/roles/tech-radar/boundaries.md"
+  ],
+  "workspace": null,
+  "docker": {
+    "service": "hermes",
+    "profile": "lingxi",
+    "port": 9122
+  }
+}

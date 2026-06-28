@@ -16,6 +16,7 @@ from lib.claude_launch import (
     resolve_claude_workspace,
     resolve_project_dir,
     resolve_windows_claude_bin,
+    try_build_push_direct,
     _build_interactive_ps_inner,
     _interactive_claude_flags,
 )
@@ -163,6 +164,44 @@ class TestClaudeLaunch(unittest.TestCase):
         ps = "hopew 123 claude -p 'mailbus task' --permission-mode acceptEdits\n"
         self.assertTrue(host_cli_active(ps))
         self.assertFalse(host_cli_active("hopew 1 tail -f /dev/null\n"))
+
+    @patch("lib.claude_launch.resolve_windows_claude_bin", return_value="E:/nodejs/node_global/claude.cmd")
+    @patch("lib.claude_launch.resolve_claude_platform", return_value="windows")
+    @patch("lib.claude_launch._runtime_os", return_value="windows")
+    def test_try_build_push_direct_on_windows_native(self, *_mocks):
+        if sys.platform != "win32":
+            self.skipTest("Windows-only direct push")
+        data_dir = os.path.join(os.path.dirname(__file__), "..", "store")
+        spec = try_build_push_direct(
+            "lingyun",
+            AGENT_CFG,
+            TYPES,
+            data_dir=data_dir,
+            prompt="line1\nit's quoted\npath=E:/ai_tools",
+        )
+        self.assertIsNotNone(spec)
+        self.assertIn("-p", spec["argv"])
+        idx = spec["argv"].index("-p")
+        self.assertEqual(spec["argv"][idx + 1], "line1\nit's quoted\npath=E:/ai_tools")
+        self.assertIn("CLAUDE_CONFIG_DIR", spec["env"])
+        self.assertTrue(spec["cwd"])
+
+    @patch("lib.claude_launch.resolve_claude_bin", return_value="claude")
+    @patch("lib.claude_launch.resolve_claude_plat_cfg", return_value=("linux", {"claude_bin": "claude"}))
+    @patch("lib.claude_launch.resolve_claude_platform", return_value="linux")
+    @patch("lib.claude_launch._runtime_os", return_value="linux")
+    def test_try_build_push_direct_on_linux(self, *_mocks):
+        data_dir = os.path.join(os.path.dirname(__file__), "..", "store")
+        spec = try_build_push_direct(
+            "lingyun",
+            AGENT_CFG,
+            TYPES,
+            data_dir=data_dir,
+            prompt="hello",
+        )
+        self.assertIsNotNone(spec)
+        self.assertIn("-p", spec["argv"])
+        self.assertEqual(spec["argv"][spec["argv"].index("-p") + 1], "hello")
 
 
 if __name__ == "__main__":

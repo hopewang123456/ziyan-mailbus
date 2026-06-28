@@ -445,6 +445,14 @@ class TaskTracker:
                         "reminded_count": count,
                     })
             elif elapsed_min >= reminder_minutes and task["reminded_count"] >= max_reminders:
+                chain = task.get("chain") or []
+                if chain:
+                    from .pipeline_chain import is_pipeline_step
+                    from .task_fsm import get_active_step
+                    if is_pipeline_step(chain[0]) or chain[0].get("planned_agents"):
+                        active = get_active_step(task)
+                        if active and active.get("status") == "running":
+                            continue
                 self.update_status(task_id, TaskStatus.TIMEOUT, error={
                     "code": "TIMEOUT",
                     "reason": f"超过{max_reminders}次催办（间隔{reminder_minutes}分钟）未响应",

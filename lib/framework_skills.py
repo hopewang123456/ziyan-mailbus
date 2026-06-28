@@ -1,58 +1,42 @@
-"""Framework runtime skill paths — shared by patch + sync scripts."""
+"""Framework runtime skill paths — shared by patch + sync scripts.
+
+SoT: mail/access/**/agent.json via agent_registry + mail/skills/**/SKILL.md.
+"""
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-ADAPTERS = ROOT / "adapters"
-ROLES = ROOT / "roles"
+from . import agent_registry as _reg
+from .constants import MAILBUS_ROOT
 
-FRAMEWORK_SKILL_DIRS: dict[str, str] = {
-    "hermes": "hermes/framework-runtime/SKILL.md",
-    "hermes_profile": "hermes_profile/framework-runtime/SKILL.md",
-    "opencode": "opencode/framework-runtime/SKILL.md",
-    "codex": "codex/framework-runtime/SKILL.md",
-    "claude_code": "claude_code/framework-runtime/SKILL.md",
-    "openclaw": "openclaw/framework-runtime/SKILL.md",
-    "cline": "cline/framework-runtime/SKILL.md",
-    "cursor": "cursor/framework-runtime/SKILL.md",
-}
+ROOT = MAILBUS_ROOT
 
-SHARED_PROTOCOL = "_shared/mailbus-file-protocol/SKILL.md"
-AGENT_UNIVERSAL = "_shared/agent-universal/SKILL.md"
-
-AGENT_ARCHETYPES: dict[str, str] = {
-    "dali": "coding-executor",
-    "lingyun": "coding-pro",
-    "lingyan": "test-engineer",
-    "lingjian": "code-reviewer",
-    "lingzhao": "spec-designer",
-    "xiaoqi": "orchestrator",
-    "yige": "operations",
-    "lingjin": "security-auditor",
-    "lingxi": "tech-radar",
-    "lingtuo": "market-expansion",
-    "lingxun": "patroller",
-    "lingxiao": "tech-lead",
-    "lingzhang": "finance-followup",
-}
-
-# hermes_profile 编制（与 docker entrypoint 一致）
-HERMES_PROFILE_AGENTS: tuple[str, ...] = (
-    "lingzhao",
-    "lingjin",
-    "lingxi",
-    "lingtuo",
-    "lingxun",
-    "lingzhang",
+FRAMEWORKS = (
+    "hermes",
+    "hermes_profile",
+    "opencode",
+    "codex",
+    "claude_code",
+    "openclaw",
+    "cline",
+    "cursor",
 )
+
+
+def _load_archetypes() -> dict[str, str]:
+    return _reg.agent_archetypes()
+
+
+AGENT_ARCHETYPES: dict[str, str] = _load_archetypes()
+
+
+HERMES_PROFILE_AGENTS: tuple[str, ...] = _reg.hermes_profile_agents()
 
 
 def hermes_sync_skills_dir(agent_id: str, *, mail_root: Path | None = None) -> Path:
     """宿主机 / 容器内 Hermes L0–L2 skills 同步目标。"""
-    root = mail_root or ROOT
-    return root / "adapters" / ".sync" / agent_id / "skills"
+    return _reg.hermes_sync_skills_dir(agent_id, mail_root=mail_root)
 
 
 def framework_skill_id(framework: str) -> str:
@@ -60,16 +44,21 @@ def framework_skill_id(framework: str) -> str:
 
 
 def framework_skill_path_rel(framework: str) -> str:
-    rel = FRAMEWORK_SKILL_DIRS.get(framework)
-    if not rel:
+    if framework not in FRAMEWORKS:
         raise ValueError(f"unknown framework: {framework}")
-    return f"mail/adapters/{rel}"
+    v3 = ROOT / "skills" / "frameworks" / framework / "SKILL.md"
+    if not v3.is_file():
+        raise FileNotFoundError(f"missing v3 framework skill: {v3}")
+    return f"mail/skills/frameworks/{framework}/SKILL.md"
 
 
 def universal_skill_spec() -> dict:
+    v3 = ROOT / "skills" / "common" / "agent-universal" / "SKILL.md"
+    if not v3.is_file():
+        raise FileNotFoundError(f"missing v3 skill: {v3}")
     return {
         "id": "agent-universal",
-        "path": f"mail/adapters/{AGENT_UNIVERSAL}",
+        "path": "mail/skills/common/agent-universal/SKILL.md",
         "type": "shared_skill",
         "layer": "L0",
         "always": True,
@@ -77,9 +66,12 @@ def universal_skill_spec() -> dict:
 
 
 def shared_protocol_spec() -> dict:
+    v3 = ROOT / "skills" / "common" / "mailbus-file-protocol" / "SKILL.md"
+    if not v3.is_file():
+        raise FileNotFoundError(f"missing v3 skill: {v3}")
     return {
         "id": "mailbus-file-protocol",
-        "path": f"mail/adapters/{SHARED_PROTOCOL}",
+        "path": "mail/skills/common/mailbus-file-protocol/SKILL.md",
         "type": "shared_skill",
         "layer": "L0",
         "always": True,
@@ -101,9 +93,12 @@ def role_archetype_spec(agent_id: str) -> dict:
     archetype = AGENT_ARCHETYPES.get(agent_id)
     if not archetype:
         raise ValueError(f"unknown agent for archetype: {agent_id}")
+    v3 = ROOT / "skills" / "roles" / "archetypes" / archetype / "SKILL.md"
+    if not v3.is_file():
+        raise FileNotFoundError(f"missing v3 archetype skill: {v3}")
     return {
         "id": f"role-{archetype}",
-        "path": f"mail/roles/archetypes/{archetype}/SKILL.md",
+        "path": f"mail/skills/roles/archetypes/{archetype}/SKILL.md",
         "type": "role_archetype",
         "layer": "L2",
         "archetype": archetype,
@@ -114,9 +109,12 @@ def role_archetype_spec(agent_id: str) -> dict:
 def role_overlay_spec(agent_id: str) -> dict:
     if agent_id not in AGENT_ARCHETYPES:
         raise ValueError(f"unknown agent for overlay: {agent_id}")
+    v3 = ROOT / "skills" / "roles" / "overlays" / agent_id / "SKILL.md"
+    if not v3.is_file():
+        raise FileNotFoundError(f"missing v3 overlay skill: {v3}")
     return {
         "id": f"role-overlay-{agent_id}",
-        "path": f"mail/roles/overlays/{agent_id}/SKILL.md",
+        "path": f"mail/skills/roles/overlays/{agent_id}/SKILL.md",
         "type": "role_overlay",
         "layer": "L2",
         "agent_id": agent_id,
@@ -126,31 +124,13 @@ def role_overlay_spec(agent_id: str) -> dict:
 
 
 def layer_skills_for_agent(agent_id: str, framework: str) -> list[dict]:
-    """Ordered L0–L2 specs for one agent."""
-    return [
-        universal_skill_spec(),
-        shared_protocol_spec(),
-        framework_skill_spec(framework),
-        role_archetype_spec(agent_id),
-        role_overlay_spec(agent_id),
-    ]
+    """Ordered L0–L2 specs for one agent (v3 access/ + mail/skills/)."""
+    return _reg.layer_skills_for_agent(agent_id, framework)
 
 
 def resolve_skill_src(rel: str, *, mail_root: Path | None = None) -> Path:
-    """Resolve mail/adapters/... mail/roles/... or .codex/... paths from repo root."""
-    mail_root = mail_root or ROOT
-    ai_tools = mail_root.parent
-    rel = (rel or "").replace("\\", "/")
-    if rel.startswith("mail/adapters/"):
-        return mail_root / rel.replace("mail/", "", 1)
-    if rel.startswith("mail/roles/"):
-        return mail_root / rel.replace("mail/", "", 1)
-    if rel.startswith(".codex/"):
-        return ai_tools / rel
-    if rel.startswith("store/"):
-        return mail_root / rel
-    p = Path(rel)
-    return p if p.is_absolute() else ai_tools / rel
+    """Resolve skill path from mail/skills/ or other v3 roots."""
+    return _reg.resolve_skill_src(rel, mail_root=mail_root or ROOT)
 
 
 SYNCABLE_SKILL_TYPES = frozenset({
@@ -159,7 +139,45 @@ SYNCABLE_SKILL_TYPES = frozenset({
     "shared_skill",
     "role_archetype",
     "role_overlay",
+    "skill",
 })
+
+
+def _prepare_skill_dest_dir(dest_dir: Path) -> None:
+    """Ensure clean dest dir (Windows junction/reparse SKILL.md → rmtree)."""
+    import shutil
+
+    if dest_dir.exists() or dest_dir.is_symlink():
+        shutil.rmtree(dest_dir, ignore_errors=True)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+
+def _remove_skill_dest(path: Path) -> None:
+    """Remove dest SKILL.md including broken Windows reparse points."""
+    import stat
+
+    if not path.exists() and not path.is_symlink():
+        return
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        if os.name == "nt":
+            try:
+                os.chmod(path, stat.S_IWRITE)
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def _write_skill_copy(src: Path, dest: Path) -> None:
+    """Copy skill content; read/write fallback for WinError 1920."""
+    import shutil
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copy2(src, dest)
+    except OSError:
+        dest.write_bytes(src.read_bytes())
 
 
 def install_skill_spec(
@@ -170,8 +188,6 @@ def install_skill_spec(
     use_symlink: bool = True,
 ) -> bool:
     """Copy or symlink one skill entry into skills_root/{id}/SKILL.md."""
-    import shutil
-
     stype = spec.get("type") or ""
     if stype not in SYNCABLE_SKILL_TYPES:
         return False
@@ -183,19 +199,23 @@ def install_skill_spec(
     if not src.is_file():
         return False
     dest_dir = skills_root / sid
-    dest_dir.mkdir(parents=True, exist_ok=True)
     dest_skill = dest_dir / "SKILL.md"
     if use_symlink:
+        _remove_skill_dest(dest_skill)
+        dest_dir.mkdir(parents=True, exist_ok=True)
         try:
-            if dest_skill.is_symlink() or dest_skill.exists():
-                dest_skill.unlink()
             rel_target = os.path.relpath(src.resolve(), dest_dir.resolve())
             dest_skill.symlink_to(rel_target)
             return True
         except OSError:
-            pass
-    shutil.copy2(src, dest_skill)
-    return True
+            _remove_skill_dest(dest_skill)
+    _prepare_skill_dest_dir(dest_dir)
+    dest_skill = dest_dir / "SKILL.md"
+    try:
+        _write_skill_copy(src, dest_skill)
+        return True
+    except OSError:
+        return False
 
 
 def sync_agent_skills_from_index(

@@ -12,13 +12,23 @@ from datetime import datetime, timezone, timedelta
 PROJECT_ROOT = Path(__file__).resolve().parent.parent  # mailbus/lib/ → mailbus/
 PROJECT_ROOT_STR = str(PROJECT_ROOT)
 
+# Env overrides (Phase 3): MAILBUS_ROOT = mail repo; MAILBUS_DATA = runtime store.
+MAILBUS_ROOT = Path(os.environ.get("MAILBUS_ROOT", PROJECT_ROOT_STR)).resolve()
+MAILBUS_ROOT_STR = str(MAILBUS_ROOT)
+MAILBUS_DATA = Path(
+    os.environ.get("MAILBUS_DATA")
+    or os.environ.get("MAILBUS_DATA_DIR")
+    or os.path.join(MAILBUS_ROOT_STR, "store")
+).resolve()
+MAILBUS_DATA_STR = str(MAILBUS_DATA)
+
 # ── 数据目录 ─────────────────────────────────────────────────────────────
-DEFAULT_DATA_DIR = os.path.join(PROJECT_ROOT_STR, "store")
+DEFAULT_DATA_DIR = MAILBUS_DATA_STR
 DEFAULT_INBOX_BASE = f"{DEFAULT_DATA_DIR}/inbox"
-DEFAULT_LOG_DIR = os.path.join(PROJECT_ROOT_STR, "logs")
+DEFAULT_LOG_DIR = os.path.join(MAILBUS_ROOT_STR, "logs")
 
 # ── 默认配置 ─────────────────────────────────────────────────────────────
-DEFAULT_ACK_TIMEOUT = 10
+DEFAULT_ACK_TIMEOUT = 30
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_REMINDER_MINUTES = 30
 DEFAULT_MAX_REMINDERS = 12

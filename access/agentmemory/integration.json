@@ -1,0 +1,10 @@
+{
+  "schema": "mailbus-agentmemory-v1",
+  "team_memory_db": "/mnt/e/hermes-data/.hermes/shared-memory/team-memory.db",
+  "agentmemory_url": "http://127.0.0.1:3111",
+  "bridge": {
+    "sqlite_env": "MEMORY_BRIDGE_SQLITE",
+    "agentmemory_env": "MEMORY_BRIDGE_AGENTMEMORY",
+    "pending_dir": "store/agentmemory-pending"
+  }
+}

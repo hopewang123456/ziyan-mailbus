@@ -44,15 +44,29 @@ fi
 identity=""
 case "$AGENT" in
   lingxiao)
-    for p in /mailbus/identities/lingxiao/IDENTITY.md /mailbus/identities/lingxiao.md; do
+    for p in \
+      /mailbus/access/codex/lingxiao/IDENTITY.md \
+      /mailbus/skills/roles/overlays/lingxiao/IDENTITY.md \
+      /mailbus/identities/lingxiao/IDENTITY.md \
+      /mailbus/identities/lingxiao.md; do
       if [ -f "$p" ]; then identity="$p"; break; fi
     done
     ;;
   lingjian)
-    identity="/mailbus/identities/lingjian.md"
+    for p in \
+      /mailbus/access/codex/lingjian/IDENTITY.md \
+      /mailbus/skills/roles/overlays/lingjian/IDENTITY.md \
+      /mailbus/identities/lingjian.md; do
+      if [ -f "$p" ]; then identity="$p"; break; fi
+    done
     ;;
   *)
-    identity="/mailbus/identities/${AGENT}.md"
+    for p in \
+      "/mailbus/access/codex/${AGENT}/IDENTITY.md" \
+      "/mailbus/skills/roles/overlays/${AGENT}/IDENTITY.md" \
+      "/mailbus/identities/${AGENT}.md"; do
+      if [ -f "$p" ]; then identity="$p"; break; fi
+    done
     ;;
 esac
 

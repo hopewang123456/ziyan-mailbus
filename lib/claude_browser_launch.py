@@ -21,7 +21,7 @@ from .claude_launch import (
 from .utils import json_read, to_wsl_path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-START_SCRIPT = os.path.join(ROOT, "tools", "start-claude-web.sh")
+START_SCRIPT = os.path.join(ROOT, "tools", "tools/ops/start-claude-web.sh")
 
 
 def _config_path(data_dir: str) -> str:
@@ -180,12 +180,12 @@ def _tmux_session_ok(agent_key: str) -> bool:
 def _format_start_error(result: subprocess.CompletedProcess) -> str:
     err = (result.stderr or result.stdout or "").strip()
     if not err:
-        return "start-claude-web.sh failed"
+        return "tools/ops/start-claude-web.sh failed"
     lines = [ln.strip() for ln in err.splitlines() if ln.strip()]
     for ln in reversed(lines):
         if ln.startswith("[claude-web]") or ln.startswith("[ERROR]") or "ttyd" in ln.lower():
             return ln
-    return lines[-1] if lines else "start-claude-web.sh failed"
+    return lines[-1] if lines else "tools/ops/start-claude-web.sh failed"
 
 
 def ensure_claude_web(agent_key: str, data_dir: str, *, wait_seconds: int = 15) -> dict:

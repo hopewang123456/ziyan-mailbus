@@ -18,8 +18,13 @@ import os
 import sys
 from datetime import datetime, timezone, timedelta
 
+_MAIL_DIR = os.path.dirname(os.path.abspath(__file__))
+if _MAIL_DIR not in sys.path:
+    sys.path.insert(0, _MAIL_DIR)
+
+from lib.constants import DEFAULT_DATA_DIR  # noqa: E402
+
 TZ_CST = timezone(timedelta(hours=8))
-DEFAULT_DATA_DIR = "/mnt/e/ai_tools/mail/store"
 
 
 def now_iso():

@@ -16,6 +16,7 @@ from collections import Counter
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
+from .constants import MAILBUS_ROOT
 from .utils import json_read, json_write, resolve_paths, _now_iso
 from .tracker import TaskTracker, TaskStatus
 from .pipeline_chain import is_pipeline_step
@@ -282,6 +283,11 @@ def run_round1(data_dir: str, agents: dict) -> dict:
     inbox = _inbox_stats(data_dir, agents)
     tasks = _task_stats(data_dir)
     config = json_read(os.path.join(data_dir, "config.json"), {})
+
+    if tasks.get("false_timeout"):
+        reopened = TaskTracker(data_dir).reopen_stale_timeouts(agents, data_dir)
+        if reopened:
+            tasks = _task_stats(data_dir)
 
     problems = []
 
@@ -644,13 +650,7 @@ def run_round3(data_dir: str, agents: dict, backlog: Optional[dict] = None, forc
                 "全部 agent inbox task_pending 无 pushed 超过 60min",
             ],
         },
-        "agent_commands": {
-            "assess": "cd /mnt/e/ai_tools/mail && python3 -m bus iteration --round 1 --data-dir store",
-            "plan": "cd /mnt/e/ai_tools/mail && python3 -m bus iteration --round 2 --data-dir store",
-            "protocol": "cd /mnt/e/ai_tools/mail && python3 -m bus iteration --round 3 --data-dir store",
-            "full_cycle": "cd /mnt/e/ai_tools/mail && python3 -m bus iteration --round all --data-dir store",
-            "snapshot": "bash docker-agents/task-flow-snapshot.sh",
-        },
+        "agent_commands": _iteration_agent_commands(),
         "backlog_status": {
             "total": len(backlog.get("items", [])),
             "done": len(done),
@@ -684,6 +684,21 @@ def run_all(data_dir: str, agents: dict, force: bool = False) -> dict:
         out["round2"] = {"status": "blocked", "reason": "等待 Round1 执行+审计通过"}
         out["round3"] = {"status": "skipped"}
     return out
+
+
+def _iteration_agent_commands() -> dict:
+    """Round 命令 — 使用 MAILBUS_ROOT，避免硬编码 /mnt/e/ai_tools/mail。"""
+    root = str(MAILBUS_ROOT).replace("\\", "/")
+    snap = f"{root}/docker-agents/task-flow-snapshot.sh"
+    snap_cmd = f"bash {snap}" if os.path.isfile(snap) else f"bash docker-agents/task-flow-snapshot.sh"
+    base = f"cd {root} && python bus.py iteration"
+    return {
+        "assess": f"{base} --round 1 --data-dir store",
+        "plan": f"{base} --round 2 --data-dir store",
+        "protocol": f"{base} --round 3 --data-dir store",
+        "full_cycle": f"{base} --round all --data-dir store",
+        "snapshot": snap_cmd,
+    }
 
 
 def _task_assignee(data_dir: str, task_id: str) -> Optional[str]:

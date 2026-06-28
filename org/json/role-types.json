@@ -1,0 +1,94 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-06-18",
+  "description": "SoT: role_type integers. Human catalog: ../md/catalog.md (generated).",
+  "roles": {
+    "1": {
+      "key": "planner",
+      "display": { "zh": "方案设计师", "en": "Planner" },
+      "candidates": ["lingzhao"],
+      "default_sla_minutes": 30
+    },
+    "2": {
+      "key": "security_auditor",
+      "display": { "zh": "安全审计师", "en": "Security Auditor" },
+      "candidates": ["lingjin"],
+      "default_sla_minutes": 30
+    },
+    "3": {
+      "key": "tech_researcher",
+      "display": { "zh": "技术研究员", "en": "Tech Researcher" },
+      "candidates": ["lingxi"],
+      "default_sla_minutes": 60
+    },
+    "4": {
+      "key": "market_intake",
+      "display": { "zh": "市场拓展官", "en": "Market Intake" },
+      "candidates": ["lingtuo"],
+      "default_sla_minutes": 30
+    },
+    "5": {
+      "key": "reviewer",
+      "display": { "zh": "审查官", "en": "Reviewer" },
+      "candidates": ["lingjian"],
+      "default_sla_minutes": 15
+    },
+    "6": {
+      "key": "qa_tester",
+      "display": { "zh": "测试工程师", "en": "QA Tester" },
+      "candidates": ["lingyan"],
+      "default_sla_minutes": 30
+    },
+    "7": {
+      "key": "ops_patrol",
+      "display": { "zh": "巡检官", "en": "Ops Patrol" },
+      "candidates": ["lingxun"],
+      "default_sla_minutes": 15
+    },
+    "8": {
+      "key": "developer",
+      "display": { "zh": "开发工程师", "en": "Developer" },
+      "candidates": ["lingxiao", "dali"],
+      "default_sla_minutes": 30
+    },
+    "9": {
+      "key": "dispatcher",
+      "display": { "zh": "调度员", "en": "Dispatcher" },
+      "candidates": ["xiaoqi"],
+      "default_sla_minutes": 10
+    },
+    "10": {
+      "key": "finance",
+      "display": { "zh": "财务跟进官", "en": "Finance" },
+      "candidates": ["lingzhang"],
+      "default_sla_minutes": 15
+    },
+    "11": {
+      "key": "content_ops",
+      "display": { "zh": "运营", "en": "Content Ops" },
+      "candidates": ["yige"],
+      "default_sla_minutes": 30
+    },
+    "12": {
+      "key": "acceptor",
+      "display": { "zh": "验收员", "en": "Acceptor" },
+      "candidates": ["xiaoqi"],
+      "default_sla_minutes": 10
+    }
+  },
+  "conclusions": {
+    "done": { "zh": "本步完成", "en": "done" },
+    "pass": { "zh": "通过", "en": "pass" },
+    "fail": { "zh": "未通过", "en": "fail" },
+    "approved": { "zh": "验收通过", "en": "approved" },
+    "rejected": { "zh": "验收驳回", "en": "rejected" },
+    "blocked": { "zh": "需决策", "en": "blocked" },
+    "dispatched": { "zh": "已拆单", "en": "dispatched" },
+    "need_research": { "zh": "需调研", "en": "need_research" },
+    "warning": { "zh": "告警", "en": "warning" },
+    "pursue": { "zh": "值得跟进", "en": "pursue" },
+    "watch": { "zh": "观望", "en": "watch" },
+    "reject": { "zh": "拒绝", "en": "reject" },
+    "handed_to_lingzhao": { "zh": "已交灵昭", "en": "handed_to_lingzhao" }
+  }
+}

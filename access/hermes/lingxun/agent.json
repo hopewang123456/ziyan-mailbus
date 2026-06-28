@@ -1,0 +1,26 @@
+{
+  "schema": "mailbus-agent-v3",
+  "agent_id": "lingxun",
+  "framework": "hermes_profile",
+  "archetype": "patroller",
+  "skills": [
+    "mail/skills/common/agent-universal",
+    "mail/skills/common/mailbus-file-protocol",
+    "mail/skills/frameworks/hermes_profile",
+    "mail/skills/roles/archetypes/patroller",
+    "mail/skills/roles/overlays/lingxun"
+  ],
+  "rules": [
+    "mail/rules/common/execution-order.md",
+    "mail/rules/common/task-fsm.md",
+    "mail/rules/common/team-secrets-policy.md",
+    "mail/rules/frameworks/hermes_profile/delivery.md",
+    "mail/rules/roles/patroller/boundaries.md"
+  ],
+  "workspace": null,
+  "docker": {
+    "service": "hermes",
+    "profile": "lingxun",
+    "port": 9125
+  }
+}

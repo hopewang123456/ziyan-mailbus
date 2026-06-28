@@ -66,6 +66,14 @@ def verify_test_done(report: dict, *, strict: bool = False) -> Tuple[bool, Optio
                 return False, "failed count > 0"
         except (TypeError, ValueError):
             pass
+    if strict:
+        paths = details.get("test_paths") or {}
+        if isinstance(paths, dict):
+            for key in ("interactive", "auto", "windows_launch"):
+                if paths.get(key) is False:
+                    return False, f"test_paths.{key} not passed"
+        elif not details.get("interactive_ran") and not details.get("auto_ran"):
+            return False, "missing interactive/auto test path report"
     return True, None
 
 

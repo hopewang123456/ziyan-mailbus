@@ -5,9 +5,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 AI_TOOLS="$(cd "$ROOT/.." && pwd)"
 AGENT="${HERMES_AGENT:-lingzhao}"
-ADAPTERS_MOUNT="${HERMES_ADAPTERS_DIR:-/mailbus/adapters}"
+ADAPTERS_MOUNT="${HERMES_ADAPTERS_DIR:-/mailbus/access}"
 DATA_DIR="${DATA_DIR:-$ROOT/store}"
-TARGET="${HERMES_FRAMEWORK_SKILLS_DIR:-$AI_TOOLS/mail/adapters/.sync/$AGENT/skills}"
+TARGET="${HERMES_FRAMEWORK_SKILLS_DIR:-$AI_TOOLS/mail/access/hermes/.sync/$AGENT/skills}"
 COPY_FLAG=""
 if [ "${HERMES_SKILL_COPY:-}" = "1" ]; then
   COPY_FLAG="--copy"
@@ -17,7 +17,7 @@ fi
 if [ -d "$ADAPTERS_MOUNT" ]; then
   echo "[sync-hermes-framework-skill] adapters mount ok: $ADAPTERS_MOUNT"
 else
-  echo "[sync-hermes-framework-skill] warn: $ADAPTERS_MOUNT not found (mount mail/adapters in compose)"
+  echo "[sync-hermes-framework-skill] warn: $ADAPTERS_MOUNT not found (mount mail/access in compose)"
 fi
 
 mkdir -p "$TARGET"

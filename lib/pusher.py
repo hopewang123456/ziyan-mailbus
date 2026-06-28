@@ -18,6 +18,43 @@ from .utils import json_read, json_write, jsonl_append, log_error, resolve_paths
 from .scanner import mark_as_pushed, update_message_status
 from .mbus_log import debug, warn
 
+# agent_name -> subprocess.Popen（后台 CLI，供超时 kill / 自愈查询）
+_ACTIVE_CLI_PROCS: dict[str, subprocess.Popen] = {}
+
+
+def get_active_cli_proc(agent_name: str) -> subprocess.Popen | None:
+    """返回 agent 当前后台 CLI 进程（若仍存活）。"""
+    proc = _ACTIVE_CLI_PROCS.get(agent_name)
+    if proc is None:
+        return None
+    if proc.poll() is not None:
+        _ACTIVE_CLI_PROCS.pop(agent_name, None)
+        return None
+    return proc
+
+
+def _register_cli_proc(agent_name: str, proc: subprocess.Popen) -> None:
+    old = _ACTIVE_CLI_PROCS.get(agent_name)
+    if old is not None and old.poll() is None and old.pid != proc.pid:
+        try:
+            old.kill()
+            old.communicate()
+        except Exception as exc:
+            warn(f"[pusher] replaced stale CLI pid={getattr(old, 'pid', '?')}: {exc}")
+    _ACTIVE_CLI_PROCS[agent_name] = proc
+
+
+def _kill_cli_proc(proc: subprocess.Popen, agent_name: str = "") -> None:
+    """终止超时 CLI 并 reap，避免孤儿进程重复 push。"""
+    try:
+        proc.kill()
+        proc.communicate()
+    except Exception as exc:
+        warn(f"[pusher] kill CLI {agent_name or proc.pid}: {exc}")
+    if agent_name:
+        _ACTIVE_CLI_PROCS.pop(agent_name, None)
+
+
 # ── API Key 注入 ─────────────────────────────────────────────────────
 # P0: 统一从 .env 文件加载所有 API Key，注入子进程
 # 不再通过 cmd 字面量搜索 provider 名（那不可靠）
@@ -96,6 +133,39 @@ def _truncate_cli_text(text: str, max_chars: int = DEFAULT_CLI_MSG_MAX_CHARS) ->
     return text[:max_chars] + "\n...(内容已截断，完整见 inbox / msg-files)"
 
 
+def _wrap_docker_cmd(cmd: str) -> str:
+    """保留兼容：非 Windows 或无 wsl 时仍返回 shell 字符串。"""
+    argv = _docker_push_argv(cmd)
+    if argv:
+        return cmd
+    import shutil
+    stripped = (cmd or "").lstrip()
+    if not stripped.startswith("docker "):
+        return cmd
+    if shutil.which("docker"):
+        return cmd
+    wsl = shutil.which("wsl.exe") or shutil.which("wsl")
+    if wsl:
+        return f"{wsl} {stripped}"
+    return cmd
+
+
+def _docker_push_argv(cmd: str) -> list[str] | None:
+    """Windows 无 docker 时返回 [wsl, bash, -lc, <docker cmd>]，供 Popen(shell=False)。"""
+    import shutil
+    import sys
+
+    stripped = (cmd or "").lstrip()
+    if sys.platform != "win32" or not stripped.startswith("docker "):
+        return None
+    if shutil.which("docker"):
+        return None
+    wsl = shutil.which("wsl.exe") or shutil.which("wsl")
+    if not wsl:
+        return None
+    return [wsl, "bash", "-lc", stripped]
+
+
 def push_messages(
     data_dir: str,
     agent_name: str,
@@ -151,22 +221,25 @@ def push_messages(
         return []
     
     # 2. 构建推送文本（从 Message.action 结构化字段读取指令）
-    # ── P1/A: 精简推送 + 规则文档外置 ──
-    # 系统上下文精简为7行核心信息，不再嵌入长说明
-    # 规则文档路径引用由 store/rules/ 外部文件提供
-    rules_dir = f"{data_dir}/rules"
+    cfg = json_read(os.path.join(data_dir, "config.json"), {})
+    agents_cfg = cfg.get("agents", {})
+    from .token_budget import load_token_budget
+    from .agent_adapters import store_path_for_agent
+    from .utils import format_push_content_for_agent
+
+    agent_cfg_entry = agents_cfg.get(agent_name) or {}
+    tb = load_token_budget(cfg)
+    rules_dir = store_path_for_agent(data_dir, f"{data_dir}/rules", agent_cfg_entry)
+    inbox_path = store_path_for_agent(data_dir, f"{data_dir}/inbox/{agent_name}/inbox.json", agent_cfg_entry)
+    ack_path = store_path_for_agent(data_dir, f"{data_dir}/inbox/{agent_name}/ack.json", agent_cfg_entry)
     system_context = (
         f"mailbus | agent={agent_name}\n"
-        f"inbox={data_dir}/inbox/{agent_name}/inbox.json\n"
-        f"ack={data_dir}/inbox/{agent_name}/ack.json\n"
+        f"inbox={inbox_path}\n"
+        f"ack={ack_path}\n"
         f"rules={rules_dir}/\n---\n"
     )
     combined_text = system_context
 
-    cfg = json_read(os.path.join(data_dir, "config.json"), {})
-    agents_cfg = cfg.get("agents", {})
-    from .token_budget import load_token_budget
-    tb = load_token_budget(cfg)
     per_msg_max = int(
         (agents_cfg.get(agent_name) or {}).get("cli_msg_max_chars")
         or tb.get("cli_msg_max_chars")
@@ -177,15 +250,16 @@ def push_messages(
     for msg_entry in messages:
         from_ = msg_entry.get("from", "?") if isinstance(msg_entry, dict) else msg_entry.from_
         content = msg_entry.get("content", "") if isinstance(msg_entry, dict) else msg_entry.content
+        entry_dict = msg_entry if isinstance(msg_entry, dict) else msg_entry.to_dict()
+        agent_cfg_entry = agents_cfg.get(agent_name) or {}
         raw_content = content or ""
+        raw_content = format_push_content_for_agent(data_dir, raw_content, agent_cfg_entry)
         content = _truncate_cli_text(raw_content, max_chars=per_msg_max)
         msg_id = msg_entry.get("id", "") if isinstance(msg_entry, dict) else msg_entry.id
         action_raw = msg_entry.get("action", {}) if isinstance(msg_entry, dict) else (msg_entry.action or MsgType.default_action(msg_entry.type))
         msg_type = msg_entry.get("type", "notice") if isinstance(msg_entry, dict) else msg_entry.type
         fwd_chain = msg_entry.get("forward_chain") if isinstance(msg_entry, dict) else msg_entry.forward_chain
 
-        entry_dict = msg_entry if isinstance(msg_entry, dict) else msg_entry.to_dict()
-        agent_cfg_entry = agents_cfg.get(agent_name) or {}
         agent_type = agent_cfg_entry.get("type", "")
         from .file_task_push import (
             build_file_task_push_body,
@@ -194,6 +268,8 @@ def push_messages(
         )
         if should_file_task_push(agent_type, agent_cfg_entry, entry_dict, raw_content):
             _, wo_path, rf_path = ensure_file_task_work_order(data_dir, agent_name, entry_dict)
+            wo_path = store_path_for_agent(data_dir, wo_path, agent_cfg_entry)
+            rf_path = store_path_for_agent(data_dir, rf_path, agent_cfg_entry)
             msg_body = build_file_task_push_body(
                 from_=from_, msg_id=msg_id, msg_type=msg_type,
                 wo_path=wo_path, result_path=rf_path,
@@ -211,7 +287,9 @@ def push_messages(
 
             reply_to = action_raw.get("reply_to", "") if action_raw else ""
             if reply_to and reply_to not in ("mailbus", "broadcast", "system", "manual", "mailbus-test", "test", ""):
-                reply_path = f"{data_dir}/inbox/{reply_to}/inbox.json"
+                reply_path = store_path_for_agent(
+                    data_dir, f"{data_dir}/inbox/{reply_to}/inbox.json", agent_cfg_entry,
+                )
                 msg_body += f"▶ 回复 {reply_to} → {reply_path}\n"
 
             forward_to = action_raw.get("forward_to", []) if action_raw else []
@@ -222,7 +300,9 @@ def push_messages(
 
             msg_body += "\n---"
         from .pipeline_task import pipeline_completion_block
-        msg_body += pipeline_completion_block(data_dir, raw_content, agent_name)
+        msg_body += pipeline_completion_block(
+            data_dir, raw_content, agent_name, agent_cfg_entry,
+        )
         combined_text += msg_body
     combined_text = _truncate_cli_text(combined_text, max_chars=combined_max)
     
@@ -237,19 +317,46 @@ def push_messages(
         return []
     
     used_model = None
+    agent_cfg_entry = agents_cfg.get(agent_name) or {}
+    agent_type = agent_cfg_entry.get("type", "")
+    agent_types = cfg.get("agent_types") or {}
     for cmd_template in cli_commands:
-        cmd = cmd_template.replace("'MSG'", f"'{combined_text}'")
+        model_name = None
+        direct = None
+        if agent_type == "claude_code":
+            from .claude_launch import (
+                parse_model_name_from_push_template,
+                try_build_push_direct,
+            )
+
+            model_name = parse_model_name_from_push_template(cmd_template)
+            direct = try_build_push_direct(
+                agent_name,
+                agent_cfg_entry,
+                agent_types,
+                data_dir=data_dir,
+                prompt=combined_text,
+                model_name=model_name,
+            )
+        cmd = "" if direct else _replace_msg_placeholder(cmd_template, combined_text)
         
         reply_dir = f"{data_dir}/replies" if data_dir else ""
         
-        success = _invoke_cli(cmd, agent_name=agent_name, msg_ids=msg_ids, reply_dir=reply_dir, data_dir=data_dir, messages=messages)
+        invoke_kw = dict(
+            agent_name=agent_name,
+            msg_ids=msg_ids,
+            reply_dir=reply_dir,
+            data_dir=data_dir,
+            messages=messages,
+        )
+        success = _invoke_cli(cmd, direct=direct, **invoke_kw)
         if not success:
             for attempt in range(1, max_retries + 1):
                 # 指数退避 + jitter: base 2s, 乘 2^attempt, 加 ±1s 抖动
                 delay = 2 ** attempt + random.uniform(-1, 1)
                 delay = max(0.5, min(delay, 30))  # 钳制在 [0.5, 30] 秒
                 time.sleep(delay)
-                success = _invoke_cli(cmd, agent_name=agent_name, msg_ids=msg_ids, reply_dir=reply_dir, data_dir=data_dir, messages=messages)
+                success = _invoke_cli(cmd, direct=direct, **invoke_kw)
                 if success:
                     break
         
@@ -299,12 +406,14 @@ def resolve_cli(
     agent_types: dict,
     model_alias: str = None,
     agent_name: str = "",
+    *,
+    pipeline: bool = False,
 ) -> str:
     """根据 agent 配置解析 push CLI（委托 agent_adapters 适配层）。"""
     from .agent_adapters import resolve_push_cli
 
     name = agent_name or agent_cfg.get("profile") or agent_cfg.get("agent") or ""
-    return resolve_push_cli(name, agent_cfg, agent_types, model_alias)
+    return resolve_push_cli(name, agent_cfg, agent_types, model_alias, pipeline=pipeline)
 
 
 def resolve_cli_for_message(
@@ -314,12 +423,18 @@ def resolve_cli_for_message(
     agent_name: str,
     *,
     primary_task_id: str = "",
+    data_dir: str = "",
 ) -> str:
     """按单条消息解析 CLI（含模型档位）。"""
     from .model_router import pick_model_alias, is_no_llm_notice
 
     if is_no_llm_notice(msg):
         return ""
+    pipeline = False
+    if data_dir:
+        from .pipeline_task import is_pipeline_execute_message
+        entry = msg if isinstance(msg, dict) else (msg.to_dict() if hasattr(msg, "to_dict") else {})
+        pipeline = is_pipeline_execute_message(entry, data_dir)
     alias = pick_model_alias(msg, agent_name, agent_cfg, primary_task_id=primary_task_id)
     action = msg.get("action", {}) if isinstance(msg, dict) else (getattr(msg, "action", None) or {})
     if isinstance(action, dict) and action.get("model_tier") == "flash":
@@ -330,7 +445,9 @@ def resolve_cli_for_message(
             alias = TIER_PRO
         else:
             alias = "deepseek-flash"
-    return resolve_cli(agent_cfg, agent_types, model_alias=alias, agent_name=agent_name)
+    return resolve_cli(
+        agent_cfg, agent_types, model_alias=alias, agent_name=agent_name, pipeline=pipeline,
+    )
 
 
 def resolve_cli_chain(agent_cfg: dict, agent_types: dict) -> list:
@@ -357,21 +474,43 @@ def resolve_cli_chain(agent_cfg: dict, agent_types: dict) -> list:
     return results
 
 
-def _invoke_cli(cmd: str, agent_name: str = "", msg_ids: list = None, reply_dir: str = "", data_dir: str = "", messages: list = None) -> bool:
+def _replace_msg_placeholder(cmd: str, text: str) -> str:
+    """替换 CLI 模板中的 'MSG'，按 shell 类型转义引号。"""
+    if "'MSG'" not in cmd:
+        return cmd
+    low = cmd.lower()
+    if "powershell" in low:
+        escaped = "'" + text.replace("'", "''") + "'"
+    else:
+        escaped = "'" + text.replace("'", "'\"'\"'") + "'"
+    return cmd.replace("'MSG'", escaped)
+
+
+def _invoke_cli(
+    cmd: str,
+    agent_name: str = "",
+    msg_ids: list = None,
+    reply_dir: str = "",
+    data_dir: str = "",
+    messages: list = None,
+    *,
+    direct: Optional[dict] = None,
+) -> bool:
     """
     执行 CLI 命令将消息推送给 agent。
     
-    参数 cmd 已替换好 'MSG' 占位符。
+    参数 cmd 已替换好 'MSG' 占位符；direct 为 Windows claude 直连 argv（不经 shell）。
     从 .env 文件自动注入 API Key。
     将 agent 的回复 stdout 保存到 reply_dir/{agent_name}.json。
     返回 True 表示 CLI 启动成功（Popen 不阻塞）。
     """
-    if not cmd:
+    if not cmd and not direct:
         return True
     
     try:
+        push_argv = None if direct else _docker_push_argv(cmd)
         # 获取需要注入的环境变量
-        extra_env = get_env_for_cli(cmd)
+        extra_env = get_env_for_cli(cmd) if cmd else {}
         
         # 确保子进程有完整的 shell 环境 + API Key
         env = os.environ.copy()
@@ -384,16 +523,41 @@ def _invoke_cli(cmd: str, agent_name: str = "", msg_ids: list = None, reply_dir:
             reply_file = f"{reply_dir}/{agent_name}.json"
         
         # 后台执行 CLI，不阻塞 scan，同时捕获回复
-        process = subprocess.Popen(
-            cmd,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-            env=env,
-            close_fds=True,
-        )
-        
+        if direct:
+            direct_env = dict(env)
+            direct_env.update(direct.get("env") or {})
+            process = subprocess.Popen(
+                direct["argv"],
+                cwd=direct.get("cwd") or None,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+                env=direct_env,
+                close_fds=True,
+            )
+        elif push_argv:
+            process = subprocess.Popen(
+                push_argv,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+                env=env,
+                close_fds=True,
+            )
+        else:
+            cmd = _wrap_docker_cmd(cmd)
+            process = subprocess.Popen(
+                cmd,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+                env=env,
+                close_fds=True,
+            )
+        if agent_name:
+            _register_cli_proc(agent_name, process)
+
         # 异步读取回复并保存
         if reply_file and agent_name:
             msg_entries = [
@@ -413,7 +577,10 @@ def _invoke_cli(cmd: str, agent_name: str = "", msg_ids: list = None, reply_dir:
             def _save_reply(proc, fpath, a_name, mids, dd, entries, timeout):
                 try:
                     stdout, _ = proc.communicate(timeout=timeout)
-                    reply_text = stdout.decode("utf-8", errors="replace").strip()
+                    if isinstance(stdout, bytes):
+                        reply_text = stdout.decode("utf-8", errors="replace").strip()
+                    else:
+                        reply_text = (stdout or "").strip()
                     if reply_text and len(reply_text) > 5:
                         from datetime import datetime, timezone, timedelta
                         ts = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%dT%H:%M:%S+0800")
@@ -423,15 +590,14 @@ def _invoke_cli(cmd: str, agent_name: str = "", msg_ids: list = None, reply_dir:
                             "reply": reply_text[:2000],
                             "timestamp": ts,
                         }
-                        import json
                         os.makedirs(os.path.dirname(fpath), exist_ok=True)
-                        with open(fpath, "w") as f:
-                            json.dump(reply_data, f, ensure_ascii=False, indent=2)
+                        json_write(fpath, reply_data)
                     # pipeline 落盘验收（CLI 结束后，拒绝 phantom completion）
                     import time
                     time.sleep(2)
-                    from .self_heal import agent_cli_active
+                    from .self_heal import agent_cli_active_for
                     from .pipeline_task import (
+                        extract_task_id,
                         is_pipeline_execute_message,
                         verify_pipeline_step_delivery,
                     )
@@ -464,10 +630,38 @@ def _invoke_cli(cmd: str, agent_name: str = "", msg_ids: list = None, reply_dir:
                             ok, reason = verify_pipeline_step_delivery(dd, a_name, entry)
                         if reply_phantom and ok:
                             ok, reason = False, "phantom_reply_text"
+                        stall_reason = None
+                        if reply_text:
+                            from .api_stall_detect import detect_api_stall
+                            stall_reason = detect_api_stall(reply_text)
+                        if stall_reason and not ok:
+                            from .api_stall_recovery import schedule_api_stall_recovery
+                            from .pipeline_task import extract_task_id as _extract_tid
+
+                            mid = entry.get("id") if isinstance(entry, dict) else ""
+                            tid = (
+                                entry.get("task_id") if isinstance(entry, dict) else ""
+                            ) or _extract_tid(raw)
+                            if not agent_cli_active_for(
+                                a_name, agents_cfg, msg_id=mid, task_id=tid,
+                            ):
+                                schedule_api_stall_recovery(
+                                    dd, a_name, mid,
+                                    reason=stall_reason,
+                                    task_id=tid,
+                                    reply_excerpt=reply_text,
+                                )
+                                continue
                         if ok:
                             continue
                         mid = entry.get("id") if isinstance(entry, dict) else ""
-                        if agent_cli_active(a_name, agents_cfg):
+                        if agent_cli_active_for(
+                            a_name,
+                            agents_cfg,
+                            msg_id=mid,
+                            task_id=entry.get("task_id") if isinstance(entry, dict) else ""
+                            or extract_task_id(raw),
+                        ):
                             debug(
                                 f"[pusher] pipeline-delivery {a_name} msg={mid}: "
                                 f"{reason} — CLI active, skip reset"
@@ -477,21 +671,57 @@ def _invoke_cli(cmd: str, agent_name: str = "", msg_ids: list = None, reply_dir:
                             f"[pusher] pipeline-delivery {a_name} msg={mid}: "
                             f"{reason} — reset pending"
                         )
+                        tid = (
+                            entry.get("task_id") if isinstance(entry, dict) else ""
+                        ) or extract_task_id(raw)
+                        if is_pipe and tid:
+                            from .dispatch.pipeline_step_failover import note_pipeline_verify_failure
+                            note_pipeline_verify_failure(
+                                dd, tid, a_name, mid, reason=reason,
+                            )
                         update_message_status(dd, a_name, mid, MsgStatus.PENDING)
                 except subprocess.TimeoutExpired:
+                    _kill_cli_proc(proc, a_name)
                     from .models import MsgStatus
                     from .scanner import update_message_status
                     from .file_task_push import is_executable_task
-                    from .utils import json_read as _json_read
+                    partial = ""
+                    try:
+                        out, _ = proc.communicate(timeout=5)
+                        if isinstance(out, bytes):
+                            partial = out.decode("utf-8", errors="replace").strip()
+                        else:
+                            partial = (out or "").strip()
+                    except Exception:
+                        pass
+                    timeout_note = f"[mailbus] CLI timeout after {timeout}s"
+                    if partial:
+                        timeout_note = f"{timeout_note}\n{partial[:1500]}"
+                    if fpath:
+                        from datetime import datetime, timezone, timedelta
+                        ts = datetime.now(timezone(timedelta(hours=8))).strftime(
+                            "%Y-%m-%dT%H:%M:%S+0800"
+                        )
+                        os.makedirs(os.path.dirname(fpath), exist_ok=True)
+                        json_write(fpath, {
+                            "agent": a_name,
+                            "msg_ids": mids or [],
+                            "reply": timeout_note[:2000],
+                            "timestamp": ts,
+                            "error": "timeout",
+                        })
                     for entry in entries or []:
                         if not is_executable_task(entry if isinstance(entry, dict) else {}):
                             continue
                         mid = entry.get("id") if isinstance(entry, dict) else ""
                         if mid:
-                            warn(f"[pusher] CLI timeout {a_name} msg={mid} — reset pending")
+                            warn(f"[pusher] CLI timeout {a_name} msg={mid} — killed proc, reset pending")
                             update_message_status(dd, a_name, mid, MsgStatus.PENDING)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    warn(f"[pusher] _save_reply failed {a_name}: {type(exc).__name__}: {exc}")
+                finally:
+                    if a_name:
+                        _ACTIVE_CLI_PROCS.pop(a_name, None)
             import threading
             t = threading.Thread(
                 target=_save_reply,

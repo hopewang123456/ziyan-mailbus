@@ -2,7 +2,10 @@
 # mailbus 工作流冒烟：Envelope 创建 + 推送 inbox
 set -euo pipefail
 
-BASE="http://127.0.0.1:9812"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/lib/api-url.sh"
+
+BASE="$MAILBUS_API_BASE"
 TS=$(date +%Y%m%d-%H%M%S)
 TASK_ID="game-lvup-${TS}"
 MAIL="/mnt/e/ai_tools/mail"
@@ -12,7 +15,7 @@ log() { echo "[workflow] $*"; }
 log "=== workflow test ${TASK_ID} ==="
 log "1. create task (Envelope)"
 cd "$MAIL"
-python3 tools/task-create-envelope.py \
+python3 tools/tools/ops/task-create-envelope.py \
   --api "${BASE}" \
   --task-id "${TASK_ID}" \
   --intent "打怪升级小游戏 MVP" \

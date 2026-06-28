@@ -6,7 +6,7 @@ Wants=docker.service
 [Service]
 Type=simple
 User=root
-ExecStart=/bin/bash /mnt/e/ai_tools/mail/mailbus-launch-watchdog.sh
+ExecStart=/bin/bash /mnt/e/ai_tools/mail/docker-agents/mailbus-launch-watchdog.sh
 Restart=always
 RestartSec=3
 

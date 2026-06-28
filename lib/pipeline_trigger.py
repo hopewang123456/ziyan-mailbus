@@ -106,6 +106,15 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
 
     result = read_step_result(data_dir, task_id, current)
     if not result:
+        try:
+            from .delivery_normalizer import normalize_opencode_deliveries
+            cfg = json_read(os.path.join(data_dir, "config.json"), {})
+            agents = cfg.get("agents") or {}
+            normalize_opencode_deliveries(data_dir, agents, config=cfg)
+        except Exception:
+            pass
+        result = read_step_result(data_dir, task_id, current)
+    if not result:
         return {"ok": True, "skipped": "no_result"}
 
     mtime_ok = _result_mtime_ok(data_dir, task_id, current, result)
@@ -130,8 +139,8 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
     outcome = apply_submit(t, result, agents=agents, data_dir=data_dir)
     if not outcome.get("ok"):
         if outcome.get("action") == "retry_same_step":
-            from .task_fsm import archive_step_result_for_retry
-            archive_step_result_for_retry(data_dir, task_id, current, result)
+            from .task_fsm import archive_step_result_for_retry, revert_failed_retry
+            archived = archive_step_result_for_retry(data_dir, task_id, current, result)
             t = outcome.get("task") or t
             json_write(task_file, t)
             summary = result.get("summary", "") or outcome.get("message", "verify retry")
@@ -144,7 +153,10 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
             ):
                 info(f"[fsm] verify retry redispatch {task_id[:24]} -> {to_person}")
                 return {"ok": True, "action": "retry_same_step"}
-            warn(f"[fsm] verify retry dispatch failed {task_id[:30]}")
+            revert_failed_retry(data_dir, task_id, current, result, archived_path=archived)
+            json_write(task_file, t)
+            warn(f"[fsm] verify retry dispatch failed rollback {task_id[:30]}")
+            return {"ok": False, "error": "dispatch_failed"}
         debug(f"[fsm] {task_id[:24]} submit rejected: {outcome.get('error')}")
         return {"ok": False, "error": outcome.get("error")}
 
@@ -200,32 +212,10 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
     return {"ok": True, "action": action or "unknown"}
 
 
-def trigger_legacy(data_dir: str, agents: dict, paths: dict):
-    """兼容别名。"""
-    trigger(data_dir, agents, paths)
-
-
 def _result_mtime_ok(data_dir: str, task_id: str, current: dict, result: dict) -> bool:
-    step_started = current.get("started_at") or ""
-    result_ts = result.get("timestamp") or result.get("updated_at") or ""
-    if step_started and result_ts:
-        try:
-            return _parse_iso_dt(result_ts) >= _parse_iso_dt(step_started)
-        except Exception:
-            return True
-    if step_started:
-        sid = current.get("step_id")
-        paths_to_try = []
-        if sid:
-            paths_to_try.append(step_result_path(data_dir, task_id, sid))
-        paths_to_try.append(legacy_result_path(data_dir, task_id))
-        for rf in paths_to_try:
-            try:
-                mtime = datetime.fromtimestamp(os.path.getmtime(rf), tz=timezone.utc)
-                return mtime >= _parse_iso_dt(step_started)
-            except OSError:
-                continue
-    return True
+    from .task_fsm import result_mtime_ok
+
+    return result_mtime_ok(data_dir, task_id, current, result)
 
 
 def _close_pipeline_inbox(data_dir: str, paths: dict, task_id: str, agents: dict) -> int:
@@ -271,96 +261,90 @@ def _send_task(
 ):
     """写任务文件和推送消息给下一步的 agent。成功返回 True。"""
     from .pipeline_work_order import write_pipeline_work_order
+    from .task_lock import acquire_task_lock, release_task_lock, task_lock_holder
 
-    task_path = os.path.join(data_dir, "tasks", f"{task_id}.json")
-    planned = None
-    planned_rt = None
-    if os.path.isfile(task_path):
-        tdata = json_read(task_path, {})
-        chain = tdata.get("chain") or []
-        if chain:
-            head = chain[0]
-            planned = head.get("planned_agents")
-            planned_rt = head.get("planned_role_types")
+    lock_holder = None
+    lock_acquired_here = False
+    if task_id:
+        existing = task_lock_holder(data_dir, task_id)
+        if existing:
+            lock_holder = existing
+        else:
+            lock_holder = f"push:{to_person}:{step_id or step_num}"
+            if not acquire_task_lock(
+                data_dir, task_id, lock_holder, meta={"action": "push", "to": to_person},
+            ):
+                debug(f"[fsm] task lock busy {task_id[:24]} holder!=push")
+                return False
+            lock_acquired_here = True
 
-    nid, nf = write_pipeline_work_order(
-        data_dir,
-        task_id=task_id,
-        step_num=step_num,
-        to_person=to_person,
-        to_role=to_role,
-        from_person=from_person,
-        from_role=from_role,
-        summary=summary,
-        planned_agents=planned,
-        planned_role_types=planned_rt,
-        step_id=step_id,
-    )
-    if result_ref:
-        rf = os.path.join(data_dir, result_ref.replace("/mailbus/store/", "").lstrip("/"))
-    elif step_id:
-        rf = step_result_path(data_dir, task_id, step_id)
-    else:
-        rf = legacy_result_path(data_dir, task_id)
+    try:
+        task_path = os.path.join(data_dir, "tasks", f"{task_id}.json")
+        planned = None
+        planned_rt = None
+        if os.path.isfile(task_path):
+            tdata = json_read(task_path, {})
+            chain = tdata.get("chain") or []
+            if chain:
+                head = chain[0]
+                planned = head.get("planned_agents")
+                planned_rt = head.get("planned_role_types")
 
-    nxt_file = os.path.join(paths["inbox"], to_person, "inbox.json")
-    if not os.path.exists(os.path.dirname(nxt_file)):
-        return False
+        nid, nf = write_pipeline_work_order(
+            data_dir,
+            task_id=task_id,
+            step_num=step_num,
+            to_person=to_person,
+            to_role=to_role,
+            from_person=from_person,
+            from_role=from_role,
+            summary=summary,
+            planned_agents=planned,
+            planned_role_types=planned_rt,
+            step_id=step_id,
+        )
+        if result_ref:
+            rf = os.path.join(data_dir, result_ref.replace("/mailbus/store/", "").lstrip("/"))
+        elif step_id:
+            rf = step_result_path(data_dir, task_id, step_id)
+        else:
+            rf = legacy_result_path(data_dir, task_id)
 
-    nxt_data = json_read(nxt_file, {})
-    nxt_inbox = Inbox.from_dict(nxt_data) if nxt_data else Inbox(agent=to_person)
-    step_hint = f"step_id={step_id}" if step_id else f"pipeline_step={step_num}"
-    nxt_inbox.messages.append({
-        "id": nid,
-        "from": from_person,
-        "to": to_person,
-        "type": "task",
-        "priority": "normal",
-        "state": "pending",
-        "task_id": task_id,
-        "content": (
-            "📋 【%s】pipeline 步骤 (%s)\n任务文件: %s\n结果写入: %s\n"
-            "请读取任务文件执行，完成后写结果文件（含 pipeline_step 与 step_id）。\n\n"
-            "⚠️ 必须写入结果文件才能完成。"
-        ) % (task_id, step_hint, nf, rf),
-        "created_at": _now_iso(),
-    })
-    nxt_inbox.has_unread = True
-    json_write(nxt_file, nxt_inbox.to_dict())
-    debug(f"[fsm] pushed {to_person} task={task_id[:24]} {step_hint}")
-    return True
+        agents = json_read(os.path.join(data_dir, "config.json"), {}).get("agents", {})
+        to_cfg = agents.get(to_person) or {}
+        from .agent_adapters import store_path_for_agent
 
+        nf_disp = store_path_for_agent(data_dir, nf, to_cfg)
+        rf_disp = store_path_for_agent(data_dir, rf, to_cfg)
 
-# ── 兼容旧测试 / 工具 ─────────────────────────────────────────────────────
+        nxt_file = os.path.join(paths["inbox"], to_person, "inbox.json")
+        if not os.path.exists(os.path.dirname(nxt_file)):
+            return False
 
-def _find_result(data_dir, task_id):
-    """legacy: 精确 msg-results/{task_id}.json"""
-    p = legacy_result_path(data_dir, task_id)
-    return p if os.path.isfile(p) else None
-
-
-def _result_applies_to_step(result: dict, result_file: str, task_id: str, current: dict, chain: list) -> bool:
-    step_started = current.get("started_at") or ""
-    result_ts = result.get("timestamp") or result.get("updated_at") or ""
-    mtime_ok = True
-    if step_started and result_ts:
-        try:
-            mtime_ok = _parse_iso_dt(result_ts) >= _parse_iso_dt(step_started)
-        except Exception:
-            mtime_ok = True
-    elif step_started and result_file and os.path.isfile(result_file):
-        try:
-            mtime = datetime.fromtimestamp(os.path.getmtime(result_file), tz=timezone.utc)
-            mtime_ok = mtime >= _parse_iso_dt(step_started)
-        except (OSError, Exception):
-            pass
-    ok, _ = result_applies_to_step(result, task_id, current, chain, result_mtime_ok=mtime_ok)
-    return ok
-
-
-def _is_done(result):
-    from .task_fsm import _DONE_CONCLUSIONS
-    c = (result.get("conclusion") or "").lower()
-    if c in _DONE_CONCLUSIONS:
+        nxt_data = json_read(nxt_file, {})
+        nxt_inbox = Inbox.from_dict(nxt_data) if nxt_data else Inbox(agent=to_person)
+        step_hint = f"step_id={step_id}" if step_id else f"pipeline_step={step_num}"
+        nxt_inbox.messages.append({
+            "id": nid,
+            "from": from_person,
+            "to": to_person,
+            "type": "task",
+            "priority": "normal",
+            "state": "pending",
+            "task_id": task_id,
+            "pipeline_step": step_num,
+            "step_id": step_id,
+            "content": (
+                "📋 【%s】pipeline 步骤 (%s)\n任务文件: %s\n结果写入: %s\n"
+                "请读取任务文件执行，完成后写结果文件（含 pipeline_step 与 step_id）。\n\n"
+                "⚠️ 必须写入结果文件才能完成。"
+            ) % (task_id, step_hint, nf_disp, rf_disp),
+            "created_at": _now_iso(),
+        })
+        nxt_inbox.has_unread = True
+        json_write(nxt_file, nxt_inbox.to_dict())
+        debug(f"[fsm] pushed {to_person} task={task_id[:24]} {step_hint}")
         return True
-    return result.get("status") == "completed"
+    finally:
+        if task_id and lock_acquired_here and lock_holder:
+            release_task_lock(data_dir, task_id, lock_holder)

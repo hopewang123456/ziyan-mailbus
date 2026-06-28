@@ -2,7 +2,10 @@
 # v3 LIVE 验收 — 容器内 Envelope 创建
 set -euo pipefail
 
-BASE="http://127.0.0.1:9812"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/lib/api-url.sh"
+
+BASE="$MAILBUS_API_BASE"
 TASK_ID="${1:-game-stellar-v3-20260618}"
 STORE="/mailbus/store"
 
@@ -32,7 +35,7 @@ rm -f "${STORE}/msg-results/${TASK_ID}.json"
 
 log "2. create task (Envelope) if missing"
 if [ ! -f "${STORE}/tasks/${TASK_ID}.json" ]; then
-  python3 /mailbus/tools/task-create-envelope.py \
+  python3 /mailbus/tools/ops/tools/ops/task-create-envelope.py \
     --api "${BASE}" \
     --task-id "${TASK_ID}" \
     --intent "星际驿站 v3 LIVE — 全员 agent 真实写 msg-results 验收" \

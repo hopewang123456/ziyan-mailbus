@@ -2,8 +2,11 @@
 # v3 LIVE 跑前环境自检 — mailbus + agent 挂载 + pipeline 状态
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/lib/api-url.sh"
+
 MAIL="/mnt/e/ai_tools/mail"
-BASE="http://127.0.0.1:9812"
+BASE="$MAILBUS_API_BASE"
 TASK_ID="${1:-game-stellar-20260618}"
 PASS=0
 FAIL=0
@@ -38,7 +41,7 @@ code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 "$BASE/" 2>/de
 docker exec docker-agents-mailbus-1 python3 <<'PY'
 import json, urllib.request, sys
 try:
-    with urllib.request.urlopen("http://127.0.0.1:9812/api/status", timeout=5) as r:
+    with urllib.request.urlopen(""$MAILBUS_API_BASE"/api/status", timeout=5) as r:
         d = json.loads(r.read())
     sched = d.get("scheduler") or {}
     if not sched.get("running"):
@@ -112,7 +115,7 @@ fi
 
 if [ "${SKIP_AGENT_WRITE_SMOKE:-0}" != "1" ]; then
   log "========== 7b. agent 落盘探针（可选 SKIP_AGENT_WRITE_SMOKE=1 跳过） =========="
-  if docker exec docker-agents-mailbus-1 python3 /mailbus/tools/smoke-agent-disk-write.py \
+  if docker exec docker-agents-mailbus-1 python3 /mailbus/tools/ops/tools/ops/smoke-agent-disk-write.py \
       --agent lingzhao --data-dir /mailbus/store --timeout "${AGENT_WRITE_TIMEOUT:-420}" \
       >/tmp/pre-v3-agent-write.log 2>&1; then
     pass "smoke-agent-disk-write lingzhao"

@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mailbus.local/schemas/order-intake.schema.json",
+  "title": "Order Intake Record",
+  "type": "object",
+  "required": [
+    "intake_id",
+    "source_platform",
+    "title",
+    "score",
+    "decision",
+    "created_at",
+    "updated_at"
+  ],
+  "properties": {
+    "intake_id": {
+      "type": "string",
+      "pattern": "^intake-[0-9]{8}-[a-z0-9]{6}$"
+    },
+    "source_platform": { "type": "string" },
+    "title": { "type": "string", "minLength": 3 },
+    "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "decision": {
+      "type": "string",
+      "enum": ["pending", "pursue", "watch", "reject", "handed_to_lingzhao"]
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "analyzed",
+        "contacting",
+        "qualified",
+        "designing",
+        "await_customer",
+        "delivery",
+        "closed"
+      ]
+    },
+    "commercial_gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["gate_id", "status"],
+        "properties": {
+          "gate_id": {
+            "type": "string",
+            "enum": [
+              "contact_done",
+              "req_to_lingzhao",
+              "customer_design_ok",
+              "start_delivery",
+              "content_start"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "approved", "skipped", "denied"]
+          }
+        }
+      }
+    }
+  }
+}

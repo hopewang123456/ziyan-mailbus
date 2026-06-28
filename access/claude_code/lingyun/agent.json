@@ -1,0 +1,25 @@
+{
+  "schema": "mailbus-agent-v3",
+  "agent_id": "lingyun",
+  "framework": "claude_code",
+  "archetype": "coding-pro",
+  "skills": [
+    "mail/skills/common/agent-universal",
+    "mail/skills/common/mailbus-file-protocol",
+    "mail/skills/frameworks/claude_code",
+    "mail/skills/roles/archetypes/coding-pro",
+    "mail/skills/roles/overlays/lingyun"
+  ],
+  "rules": [
+    "mail/rules/common/execution-order.md",
+    "mail/rules/common/task-fsm.md",
+    "mail/rules/common/team-secrets-policy.md",
+    "mail/rules/frameworks/claude_code/delivery.md",
+    "mail/rules/roles/coding-pro/boundaries.md"
+  ],
+  "workspace": "/mnt/e/ai_tools/.mailbus/claude/lingyun",
+  "docker": {
+    "service": "claude-agent",
+    "profile": "lingyun"
+  }
+}

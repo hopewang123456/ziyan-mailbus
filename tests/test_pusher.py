@@ -2,7 +2,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.pusher import resolve_cli, resolve_cli_chain
+from lib.pusher import resolve_cli, resolve_cli_chain, _replace_msg_placeholder
 
 TYPES = {
     "hermes": {"push": "legacy"},
@@ -63,6 +63,13 @@ def test_resolve_cli_chain_multi():
     assert "--model ds" in chain[0][0]
     assert "--model qw" in chain[1][0]
     print("  ✓ test_resolve_cli_chain_multi")
+
+
+def test_replace_msg_placeholder_powershell_escapes_quotes():
+    cmd = 'powershell -Command "claude -p \'MSG\'"'
+    out = _replace_msg_placeholder(cmd, "it's a test")
+    assert "it''s a test" in out
+    print("  ✓ test_replace_msg_placeholder_powershell_escapes_quotes")
 
 
 if __name__ == "__main__":

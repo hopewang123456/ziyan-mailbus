@@ -65,7 +65,7 @@ mailbus is **pure Python + filesystem** — on **Linux and macOS** you can run i
 | Deployment | API port | Notes |
 |------------|----------|-------|
 | Native `mailbus serve` | **9814** | Linux / macOS / Windows |
-| Docker `mailbus` service | **9812** | Inside `docker-agents/` compose network; host mapping may differ |
+| Docker `mailbus` service | **9814** | Compose maps `$MAILBUS_API_PORT` (default 9814) |
 | n8n webhook | **5678** | Optional; video publish drill |
 | AgentMemory | **3111** | Optional |
 | Lingyun Claude ttyd | **9260** | WSL host · Claude Code pro |
@@ -107,14 +107,14 @@ EOF
 # 4. Start bus (built-in SchedulerHub: scan, platform-scout, pipeline-repair, …)
 mailbus serve --host 127.0.0.1 --port 9814 --data-dir ./store
 # Or background:
-bash tools/restart-mailbus.sh 9814
+python tools/restart-mailbus.py --port 9814
 
 # 5. Optional: n8n sidecar
 bash docker-agents/start-n8n.sh
-bash tools/setup-n8n.sh
+bash tools/tools/ops/setup-n8n.sh
 
 # 6. Acceptance
-python3 tools/run-final-acceptance.py
+python3 tools/tools/ops/run-final-acceptance.py
 python3 tools/validate-order-intake.py --data-dir store
 # Dashboard: open docs/index.html (API base defaults to http://127.0.0.1:9814)
 ```
@@ -131,13 +131,13 @@ mailbus init --data-dir store
 # Configure .env (same vars as Linux)
 
 # Start / restart native serve (default 9814)
-.\tools\restart-mailbus.ps1
+python tools/restart-mailbus.py --port 9814
 
 # n8n in WSL Docker
-.\tools\setup-n8n.ps1          # or -Reset to rebuild workflow volume
+.\tools\tools/ops/setup-n8n.ps1          # or -Reset to rebuild workflow volume
 # Or: wsl bash docker-agents/start-n8n.sh
 
-python tools\run-final-acceptance.py
+python tools\tools/ops/run-final-acceptance.py
 ```
 
 Tips:
@@ -155,13 +155,13 @@ bash start-team.sh            # compose up + health checks
 bash mailbus-pipeline-e2e.sh  # end-to-end regression
 ```
 
-Inside the mailbus container the API listens on **9812** (see `docker-compose.yml`). Host scripts under `docker-agents/*.sh` use that port — this is intentional and different from native **9814**.
+Docker and native mailbus API both default to **9814** (`docker-compose.yml` + `lib/constants.py`). Override with `MAILBUS_API_PORT`; see `docker-agents/lib/api-url.sh` and `config/env.template`.
 
 ### Optional components
 
 | Component | Purpose | Setup |
 |-----------|---------|-------|
-| **n8n** | Multi-channel publish (video drill) | `setup-n8n.sh` / `setup-n8n.ps1` |
+| **n8n** | Multi-channel publish (video drill) | `tools/ops/setup-n8n.sh` / `tools/ops/setup-n8n.ps1` |
 | **ComfyUI** | Image generation step | `docker-agents/start-comfyui-gpu.sh` |
 | **AgentMemory** | Long-term message memory | `npm i -g @agentmemory/agentmemory && agentmemory` |
 
@@ -170,9 +170,9 @@ Inside the mailbus container the API listens on **9812** (see `docker-compose.ym
 ```bash
 python3 tests/run_all.py                          # unit tests
 python3 tools/validate-scheduler.py --url http://127.0.0.1:9814
-python3 tools/smoke-platform-scout.py --data-dir store
+python3 tools/tools/ops/smoke-platform-scout.py --data-dir store
 python3 tools/validate-order-intake.py --data-dir store
-python3 tools/run-final-acceptance.py
+python3 tools/tools/ops/run-final-acceptance.py
 ```
 
 ### Roadmap gaps (see `plans/`)
@@ -413,7 +413,9 @@ Full example config at [examples/config.example.json](examples/config.example.js
 ```
 ziyan-mailbus/
 ├── bus.py                        # CLI entry point
-├── mailbus-boot.sh                # Full startup script (launches bus.py + all agent processes)
+├── docker-agents/start-team.sh    # Team container startup (recommended)
+├── mailbus-send                   # Send CLI wrapper
+├── mailbus-memory-bridge.py       # AgentMemory dual-write bridge
 ├── lib/
 │   ├── __init__.py
 │   ├── models.py                 # Data models (Message, Inbox, MsgType)

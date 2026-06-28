@@ -134,12 +134,12 @@ def validate_config(config: dict, config_path: str = "") -> list:
             elif cfg["type"] not in ("hermes", "hermes_profile", "openclaw", "cline", "opencode", "codex", "claude_code", "none"):
                 errors.append(f"agents.{name}.type: 不支持的 agent 类型 ({cfg['type']})")
             # 检查未知字段
-            allowed = {"type", "role", "profile", "agent", "agent_id", "provider",
+            allowed = {"type", "role", "profile", "agent", "agent_id", "archetype", "provider",
                        "models", "webhook_url", "webhook_secret",
                        "name", "inbox", "profile_paths", "launch",
                        "max_concurrency", "push", "push_timeout_seconds", "model",
-                       "max_turns", "claude", "docker", "cwd", "file_task_for_executable",
-                       "file_task_content_threshold"}
+                       "max_turns", "claude", "codex", "docker", "cwd", "file_task_for_executable",
+                       "file_task_content_threshold", "cli_msg_max_chars", "processing_stale_minutes"}
             extra = set(cfg.keys()) - allowed
             if extra:
                 errors.append(f"agents.{name}: 未知字段 {extra}")

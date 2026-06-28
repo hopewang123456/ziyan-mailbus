@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Design Step Decomposition Result",
+  "description": "Phase 6 · 方案设计步 msg-results 内 decomposition 块",
+  "type": "object",
+  "properties": {
+    "decomposition": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["ready", "simple", "clarifications_needed", "blocked"]
+        },
+        "clarifications_needed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["question"],
+            "properties": {
+              "question": { "type": "string", "minLength": 1 },
+              "context": { "type": "string" },
+              "blocking": { "type": "boolean", "default": true }
+            }
+          }
+        },
+        "subtasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "title", "role_type"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "title": { "type": "string", "minLength": 1 },
+              "role_type": { "type": "integer", "minimum": 1 },
+              "assignee_hint": { "type": "string" },
+              "acceptance": { "type": "string" },
+              "depends_on": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "estimate_minutes": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

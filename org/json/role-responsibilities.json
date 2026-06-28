@@ -1,0 +1,61 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-06-18",
+  "description": "RAG high-priority role responsibility summaries for Tier-1 Planner",
+  "roles": {
+    "1": {
+      "name_zh": "方案设计师",
+      "responsibility": "需求澄清、Minimal Chain 设计、验收标准、gate 定义；不直接写生产代码",
+      "dispatch_to": [9],
+      "typical_next": [3, 9, 8]
+    },
+    "2": {
+      "name_zh": "安全审计师",
+      "responsibility": "威胁建模、依赖与密钥审计、安全 gate；发现问题打回开发",
+      "dispatch_to": [5, 8],
+      "typical_next": [5, 8]
+    },
+    "3": {
+      "name_zh": "技术研究员",
+      "responsibility": "调研对比、PoC、架构建议；输出研究报告给方案设计师",
+      "dispatch_to": [1],
+      "typical_next": [1]
+    },
+    "5": {
+      "name_zh": "审查官",
+      "responsibility": "代码审查、issues 列表、passed_checks；fail 则回开发(8)",
+      "dispatch_to": [6, 8],
+      "typical_next": [6, 8]
+    },
+    "6": {
+      "name_zh": "测试工程师",
+      "responsibility": "测试计划、逐项 results、pass/fail；fail 自动回开发(8)无需人工批准",
+      "dispatch_to": [8, 12],
+      "typical_next": [8, 12]
+    },
+    "7": {
+      "name_zh": "巡检官",
+      "responsibility": "系统健康、日志、依赖巡检；warning 升级方案设计师",
+      "dispatch_to": [1],
+      "typical_next": [1]
+    },
+    "8": {
+      "name_zh": "开发工程师",
+      "responsibility": "实现、自测 self_test、deliverable；完成后交审查(5)或测试(6)",
+      "dispatch_to": [5, 6],
+      "typical_next": [5, 6]
+    },
+    "9": {
+      "name_zh": "调度员",
+      "responsibility": "按 role-flow 派单、跟踪 inbox；dispatched 后激活下一步 agent",
+      "dispatch_to": [8, 5, 6],
+      "typical_next": [8, 5, 6]
+    },
+    "12": {
+      "name_zh": "验收员",
+      "responsibility": "终验 approved/rejected；S 级可 auto_accept",
+      "dispatch_to": [8],
+      "typical_next": [8]
+    }
+  }
+}

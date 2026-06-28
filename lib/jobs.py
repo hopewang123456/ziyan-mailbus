@@ -206,7 +206,7 @@ def run_agentmemory_watchdog(data_dir: str) -> int:
 
 def run_log_rotate(data_dir: str) -> int:
     root = _mail_root(data_dir)
-    script = os.path.join(root, "mailbus-log-rotate.py")
+    script = os.path.join(root, "tools", "ops", "mailbus-log-rotate.py")
     if not os.path.isfile(script):
         return 0
     try:

@@ -33,6 +33,6 @@ if [ "$ready" != "1" ]; then
 fi
 echo ""
 echo "ComfyUI GPU (WSL): http://127.0.0.1:8188"
-echo "Windows mailbus: powershell -File tools/sync-comfyui-url.ps1"
+echo "Windows mailbus: powershell -File tools/tools/ops/sync-comfyui-url.ps1"
 echo "GPU 分时: store/config.json mailbus_internal_llm.gpu_sharing"
 echo "勿并行启动 Windows CPU 版 ComfyUI（ensure-comfyui.ps1 -Start）以免占 8188"

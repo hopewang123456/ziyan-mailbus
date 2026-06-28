@@ -1,4 +1,8 @@
-"""启动时加载 mailbus 环境变量（.env）。"""
+"""启动时加载 mailbus 环境变量（.env）。
+
+加载链（#36）：`config/env.template` → 复制为 `mail/.env` → 本模块读
+`mail/.env` + `docker-agents/.env`；Shell 脚本用 `docker-agents/lib/mailbus-env.sh`。
+"""
 
 from __future__ import annotations
 

@@ -16,13 +16,14 @@ services:
       context: ./mailbus
       dockerfile: Dockerfile
     ports:
-      - "9812:9812"
+      - "${MAILBUS_API_PORT:-9814}:${MAILBUS_API_PORT:-9814}"
     networks:
       - ziyan-net
     volumes:
       - /mnt/e/ai_tools/mail:/mailbus
-      - /mnt/e/ai_tools/mail/adapters:/mailbus/adapters:ro
-      - /mnt/e/ai_tools/mail/roles:/mailbus/roles:ro
+      - /mnt/e/ai_tools/mail/skills:/mailbus/skills:ro
+      - /mnt/e/ai_tools/mail/rules:/mailbus/rules:ro
+      - /mnt/e/ai_tools/mail/access:/mailbus/access:ro
       - /mnt/e/hermes-data/.hermes/.env:/run/hermes/.env:ro
       - /mnt/e/hermes-data/.hermes/shared-memory:/hermes/shared-memory
       - /var/run/docker.sock:/var/run/docker.sock
@@ -40,9 +41,9 @@ services:
       - MAILBUS_INTERNAL_LLM_API_KEY=${MAILBUS_INTERNAL_LLM_API_KEY:-${DEEPSEEK_API_KEY:-}}
       - MAILBUS_INTERNAL_LLM_PROVIDER_PRIORITY=${MAILBUS_INTERNAL_LLM_PROVIDER_PRIORITY:-local,remote}
       - IMAGE_GENERATE_WEBHOOK_URL=${IMAGE_GENERATE_WEBHOOK_URL:-}
-      - N8N_PUBLISH_WEBHOOK_URL=${N8N_PUBLISH_WEBHOOK_URL:-}
+      - MAILBUS_API_PORT=${MAILBUS_API_PORT:-9814}
     restart: unless-stopped
-    command: ["python3", "-m", "bus", "serve", "--host", "0.0.0.0", "--port", "9812", "--data-dir", "/mailbus/store"]
+    command: ["python3", "-m", "bus", "serve", "--host", "0.0.0.0", "--port", "9814", "--data-dir", "/mailbus/store"]
 
   iii-init:
     image: busybox:1.36
@@ -123,13 +124,12 @@ services:
       - /mnt/e/hermes-data/.hermes:/home/hermes/.hermes
       - /mnt/e/ai_tools/mail/store:/mailbus/store
       - /mnt/e/ai_tools/mail/tools:/mailbus/tools:ro
+      - /mnt/e/ai_tools/mail/skills:/mailbus/skills:ro
       - /mnt/e/ai_tools/mail/rules:/mailbus/rules:ro
-      - /mnt/e/ai_tools/mail/identities:/mailbus/identities:ro
-      - /mnt/e/ai_tools/mail/external-tools:/mailbus/external-tools:ro
-      - /mnt/e/ai_tools/mail/adapters:/mailbus/adapters:ro
-      - /mnt/e/ai_tools/mail/roles:/mailbus/roles:ro
+      - /mnt/e/ai_tools/mail/access:/mailbus/access:ro
+      - /mnt/e/ai_tools/mail/access/external-tools:/mailbus/external-tools:ro
+      - /mnt/e/ai_tools/mail/access/hermes/.sync:/mailbus/access/hermes/.sync
       - /mnt/e/ai_tools/mail/store/inbox:/home/hermes/inbox:ro
-      - /mnt/e/ai_tools/mail/identities:/home/hermes/identities:ro
     environment:
       - HERMES_HOME=/home/hermes/.hermes
       - AGENTMEMORY_URL=http://iii-engine:3111
@@ -161,10 +161,10 @@ services:
       - /mnt/e/ai_tools/openclaw_space:/workspace
       - /mnt/e/ai_tools/mail/store:/mailbus/store
       - /mnt/e/ai_tools/mail/tools:/mailbus/tools:ro
+      - /mnt/e/ai_tools/mail/skills:/mailbus/skills:ro
       - /mnt/e/ai_tools/mail/rules:/mailbus/rules:ro
-      - /mnt/e/ai_tools/mail/external-tools:/mailbus/external-tools:ro
-      - /mnt/e/ai_tools/mail/adapters:/mailbus/adapters:ro
-      - /mnt/e/ai_tools/mail/roles:/mailbus/roles:ro
+      - /mnt/e/ai_tools/mail/access:/mailbus/access:ro
+      - /mnt/e/ai_tools/mail/access/external-tools:/mailbus/external-tools:ro
       - /mnt/e/ai_tools/mail/store/inbox:/inbox:ro
       - /mnt/e/hermes-data/.hermes:/hermes-secrets:ro
     environment:
@@ -196,11 +196,10 @@ services:
     volumes:
       - /mnt/e/ai_tools/mail/store:/mailbus/store
       - /mnt/e/ai_tools/mail/tools:/mailbus/tools:ro
+      - /mnt/e/ai_tools/mail/skills:/mailbus/skills:ro
       - /mnt/e/ai_tools/mail/rules:/mailbus/rules:ro
-      - /mnt/e/ai_tools/mail/identities:/mailbus/identities:ro
-      - /mnt/e/ai_tools/mail/external-tools:/mailbus/external-tools:ro
-      - /mnt/e/ai_tools/mail/adapters:/mailbus/adapters:ro
-      - /mnt/e/ai_tools/mail/roles:/mailbus/roles:ro
+      - /mnt/e/ai_tools/mail/access:/mailbus/access:ro
+      - /mnt/e/ai_tools/mail/access/external-tools:/mailbus/external-tools:ro
       - /mnt/e/ai_tools/lingxiao:/workspace/lingxiao:ro
       - /mnt/e/hermes-data/.hermes/.env:/run/hermes/.env:ro
       - /mnt/e/.codex/skills:/home/node/.codex/skills
@@ -248,11 +247,10 @@ services:
     volumes:
       - /mnt/e/ai_tools/mail/store:/mailbus/store
       - /mnt/e/ai_tools/mail/tools:/mailbus/tools:ro
+      - /mnt/e/ai_tools/mail/skills:/mailbus/skills:ro
       - /mnt/e/ai_tools/mail/rules:/mailbus/rules:ro
-      - /mnt/e/ai_tools/mail/identities:/mailbus/identities:ro
-      - /mnt/e/ai_tools/mail/external-tools:/mailbus/external-tools:ro
-      - /mnt/e/ai_tools/mail/adapters:/mailbus/adapters:ro
-      - /mnt/e/ai_tools/mail/roles:/mailbus/roles:ro
+      - /mnt/e/ai_tools/mail/access:/mailbus/access:ro
+      - /mnt/e/ai_tools/mail/access/external-tools:/mailbus/external-tools:ro
       - /mnt/e/hermes-data/.hermes/.env:/run/hermes/.env:ro
       - /mnt/e/.codex/skills:/home/node/.codex/skills
       - /mnt/e/ai_tools/node_modules:/node_modules:ro
@@ -295,10 +293,10 @@ services:
     volumes:
       - /mnt/e/ai_tools/mail/store:/mailbus/store
       - /mnt/e/ai_tools/mail/tools:/mailbus/tools:ro
+      - /mnt/e/ai_tools/mail/skills:/mailbus/skills:ro
       - /mnt/e/ai_tools/mail/rules:/mailbus/rules:ro
-      - /mnt/e/ai_tools/mail/external-tools:/mailbus/external-tools:ro
-      - /mnt/e/ai_tools/mail/adapters:/mailbus/adapters:ro
-      - /mnt/e/ai_tools/mail/roles:/mailbus/roles:ro
+      - /mnt/e/ai_tools/mail/access:/mailbus/access:ro
+      - /mnt/e/ai_tools/mail/access/external-tools:/mailbus/external-tools:ro
       - /mnt/e/ai_tools/mail/docker-agents/codex-agent/wait-agentmemory.sh:/mailbus/docker-agents/codex-agent/wait-agentmemory.sh:ro
       - /mnt/e/ai_tools/opencode:/workspace/opencode:ro
       - /mnt/e/ai_tools/opencode/skills:/workspace/opencode/skills

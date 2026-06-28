@@ -2,10 +2,13 @@
 # 持续监控 pipeline 任务链 + 服务健康（可 cron 或后台跑）
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/lib/api-url.sh"
+
 TASK_ID="${1:-mailbus-hardening-20260616}"
 INTERVAL="${2:-60}"
 MAX_ROUNDS="${3:-9999}"
-BASE="http://127.0.0.1:9812"
+BASE="$MAILBUS_API_BASE"
 LOG="/tmp/pipeline-watch-${TASK_ID}.log"
 
 log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG"; }

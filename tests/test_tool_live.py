@@ -25,14 +25,9 @@ from lib.workflow.tool_exec import mark_tool_live_after_gate, run_tool_step, too
 
 
 def _seed(tmp: str) -> None:
-    root = os.path.join(os.path.dirname(__file__), "..", "store")
-    for sub in ("roles/json", "workflows", "dispatch", "rules"):
-        src = os.path.join(root, sub)
-        dst = os.path.join(tmp, sub)
-        if os.path.isdir(src):
-            shutil.copytree(src, dst, dirs_exist_ok=True)
-    os.makedirs(os.path.join(tmp, "tasks"), exist_ok=True)
-    json_write(os.path.join(tmp, "config.json"), {
+    from tests.test_helpers import seed_runtime_from_sot
+
+    seed_runtime_from_sot(tmp, extra_config={
         "mailbus_workflow": {"tool_live": False, "tool_live_gates": ["publish_go"]},
     })
 

@@ -4,7 +4,7 @@ Hermes / OpenClaw / Cline / OpenCode / Codex CLI / Claude Code / A2A Remote 等
 **平级 Agent 架构**，push / interactive CLI、HTTP 交付均在 Adapter 层集中维护。
 
 mailbus Core 只认 agent_id + role_type；新增框架 = 新 Adapter 类 + ADAPTERS 注册。
-规范: store/rules/agent-layer-spec.md · store/rules/agent-adapter-layer.md
+规范: mail/access/{framework}/adapter/SPEC.md · mail/docs/agent-adapter-layer.md
 """
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ import os
 import re
 import subprocess
 from typing import Optional
+
+from .access_adapters import load_adapter_spec
 
 # ── 容器解析 ──────────────────────────────────────────────────────
 
@@ -145,6 +147,7 @@ class HermesProfileAdapter(BaseAdapter):
     type_name = "hermes_profile"
     container_service = "hermes"
     supports_auto_ack = True
+    mark_processing_on_task_push = True
 
     def _profile(self, agent_name: str, agent_cfg: dict) -> str:
         return agent_cfg.get("profile") or agent_name
@@ -227,11 +230,12 @@ class OpenClawAdapter(BaseAdapter):
         agent_id = self._agent_id(agent_name, agent_cfg)
         state_dir = self._state_dir(agent_name, agent_cfg)
         mflag = model_flag(agent_cfg, agent_types, self.type_name, model_alias)
+        oc_timeout = self.push_timeout_seconds(pipeline=True, agent_cfg=agent_cfg)
         return _join(
             f"{self._docker_prefix(container, state_dir)} openclaw agent --local --agent {agent_id}",
             "--message 'MSG'",
             mflag,
-            "--timeout 120",
+            f"--timeout {oc_timeout}",
         )
 
     def build_interactive_cli(self, agent_name, agent_cfg, agent_types) -> str:
@@ -287,7 +291,7 @@ class ClineAdapter(BaseAdapter):
         cwd = _push_cwd(agent_cfg)
         provider = self._provider_id(agent_cfg, agent_types, model_alias)
         model = self._model_id(agent_cfg, agent_types, model_alias)
-        timeout = self.push_timeout_seconds(pipeline=False)
+        timeout = self.push_timeout_seconds(pipeline=True, agent_cfg=agent_cfg)
         # prompt 为 positional；与 Hermes -q 不同，须 -P/-m/-t/-c
         inner = _join(
             "cline 'MSG'",
@@ -397,23 +401,52 @@ class CodexAdapter(BaseAdapter):
     def _service(self, agent_name: str, agent_cfg: dict) -> str:
         return (agent_cfg.get("docker") or {}).get("service") or agent_name
 
-    def _model_id(self, agent_cfg, agent_types, model_alias) -> str:
+    def _codex_sandbox(self, agent_cfg: dict, *, pipeline: bool = False) -> str:
+        push = agent_cfg.get("push") or {}
+        codex = agent_cfg.get("codex") or {}
+        if pipeline:
+            sb = push.get("pipeline_sandbox") or codex.get("pipeline_sandbox")
+            if sb:
+                return str(sb)
+        return str(
+            push.get("sandbox")
+            or codex.get("sandbox")
+            or "workspace-write"
+        )
+
+    def _model_id(
+        self,
+        agent_cfg,
+        agent_types,
+        model_alias,
+        *,
+        pipeline: bool = False,
+    ) -> str:
+        push = agent_cfg.get("push") or {}
+        if pipeline and push.get("pipeline_model"):
+            alias = str(push["pipeline_model"])
+            raw = model_flag(agent_cfg, agent_types, self.type_name, alias)
+            mid = _flag_value(raw, "--model ", "-m ")
+            return mid or alias
         if agent_cfg.get("model"):
             return str(agent_cfg["model"])
         raw = model_flag(agent_cfg, agent_types, self.type_name, model_alias)
         mid = _flag_value(raw, "--model ", "-m ")
         return mid or "deepseek-v4-flash"
 
-    def build_push_cli(self, agent_name, agent_cfg, agent_types, model_alias=None) -> str:
+    def build_push_cli(
+        self, agent_name, agent_cfg, agent_types, model_alias=None, *, pipeline: bool = False,
+    ) -> str:
         service = self._service(agent_name, agent_cfg)
         container = resolve_container(agent_cfg, agent_name, service)
         cwd = _push_cwd(agent_cfg)
-        model = self._model_id(agent_cfg, agent_types, model_alias)
+        model = self._model_id(agent_cfg, agent_types, model_alias, pipeline=pipeline)
+        sandbox = self._codex_sandbox(agent_cfg, pipeline=pipeline)
         inner = _join(
             "codex exec",
             "--json --ephemeral --skip-git-repo-check",
             f"--cd {cwd}",
-            "-s workspace-write",
+            f"-s {sandbox}",
             '-c \'approval_policy="never"\'',
             f"-m {model}",
             "'MSG'",
@@ -434,6 +467,30 @@ class CodexAdapter(BaseAdapter):
             if any(n in low for n in noise):
                 continue
             if re.search(r"\bcodex\s+exec\b", line):
+                return True
+        return False
+
+    def cli_active_in_ps_for(
+        self,
+        agent_name: str,
+        agent_cfg: dict,
+        ps_output: str,
+        *,
+        msg_id: str = "",
+        task_id: str = "",
+    ) -> bool:
+        """Codex 单槽：仅当 ps 行匹配指定 msg_id / task_id 时视为占用。"""
+        noise = ("grep", "tail -f /dev/null", "node_modules/@openai/codex")
+        needles = [n for n in (msg_id, task_id) if n]
+        if not needles:
+            return self.cli_active_in_ps(agent_name, agent_cfg, ps_output)
+        for line in ps_output.splitlines():
+            low = line.lower()
+            if any(n in low for n in noise):
+                continue
+            if not re.search(r"\bcodex\s+exec\b", line):
+                continue
+            if any(n in line for n in needles):
                 return True
         return False
 
@@ -505,6 +562,11 @@ def get_adapter(agent_type: str) -> Optional[BaseAdapter]:
     return ADAPTERS.get(agent_type or "none")
 
 
+def framework_adapter_spec(framework: str) -> str:
+    """Load access/{fw}/adapter/SPEC.md (v3 SoT)."""
+    return load_adapter_spec(framework)
+
+
 def _legacy_launch_command(agent_cfg: dict) -> str:
     return ((agent_cfg.get("launch") or {}).get("cli") or {}).get("command", "").strip()
 
@@ -539,6 +601,8 @@ def resolve_push_cli(
     agent_cfg: dict,
     agent_types: dict,
     model_alias: Optional[str] = None,
+    *,
+    pipeline: bool = False,
 ) -> str:
     """mailbus 推送用 CLI（非 TTY）。"""
     atype = agent_cfg.get("type", "none")
@@ -548,6 +612,10 @@ def resolve_push_cli(
 
     adapter = get_adapter(atype)
     if adapter:
+        if atype == "codex":
+            return adapter.build_push_cli(
+                agent_name, agent_cfg, agent_types, model_alias, pipeline=pipeline,
+            )
         return adapter.build_push_cli(agent_name, agent_cfg, agent_types, model_alias)
 
     # 极旧配置：agent_types.push 模板 fallback
@@ -597,29 +665,46 @@ def resolve_interactive_cli(
 
 def agent_cli_active(agent_name: str, agents: dict) -> bool:
     """容器内或宿主机是否仍有该 agent 的任务 CLI 在跑。"""
+    return agent_cli_active_for(agent_name, agents)
+
+
+def agent_cli_active_for(
+    agent_name: str,
+    agents: dict,
+    *,
+    msg_id: str = "",
+    task_id: str = "",
+) -> bool:
+    """按 msg_id / task_id 精确判断 CLI 是否仍为该工单占用（Codex 单槽）。"""
     agent_cfg = agents.get(agent_name) or {}
     adapter = get_adapter(agent_cfg.get("type", ""))
     if not adapter:
         return False
+    use_precise = bool(msg_id or task_id) and hasattr(adapter, "cli_active_in_ps_for")
     if not adapter.container_service:
         from .claude_launch import host_ps_output
 
-        return adapter.cli_active_in_ps(agent_name, agent_cfg, host_ps_output())
-    container = resolve_container(agent_cfg, agent_name, adapter.container_service)
+        ps = host_ps_output()
+        if use_precise:
+            return adapter.cli_active_in_ps_for(
+                agent_name, agent_cfg, ps, msg_id=msg_id, task_id=task_id,
+            )
+        return adapter.cli_active_in_ps(agent_name, agent_cfg, ps)
+    docker_svc = (agent_cfg.get("docker") or {}).get("service")
+    default_svc = docker_svc or adapter.container_service or agent_name
+    container = resolve_container(agent_cfg, agent_name, default_svc)
     if not container:
         return False
-    try:
-        r = subprocess.run(
-            ["docker", "exec", container, "ps", "aux"],
-            capture_output=True,
-            text=True,
-            timeout=8,
-        )
-        if r.returncode != 0:
-            return False
-        return adapter.cli_active_in_ps(agent_name, agent_cfg, r.stdout)
-    except Exception:
+    from .docker_probe import docker_exec_ps
+
+    ps = docker_exec_ps(container)
+    if not ps:
         return False
+    if use_precise:
+        return adapter.cli_active_in_ps_for(
+            agent_name, agent_cfg, ps, msg_id=msg_id, task_id=task_id,
+        )
+    return adapter.cli_active_in_ps(agent_name, agent_cfg, ps)
 
 
 def validate_agents(agents: dict, agent_types: dict | None = None) -> list[str]:
@@ -682,6 +767,16 @@ def push_timeout_for(agent_cfg: dict, *, pipeline: bool = False) -> int:
     if adapter:
         return adapter.push_timeout_seconds(pipeline=pipeline, agent_cfg=agent_cfg)
     return PUSH_TIMEOUT_PIPELINE if pipeline else PUSH_TIMEOUT_DEFAULT
+
+
+def store_path_for_agent(data_dir: str, path: str, agent_cfg: dict) -> str:
+    """容器内 agent 推送/工单使用 /mailbus/store 路径。"""
+    adapter = get_adapter((agent_cfg or {}).get("type", ""))
+    if adapter and adapter.container_service:
+        from .utils import to_container_store_path
+
+        return to_container_store_path(data_dir, path)
+    return path
 
 
 def should_mark_processing_on_push(agent_cfg: dict, msg_entry: dict) -> bool:

@@ -11,6 +11,10 @@ ziyan-mailbus 是一个独立、解耦、轻量的**文件级消息总线系统*
 - **故障隔离**：推送失败 3 次 → 写错误日志 → 监控 Agent 扫日志找修复方案
 - **去中心化通信**：Agent 之间回信直接写目标 inbox，由总线递送
 
+## 团队规范
+
+历史文件 [`STANDARD_PROCEDURE.md`](../STANDARD_PROCEDURE.md) 已弃用。现行边界见 [`docs/agent-layer-spec.md`](agent-layer-spec.md) 与 `mail/rules/common/`、`mail/skills/common/`。
+
 ## 安装
 
 ```bash

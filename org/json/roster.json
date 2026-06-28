@@ -1,0 +1,197 @@
+{
+  "version": "1.0.2",
+  "updated_at": "2026-06-24",
+  "team_name": "子言·AI 团队",
+  "headcount": 13,
+  "description": "SoT: team roster. Human guide: ../md/roster-guide.md (generated).",
+  "members": [
+    {
+      "id": "lingzhao",
+      "display": {
+        "zh": "灵昭",
+        "en": "Lingzhao"
+      },
+      "icon": "🪷",
+      "gender": "male",
+      "role_types": [
+        1
+      ],
+      "domain": "decision",
+      "framework": "hermes_profile",
+      "port": 9120
+    },
+    {
+      "id": "lingjin",
+      "display": {
+        "zh": "灵瑾",
+        "en": "Lingjin"
+      },
+      "icon": "🦋",
+      "gender": "female",
+      "role_types": [
+        2
+      ],
+      "domain": "security",
+      "framework": "hermes_profile",
+      "port": 9121
+    },
+    {
+      "id": "lingxi",
+      "display": {
+        "zh": "灵犀",
+        "en": "Lingxi"
+      },
+      "icon": "🔭",
+      "gender": "female",
+      "role_types": [
+        3
+      ],
+      "domain": "research",
+      "framework": "hermes_profile",
+      "port": 9122
+    },
+    {
+      "id": "lingtuo",
+      "display": {
+        "zh": "灵拓",
+        "en": "Lingtuo"
+      },
+      "icon": "🧭",
+      "gender": "male",
+      "role_types": [
+        4
+      ],
+      "domain": "intake",
+      "framework": "hermes_profile",
+      "port": 9126
+    },
+    {
+      "id": "lingjian",
+      "display": {
+        "zh": "灵鉴",
+        "en": "Lingjian"
+      },
+      "icon": "🔍",
+      "gender": "male",
+      "role_types": [
+        5
+      ],
+      "domain": "quality",
+      "framework": "codex",
+      "port": 9123
+    },
+    {
+      "id": "lingyan",
+      "display": {
+        "zh": "灵验",
+        "en": "Lingyan"
+      },
+      "icon": "🧪",
+      "gender": "female",
+      "role_types": [
+        6
+      ],
+      "domain": "quality",
+      "framework": "claude_code",
+      "port": 9124
+    },
+    {
+      "id": "lingxun",
+      "display": {
+        "zh": "灵巡",
+        "en": "Lingxun"
+      },
+      "icon": "🔦",
+      "gender": "male",
+      "role_types": [
+        7
+      ],
+      "domain": "ops",
+      "framework": "hermes_profile",
+      "port": 9125
+    },
+    {
+      "id": "lingxiao",
+      "display": {
+        "zh": "灵霄",
+        "en": "Lingxiao"
+      },
+      "icon": "🎯",
+      "gender": "male",
+      "role_types": [
+        8
+      ],
+      "domain": "dev",
+      "framework": "codex",
+      "port": null
+    },
+    {
+      "id": "dali",
+      "display": {
+        "zh": "大力",
+        "en": "Dali"
+      },
+      "icon": "🤖",
+      "gender": "male",
+      "role_types": [
+        8
+      ],
+      "domain": "dev",
+      "framework": "opencode",
+      "port": null
+    },
+    {
+      "id": "xiaoqi",
+      "display": {
+        "zh": "小七",
+        "en": "Xiaoqi"
+      },
+      "icon": "🦞",
+      "gender": "female",
+      "role_types": [
+        9,
+        12
+      ],
+      "domain": "dispatch",
+      "framework": "openclaw",
+      "port": 18789
+    },
+    {
+      "id": "yige",
+      "display": {
+        "zh": "一哥",
+        "en": "Yige"
+      },
+      "icon": "👨‍🔧",
+      "gender": "male",
+      "role_types": [
+        11
+      ],
+      "domain": "content",
+      "framework": "openclaw",
+      "port": 18790
+    },
+    {
+      "id": "lingzhang",
+      "display": {
+        "zh": "灵账",
+        "en": "Lingzhang"
+      },
+      "icon": "🧾",
+      "gender": "female",
+      "role_types": [
+        10
+      ],
+      "domain": "finance",
+      "framework": "hermes_profile",
+      "port": 9127
+    },
+    {
+      "id": "lingyun",
+      "name": "灵云",
+      "gender": "女",
+      "role": "精细编码",
+      "framework": "claude_code"
+    }
+  ]
+}

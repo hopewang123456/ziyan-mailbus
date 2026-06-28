@@ -2,8 +2,14 @@
 # mailbus 全流程回归：pipeline E2E + monitor-regression
 set -euo pipefail
 
-COMPOSE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MAIL="/mnt/e/ai_tools/mail"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/mailbus-env.sh
+. "${SCRIPT_DIR}/lib/mailbus-env.sh"
+# shellcheck source=lib/api-url.sh
+. "${SCRIPT_DIR}/lib/api-url.sh"
+
+COMPOSE="${SCRIPT_DIR}"
+MAIL="${MAILBUS_ROOT}"
 LOG="${COMPOSE}/mailbus-pipeline-e2e.log"
 
 log() { echo "[pipeline-e2e] $*" | tee -a "$LOG"; }
@@ -21,7 +27,7 @@ fi
 log "--- pipeline-e2e-regression ---"
 cd "$MAIL"
 if docker exec docker-agents-mailbus-1 python3 /mailbus/tools/pipeline-e2e-regression.py \
-    --data-dir /mailbus/store --url http://127.0.0.1:9812 2>&1 | tee -a "$LOG"; then
+    --data-dir /mailbus/store --url http://127.0.0.1:${MAILBUS_API_PORT} 2>&1 | tee -a "$LOG"; then
   log "pipeline e2e: PASS"
 else
   log "pipeline e2e: FAIL (retry from host)"
@@ -30,9 +36,9 @@ fi
 
 # 3. triage 快照
 log "--- triage ---"
-python3 tools/triage-tasks.py --data-dir store 2>&1 | tee -a "$LOG"
+python3 tools/tools/ops/triage-tasks.py --data-dir store 2>&1 | tee -a "$LOG"
 log "--- reconcile audits ---"
-docker exec docker-agents-mailbus-1 python3 /mailbus/tools/flush-pending-audits.py --data-dir /mailbus/store 2>&1 | tee -a "$LOG" || true
+docker exec docker-agents-mailbus-1 python3 /mailbus/tools/ops/tools/ops/flush-pending-audits.py --data-dir /mailbus/store 2>&1 | tee -a "$LOG" || true
 
 # 4. monitor-regression
 log "--- monitor-regression ---"
@@ -48,11 +54,11 @@ bash "$COMPOSE/run-mailbus-iteration.sh" 2 dispatch-r2 2>&1 | tee -a "$LOG" || t
 
 log "--- Round2 complete ---"
 cd "$MAIL"
-python3 tools/complete-round2-regression.py --data-dir store 2>&1 | tee -a "$LOG"
+python3 tools/tools/ops/complete-round2-regression.py --data-dir store 2>&1 | tee -a "$LOG"
 
 log "--- final pipeline-e2e verify ---"
 docker exec docker-agents-mailbus-1 python3 /mailbus/tools/pipeline-e2e-regression.py \
-    --data-dir /mailbus/store --url http://127.0.0.1:9812 2>&1 | tee -a "$LOG" || \
+    --data-dir /mailbus/store --url http://127.0.0.1:${MAILBUS_API_PORT} 2>&1 | tee -a "$LOG" || \
   python3 tools/pipeline-e2e-regression.py --data-dir store 2>&1 | tee -a "$LOG"
 
 log "=== pipeline E2E complete ==="

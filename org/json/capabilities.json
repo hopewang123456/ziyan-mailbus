@@ -1,0 +1,79 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-06-18",
+  "description": "Planner capability index. role_types from role-types.json",
+  "capabilities": {
+    "architecture_design": {
+      "role_types": [1],
+      "agents": ["lingzhao"],
+      "tags": ["adr", "spec", "plan", "scope"],
+      "tier_min": "M"
+    },
+    "security_audit": {
+      "role_types": [2],
+      "agents": ["lingjin"],
+      "tags": ["auth", "pentest", "dependency", "compliance"],
+      "tier_min": "M"
+    },
+    "tech_research": {
+      "role_types": [3],
+      "agents": ["lingxi"],
+      "tags": ["spike", "github", "feasibility", "trend"],
+      "tier_min": "S"
+    },
+    "market_intake": {
+      "role_types": [4],
+      "agents": ["lingtuo"],
+      "tags": ["intake", "lead", "pursue", "brief"],
+      "tier_min": "S"
+    },
+    "code_review": {
+      "role_types": [5],
+      "agents": ["lingjian"],
+      "tags": ["review", "quality", "lint"],
+      "tier_min": "S"
+    },
+    "qa_testing": {
+      "role_types": [6],
+      "agents": ["lingyan"],
+      "tags": ["test", "regression", "e2e"],
+      "tier_min": "S"
+    },
+    "ops_inspection": {
+      "role_types": [7],
+      "agents": ["lingxun"],
+      "tags": ["ops", "health", "monitor", "incident"],
+      "tier_min": "S"
+    },
+    "software_development": {
+      "role_types": [8],
+      "agents": ["lingxiao", "dali"],
+      "tags": ["code", "bugfix", "feature", "refactor"],
+      "tier_min": "S"
+    },
+    "task_dispatch": {
+      "role_types": [9, 12],
+      "agents": ["xiaoqi"],
+      "tags": ["dispatch", "acceptance", "sla", "planning"],
+      "tier_min": "S"
+    },
+    "finance_followup": {
+      "role_types": [10],
+      "agents": ["lingzhang"],
+      "tags": ["invoice", "payment", "billing"],
+      "tier_min": "S"
+    },
+    "content_ops": {
+      "role_types": [11],
+      "agents": ["yige"],
+      "tags": ["content", "marketing", "publish"],
+      "tier_min": "S"
+    },
+    "full_delivery_chain": {
+      "role_types": [4, 3, 1, 9, 8, 2, 5, 6, 12],
+      "agents": [],
+      "tags": ["full_delivery", "pipeline"],
+      "tier_min": "L"
+    }
+  }
+}

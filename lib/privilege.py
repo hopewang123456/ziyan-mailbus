@@ -5,9 +5,34 @@ import os
 import subprocess
 from typing import Optional
 
+from .constants import MAILBUS_ROOT_STR
+from .utils import to_wsl_path
+
 
 def _repo_root() -> str:
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return MAILBUS_ROOT_STR
+
+
+def _mailbus_wsl_prefix() -> str:
+    return to_wsl_path(MAILBUS_ROOT_STR).replace("\\", "/").rstrip("/") + "/"
+
+
+def _host_path_under_mailbus(host_path: str) -> bool:
+    norm = (host_path or "").replace("\\", "/")
+    wsl_prefix = _mailbus_wsl_prefix()
+    native = MAILBUS_ROOT_STR.replace("\\", "/").rstrip("/") + "/"
+    return norm.startswith(wsl_prefix) or norm.startswith(native)
+
+
+def _to_container_mailbus_path(host_path: str) -> str:
+    norm = host_path.replace("\\", "/")
+    wsl_prefix = _mailbus_wsl_prefix()
+    if norm.startswith(wsl_prefix):
+        return "/mailbus/" + norm[len(wsl_prefix):]
+    native = MAILBUS_ROOT_STR.replace("\\", "/").rstrip("/") + "/"
+    if norm.startswith(native):
+        return "/mailbus/" + norm[len(native):]
+    return norm
 
 
 def _secrets_path() -> str:
@@ -39,9 +64,9 @@ def docker_mailbus_exec(args: list[str], *, timeout: int = 30) -> subprocess.Com
 
 def write_via_mailbus_container(host_path: str, content: str) -> bool:
     """容器内 root 写挂载卷（避免 WSL 上 root 属主文件无法写）。"""
-    if not host_path.startswith("/mnt/e/ai_tools/mail/"):
+    if not _host_path_under_mailbus(host_path):
         return False
-    container_path = host_path.replace("/mnt/e/ai_tools/mail", "/mailbus", 1)
+    container_path = _to_container_mailbus_path(host_path)
     try:
         r = docker_mailbus_exec(
             ["python3", "-c", f"open({container_path!r},'w',encoding='utf-8').write({content!r})"],

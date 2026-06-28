@@ -110,11 +110,11 @@ mailbus 通过 `ClaudeCodeAdapter`（`type: claude_code`）将任务 push 到宿
 | lingyan 灵验 | 9261 | `~/.claude-lingyan` | dontAsk + Bash/Read/Glob/Grep |
 
 ```bash
-./launch-agent.sh lingyun browser
-./launch-agent.sh lingyan browser
-python tools/launch-claude-browser.py lingyun --data-dir store
-./launch-agent.sh lingyun cli
-./launch-agent.sh lingyan cli
+./tools/ops/launch-agent.sh lingyun browser
+./tools/ops/launch-agent.sh lingyan browser
+python tools/tools/ops/launch-claude-browser.py lingyun --data-dir store
+./tools/ops/launch-agent.sh lingyun cli
+./tools/ops/launch-agent.sh lingyan cli
 ```
 
 | 模式 | 说明 |

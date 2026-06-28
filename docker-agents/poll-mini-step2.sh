@@ -7,4 +7,4 @@ POLL="${3:-30}"
 
 docker exec docker-agents-mailbus-1 env \
   TASK_ID="${TASK}" TIMEOUT="${TIMEOUT}" POLL="${POLL}" \
-  python3 /mailbus/tools/poll-mini-step2.py
+  python3 /mailbus/tools/ops/tools/ops/poll-mini-step2.py

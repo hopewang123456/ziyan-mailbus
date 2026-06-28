@@ -138,6 +138,33 @@ class TestAgentAdapters(unittest.TestCase):
         self.assertIn("docker-agents-lingjian-1", cmd)
         self.assertIn("codex", cmd)
 
+    def test_codex_push_sandbox_and_pipeline_model(self):
+        cfg = {
+            "type": "codex",
+            "model": "deepseek-reasoner",
+            "models": ["deepseek-flash"],
+            "docker": {"service": "lingjian"},
+            "push": {
+                "cwd": "/mailbus/store",
+                "sandbox": "danger-full-access",
+                "pipeline_model": "deepseek-flash",
+            },
+        }
+        types = {
+            **TYPES,
+            "models": {
+                **TYPES.get("models", {}),
+                "deepseek-flash": {"codex": "-m deepseek-flash"},
+            },
+        }
+        normal = resolve_push_cli("lingjian", cfg, types, pipeline=False)
+        pipe = resolve_push_cli("lingjian", cfg, types, pipeline=True)
+        self.assertIn("-s danger-full-access", normal)
+        self.assertIn("-s danger-full-access", pipe)
+        self.assertIn("-m deepseek-reasoner", normal)
+        self.assertIn("-m deepseek-flash", pipe)
+        self.assertNotIn("-s workspace-write", pipe)
+
     def test_claude_code_push_windows(self):
         cfg = {
             "type": "claude_code",

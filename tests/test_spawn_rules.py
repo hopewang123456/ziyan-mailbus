@@ -36,28 +36,10 @@ from lib.utils import json_write
 
 
 def _seed(tmp: str) -> None:
-    root = os.path.join(os.path.dirname(__file__), "..", "store")
-    for sub in ("roles/json", "workflows", "dispatch", "rules", "leads", "inbox/dali", "inbox/lingxiao", "msg-files"):
-        src = os.path.join(root, sub)
-        dst = os.path.join(tmp, sub)
-        if os.path.isdir(src):
-            shutil.copytree(src, dst, dirs_exist_ok=True)
-    os.makedirs(os.path.join(tmp, "tasks"), exist_ok=True)
-    json_write(os.path.join(tmp, "inbox", "dali", "inbox.json"), {"agent": "dali", "messages": []})
-    json_write(os.path.join(tmp, "inbox", "lingxiao", "inbox.json"), {"agent": "lingxiao", "messages": []})
-    json_write(os.path.join(tmp, "human-queue.json"), {"version": "1.0.0", "updated_at": "2026-06-18T00:00:00+08:00", "items": []})
-    json_write(os.path.join(tmp, "config.json"), {
-        "mailbus_intake_bridge": {
-            "enabled": True,
-            "auto_spawn_analyze": True,
-            "auto_spawn_content": False,
-            "auto_spawn_solution": False,
-        },
-        "mailbus_internal_llm": {"enabled": False, "guardrails": {"await_plan_approval_tier_min": "L"}},
-    })
-    example = os.path.join(root, "examples", "order-intake.pursue.example.json")
-    with open(example, encoding="utf-8") as f:
-        intake = json.load(f)
+    from tests.test_helpers import load_pursue_intake_example, seed_runtime_from_sot
+
+    seed_runtime_from_sot(tmp)
+    intake = load_pursue_intake_example()
     intake["decision"] = "pending"
     intake["pipeline_link"] = {}
     json_write(os.path.join(tmp, "leads", "order-intake.json"), [intake])

@@ -74,13 +74,23 @@ def measure_mailbus_activity(data_dir: str, agents: dict, config: dict) -> Dict[
                     urgent += 1
 
     running_tasks = 0
+    high_priority_tasks = 0
+    interrupted_tasks = 0
     try:
         from .tracker import TaskTracker, TaskStatus
-        running_tasks = len(TaskTracker(data_dir).list_all(status_filter=TaskStatus.RUNNING))
+        running = TaskTracker(data_dir).list_all(status_filter=TaskStatus.RUNNING)
+        running_tasks = len(running)
+        from .task_fsm import ensure_fsm, task_priority
+        for t in running:
+            ensure_fsm(t)
+            if task_priority(t) <= 25:
+                high_priority_tasks += 1
+            if t.get("interrupted"):
+                interrupted_tasks += 1
     except Exception:
         pass
 
-    if urgent > 0 or (running_tasks > 0 and pending > 0):
+    if urgent > 0 or high_priority_tasks > 0 or interrupted_tasks > 0 or (running_tasks > 0 and pending > 0):
         level = "urgent"
     elif pending > 0 or processing > 0 or running_tasks > 0:
         level = "active"
@@ -93,6 +103,8 @@ def measure_mailbus_activity(data_dir: str, agents: dict, config: dict) -> Dict[
         "urgent_pending": urgent,
         "processing": processing,
         "running_tasks": running_tasks,
+        "high_priority_tasks": high_priority_tasks,
+        "interrupted_tasks": interrupted_tasks,
     }
 
 

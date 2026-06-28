@@ -39,7 +39,7 @@ sleep 8
 docker ps --format 'table {{.Names}}\t{{.Ports}}' | grep ling || true
 
 echo "=== smoke ==="
-python3 /mnt/e/ai_tools/mail/tools/smoke-codex-agent.py --container "${PROJECT}-lingxiao-1" || true
-python3 /mnt/e/ai_tools/mail/tools/smoke-codex-agent.py --container "${PROJECT}-lingjian-1" || true
+python3 /mnt/e/ai_tools/mail/tools/ops/tools/ops/smoke-codex-agent.py --container "${PROJECT}-lingxiao-1" || true
+python3 /mnt/e/ai_tools/mail/tools/ops/tools/ops/smoke-codex-agent.py --container "${PROJECT}-lingjian-1" || true
 
 echo "=== DONE ==="

@@ -160,6 +160,11 @@ class Message:
     escalate_to: Optional[str] = None      # 超时后通知谁（默认发件人）
     reminded_count: int = 0                # 已催办次数
     last_reminded_at: Optional[str] = None # 上次催办时间
+    # API/网络停滞恢复
+    repush_after: Optional[str] = None
+    api_stall_at: Optional[str] = None
+    api_stall_reason: str = ""
+    api_stall_count: int = 0
 
     def __post_init__(self):
         # 没配 action 的根据 type 自动推断
@@ -225,7 +230,7 @@ class Message:
                  "project",
                  "state", "state_history", "actions", "received_at", "done_at",
                  "timeout_minutes", "escalate_to", "reminded_count", "last_reminded_at",
-                 "done_note"}
+                 "done_note", "repush_after", "api_stall_at", "api_stall_reason", "api_stall_count"}
         filtered = {k: v for k, v in d.items() if k in known}
         # 缺 id 的自动生成
         if "id" not in filtered or not filtered["id"]:
@@ -288,8 +293,7 @@ class Inbox:
             else:
                 m.status = status
                 for k, v in extra.items():
-                    if hasattr(m, k):
-                        setattr(m, k, v)
+                    setattr(m, k, v)
             changed = True
         return changed
 

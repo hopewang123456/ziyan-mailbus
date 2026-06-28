@@ -2,7 +2,10 @@
 # 下发 mailbus-hardening 任务（A2A Envelope）
 set -euo pipefail
 
-BASE="http://127.0.0.1:9812"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/lib/api-url.sh"
+
+BASE="$MAILBUS_API_BASE"
 TASK_ID="mailbus-hardening-20260616"
 MAIL="/mnt/e/ai_tools/mail"
 PLAN="/mnt/e/ai_tools/mail/plans/2026-06-16-mailbus-hardening-inventory.md"
@@ -11,7 +14,7 @@ log() { echo "[submit] $*"; }
 
 log "1. create pipeline task (Envelope)"
 cd "$MAIL"
-python3 tools/task-create-envelope.py \
+python3 tools/tools/ops/task-create-envelope.py \
   --api "${BASE}" \
   --task-id "${TASK_ID}" \
   --intent "mailbus P0 工作流完善 + skill 专精分配 + 7天归档 + ES日志方案" \

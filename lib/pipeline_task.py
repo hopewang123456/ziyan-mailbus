@@ -45,6 +45,43 @@ def is_current_pipeline_assignee(data_dir: str, task_id: str, agent_name: str) -
     return agent_ok and cur.get("status") == "running"
 
 
+def primary_pipeline_assignee(data_dir: str) -> Optional[str]:
+    """iteration primary 任务当前 chain 步骤 assignee（running 时）。"""
+    try:
+        from .iteration_engine import load_primary_task_id
+    except ImportError:
+        return None
+    primary = load_primary_task_id(data_dir)
+    if not primary:
+        return None
+    t = get_running_pipeline_task(data_dir, primary)
+    if not t:
+        return None
+    cur = (t.get("chain") or [])[-1]
+    if cur.get("status") != "running":
+        return None
+    return cur.get("to_agent") or cur.get("to_person") or None
+
+
+def side_audit_deferred_for_reviewer(data_dir: str, reviewer: str) -> bool:
+    """主 pipeline running 时暂停全部 Round1 side-audit（Codex 单槽不与主链争用）。"""
+    return bool(primary_pipeline_assignee(data_dir))
+
+
+def pipeline_inbox_may_mark_done(
+    data_dir: str, agent_name: str, msg_entry: dict,
+) -> tuple[bool, str]:
+    """pipeline 执行工单：无 verify 通过不得标 done/closed。"""
+    if not is_pipeline_execute_message(msg_entry, data_dir):
+        return True, "not_pipeline"
+    ok, reason = verify_pipeline_step_delivery(data_dir, agent_name, msg_entry)
+    return ok, reason
+
+
+def is_side_audit_message(msg_id: str) -> bool:
+    return str(msg_id or "").startswith("audit-req-")
+
+
 def pipeline_inbox_message_stale(data_dir: str, agent_name: str, content: str) -> bool:
     """该 agent 不应再执行此 pipeline 工单（已完成本步或已不是当前 assignee）。"""
     tid = extract_task_id(content or "")
@@ -63,6 +100,32 @@ def pipeline_inbox_message_stale(data_dir: str, agent_name: str, content: str) -
             return True
     cur_agent = cur.get("to_agent") or cur.get("to_person")
     return cur_agent != agent_name
+
+
+def pipeline_message_protected_from_auto_close(
+    data_dir: str,
+    agent_name: str,
+    m_raw: Any,
+    inbox: Any = None,
+) -> bool:
+    """当前 running pipeline 执行工单：禁止催办 3 次 / max_pushes 自动关闭。"""
+    if inbox is not None:
+        msg_type = inbox.msg_field(m_raw, "type", "")
+        content = inbox.msg_field(m_raw, "content", "")
+    elif isinstance(m_raw, dict):
+        msg_type = m_raw.get("type", "")
+        content = m_raw.get("content", "")
+    else:
+        return False
+    if msg_type != "task":
+        return False
+    entry = m_raw if isinstance(m_raw, dict) else {}
+    if is_pipeline_execute_message(entry, data_dir):
+        return True
+    tid = extract_task_id(content or "") or entry.get("task_id")
+    if tid and is_current_pipeline_assignee(data_dir, tid, agent_name):
+        return True
+    return False
 
 
 def is_pipeline_execute_message(msg: Any, data_dir: str) -> bool:
@@ -99,7 +162,9 @@ def should_auto_ack_message(msg: Any, data_dir: str, agent_type: str) -> bool:
     return is_no_llm_notice(msg)
 
 
-def pipeline_completion_block(data_dir: str, content: str, agent_name: str) -> str:
+def pipeline_completion_block(
+    data_dir: str, content: str, agent_name: str, agent_cfg: dict | None = None,
+) -> str:
     tid = extract_task_id(content or "")
     if not tid:
         return ""
@@ -120,6 +185,10 @@ def pipeline_completion_block(data_dir: str, content: str, agent_name: str) -> s
         rf = ref
     else:
         rf = f"{data_dir}/msg-results/{tid}.json"
+    if agent_cfg:
+        from .agent_adapters import store_path_for_agent
+
+        rf = store_path_for_agent(data_dir, rf, agent_cfg)
     sid_part = f', "step_id":"{sid}"' if sid else ""
     return (
         f"\n[pipeline] 写结果→{rf}\n"
@@ -195,5 +264,5 @@ def verify_pipeline_step_delivery(
 def pipeline_repush_cooldown_minutes(config: dict, *, is_primary: bool) -> float:
     ops = config.get("pipeline_ops") or {}
     if is_primary:
-        return float(ops.get("primary_repush_cooldown_minutes", 15))
+        return float(ops.get("primary_repush_cooldown_minutes", 6))
     return float(ops.get("repush_cooldown_minutes", 8))

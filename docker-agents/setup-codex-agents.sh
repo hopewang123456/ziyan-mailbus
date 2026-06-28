@@ -21,11 +21,11 @@ sleep 12
 for svc in lingxiao lingjian; do
   cname="${PROJECT}-${svc}-1"
   echo "=== smoke $cname ==="
-  python3 /mnt/e/ai_tools/mail/tools/smoke-codex-agent.py --container "$cname" || true
+  python3 /mnt/e/ai_tools/mail/tools/ops/tools/ops/smoke-codex-agent.py --container "$cname" || true
 done
 
 echo "=== disk-write probe (lingxiao) ==="
-docker exec docker-agents-mailbus-1 python3 /mailbus/tools/smoke-agent-disk-write.py \
+docker exec docker-agents-mailbus-1 python3 /mailbus/tools/ops/tools/ops/smoke-agent-disk-write.py \
   --agent lingxiao --data-dir /mailbus/store --timeout 600 || true
 
 echo "=== DONE ==="

@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+BRIDGE_CONFIG = ROOT / "config" / "intake" / "bridge.json"
+SCHEMA_SO_T = ROOT / "rules" / "schemas" / "order-intake.schema.json"
 INTAKE_ID_RE = re.compile(r"^intake-[0-9]{8}-[a-z0-9]{6}$")
 DECISIONS = {"pending", "pursue", "watch", "reject", "handed_to_lingzhao"}
 STAGES = {
@@ -128,9 +130,23 @@ def main() -> int:
     args = ap.parse_args()
     intake_path = Path(args.data_dir) / "leads" / "order-intake.json"
     schema_path = Path(args.data_dir) / "rules" / "order-intake.schema.json"
+    if not schema_path.is_file() and SCHEMA_SO_T.is_file():
+        schema_path = SCHEMA_SO_T
 
     if not schema_path.is_file():
         print(f"  [FAIL] missing schema {schema_path}", file=sys.stderr)
+        return 1
+
+    if not BRIDGE_CONFIG.is_file():
+        print(f"  [FAIL] missing intake bridge SoT {BRIDGE_CONFIG}", file=sys.stderr)
+        return 1
+    try:
+        bridge = json.loads(BRIDGE_CONFIG.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        print(f"  [FAIL] invalid bridge config: {exc}", file=sys.stderr)
+        return 1
+    if not isinstance(bridge, dict) or "enabled" not in bridge:
+        print("  [FAIL] config/intake/bridge.json must be object with 'enabled'", file=sys.stderr)
         return 1
 
     errors, count = validate_intake_file(intake_path)

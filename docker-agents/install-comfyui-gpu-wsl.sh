@@ -50,7 +50,7 @@ apt-get update -qq
 apt-get install -y -qq nvidia-container-toolkit
 
 echo "[4/6] 配置 Docker NVIDIA runtime"
-nvidia-ctk runtime configure --runtime=docker
+nvidia-ctk runtime configure --runtime=docke
 
 echo "[5/6] 重启 Docker"
 systemctl restart docker || service docker restart

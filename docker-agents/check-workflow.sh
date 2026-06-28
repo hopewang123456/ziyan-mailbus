@@ -1,5 +1,5 @@
 #!/bin/bash
-curl -s --connect-timeout 5 http://127.0.0.1:9812/api/tasks -o /tmp/check-workflow-tasks.json
+curl -s --connect-timeout 5 "$MAILBUS_API_BASE"/api/tasks -o /tmp/check-workflow-tasks.json
 python3 <<'PY'
 import json
 try:

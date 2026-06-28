@@ -3,7 +3,9 @@
 mailbus → team-memory.db + AgentMemory 双写桥接脚本
 每次 mailbus scan 后运行，将已 ack 且未同步的消息写入共享记忆。
 
-用法: python3 mailbus-memory-bridge.py --data-dir /mnt/e/ai_tools/mail/store
+用法: python3 mailbus-memory-bridge.py [--data-dir PATH]
+
+默认 data-dir: $MAILBUS_DATA（见 lib/constants.DEFAULT_DATA_DIR）
 
 环境变量:
   TEAM_MEMORY_DB              SQLite 路径（默认见 lib/team_memory_store.py）
@@ -22,6 +24,7 @@ _ROOT = os.path.dirname(os.path.abspath(__file__))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
+from lib.constants import DEFAULT_DATA_DIR  # noqa: E402
 from lib.memory_bridge import (  # noqa: E402
     AGENTMEMORY_URL,
     bridge_agentmemory_enabled,
@@ -32,7 +35,7 @@ from lib.memory_bridge import (  # noqa: E402
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sync mailbus messages to team memory + AgentMemory")
-    parser.add_argument("--data-dir", required=True, help="mailbus data directory")
+    parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR, help="mailbus data directory")
     parser.add_argument("--limit", type=int, default=20, help="max messages per run (cron safety)")
     args = parser.parse_args()
 

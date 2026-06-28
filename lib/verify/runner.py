@@ -56,4 +56,30 @@ def run_step_verify(
             if not passed:
                 return False, f"pytest failed: {summary}", meta
 
+    if role_type == 6 and c == "pass" and strict:
+        from .deliverable_check import verify_deliverable_playability
+
+        d_ok, d_err, d_meta = verify_deliverable_playability(
+            details, data_dir=data_dir, strict=strict, vc=vc,
+        )
+        meta.update(d_meta)
+        if not d_ok:
+            return False, d_err or "deliverable verify failed", meta
+
+    if role_type == 10 and c in ("done", "pass", "dispatched") and strict:
+        from .deliverable_check import check_windows_launch_files, _deliverable_dir
+
+        ddir = _deliverable_dir(details, data_dir)
+        required = vc.get("acceptance_deliverable_files") or [
+            "play.ps1", "play.bat", "play-auto.bat",
+        ]
+        if ddir:
+            missing = [f for f in required if not os.path.isfile(os.path.join(ddir, f))]
+            if missing and vc.get("require_launch_matrix", False):
+                return False, f"missing launch files: {missing}", meta
+            ok, msg = check_windows_launch_files(ddir)
+            meta["windows_launch"] = msg
+            if not ok and vc.get("require_launch_matrix", False):
+                return False, msg, meta
+
     return True, None, meta

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Codex skills-index → CODEX_HOME/skills 同步（供 sync-codex-agent-skills.sh 调用）。"""
+"""Codex skills-index → CODEX_HOME/skills 同步（供 tools/ops/sync-codex-agent-skills.sh 调用）。"""
 from __future__ import annotations
 
 import json

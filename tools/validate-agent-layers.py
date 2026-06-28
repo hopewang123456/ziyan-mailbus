@@ -15,8 +15,27 @@ from lib.framework_skills import AGENT_ARCHETYPES, layer_skills_for_agent  # noq
 
 INDEX = ROOT / "store" / "agents" / "json" / "skills-index.json"
 IDENTITIES = ROOT / "identities"
+ORG_OVERLAYS = ROOT / "org"
 OPENCODE_AGENTS = ROOT.parent / "opencode" / "AGENTS.md"
-MAILBUS_FILE_PROTOCOL = ROOT / "adapters" / "_shared" / "mailbus-file-protocol" / "SKILL.md"
+SKILLS_COMMON = ROOT / "skills" / "common"
+ADAPTERS_SHARED = ROOT / "adapters" / "_shared"
+
+
+def _protocol_skill_path() -> Path:
+    v3 = SKILLS_COMMON / "mailbus-file-protocol" / "SKILL.md"
+    if v3.is_file():
+        return v3
+    return ADAPTERS_SHARED / "mailbus-file-protocol" / "SKILL.md"
+
+
+def _universal_skill_path() -> Path:
+    v3 = SKILLS_COMMON / "agent-universal" / "SKILL.md"
+    if v3.is_file():
+        return v3
+    return ADAPTERS_SHARED / "agent-universal" / "SKILL.md"
+
+
+MAILBUS_FILE_PROTOCOL = _protocol_skill_path()
 
 FORBIDDEN_IDENTITY_PATTERNS = [
     re.compile(r"##\s*📬\s*mailbus", re.I),
@@ -72,7 +91,7 @@ def check_identities() -> list[str]:
             if pat.search(text):
                 errors.append(f"identity {path.name}: forbidden inline mailbus content")
                 break
-        if agent in AGENT_ARCHETYPES and "mail/roles/overlays/" not in text:
+        if agent in AGENT_ARCHETYPES and "mail/skills/roles/overlays/" not in text:
             errors.append(f"identity {path.name}: missing overlay pointer")
     return errors
 
@@ -95,13 +114,15 @@ def check_l0_no_delivery_table() -> list[str]:
 def check_role_files_exist() -> list[str]:
     errors: list[str] = []
     for agent_id, archetype in AGENT_ARCHETYPES.items():
-        arch_skill = ROOT / "roles" / "archetypes" / archetype / "SKILL.md"
-        overlay_skill = ROOT / "roles" / "overlays" / agent_id / "SKILL.md"
-        if not arch_skill.is_file():
-            errors.append(f"missing archetype skill: {arch_skill}")
-        if not overlay_skill.is_file():
-            errors.append(f"missing overlay skill: {overlay_skill}")
-    universal = ROOT / "adapters" / "_shared" / "agent-universal" / "SKILL.md"
+        arch_v3 = ROOT / "skills" / "roles" / "archetypes" / archetype / "SKILL.md"
+        arch_legacy = ROOT / "roles" / "archetypes" / archetype / "SKILL.md"
+        overlay_v3 = ROOT / "skills" / "roles" / "overlays" / agent_id / "SKILL.md"
+        overlay_legacy = ROOT / "roles" / "overlays" / agent_id / "SKILL.md"
+        if not arch_v3.is_file() and not arch_legacy.is_file():
+            errors.append(f"missing archetype skill: {arch_v3} (or legacy {arch_legacy})")
+        if not overlay_v3.is_file() and not overlay_legacy.is_file():
+            errors.append(f"missing overlay skill: {overlay_v3} (or legacy {overlay_legacy})")
+    universal = _universal_skill_path()
     if not universal.is_file():
         errors.append(f"missing L0: {universal}")
     return errors

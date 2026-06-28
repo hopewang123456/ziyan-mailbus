@@ -2,7 +2,10 @@
 # 下发 mailbus-scheduler-validation 主任务（A2A Envelope）
 set -euo pipefail
 
-BASE="http://127.0.0.1:9812"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/lib/api-url.sh"
+
+BASE="$MAILBUS_API_BASE"
 TASK_ID="mailbus-scheduler-validation-20260616"
 MAIL="/mnt/e/ai_tools/mail"
 
@@ -10,7 +13,7 @@ log() { echo "[submit-scheduler] $*"; }
 
 log "1. create task ${TASK_ID}"
 cd "$MAIL"
-python3 tools/task-create-envelope.py \
+python3 tools/tools/ops/task-create-envelope.py \
   --api "${BASE}" \
   --task-id "${TASK_ID}" \
   --intent "内置 SchedulerHub 验证：scan/bridge/patrol + agent 推送链路" \
@@ -24,6 +27,6 @@ log "2. push to lingzhao"
 python3 -m bus send lingzhao --data-dir store --from mailbus --type task --priority urgent --msg "$MSG"
 
 log "3. primary_task_id"
-python3 tools/set-primary-task.py "${TASK_ID}" || true
+python3 tools/tools/ops/set-primary-task.py "${TASK_ID}" || true
 
 log "=== submitted ${TASK_ID} ==="

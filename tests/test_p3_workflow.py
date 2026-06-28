@@ -44,18 +44,9 @@ class _FakeHandler:
 
 
 def _seed(tmp: str) -> None:
-    root = os.path.join(os.path.dirname(__file__), "..", "store")
-    for sub in ("roles/json", "workflows", "dispatch", "rules", "rag"):
-        src = os.path.join(root, sub)
-        dst = os.path.join(tmp, sub)
-        if os.path.isdir(src):
-            shutil.copytree(src, dst, dirs_exist_ok=True)
-    for d in ("tasks", "inbox/dali", "inbox/lingxiao", "msg-files"):
-        os.makedirs(os.path.join(tmp, d), exist_ok=True)
-    json_write(os.path.join(tmp, "inbox", "dali", "inbox.json"), {"agent": "dali", "messages": []})
-    json_write(os.path.join(tmp, "inbox", "lingxiao", "inbox.json"), {"agent": "lingxiao", "messages": []})
-    json_write(os.path.join(tmp, "human-queue.json"), {"version": "1.0.0", "updated_at": "2026-06-18T00:00:00+08:00", "items": []})
-    json_write(os.path.join(tmp, "config.json"), {
+    from tests.test_helpers import seed_runtime_from_sot
+
+    seed_runtime_from_sot(tmp, extra_config={
         "mailbus_internal_llm": {
             "enabled": True,
             "provider_priority": ["stub"],
@@ -65,6 +56,7 @@ def _seed(tmp: str) -> None:
             "budget": {"max_calls_per_hour": 30, "max_calls_per_task": 5},
         },
     })
+    os.makedirs(os.path.join(tmp, "rag"), exist_ok=True)
 
 
 def _finance_task(tmp: str) -> dict:

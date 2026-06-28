@@ -3,7 +3,7 @@
 ziyan-mailbus — 多 Agent 消息总线系统
 
 用法:
-  bus.py init                        初始化目录结构 + 写默认配置
+  bus.py init [--fresh]              初始化 store（--fresh 从 SoT 重建）
   bus.py scan                        扫描全员 inbox → 推送未读消息
   bus.py send <agent> --msg <内容>    手动发消息
          [--priority urgent] [--from <发件人>] [--type <类型>]
@@ -17,7 +17,7 @@ ziyan-mailbus — 多 Agent 消息总线系统
   bus.py agent-add <名> --cli <CLI>  注册新 agent
   bus.py agent-remove <名>           移除 agent
 
-配置: data_dir (默认 /mnt/e/ai_tools/mail/store) 中的 config.json
+配置: data_dir (默认 $MAILBUS_DATA 或 mail/store) 中的 config.json
 """
 
 import os
@@ -71,7 +71,7 @@ DEFAULT_CONFIG = {
 
 
 
-from lib.commands import load_config, save_config, cmd_init, cmd_scan, cmd_search, cmd_heartbeat, cmd_serve, cmd_send, cmd_broadcast, cmd_ack, cmd_mark_read, cmd_status, cmd_retry, cmd_archive, cmd_backup, cmd_errors, cmd_agent_add, cmd_agent_remove, cmd_review, cmd_launch, cmd_iteration, _add_data_dir_arg
+from lib.commands import load_config, save_config, cmd_init, cmd_scan, cmd_search, cmd_heartbeat, cmd_serve, cmd_send, cmd_broadcast, cmd_ack, cmd_mark_read, cmd_status, cmd_retry, cmd_archive, cmd_backup, cmd_errors, cmd_agent_add, cmd_agent_remove, cmd_review, cmd_launch, cmd_iteration, cmd_recover, _add_data_dir_arg
 
 
 def main():
@@ -80,8 +80,13 @@ def main():
     sub = parser.add_subparsers(dest="command", help="可用命令")
     
     # init
-    p_init = sub.add_parser("init", help="初始化目录结构")
+    p_init = sub.add_parser("init", help="初始化目录结构（--fresh 从 access/org/config 重建）")
     _add_data_dir_arg(p_init)
+    p_init.add_argument(
+        "--fresh",
+        action="store_true",
+        help="清空并重建 store（聚合 config/ + org/ + access/agent.json）",
+    )
     
     # scan
     p_scan = sub.add_parser("scan", help="扫描全员 inbox 并推送")
@@ -199,6 +204,14 @@ def main():
     _add_data_dir_arg(p_it)
     p_it.add_argument("--round", default="1", help="1|2|3|all（默认 1，仅诊断）")
     p_it.add_argument("--force", action="store_true", help="跳过 Round1 门禁（调试用）")
+
+    # recover — 断链恢复 / 取消
+    p_rc = sub.add_parser("recover", help="任务恢复（--continue）或取消（--cancel）")
+    _add_data_dir_arg(p_rc)
+    p_rc.add_argument("recover_action", nargs="?", default="continue",
+                      choices=["continue", "cancel"], help="continue=同 step 重 push；cancel=取消任务")
+    p_rc.add_argument("--task-id", required=False, help="任务 ID")
+    p_rc.add_argument("--reason", default="", help="操作原因（写入 fsm history）")
     
     args = parser.parse_args()
     
@@ -227,6 +240,7 @@ def main():
         "review": cmd_review,
         "launch": cmd_launch,
         "iteration": cmd_iteration,
+        "recover": cmd_recover,
     }
     
     return cmd_map[args.command](args)

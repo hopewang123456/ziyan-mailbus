@@ -65,7 +65,7 @@ mailbus 是 **纯 Python + 文件系统**，在 **Linux / macOS 上可直接原�
 | 部署方式 | API 端口 | 说明 |
 |----------|----------|------|
 | 原生 `mailbus serve` | **9814** | Linux / macOS / Windows 本机 |
-| Docker `mailbus` 服务 | **9812** | `docker-agents/` 容器内网；与原生 9814 并存 |
+| Docker `mailbus` 服务 | **9814** | `docker-agents/` compose 映射 `$MAILBUS_API_PORT`（默认 9814） |
 | n8n webhook | **5678** | 可选；视频发布演练 |
 | AgentMemory | **3111** | 可选 |
 | 灵云 Claude ttyd | **9260** | WSL 宿主机 · Claude Code pro |
@@ -106,14 +106,14 @@ EOF
 # 4. 启动总线（内置 Scheduler：scan / platform-scout / pipeline-repair 等）
 mailbus serve --host 127.0.0.1 --port 9814 --data-dir ./store
 # 或后台重启：
-bash tools/restart-mailbus.sh 9814
+python tools/restart-mailbus.py --port 9814
 
 # 5. 可选：n8n 侧车
 bash docker-agents/start-n8n.sh
-bash tools/setup-n8n.sh
+bash tools/tools/ops/setup-n8n.sh
 
 # 6. 验收
-python3 tools/run-final-acceptance.py
+python3 tools/tools/ops/run-final-acceptance.py
 python3 tools/validate-order-intake.py --data-dir store
 # Dashboard：浏览器打开 docs/index.html（默认 API http://127.0.0.1:9814）
 ```
@@ -129,11 +129,11 @@ pip install -e .
 mailbus init --data-dir store
 # 配置 .env（变量同 Linux）
 
-.\tools\restart-mailbus.ps1      # 默认 9814
-.\tools\setup-n8n.ps1            # 或 -Reset 重建 workflow 卷
+python tools/restart-mailbus.py --port 9814
+.\tools\tools/ops/setup-n8n.ps1            # 或 -Reset 重建 workflow 卷
 # 或：wsl bash docker-agents/start-n8n.sh
 
-python tools\run-final-acceptance.py
+python tools\tools/ops/run-final-acceptance.py
 ```
 
 提示：可开 **WSL mirrored 网络** 或端口转发，减少对 WSL 桥接的依赖。Docker Desktop 全团队：`wsl bash docker-agents/start-team.sh`。
@@ -149,13 +149,13 @@ bash start-team.sh
 bash mailbus-pipeline-e2e.sh
 ```
 
-容器内 mailbus API 为 **9812**（`docker-compose.yml`），`docker-agents/*.sh` 使用该端口是预期行为，与原生 **9814** 不同。
+Docker 与原生 mailbus API 均默认 **9814**（`docker-compose.yml` 与 `lib/constants.py`）。可通过环境变量 `MAILBUS_API_PORT` 覆盖；`docker-agents/lib/api-url.sh` 与 `config/env.template` 为启动链 SoT。
 
 ### 可选组件
 
 | 组件 | 用途 | 安装 |
 |------|------|------|
-| **n8n** | 多渠道发布（video drill） | `setup-n8n.sh` / `setup-n8n.ps1` |
+| **n8n** | 多渠道发布（video drill） | `tools/ops/setup-n8n.sh` / `tools/ops/setup-n8n.ps1` |
 | **ComfyUI** | 生图步骤 | `docker-agents/start-comfyui-gpu.sh` |
 | **AgentMemory** | 长期消息记忆 | `npm i -g @agentmemory/agentmemory && agentmemory` |
 
@@ -164,9 +164,9 @@ bash mailbus-pipeline-e2e.sh
 ```bash
 python3 tests/run_all.py
 python3 tools/validate-scheduler.py --url http://127.0.0.1:9814
-python3 tools/smoke-platform-scout.py --data-dir store
+python3 tools/tools/ops/smoke-platform-scout.py --data-dir store
 python3 tools/validate-order-intake.py --data-dir store
-python3 tools/run-final-acceptance.py
+python3 tools/tools/ops/run-final-acceptance.py
 ```
 
 ### 方案对照 — 仍待完善（见 `plans/`）
@@ -183,7 +183,7 @@ python3 tools/run-final-acceptance.py
 | 商前 role-flow（灵拓→灵昭） | ✅ role-flow.json pursue 转换 + intake 闸门 |
 | 灵拓 Hermes profile 9126 | ✅ init-profiles.sh + config.json |
 | Dashboard i18n 中英文 | ✅ `docs/js/dashboard-i18n.js` |
-| 机器人 Agent 头像 | ✅ `docs/avatars/*.svg` + `tools/gen-robot-avatars.py` |
+| 机器人 Agent 头像 | ✅ `docs/avatars/*.svg`（生成脚本已归档 `tools/_archive/gen-robot-avatars.py`） |
 
 ## 核心特性
 
@@ -340,7 +340,7 @@ mailbus 将已 ack 的消息**必写** [`team-memory.db`](/mnt/e/hermes-data/.he
 ```bash
 python3 mailbus-memory-bridge.py --data-dir /path/to/store
 python3 /mnt/e/hermes-data/.hermes/scripts/memory.py search mailbus
-python3 tools/check-agentmemory-persistence.py --dry-run   # 探针（加 --dry-run 跳过重启）
+python3 tools/tools/ops/check-agentmemory-persistence.py --dry-run   # 探针（加 --dry-run 跳过重启）
 ```
 
 环境变量：
@@ -351,7 +351,7 @@ python3 tools/check-agentmemory-persistence.py --dry-run   # 探针（加 --dry-
 | `MEMORY_BRIDGE_AGENTMEMORY` | `1` | 写 AgentMemory |
 | `TEAM_MEMORY_DB` | 见 compose | SQLite 路径 |
 
-团队规范同步：`python3 tools/sync-team-rules.py --data-dir store`（bulletin + team-memory.db + 各 agent notice；AgentMemory 可选）
+团队规范同步：`python3 tools/tools/ops/sync-team-rules.py --data-dir store`（bulletin + team-memory.db + 各 agent notice；AgentMemory 可选）
 
 消息 SQLite 格式：`[agent:xxx] [from:yyy] [type:zzz] <内容>`，key=`mailbus:{msg_id}`
 
@@ -453,7 +453,9 @@ bash docker-agents/start-team.sh
 ```
 ziyan-mailbus/
 ├── bus.py                        # 入口脚本（CLI 命令入口）
-├── mailbus-boot.sh                # 全量启动脚本（自动拉起 bus.py + 所有 Agent 进程）
+├── docker-agents/start-team.sh    # 团队容器启动（推荐入口）
+├── mailbus-send                   # 发送 CLI 包装
+├── mailbus-memory-bridge.py       # AgentMemory 双写桥接
 ├── lib/
 │   ├── scheduler.py              # 内置 SchedulerHub（替代 WSL crontab）
 │   ├── jobs.py                   # scan / bridge / watchdog 等 job

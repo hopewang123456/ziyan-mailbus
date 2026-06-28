@@ -2,6 +2,9 @@
 # 60 秒稳定性探测：mailbus + Windows localhost + 容器未重启
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/lib/api-url.sh"
+
 DURATION="${STABILITY_SEC:-60}"
 INTERVAL=10
 pass=0
@@ -11,9 +14,9 @@ start_restarts=$(docker inspect docker-agents-mailbus-1 --format '{{.RestartCoun
 echo "=== stability test ${DURATION}s (interval ${INTERVAL}s) ==="
 end=$((SECONDS + DURATION))
 while [ $SECONDS -lt $end ]; do
-  wsl_code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://127.0.0.1:9812/ 2>/dev/null || echo "000")
+  wsl_code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 "$MAILBUS_API_BASE"/ 2>/dev/null || echo "000")
   if [ -x /mnt/c/Windows/System32/curl.exe ]; then
-    win_code=$(/mnt/c/Windows/System32/curl.exe -s -o /mnt/c/Windows/NUL -w '%{http_code}' --connect-timeout 8 http://localhost:9812/ 2>/dev/null | tr -d '\r\n')
+    win_code=$(/mnt/c/Windows/System32/curl.exe -s -o /mnt/c/Windows/NUL -w '%{http_code}' --connect-timeout 8 "http://localhost:${MAILBUS_API_PORT}/" 2>/dev/null | tr -d '\r\n')
   else
     win_code="skip"
   fi

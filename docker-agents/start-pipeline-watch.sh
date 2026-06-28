@@ -13,7 +13,7 @@ if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
   exit 0
 fi
 
-nohup python3 "$MAIL/tools/watch-task-pipeline.py" \
+nohup python3 "$MAIL/tools/tools/ops/watch-task-pipeline.py" \
   --task-id "$TASK_ID" \
   --data-dir "$MAIL/store" \
   --interval "$INTERVAL" \

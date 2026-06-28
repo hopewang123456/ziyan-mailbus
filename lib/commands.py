@@ -3,7 +3,7 @@
 ziyan-mailbus — 多 Agent 消息总线系统
 
 用法:
-  bus.py init                        初始化目录结构 + 写默认配置
+  bus.py init [--fresh]              初始化 store（--fresh 从 SoT 重建）
   bus.py scan                        扫描全员 inbox → 推送未读消息
   bus.py send <agent> --msg <内容>    手动发消息
          [--priority urgent] [--from <发件人>] [--type <类型>]
@@ -17,7 +17,7 @@ ziyan-mailbus — 多 Agent 消息总线系统
   bus.py agent-add <名> --cli <CLI>  注册新 agent
   bus.py agent-remove <名>           移除 agent
 
-配置: data_dir (默认 /mnt/e/ai_tools/mail/store) 中的 config.json
+配置: data_dir (默认 $MAILBUS_DATA 或 mail/store) 中的 config.json
 """
 
 import os
@@ -166,58 +166,14 @@ def get_system_message(agent_name: str) -> dict:
 # ── CLI 命令实现 ──────────────────────────────────────────────────────
 
 def cmd_init(args) -> int:
-    """初始化目录结构 + 创建默认配置"""
-    data_dir = args.data_dir or DEFAULT_CONFIG["data_dir"]
-    _ensure_dir(data_dir)
-    config_path = f"{data_dir}/config.json"
-    
-    # 如果已经有配置，不覆盖
-    existing = json_read(config_path, None)
-    if existing:
-        print(f"✗ 配置已存在: {config_path}")
-        print("  如需重新初始化，请先删除该文件")
-        return 1
-    
-    config = dict(DEFAULT_CONFIG)
-    config["data_dir"] = data_dir
-    
-    # 创建目录结构
-    _ensure_dir(f"{data_dir}/inbox")
-    _ensure_dir(f"{data_dir}/queue/urgent")
-    _ensure_dir(f"{data_dir}/queue/normal")
-    _ensure_dir(f"{data_dir}/archive")
-    _ensure_dir(f"{data_dir}/errors")
-    
-    # 写配置
-    save_config(config_path, config)
-    
-    # 写空 sent.json 和 board.json
-    json_write(f"{data_dir}/sent.json", {})
-    json_write(f"{data_dir}/board.json", {
-        "board": [],
-        "created_at": _now_iso(),
-    })
+    """初始化目录结构 + 创建默认配置（--fresh 从 access/org/config 重建 store）"""
+    from .init_store import run_init_store
 
-    # 默认权限（Dashboard 持久化）
-    default_perms = {}
-    for name in config.get("agents", {}):
-        default_perms[name] = {
-            "browser": True,
-            "cli": True,
-            "mailbox": True,
-            "bulletin": name in ("lingzhao", "xiaoqi", "lingxiao"),
-        }
-    json_write(f"{data_dir}/permission.json", {
-        "permissions": default_perms,
-        "bulletin": ["lingzhao", "xiaoqi"],
-        "updated_at": _now_iso(),
-    })
-    
-    print(f"✓ ziyan-mailbus 已初始化")
-    print(f"  数据目录: {data_dir}")
-    print(f"  配置文件: {config_path}")
-    print(f"\n下一步: 用 bus.py agent-add 注册你的 agent")
-    return 0
+    data_dir = args.data_dir or DEFAULT_CONFIG["data_dir"]
+    if getattr(args, "fresh", False):
+        return run_init_store(data_dir, fresh=True)
+
+    return run_init_store(data_dir, fresh=False)
 
 
 def run_scan_once(data_dir: str, config: dict, *, quiet: bool = False) -> int:
@@ -229,6 +185,15 @@ def run_scan_once(data_dir: str, config: dict, *, quiet: bool = False) -> int:
 
     with named_lock("mailbus-scan", blocking=False) as acquired:
         if not acquired:
+            log_dir = os.path.join(data_dir, "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            skip_log = os.path.join(log_dir, "scan-skipped.jsonl")
+            from .utils import jsonl_append, _now_iso
+            jsonl_append(skip_log, {
+                "ts": _now_iso(),
+                "event": "scan_skipped",
+                "reason": "mailbus-scan lock held",
+            })
             if not quiet:
                 print("⏭ scan 跳过（另一实例正在运行，锁 mailbus-scan）")
             return 0
@@ -263,6 +228,15 @@ def _run_scan_once_body(data_dir: str, config: dict, *, quiet: bool = False) -> 
     except Exception as exc:
         if not quiet:
             print(f"  [scan] self_heal 异常: {exc}")
+
+    try:
+        from lib.task_interrupt import detect_interrupted_tasks
+        interrupted = detect_interrupted_tasks(data_dir, agents)
+        if interrupted and not quiet:
+            print(f"⚠️ 断链任务: {len(interrupted)} 个（Dashboard 可继续/recover）")
+    except Exception as exc:
+        if not quiet:
+            print(f"  [scan] interrupt-detect 异常: {exc}")
 
     urgent_queue, normal_queue = build_queues(data_dir, agents, config)
     total_messages = sum(len(v) for v in urgent_queue.values()) + sum(len(v) for v in normal_queue.values())
@@ -764,7 +738,8 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
 
             msg0 = messages[0]
             cli_cmd = resolve_cli_for_message(
-                agent_cfg, agent_types, msg0, agent_name, primary_task_id=primary_tid,
+                agent_cfg, agent_types, msg0, agent_name,
+                primary_task_id=primary_tid, data_dir=data_dir,
             )
             if not cli_cmd:
                 print(f"   → {agent_name} ({label}): 跳过（无需 LLM）")
@@ -1427,8 +1402,12 @@ def cmd_review(args) -> int:
     # ── 3. semgrep 安全扫描 ──
     semgrep_exit = 0
     if getattr(args, "semgrep", False):
-        semgrep_rules_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "semgrep-rules")
-        semgrep_rules_dir = os.path.normpath(semgrep_rules_dir)
+        from .constants import MAILBUS_ROOT
+
+        semgrep_rules_dir = str(MAILBUS_ROOT / "config" / "review" / "semgrep")
+        legacy_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "semgrep-rules"))
+        if not os.path.isdir(semgrep_rules_dir) and os.path.isdir(legacy_dir):
+            semgrep_rules_dir = legacy_dir
         semgrep_exit = 0
         if shutil.which("semgrep") and os.path.isdir(semgrep_rules_dir):
             target_dir = args.target or "."
@@ -1623,6 +1602,46 @@ def _read_deepseek_key_from_openclaw_config() -> str:
                 if line.startswith("DEEPSEEK_API_KEY="):
                     return line.strip().split("=", 1)[1].strip("'\"")
     return ""
+
+
+def cmd_recover(args) -> int:
+    """recover --continue：interrupted/paused 任务同 step 重 push。"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = getattr(args, "data_dir", None) or config.get("data_dir") or DEFAULT_DATA_DIR
+
+    action = getattr(args, "recover_action", "continue")
+    task_id = getattr(args, "task_id", "") or ""
+    reason = getattr(args, "reason", "") or "cli_recover"
+
+    if action == "cancel":
+        from .task_recover import apply_cancel_task
+        if not task_id:
+            print("✗ 需要 --task-id")
+            return 1
+        out = apply_cancel_task(data_dir, task_id, reason=reason)
+        if out.get("ok"):
+            print(f"✓ 已取消 task={task_id}")
+            return 0
+        print(f"✗ 取消失败: {out.get('error', out)}")
+        return 1
+
+    if action != "continue":
+        print(f"✗ 未知 recover 动作: {action}（可用 continue / cancel）")
+        return 1
+
+    if not task_id:
+        print("✗ recover --continue 需要 --task-id")
+        return 1
+
+    from .task_recover import recover_continue
+    out = recover_continue(data_dir, task_id, reason=reason)
+    if out.get("ok"):
+        disp = "已 dispatch" if out.get("dispatch_ok") else "dispatch 失败（检查 inbox）"
+        print(f"✓ recover continue task={task_id} step={out.get('step_id')} → {out.get('to_person')} ({disp})")
+        return 0 if out.get("dispatch_ok") else 1
+    print(f"✗ recover 失败: {out.get('error', out)}")
+    return 1
 
 
 def cmd_iteration(args) -> int:

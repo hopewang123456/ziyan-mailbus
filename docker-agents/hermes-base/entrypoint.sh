@@ -8,7 +8,7 @@ bash /sync-identities.sh
 
 if [ -x /mailbus/tools/sync-hermes-framework-skill.sh ]; then
   for agent in lingzhao lingjin lingxi lingtuo lingxun lingzhang; do
-    HERMES_AGENT="$agent" HERMES_FRAMEWORK_SKILLS_DIR="/mailbus/adapters/.sync/${agent}/skills" \
+    HERMES_AGENT="$agent" HERMES_FRAMEWORK_SKILLS_DIR="/mailbus/access/hermes/.sync/${agent}/skills" \
       HERMES_SKILL_COPY=1 \
       bash /mailbus/tools/sync-hermes-framework-skill.sh || true
   done

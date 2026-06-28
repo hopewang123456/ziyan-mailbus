@@ -40,6 +40,17 @@ def agent_cli_active(agent_name: str, agents: dict) -> bool:
     return _adapter_cli_active(agent_name, agents)
 
 
+def agent_cli_active_for(
+    agent_name: str,
+    agents: dict,
+    *,
+    msg_id: str = "",
+    task_id: str = "",
+) -> bool:
+    from .agent_adapters import agent_cli_active_for as _for
+    return _for(agent_name, agents, msg_id=msg_id, task_id=task_id)
+
+
 def _extract_task_ids(text: str) -> Set[str]:
     if not text:
         return set()
@@ -389,6 +400,13 @@ def trim_stale_notices(data_dir: str, agents: dict, max_age_days: int = 3) -> in
 def run_self_heal(data_dir: str, agents: dict, *, phase: str = "full") -> dict:
     """scan 内置自愈入口。pre=推送前，full=含审计归档。"""
     out = {}
+    try:
+        from .delivery_normalizer import normalize_opencode_deliveries
+        norm = normalize_opencode_deliveries(data_dir, agents)
+        if norm.get("total"):
+            out["delivery_normalized"] = norm["total"]
+    except Exception as exc:
+        debug(f"[self_heal] delivery_normalizer error: {exc}")
     n = recover_replies_to_msg_results(data_dir, agents)
     if n:
         out["reply_recovered"] = n

@@ -57,12 +57,39 @@ def ensure_file_task_work_order(
     agent_name: str,
     msg_entry: dict,
 ) -> Tuple[str, str, str]:
-    """写 msg-files/{msg_id}.md，返回 (msg_id, work_order_path, result_path)。"""
+    """写 work-orders（pipeline）或 msg-files 工单，返回 (msg_id, work_order_path, result_path)。"""
     msg_id = (msg_entry.get("id") or "").strip()
     if not msg_id:
         from .utils import generate_msg_id
         msg_id = generate_msg_id()
         msg_entry["id"] = msg_id
+
+    task_id = (msg_entry.get("task_id") or "").strip()
+    step_id = (msg_entry.get("step_id") or "").strip()
+    if not step_id and task_id:
+        import re
+        content = msg_entry.get("content") or ""
+        m = re.search(r"step_id=([^\s\n]+)", content)
+        if m:
+            step_id = m.group(1)
+
+    if task_id and step_id:
+        from .pipeline_work_order import write_pipeline_work_order
+
+        step_num = int(msg_entry.get("pipeline_step") or msg_entry.get("step") or 1)
+        _, wo_path = write_pipeline_work_order(
+            data_dir,
+            task_id=task_id,
+            step_num=step_num,
+            to_person=agent_name,
+            to_role=msg_entry.get("to_role") or agent_name,
+            from_person=msg_entry.get("from") or "mailbus",
+            summary=(msg_entry.get("content") or "")[:300],
+            msg_id=msg_id,
+            step_id=step_id,
+        )
+        rf_path = os.path.join(data_dir, "msg-results", task_id, f"step-{step_id}.json")
+        return msg_id, wo_path, rf_path
 
     msg_files = os.path.join(data_dir, "msg-files")
     os.makedirs(msg_files, exist_ok=True)

@@ -3602,6 +3602,9 @@ function showTaskReport(el) {
     html += '<div style="color:var(--text-muted);padding:12px">暂无任务链数据</div>';
   }
   html += '</div>';
+  if (task.task_id || task.id) {
+    html += renderTaskActionBar({ task_id: task.task_id || task.id, status: status, fsm: task.fsm, interrupted: task.interrupted, chain: task.chain });
+  }
   document.getElementById('agentModalContent').innerHTML = html;
   document.getElementById('agentModal').classList.add('open');
 }
@@ -3742,6 +3745,71 @@ function showChainReport(info, icon, report) {
 
 // ═══════════════ 任务过滤 ═══════════════
 
+function renderTaskActionBar(task) {
+  var tid = task.task_id || task.id || '';
+  if (!tid) return '';
+  var fsm = task.fsm || {};
+  var state = (fsm.state || task.status || '').toLowerCase();
+  if (state === 'succeeded' || state === 'success' || state === 'cancelled' || task.status === 'success') return '';
+  var showContinue = task.interrupted || state === 'blocked' || state === 'paused' ||
+    state === 'executing' || task.status === 'running' || task.status === 'failed' || task.status === 'timeout';
+  var html = '<div class="task-actions" style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap" onclick="event.stopPropagation()">';
+  if (showContinue) {
+    html += '<button class="btn btn-sm btn-primary" data-action="taskFsmAction" data-arg="' + esc(tid) + '" data-arg2="continue">继续</button>';
+  }
+  html += '<button class="btn btn-sm" style="border-color:var(--accent-red);color:var(--accent-red)" data-action="taskFsmAction" data-arg="' + esc(tid) + '" data-arg2="cancel">取消</button>';
+  html += '<button class="btn btn-sm" data-action="taskFsmRollbackPrompt" data-arg="' + esc(tid) + '">回退</button>';
+  html += '<select class="btn btn-sm" style="padding:2px 6px;max-width:90px" onchange="if(this.value){taskFsmPriority(\'' + jsStr(tid) + '\',this.value);this.value=\'\';}">' +
+    '<option value="">优先级</option><option value="10">加急</option><option value="50">普通</option><option value="80">低</option></select>';
+  if (task.interrupted) {
+    html += '<span style="font-size:10px;color:var(--accent-gold);align-self:center">⚡ 断链</span>';
+  }
+  html += '</div>';
+  return html;
+}
+
+async function taskFsmAction(taskId, action) {
+  var reason = '';
+  if (action === 'cancel') {
+    reason = prompt('取消原因（可选）', 'dashboard_cancel') || 'dashboard_cancel';
+  } else if (action === 'continue') {
+    reason = 'dashboard_continue';
+  }
+  try {
+    var r = await postJSON('/api/tasks/' + encodeURIComponent(taskId) + '/fsm/' + action, { reason: reason });
+    toast((r.action || action) + ' 成功', 'success');
+    loadAll().catch(function() {});
+  } catch (e) {
+    toast('操作失败: ' + e.message, 'error');
+  }
+}
+
+async function taskFsmRollbackPrompt(taskId) {
+  var reason = prompt('回退原因', '') || 'dashboard_rollback';
+  var toStep = prompt('回退到步骤号（留空=上一步）', '');
+  var toAgent = prompt('回退到 agent（可选）', '') || undefined;
+  var body = { reason: reason };
+  if (toStep) body.to_step = parseInt(toStep, 10);
+  if (toAgent) body.to_agent = toAgent;
+  try {
+    await postJSON('/api/tasks/' + encodeURIComponent(taskId) + '/fsm/rollback', body);
+    toast('已回退', 'success');
+    loadAll().catch(function() {});
+  } catch (e) {
+    toast('回退失败: ' + e.message, 'error');
+  }
+}
+
+async function taskFsmPriority(taskId, priority) {
+  try {
+    await postJSON('/api/tasks/' + encodeURIComponent(taskId) + '/fsm/priority', { priority: parseInt(priority, 10) });
+    toast('优先级已更新', 'success');
+    loadAll().catch(function() {});
+  } catch (e) {
+    toast('优先级更新失败: ' + e.message, 'error');
+  }
+}
+
 function renderTaskCard(task) {
   _currentChainTask = task;
   const summary = (task.summary || '').substring(0, 60) + ((task.summary || '').length > 60 ? '...' : '');
@@ -3759,12 +3827,13 @@ function renderTaskCard(task) {
     task.status === 'paused' || (fsm && fsm.fsm_state === 'paused') ? '#f59e0b' :
     isRunning ? 'var(--accent-cyan)' : 'var(--text-muted)';
 
-  return '<div class="msg-item" style="margin-bottom:6px;border-left:3px solid ' + statusColor + ';cursor:pointer" data-task=\'' + encodeURIComponent(JSON.stringify({chain: task.chain || [], status: task.status, summary: task.summary, fsm: task.fsm})) + '\' onclick="showTaskReport(this)">' +
+  return '<div class="msg-item" style="margin-bottom:6px;border-left:3px solid ' + statusColor + ';cursor:pointer" data-task=\'' + encodeURIComponent(JSON.stringify({task_id: task.task_id || task.id, chain: task.chain || [], status: task.status, summary: task.summary, fsm: task.fsm, interrupted: task.interrupted})) + '\' onclick="showTaskReport(this)">' +
     '<div style="display:flex;justify-content:space-between;align-items:center">' +
-      '<div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + esc(summary) + renderFsmBadge(fsm) + '</div>' +
+      '<div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + esc(summary) + renderFsmBadge(fsm) + (task.interrupted ? ' <span style="font-size:10px;color:var(--accent-gold)">断链</span>' : '') + '</div>' +
       '<span style="font-size:10px;color:var(--text-muted);white-space:nowrap;margin-left:8px">' + updatedAt + '</span>' +
     '</div>' +
     renderTaskPipelineView(task) +
+    renderTaskActionBar(task) +
   '</div>';
 }
 
@@ -4343,18 +4412,7 @@ async function hqApprove(hqId) {
   if (!it) return;
   var body = _hqBody('approved');
   try {
-    if (it.type === 'plan_approval') {
-      await postJSON('/api/tasks/' + encodeURIComponent(it.task_id) + '/fsm/approve-plan', body);
-    } else if (it.type === 'final_acceptance') {
-      await postJSON('/api/tasks/' + encodeURIComponent(it.task_id) + '/fsm/accept', body);
-    } else if (it.type === 'intake_gate') {
-      await postJSON('/api/intake/' + encodeURIComponent(it.intake_id) + '/gates/' + encodeURIComponent(it.gate_id) + '/approve', body);
-    } else if (it.task_id && it.gate_id) {
-      await postJSON('/api/tasks/' + encodeURIComponent(it.task_id) + '/gates/' + encodeURIComponent(it.gate_id) + '/approve', body);
-    } else {
-      toast('无法路由审批 API', 'error');
-      return;
-    }
+    await postJSON('/api/human-queue/' + encodeURIComponent(hqId) + '/resolve', body);
     toast('已批准', 'success');
     if (window.MailbusThree && window.MailbusThree.burstApprovalParticles) {
       var panel = document.getElementById('hqDetailPanel');
@@ -4374,22 +4432,11 @@ async function hqDeny(hqId) {
   var body = _hqBody('denied');
   if (!body.reason) { toast('请填写驳回理由', 'error'); return; }
   try {
-    if (it.type === 'plan_approval') {
-      body.action = 'replan';
-      await postJSON('/api/tasks/' + encodeURIComponent(it.task_id) + '/fsm/approve-plan', body);
-    } else if (it.type === 'final_acceptance') {
-      await postJSON('/api/tasks/' + encodeURIComponent(it.task_id) + '/fsm/accept', body);
-    } else if (it.type === 'intake_gate') {
-      await postJSON('/api/intake/' + encodeURIComponent(it.intake_id) + '/gates/' + encodeURIComponent(it.gate_id) + '/deny', body);
-    } else if (it.task_id && it.gate_id) {
-      await postJSON('/api/tasks/' + encodeURIComponent(it.task_id) + '/gates/' + encodeURIComponent(it.gate_id) + '/deny', body);
-    } else {
-      toast('无法路由驳回 API', 'error');
-      return;
-    }
+    await postJSON('/api/human-queue/' + encodeURIComponent(hqId) + '/resolve', body);
     toast('已驳回', 'success');
     _selectedHqId = null;
     await reloadData('human-queue');
+    loadAll().catch(function() {});
   } catch(e) {
     toast('驳回失败: ' + e.message, 'error');
   }
@@ -4485,6 +4532,10 @@ async function llmRefreshHealth() {
     if (ld) { llmDryRun(); return; }
     var lh = e.target.closest('[data-action="llmRefreshHealth"]');
     if (lh) { llmRefreshHealth(); return; }
+    var tfa = e.target.closest('[data-action="taskFsmAction"]');
+    if (tfa) { e.stopPropagation(); taskFsmAction(tfa.dataset.arg, tfa.dataset.arg2); return; }
+    var trb = e.target.closest('[data-action="taskFsmRollbackPrompt"]');
+    if (trb) { e.stopPropagation(); taskFsmRollbackPrompt(trb.dataset.arg); return; }
   });
 })();
 
@@ -4893,7 +4944,7 @@ function renderSettingsIntegrations(env) {
   if (!el) return;
   el.innerHTML =
     '<div style="font-size:13px;font-weight:600;margin-bottom:10px">n8n · ComfyUI</div>' +
-    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">可运行 <code>python tools/sync-n8n-url.py</code> / <code>sync-comfyui-url.ps1</code> 自动探测 WSL IP</div>' +
+    '<div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">可运行 <code>python tools/tools/ops/sync-n8n-url.py</code> / <code>tools/ops/sync-comfyui-url.ps1</code> 自动探测 WSL IP</div>' +
     _envGroupHtml(env, 'n8n') + _envGroupHtml(env, 'comfyui') +
     '<div style="margin-top:12px;display:flex;gap:8px">' +
     '<button class="btn btn-primary btn-sm" data-action="saveSettingsEnv" data-arg="integrations">保存集成配置</button></div>';

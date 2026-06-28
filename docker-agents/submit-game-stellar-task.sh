@@ -2,7 +2,10 @@
 # 《星际驿站》全员 pipeline — Envelope full_delivery
 set -euo pipefail
 
-BASE="http://127.0.0.1:9812"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/lib/api-url.sh"
+
+BASE="$MAILBUS_API_BASE"
 OLD_ID="game-stellar-20260616"
 TASK_ID="game-stellar-20260617"
 MAIL="/mnt/e/ai_tools/mail"
@@ -26,7 +29,7 @@ rm -f "${MAIL}/store/msg-results/${OLD_ID}.json" 2>/dev/null || true
 
 log "1. create full_delivery ${TASK_ID}"
 cd "$MAIL"
-python3 tools/task-create-envelope.py \
+python3 tools/tools/ops/task-create-envelope.py \
   --api "${BASE}" \
   --task-id "${TASK_ID}" \
   --intent "星际驿站终端小游戏 — mailbus 12 agent 全员通信验收 (v2)" \

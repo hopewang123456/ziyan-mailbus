@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mailbus.local/schemas/agent-registry.json",
+  "title": "MailbusAgentRegistry",
+  "description": "Agent runtime registry · store/roles/json/agent-registry.json",
+  "type": "object",
+  "required": ["version", "updated_at", "agents"],
+  "properties": {
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "updated_at": { "type": "string", "format": "date" },
+    "protocol_compat": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "agents": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/agentEntry" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "agentEntry": {
+      "type": "object",
+      "required": ["id", "status", "runtime"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{1,63}$" },
+        "status": { "enum": ["active", "inactive", "external", "deprecated"] },
+        "runtime": {
+          "enum": [
+            "hermes_profile",
+            "hermes",
+            "cline",
+            "opencode",
+            "openclaw",
+            "codex_cli",
+            "claude_code",
+            "cursor_sdk",
+            "a2a_remote",
+            "human",
+            "api"
+          ],
+          "description": "Agent architecture key (peer to hermes/openclaw/…); mailbus Core ignores — see agent-adapter-layer.md §3"
+        },
+        "role_types": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1, "maximum": 127 }
+        },
+        "capabilities": { "type": "array", "items": { "type": "string" } },
+        "endpoint": {
+          "type": "object",
+          "properties": {
+            "base_url": { "type": "string", "format": "uri" },
+            "agent_card_url": { "type": "string" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "transport": {
+              "enum": ["local_cli", "a2a_jsonrpc", "cursor_sdk", "webhook"],
+              "description": "Adapter delivery channel; Core ignores"
+            }
+          },
+          "additionalProperties": false
+        },
+        "auth": {
+          "type": "object",
+          "properties": {
+            "scheme": { "enum": ["none", "bearer", "api_key", "mtls"] },
+            "env_var": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "features": { "type": "object", "additionalProperties": true },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "tier_min": { "enum": ["S", "M", "L"], "default": "S" },
+        "identity_ref": { "type": "string" },
+        "registered_at": { "type": "string", "format": "date-time" },
+        "deprecated_at": { "type": "string", "format": "date-time" },
+        "replaced_by": { "type": "string" },
+        "extensions": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    }
+  }
+}

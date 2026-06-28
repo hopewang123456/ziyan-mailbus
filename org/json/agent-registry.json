@@ -1,0 +1,138 @@
+{
+  "version": "1.0.1",
+  "updated_at": "2026-06-18",
+  "protocol_compat": ["mailbus-a2a/1"],
+  "agents": {
+    "lingzhao": {
+      "id": "lingzhao",
+      "status": "active",
+      "runtime": "hermes_profile",
+      "role_types": [1],
+      "capabilities": ["architecture_design"],
+      "endpoint": { "port": 9120 },
+      "auth": { "scheme": "bearer", "env_var": "HERMES_LINGZHAO_TOKEN" },
+      "features": { "streaming": false, "push_notifications": true },
+      "tags": ["decision", "adr"],
+      "identity_ref": "identities/lingzhao.md"
+    },
+    "lingjin": {
+      "id": "lingjin",
+      "status": "active",
+      "runtime": "hermes_profile",
+      "role_types": [2],
+      "capabilities": ["security_audit"],
+      "endpoint": { "port": 9121 },
+      "auth": { "scheme": "bearer", "env_var": "HERMES_LINGJIN_TOKEN" },
+      "tags": ["security"],
+      "identity_ref": "identities/lingjin.md"
+    },
+    "lingxi": {
+      "id": "lingxi",
+      "status": "active",
+      "runtime": "hermes_profile",
+      "role_types": [3],
+      "capabilities": ["tech_research"],
+      "endpoint": { "port": 9122 },
+      "auth": { "scheme": "bearer", "env_var": "HERMES_LINGXI_TOKEN" },
+      "tags": ["research"],
+      "identity_ref": "identities/lingxi.md"
+    },
+    "lingtuo": {
+      "id": "lingtuo",
+      "status": "active",
+      "runtime": "hermes_profile",
+      "role_types": [4],
+      "capabilities": ["market_intake"],
+      "endpoint": { "port": 9126 },
+      "auth": { "scheme": "bearer", "env_var": "HERMES_LINGTUO_TOKEN" },
+      "tags": ["intake"],
+      "identity_ref": "identities/lingtuo.md"
+    },
+    "lingjian": {
+      "id": "lingjian",
+      "status": "active",
+      "runtime": "hermes_profile",
+      "role_types": [5],
+      "capabilities": ["code_review"],
+      "endpoint": { "port": 9123 },
+      "auth": { "scheme": "bearer", "env_var": "HERMES_LINGJIAN_TOKEN" },
+      "tags": ["review"],
+      "identity_ref": "identities/lingjian.md"
+    },
+    "lingyan": {
+      "id": "lingyan",
+      "status": "active",
+      "runtime": "hermes_profile",
+      "role_types": [6],
+      "capabilities": ["qa_testing"],
+      "endpoint": { "port": 9124 },
+      "auth": { "scheme": "bearer", "env_var": "HERMES_LINGYAN_TOKEN" },
+      "tags": ["test"],
+      "identity_ref": "identities/lingyan.md"
+    },
+    "lingxun": {
+      "id": "lingxun",
+      "status": "active",
+      "runtime": "hermes_profile",
+      "role_types": [7],
+      "capabilities": ["ops_inspection"],
+      "endpoint": { "port": 9125 },
+      "auth": { "scheme": "bearer", "env_var": "HERMES_LINGXUN_TOKEN" },
+      "tags": ["ops"],
+      "identity_ref": "identities/lingxun.md"
+    },
+    "lingxiao": {
+      "id": "lingxiao",
+      "status": "active",
+      "runtime": "cline",
+      "role_types": [8],
+      "capabilities": ["software_development"],
+      "auth": { "scheme": "none" },
+      "tags": ["architecture", "code"],
+      "identity_ref": "identities/lingxiao.md"
+    },
+    "dali": {
+      "id": "dali",
+      "status": "active",
+      "runtime": "opencode",
+      "role_types": [8],
+      "capabilities": ["software_development"],
+      "auth": { "scheme": "none" },
+      "tags": ["code", "implementation"],
+      "identity_ref": "identities/dali.md"
+    },
+    "xiaoqi": {
+      "id": "xiaoqi",
+      "status": "active",
+      "runtime": "openclaw",
+      "role_types": [9, 12],
+      "capabilities": ["task_dispatch"],
+      "endpoint": { "port": 18789 },
+      "auth": { "scheme": "none" },
+      "tags": ["dispatch", "acceptance"],
+      "identity_ref": "identities/xiaoqi.md"
+    },
+    "lingzhang": {
+      "id": "lingzhang",
+      "status": "active",
+      "runtime": "hermes_profile",
+      "role_types": [10],
+      "capabilities": ["finance_followup"],
+      "endpoint": { "port": 9127 },
+      "auth": { "scheme": "bearer", "env_var": "HERMES_LINGZHANG_TOKEN" },
+      "tags": ["finance"],
+      "identity_ref": "identities/lingzhang.md"
+    },
+    "yige": {
+      "id": "yige",
+      "status": "active",
+      "runtime": "openclaw",
+      "role_types": [11],
+      "capabilities": ["content_ops"],
+      "endpoint": { "port": 18790 },
+      "auth": { "scheme": "none" },
+      "tags": ["content"],
+      "identity_ref": "identities/yige.md"
+    }
+  }
+}

@@ -7,6 +7,7 @@ import os, sys, json, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from bus import load_config, save_config
+from lib.constants import DEFAULT_ACK_TIMEOUT
 
 
 def test_load_config_defaults():
@@ -14,7 +15,7 @@ def test_load_config_defaults():
     with tempfile.TemporaryDirectory() as tmp:
         cfg = load_config(os.path.join(tmp, "nonexistent.json"))
         assert cfg["project"] == "ziyan-mailbus"
-        assert cfg["ack_timeout"] == 10  # 默认填充
+        assert cfg["ack_timeout"] == DEFAULT_ACK_TIMEOUT
         assert cfg["max_retries"] == 3
         assert cfg["agents"] == {}
 
@@ -27,7 +28,7 @@ def test_load_config_merged():
             json.dump({"project": "custom", "agents": {"test": {"name": "t"}}}, f)
         cfg = load_config(path)
         assert cfg["project"] == "custom"
-        assert cfg["ack_timeout"] == 10  # 默认填充
+        assert cfg["ack_timeout"] == DEFAULT_ACK_TIMEOUT
         assert cfg["agents"]["test"]["name"] == "t"
 
 
@@ -69,6 +70,22 @@ def test_get_system_message():
     assert "bus_cli_location" in msg["system_info"]
 
 
+def test_cmd_init_fresh_thirteen_agents():
+    """bus.py init --fresh 应生成 13 agents + workflows registry。"""
+    import json
+    import tempfile
+    from lib.constants import MAILBUS_ROOT
+    from lib.init_store import run_init_store
+
+    with tempfile.TemporaryDirectory() as tmp:
+        rc = run_init_store(tmp, fresh=True, mail_root=MAILBUS_ROOT, quiet=True)
+        assert rc == 0
+        cfg = json.load(open(os.path.join(tmp, "config.json"), encoding="utf-8"))
+        assert len(cfg.get("agents") or {}) == 13
+        reg = json.load(open(os.path.join(tmp, "workflows", "registry.json"), encoding="utf-8"))
+        assert len(reg.get("workflows") or {}) >= 6
+
+
 if __name__ == "__main__":
     test_load_config_defaults()
     print("✅ test_load_config_defaults")
@@ -80,4 +97,6 @@ if __name__ == "__main__":
     print("✅ test_load_config_bad_json")
     test_get_system_message()
     print("✅ test_get_system_message")
+    test_cmd_init_fresh_thirteen_agents()
+    print("✅ test_cmd_init_fresh_thirteen_agents")
     print("\n🎉 全部通过")

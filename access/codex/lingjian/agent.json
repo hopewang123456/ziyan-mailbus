@@ -1,0 +1,25 @@
+{
+  "schema": "mailbus-agent-v3",
+  "agent_id": "lingjian",
+  "framework": "codex",
+  "archetype": "code-reviewer",
+  "skills": [
+    "mail/skills/common/agent-universal",
+    "mail/skills/common/mailbus-file-protocol",
+    "mail/skills/frameworks/codex",
+    "mail/skills/roles/archetypes/code-reviewer",
+    "mail/skills/roles/overlays/lingjian"
+  ],
+  "rules": [
+    "mail/rules/common/execution-order.md",
+    "mail/rules/common/task-fsm.md",
+    "mail/rules/common/team-secrets-policy.md",
+    "mail/rules/frameworks/codex/delivery.md",
+    "mail/rules/roles/code-reviewer/boundaries.md"
+  ],
+  "workspace": null,
+  "docker": {
+    "service": "codex-agent",
+    "profile": "lingjian"
+  }
+}

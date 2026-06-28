@@ -3,7 +3,7 @@
 set -uo pipefail
 
 DATA_DIR="${1:-/mnt/e/ai_tools/mail/store}"
-SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tools/start-claude-web.sh"
+SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/tools/tools/ops/start-claude-web.sh"
 LOG="${2:-/tmp/start-team.log}"
 
 log() { echo "[ensure-claude] $*"; echo "[ensure-claude] $*" >> "$LOG"; }

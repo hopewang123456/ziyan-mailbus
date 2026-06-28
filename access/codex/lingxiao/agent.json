@@ -1,0 +1,25 @@
+{
+  "schema": "mailbus-agent-v3",
+  "agent_id": "lingxiao",
+  "framework": "codex",
+  "archetype": "tech-lead",
+  "skills": [
+    "mail/skills/common/agent-universal",
+    "mail/skills/common/mailbus-file-protocol",
+    "mail/skills/frameworks/codex",
+    "mail/skills/roles/archetypes/tech-lead",
+    "mail/skills/roles/overlays/lingxiao"
+  ],
+  "rules": [
+    "mail/rules/common/execution-order.md",
+    "mail/rules/common/task-fsm.md",
+    "mail/rules/common/team-secrets-policy.md",
+    "mail/rules/frameworks/codex/delivery.md",
+    "mail/rules/roles/tech-lead/boundaries.md"
+  ],
+  "workspace": "/mnt/e/ai_tools/lingxiao",
+  "docker": {
+    "service": "codex-agent",
+    "profile": "lingxiao"
+  }
+}

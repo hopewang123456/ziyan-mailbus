@@ -5,6 +5,6 @@ COPY docker /usr/local/bin/docker
 
 WORKDIR /mailbus
 
-EXPOSE 9812
+EXPOSE 9814
 
-CMD ["python3", "-m", "bus", "serve", "--host", "0.0.0.0", "--port", "9812"]
+CMD ["python3", "-m", "bus", "serve", "--host", "0.0.0.0", "--port", "9814"]

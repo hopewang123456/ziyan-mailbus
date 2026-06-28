@@ -22,8 +22,10 @@ L3 领域 Skill (TDD、tarot、patroller…)
 
 | 路径 | 说明 |
 |------|------|
-| [`adapters/README.md`](../adapters/README.md) | L0/L1 框架目录 + sync |
-| [`roles/README.md`](../roles/README.md) | L2 工种 archetype + overlay |
+| [`skills/common/`](../skills/common/) | L0 共享协议 |
+| [`skills/frameworks/`](../skills/frameworks/) | L1 框架 runtime |
+| [`skills/roles/`](../skills/roles/) | L2 工种 archetype + overlay |
+| [`access/`](../access/) | agent.json + adapter 契约 |
 | [`docs/agent-layer-spec.md`](agent-layer-spec.md) | 分层模型 |
 | `store/agents/json/skills-index.json` | 每 agent 的 layer skills 索引 |
 | `tools/patch-skills-index-framework.py` | 幂等补全 L0–L2 |
@@ -42,10 +44,10 @@ L3 领域 Skill (TDD、tarot、patroller…)
 | hermes_profile | `tools/sync-hermes-framework-skill.sh` |
 | **全部** | `tools/sync-all-agent-layers.py` |
 
-容器挂载：`mail/adapters` + `mail/roles` → 容器内 sync resolve
+容器挂载：`mail/skills` + `mail/access` + `mail/rules` → 容器内 sync resolve
 
 ## 命名空间
 
-- **`mail/adapters/`** — L0/L1
-- **`mail/roles/`** — L2
-- **勿混淆** `external-tools/adapters/` — Coze/Dify/webhook
+- **`mail/skills/`** — L0/L1/L2 skill 包 SoT
+- **`mail/rules/`** — 行为规范 SoT（common / frameworks / roles）
+- **勿混淆** `access/external-tools/adapters/` — Coze/Dify/webhook

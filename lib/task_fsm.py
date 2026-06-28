@@ -17,6 +17,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .role_flow import get_next_role, pick_person_for_role
 from .pipeline_step import step_agent, step_role_type, step_role_zh, is_v3_task
 from .utils import _now_iso, json_read, json_write
+from .tracker import _parse_iso_dt
 
 # ── 状态枚举 ─────────────────────────────────────────────────────────────
 
@@ -47,6 +48,7 @@ class StepFsmState(str, Enum):
 _DONE_CONCLUSIONS = frozenset({
     "done", "pass", "approved", "fail", "dispatched", "rejected",
     "need_research", "blocked", "warning",
+    "clarifications_needed", "return_to_owner", "needs_clarification",
 })
 
 # 结论 → 任务进入 blocked（需人工或自动回退）
@@ -65,18 +67,18 @@ _LEGACY_TO_FSM = {
 }
 
 
-# ── 路径与 ID ─────────────────────────────────────────────────────────────
+# ── 路径与 ID（re-export 框架层）──────────────────────────────────────────
 
-def step_result_dir(data_dir: str, task_id: str) -> str:
-    return os.path.join(data_dir, "msg-results", task_id)
-
-
-def step_result_path(data_dir: str, task_id: str, step_id: str) -> str:
-    return os.path.join(step_result_dir(data_dir, task_id), f"step-{step_id}.json")
-
-
-def legacy_result_path(data_dir: str, task_id: str) -> str:
-    return os.path.join(data_dir, "msg-results", f"{task_id}.json")
+from .pipeline_results import (
+    find_legacy_result_file,
+    legacy_mirror_enabled,
+    legacy_read_enabled,
+    legacy_result_path,
+    load_config as load_pipeline_config,
+    result_paths_to_try,
+    step_result_dir,
+    step_result_path,
+)
 
 
 def _make_step_id(step_num: int, attempt: int = 1) -> str:
@@ -170,18 +172,65 @@ def task_priority(task: dict) -> int:
 
 
 def is_task_executable(task: dict) -> bool:
+    status = (task.get("status") or "")
+    if status in ("cancelled", "success", "failed", "timeout"):
+        return False
     st = (task.get("fsm") or {}).get("state") or ""
     if st:
-        return st == TaskFsmState.EXECUTING.value
-    return (task.get("status") or "") == "running"
+        if st == TaskFsmState.EXECUTING.value:
+            return True
+        if st == TaskFsmState.CREATED.value and status == "running":
+            return True
+        return False
+    return status == "running"
 
 
 # ── 步骤结果读写 ─────────────────────────────────────────────────────────
 
+def _normalize_result_timestamp(step: dict, ts: str) -> str:
+    """禁止 agent 填早于 started_at 的历史 timestamp。"""
+    now = _now_iso()
+    started = step.get("started_at") or ""
+    out = ts or now
+    if not started:
+        return out
+    try:
+        if _parse_iso_dt(out) < _parse_iso_dt(started):
+            return now
+    except Exception:
+        return now
+    return out
+
+
+def result_mtime_ok(
+    data_dir: str, task_id: str, step: dict, result: dict,
+) -> bool:
+    """result timestamp / 文件 mtime 须不早于 step.started_at。"""
+    from datetime import datetime, timezone
+
+    step_started = step.get("started_at") or ""
+    result_ts = result.get("timestamp") or result.get("updated_at") or ""
+    if step_started and result_ts:
+        try:
+            return _parse_iso_dt(result_ts) >= _parse_iso_dt(step_started)
+        except Exception:
+            return True
+    if step_started:
+        cfg = load_pipeline_config(data_dir)
+        paths_to_try = result_paths_to_try(data_dir, task_id, step, config=cfg)
+        for rf in paths_to_try:
+            try:
+                mtime = datetime.fromtimestamp(os.path.getmtime(rf), tz=timezone.utc)
+                return mtime >= _parse_iso_dt(step_started)
+            except OSError:
+                continue
+    return True
+
+
 def write_step_result(
     data_dir: str, task_id: str, step: dict, result: dict, *, immediate_advance: bool = True,
 ) -> str:
-    """写入 per-step 结果，并 mirror 到 legacy 单文件。"""
+    """写入 per-step 结果（SoT）；legacy mirror 由 config legacy_result_mirror 控制。"""
     sid = step.get("step_id") or _make_step_id(_parse_step_num(step, []))
     path = step_result_path(data_dir, task_id, sid)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -189,9 +238,11 @@ def write_step_result(
     payload.setdefault("task_id", task_id)
     payload.setdefault("step_id", sid)
     payload.setdefault("pipeline_step", step.get("step"))
-    payload.setdefault("timestamp", _now_iso())
+    payload["timestamp"] = _normalize_result_timestamp(step, payload.get("timestamp") or "")
     json_write(path, payload)
-    json_write(legacy_result_path(data_dir, task_id), payload)
+    cfg = load_pipeline_config(data_dir)
+    if legacy_mirror_enabled(cfg):
+        json_write(legacy_result_path(data_dir, task_id), payload)
     if immediate_advance:
         _maybe_immediate_pipeline(data_dir, task_id)
     return path
@@ -224,6 +275,27 @@ def archive_step_result_for_retry(
     return dst
 
 
+def revert_failed_retry(
+    data_dir: str,
+    task_id: str,
+    step: dict,
+    result: dict,
+    archived_path: Optional[str] = None,
+) -> None:
+    """verify retry 推送失败时：恢复已归档的 step result，保持步骤 awaiting_result。"""
+    sid = step.get("step_id") or ""
+    if archived_path and os.path.isfile(archived_path):
+        dst = step_result_path(data_dir, task_id, sid) if sid else legacy_result_path(data_dir, task_id)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        json_write(dst, result)
+    elif result and sid:
+        json_write(step_result_path(data_dir, task_id, sid), result)
+    step["status"] = "running"
+    step["fsm_state"] = StepFsmState.AWAITING_RESULT.value
+    step["result_consumed"] = False
+    step.pop("completed_at", None)
+
+
 def _maybe_immediate_pipeline(data_dir: str, task_id: str) -> None:
     """G-02：写结果后立即推进 pipeline，不等待 scan 周期。"""
     try:
@@ -241,22 +313,11 @@ def _maybe_immediate_pipeline(data_dir: str, task_id: str) -> None:
 
 
 def read_step_result(data_dir: str, task_id: str, step: dict) -> Optional[dict]:
-    sid = step.get("step_id")
-    if sid:
-        p = step_result_path(data_dir, task_id, sid)
-        if os.path.isfile(p):
-            return json_read(p, {})
-    ref = step.get("result_ref") or ""
-    if ref:
-        abs_ref = ref if os.path.isabs(ref) else os.path.join(data_dir, ref.replace("/mailbus/store/", "").lstrip("/"))
-        if not abs_ref.startswith(data_dir):
-            abs_ref = os.path.join(data_dir, ref.split("msg-results/", 1)[-1] if "msg-results/" in ref else ref)
-        if os.path.isfile(abs_ref):
-            return json_read(abs_ref, {})
-    leg = legacy_result_path(data_dir, task_id)
-    if os.path.isfile(leg):
-        return json_read(leg, {})
-    return None
+    from .pipeline_results import read_result_from_paths, result_paths_to_try
+
+    paths = result_paths_to_try(data_dir, task_id, step)
+    data = read_result_from_paths(paths)
+    return data or None
 
 
 def result_applies_to_step(
@@ -448,7 +509,10 @@ def apply_submit(
 
     chain = task.get("chain") or []
     tid = task.get("task_id") or task.get("id") or ""
-    ok, reason = result_applies_to_step(result, tid, step, chain)
+    mtime_ok = result_mtime_ok(data_dir, tid, step, result) if data_dir else True
+    ok, reason = result_applies_to_step(
+        result, tid, step, chain, result_mtime_ok=mtime_ok,
+    )
     if not ok:
         return {"ok": False, "error": reason}
 
@@ -512,6 +576,24 @@ def apply_submit(
 
     if not data_dir:
         data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "store")
+
+    from .decomposition import block_for_clarifications, handle_design_step_decomposition
+
+    dec_out = handle_design_step_decomposition(task, step, result, data_dir=data_dir)
+    if dec_out:
+        action = dec_out.get("action")
+        if action in ("clarifications", "missing_decomposition", "invalid_decomposition"):
+            reason = dec_out.get("reason") or ",".join(dec_out.get("errors") or [])
+            block_for_clarifications(task, result, data_dir=data_dir, reason=reason or action)
+            return {
+                "ok": True,
+                "action": "blocked",
+                "task": task,
+                "reason": action,
+                "decomposition": dec_out,
+            }
+        if action == "subtasks_applied":
+            _append_history(task, "decomposition_applied", {"count": dec_out.get("count")})
 
     from .workflow.engine import maybe_block_after_step
 

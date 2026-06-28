@@ -1,0 +1,35 @@
+{
+  "version": "1.0.0",
+  "updated_at": "2026-06-18",
+  "description": "SoT: role transitions. Human guide: ../md/flow-guide.md (generated).",
+  "terminal": [
+    { "role_type": 12, "conclusion": "approved" },
+    { "role_type": 11, "conclusion": "done" },
+    { "role_type": 4, "conclusion": "done" },
+    { "role_type": 7, "conclusion": "done" },
+    { "role_type": 9, "conclusion": "approved" }
+  ],
+  "transitions": [
+    { "from_role_type": 8, "conclusion": "done", "to_role_type": 5 },
+    { "from_role_type": 8, "conclusion": "blocked", "to_role_type": 1 },
+    { "from_role_type": 5, "conclusion": "pass", "to_role_type": 6 },
+    { "from_role_type": 5, "conclusion": "fail", "to_role_type": 8 },
+    { "from_role_type": 6, "conclusion": "pass", "to_role_type": 12 },
+    { "from_role_type": 6, "conclusion": "fail", "to_role_type": 8 },
+    { "from_role_type": 12, "conclusion": "rejected", "to_role_type": 8 },
+    { "from_role_type": 9, "conclusion": "dispatched", "to_role_type": 8 },
+    { "from_role_type": 1, "conclusion": "approved", "to_role_type": 9 },
+    { "from_role_type": 1, "conclusion": "done", "to_role_type": 9 },
+    { "from_role_type": 1, "conclusion": "need_research", "to_role_type": 3 },
+    { "from_role_type": 2, "conclusion": "pass", "to_role_type": 5 },
+    { "from_role_type": 2, "conclusion": "fail", "to_role_type": 8 },
+    { "from_role_type": 3, "conclusion": "done", "to_role_type": 1 },
+    { "from_role_type": 7, "conclusion": "warning", "to_role_type": 1 },
+    { "from_role_type": 4, "conclusion": "done", "to_role_type": null },
+    { "from_role_type": 4, "conclusion": "pursue", "to_role_type": 1 },
+    { "from_role_type": 4, "conclusion": "handed_to_lingzhao", "to_role_type": 1 },
+    { "from_role_type": 4, "conclusion": "watch", "to_role_type": null },
+    { "from_role_type": 4, "conclusion": "reject", "to_role_type": null }
+  ],
+  "blocked_fallback_role_type": 1
+}

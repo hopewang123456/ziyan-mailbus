@@ -14,6 +14,7 @@ import time
 import shutil
 import subprocess
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+from lib.constants import MAILBUS_ROOT
 from lib.models import Inbox
 from lib.utils import json_read, json_write, resolve_paths, resolve_mailbus_path, identity_candidates, to_wsl_path, _now_iso
 from lib.heartbeat import load_status as load_heartbeat
@@ -130,20 +131,29 @@ def _agent_launch_meta(handler, name: str, cfg: dict) -> dict:
 
 
 def handle_agents(handler):
-    """GET /api/agents — 获取 agent 列表和配置"""
+    """GET /api/agents — 获取 agent 列表和配置（含 access/agent.json registry）。"""
+    from lib.agent_registry import get_agent, mailbus_root
+
     agents, _ = _reload_store_config(handler)
+    canonical = str(mailbus_root()).replace("\\", "/")
     result = {}
     for name, cfg in agents.items():
         meta = _agent_launch_meta(handler, name, cfg)
-        result[name] = {
+        reg = get_agent(name) or {}
+        entry = {
             "name": cfg.get("name", name),
             "role": cfg.get("role", ""),
             "type": cfg.get("type", "?"),
             "models": cfg.get("models", []),
             "webhook_url": cfg.get("webhook_url", ""),
+            "archetype": reg.get("archetype") or cfg.get("archetype", ""),
+            "framework": reg.get("framework") or cfg.get("type", ""),
+            "canonical_root": canonical,
+            "agent_json": reg.get("_rel_path", ""),
             **meta,
         }
-    handler._send_json({"agents": result})
+        result[name] = entry
+    handler._send_json({"agents": result, "canonical_root": canonical})
 
 
 def handle_workload(handler):
@@ -781,7 +791,7 @@ def _get_gateway_token() -> str:
         return env_token
 
     candidates = [
-        "/mnt/e/ai_tools/openclaw_space/data/.openclaw/openclaw.json",
+        str(MAILBUS_ROOT.parent / "openclaw_space" / "data" / ".openclaw" / "openclaw.json"),
         os.path.expanduser("~/.openclaw-data/openclaw.json"),
         os.path.expanduser("~/.openclaw/openclaw.json"),
     ]
@@ -942,7 +952,7 @@ def _launch_agentmemory(handler):
     """重启 AgentMemory 服务（Docker compose 优先）。"""
     compose_dir = os.environ.get(
         "MAILBUS_COMPOSE_DIR",
-        "/mailbus/docker-agents" if os.path.isdir("/mailbus/docker-agents") else "/mnt/e/ai_tools/mail/docker-agents",
+        str(MAILBUS_ROOT / "docker-agents"),
     )
     compose_file = os.path.join(compose_dir, "docker-compose.yml")
     if not os.path.isfile(compose_file):

@@ -1,0 +1,61 @@
+{
+  "$comment": "外部工具注册表（无 agent 授权）。复制为 registry.json",
+  "version": "0.2.0",
+  "defaults": {
+    "timeout_seconds": 120,
+    "retry": 1
+  },
+  "providers": {
+    "dify": {
+      "base_url_env": "DIFY_BASE_URL",
+      "api_key_env": "DIFY_API_KEY",
+      "docs": "https://docs.dify.ai/guides/application-publishing/developing-with-apis"
+    },
+    "coze": {
+      "base_url_env": "COZE_API_BASE",
+      "api_key_env": "COZE_API_TOKEN",
+      "docs": "https://www.coze.cn/docs/developer_guides/coze_api_overview"
+    },
+    "webhook": {
+      "description": "通用 HTTP webhook（n8n / 自建）"
+    }
+  },
+  "tools": [
+    {
+      "id": "dify-lead-enrich",
+      "provider": "dify",
+      "kind": "workflow",
+      "workflow_id": "REPLACE_WITH_DIFY_WORKFLOW_ID",
+      "description": "补充商机：公司背景、风险信号、竞品摘要"
+    },
+    {
+      "id": "dify-invoice-ocr",
+      "provider": "dify",
+      "kind": "workflow",
+      "workflow_id": "REPLACE_WITH_DIFY_WORKFLOW_ID",
+      "description": "发票/合同 OCR → 结构化账期字段"
+    },
+    {
+      "id": "coze-content-draft",
+      "provider": "coze",
+      "kind": "bot",
+      "bot_id": "REPLACE_WITH_COZE_BOT_ID",
+      "description": "多平台文案初稿（钩子/正文/CTA）"
+    },
+    {
+      "id": "webhook-multi-publish",
+      "provider": "webhook",
+      "kind": "webhook",
+      "url_env": "N8N_PUBLISH_WEBHOOK_URL",
+      "secret_env": "N8N_PUBLISH_WEBHOOK_SECRET",
+      "description": "n8n：多平台发布编排"
+    },
+    {
+      "id": "image-generate",
+      "provider": "comfyui",
+      "kind": "txt2img",
+      "base_url_env": "COMFYUI_BASE_URL",
+      "description": "本地 ComfyUI SD1.5（tools/tools/ops/ensure-comfyui.py）"
+    }
+  ]
+}

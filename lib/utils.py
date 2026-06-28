@@ -21,7 +21,23 @@ else:
     import fcntl
 
 from .models import Message, MsgStatus, Priority, MsgType, Level, generate_msg_id
-from .constants import _now_iso
+from .constants import _now_iso, MAILBUS_ROOT_STR
+
+# Store-relative path markers for to_container_store_path (§10 #40).
+CONTAINER_STORE_MARKERS: tuple[str, ...] = (
+    "msg-files/",
+    "msg-results/",
+    "inbox/",
+    "rules/",
+    "tasks/",
+    "work-orders/",
+    "deliverables/",
+    "human-queue",
+    "agentmemory-pending/",
+    "locks/",
+    "patches/",
+    "replies/",
+)
 
 
 def configure_stdio_utf8() -> None:
@@ -56,6 +72,56 @@ def to_wsl_path(path: str) -> str:
     return p
 
 
+def to_container_store_path(data_dir: str, path: str) -> str:
+    """宿主机 store 路径 → 容器内 /mailbus/store/...（Docker/WSL 挂载）。"""
+    if not path:
+        return path
+    norm = path.replace("\\", "/")
+    if norm.startswith("/mailbus/"):
+        return norm
+    dd = os.path.abspath(data_dir).replace("\\", "/").rstrip("/")
+    ap = os.path.abspath(path).replace("\\", "/")
+    if ap.lower().startswith(dd.lower() + "/"):
+        rel = ap[len(dd):].lstrip("/")
+        return f"/mailbus/store/{rel}"
+    for marker in CONTAINER_STORE_MARKERS:
+        idx = ap.lower().find(marker)
+        if idx >= 0:
+            return "/mailbus/store/" + ap[idx:]
+    return path
+
+
+def rewrite_host_store_refs(data_dir: str, text: str, agent_cfg: dict) -> str:
+    """推送正文内宿主机 store 路径 → /mailbus/store（Docker agent）。"""
+    if not text:
+        return text or ""
+    from .agent_adapters import get_adapter
+
+    adapter = get_adapter((agent_cfg or {}).get("type", ""))
+    if not adapter or not adapter.container_service:
+        return text
+    out = text
+    dd_abs = os.path.abspath(data_dir)
+    variants = {
+        dd_abs,
+        dd_abs.replace("\\", "/"),
+        to_wsl_path(dd_abs),
+    }
+    for v in variants:
+        if v:
+            out = out.replace(v, "/mailbus/store")
+            out = out.replace(v.replace("/", "\\"), "/mailbus/store")
+    out = out.replace("/mailbus/store\\", "/mailbus/store/")
+    while "\\" in out and "/mailbus/store/" in out:
+        out = out.replace("\\", "/")
+    return out
+
+
+def format_push_content_for_agent(data_dir: str, content: str, agent_cfg: dict) -> str:
+    """推送正文框架入口：容器 agent 路径统一 rewrite。"""
+    return rewrite_host_store_refs(data_dir, content or "", agent_cfg or {})
+
+
 def resolve_mailbus_path(data_dir: str, ref: str) -> str:
     """将 config 中的 Docker/WSL 路径解析为本地绝对路径。"""
     if not ref or not isinstance(ref, str):
@@ -63,7 +129,7 @@ def resolve_mailbus_path(data_dir: str, ref: str) -> str:
     ref = ref.strip().replace("\\", "/")
     if os.path.isfile(ref):
         return ref
-    root = os.path.dirname(os.path.abspath(data_dir))
+    root = MAILBUS_ROOT_STR if os.path.isdir(os.path.join(MAILBUS_ROOT_STR, "access")) else os.path.dirname(os.path.abspath(data_dir))
     # WSL: /mnt/e/... → E:\...
     if ref.startswith("/mnt/e/"):
         win = "E:" + ref[7:].replace("/", os.sep)
@@ -172,12 +238,26 @@ def _release_lock(lock_fd) -> None:
         fcntl.flock(lock_fd, fcntl.LOCK_UN)
 
 
+def _open_lock_file(lock_file: str, *, retries: int = 8):
+    """打开锁文件；Windows 上多进程争用 Temp 时 PermissionError 可重试。"""
+    last_err: OSError | None = None
+    for attempt in range(retries):
+        try:
+            return open(lock_file, "a+")
+        except PermissionError as exc:
+            last_err = exc
+            time.sleep(0.15 * (attempt + 1))
+    if last_err is not None:
+        raise last_err
+    return open(lock_file, "a+")
+
+
 @contextlib.contextmanager
 def file_lock(timeout: float = 10.0, path: str = ""):
     """文件锁 — 防止多个进程同时写同一份文件（带超时，防死锁）"""
     os.makedirs(_LOCK_ROOT, exist_ok=True)
     lock_file = _lock_path(path)
-    lock_fd = open(lock_file, "w")
+    lock_fd = _open_lock_file(lock_file)
     deadline = time.time() + timeout
     acquired = False
     try:
@@ -290,6 +370,15 @@ def json_read(filepath: str, default: Any = None, ttl: float = 5.0) -> Any:
             return copy.deepcopy(data)
         except FileNotFoundError:
             return default
+        except UnicodeDecodeError:
+            try:
+                with open(filepath, encoding="utf-8", errors="replace") as f:
+                    data = json.load(f)
+                json_write(filepath, data)
+                _JSON_CACHE[filepath] = (data, now + ttl, file_mtime)
+                return copy.deepcopy(data)
+            except Exception:
+                return default
         except json.JSONDecodeError:
             # JSON 损坏 → 尝试修复（常见问题：content 里有未转义的双引号）
             try:

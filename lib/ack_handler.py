@@ -13,6 +13,7 @@ from typing import Optional
 
 from .models import Message, MsgStatus, Priority, Inbox
 from .utils import json_read, json_write, resolve_paths, build_message, _now_iso
+from .mbus_log import warn
 
 
 def process_ack(data_dir: str, agent_name: str, ack_data: dict) -> bool:
@@ -81,6 +82,8 @@ def process_ack(data_dir: str, agent_name: str, ack_data: dict) -> bool:
         
         inbox.has_unread = inbox.has_unread_messages()
         json_write(inbox_file, inbox.to_dict())
+    else:
+        warn(f"[ack] orphan ack: msg_id={msg_id} agent={agent_name}")
 
     return found
 

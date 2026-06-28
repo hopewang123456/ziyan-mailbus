@@ -22,8 +22,10 @@ L3 domain skills（按需）
 
 | 路径 | 说明 |
 |------|------|
-| `mail/adapters/` | L0 + L1 skill 库 |
-| `mail/roles/` | L2 archetype + overlay |
+| `mail/skills/common/` | L0 共享协议 |
+| `mail/skills/frameworks/` | L1 框架 runtime |
+| `mail/skills/roles/` | L2 archetype + overlay |
+| `mail/access/` | agent.json + adapter 契约 |
 | `store/agents/json/skills-index.json` | 每 agent 组合索引 |
 | `tools/patch-skills-index-framework.py` | 幂等补全 L0–L2 |
 | `tools/validate-agent-layers.py` | 分层校验 |
@@ -31,7 +33,7 @@ L3 domain skills（按需）
 
 ## 废弃
 
-- inline mailbus 规则写入 `AGENTS.md` / `identities/*.md` — **禁止**（用 sync skills）
-- `mail/STANDARD_PROCEDURE.md` — 已弃用，仅历史镜像
+- inline mailbus 规则写入 `AGENTS.md` / overlay SKILL.md — **禁止**（用 sync skills）
+- `mail/STANDARD_PROCEDURE.md` — 已归档至 `tools/_archive/`
 - `openclaw_space/*/MAILBUS.md` — 已弃用，指向 L0/L1 skills
-- `mail/rules/`（非 store）— 历史镜像，改 `store/rules/`
+- `mail/adapters/`、`mail/roles/`、`mail/identities/` — 已删除（2026-06-26 Phase 6 瘦身）

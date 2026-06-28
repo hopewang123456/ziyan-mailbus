@@ -3,5 +3,5 @@
 set -euo pipefail
 AGENT="${1:-lingzhao}"
 TIMEOUT="${2:-420}"
-docker exec docker-agents-mailbus-1 python3 /mailbus/tools/smoke-agent-disk-write.py \
+docker exec docker-agents-mailbus-1 python3 /mailbus/tools/ops/tools/ops/smoke-agent-disk-write.py \
   --agent "$AGENT" --data-dir /mailbus/store --timeout "$TIMEOUT"

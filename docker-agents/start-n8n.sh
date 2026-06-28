@@ -28,7 +28,7 @@ if [ "$ready" = "1" ]; then
     echo "n8n UI (Windows, if localhost fails): http://${WSL_IP}:5678"
   fi
   echo "Import workflow: external-tools/n8n/mailbus-multi-publish.workflow.json"
-  echo "Deploy: python tools/sync-n8n-url.py  OR  ..\\tools\\setup-n8n.ps1"
+  echo "Deploy: python tools/tools/ops/sync-n8n-url.py  OR  ..\\tools\\tools/ops/setup-n8n.ps1"
 else
   echo "WARN: n8n not ready; docker logs $(docker compose -f docker-compose.n8n.yml ps -q n8n 2>/dev/null | head -1)" >&2
 fi

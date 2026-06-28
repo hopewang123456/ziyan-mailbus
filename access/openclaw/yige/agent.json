@@ -1,0 +1,25 @@
+{
+  "schema": "mailbus-agent-v3",
+  "agent_id": "yige",
+  "framework": "openclaw",
+  "archetype": "operations",
+  "skills": [
+    "mail/skills/common/agent-universal",
+    "mail/skills/common/mailbus-file-protocol",
+    "mail/skills/frameworks/openclaw",
+    "mail/skills/roles/archetypes/operations",
+    "mail/skills/roles/overlays/yige"
+  ],
+  "rules": [
+    "mail/rules/common/execution-order.md",
+    "mail/rules/common/task-fsm.md",
+    "mail/rules/common/team-secrets-policy.md",
+    "mail/rules/frameworks/openclaw/delivery.md",
+    "mail/rules/roles/operations/boundaries.md"
+  ],
+  "workspace": "/mnt/e/ai_tools/openclaw_space/a-yige",
+  "docker": {
+    "service": "openclaw-agent",
+    "profile": "yige"
+  }
+}

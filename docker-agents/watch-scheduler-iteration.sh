@@ -2,8 +2,11 @@
 # 监控 scheduler 三轮自优化 — pipeline + R2 backlog + scheduler 状态
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/lib/api-url.sh"
+
 MAIL="/mnt/e/ai_tools/mail"
-BASE="http://127.0.0.1:9812"
+BASE="$MAILBUS_API_BASE"
 TASK="${1:-mailbus-scheduler-validation-20260616}"
 LOOPS="${2:-12}"
 INTERVAL="${3:-30}"
@@ -39,7 +42,7 @@ print(f"  R2 backlog done={done}/{len(items)}")
 result = f"store/msg-results/{task_id}.json"
 print(f"  msg-results={'Y' if os.path.exists(result) else 'N'}")
 PY
-  python3 tools/triage-tasks.py 2>/dev/null | grep -E '^(===|  msg-20260616)' | head -20
+  python3 tools/tools/ops/triage-tasks.py 2>/dev/null | grep -E '^(===|  msg-20260616)' | head -20
   [ "$i" -lt "$LOOPS" ] && sleep "$INTERVAL"
 done
 

@@ -1,15 +1,7 @@
-# ⚠️ 已弃用 — 请使用 store/rules/
+# mail/rules — 行为规范 SoT
 
-运行时唯一真相源：**`store/rules/`**（容器内 `/mailbus/store/rules/`）。
+- `common/` — 全员约束
+- `frameworks/` — 各框架 delivery / push 规范
+- `roles/` — 工种边界
 
-**Agent 分层 spec（2026-06-24）** → `store/rules/agent-layer-spec.md`  
-**Adapter 层说明** → `store/rules/agent-adapter-layer.md`
-
-本目录仅保留历史镜像，**请勿在此修改**。团队规范修改后执行：
-
-```bash
-python3 tools/sync-team-rules.py --data-dir store
-python3 tools/sync-all-agent-layers.py
-```
-
-FSM 规范见：`store/rules/task-fsm.md`
+Skills 在 `mail/skills/`；运行时摘要可选 sync 到 `store/rules/`。

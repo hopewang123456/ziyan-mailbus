@@ -6,5 +6,5 @@ $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $here
 docker compose -f docker-compose.n8n.yml up -d
 Write-Host "n8n UI: http://127.0.0.1:5678" -ForegroundColor Green
-Write-Host "Deploy workflow: ..\tools\setup-n8n.ps1" -ForegroundColor Cyan
+Write-Host "Deploy workflow: ..\tools\tools/ops/setup-n8n.ps1" -ForegroundColor Cyan
 Write-Host "  (or WSL: bash docker-agents/ensure-n8n-workflow.sh)" -ForegroundColor DarkGray

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Bootstrap mail/roles archetypes and overlays (one-time generator)."""
+"""Bootstrap mail/skills/roles archetypes and overlays (one-time generator)."""
 from __future__ import annotations
 
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-ROLES = ROOT / "roles"
+ROLES = ROOT / "skills" / "roles"
 
 AGENT_ARCHETYPES: dict[str, str] = {
     "dali": "coding-executor",
@@ -176,7 +176,7 @@ archetype: {name}
 | [boundaries.md](boundaries.md) | 完整边界 |
 | [references/sparc-mapping.md](references/sparc-mapping.md) | SPARC 段 |
 
-Per-agent overlay → `mail/roles/overlays/{{agent}}/SKILL.md`
+Per-agent overlay → `mail/skills/roles/overlays/{{agent}}/SKILL.md`
 """,
         encoding="utf-8",
     )
@@ -201,7 +201,7 @@ agent_id: {agent}
 
 # Role Overlay — {agent}
 
-> **extends**: `role-{archetype}` · **identity**: `mail/identities/{agent}.md`
+> **extends**: `role-{archetype}` · **identity**: `mail/skills/roles/overlays/{agent}/SKILL.md`
 
 ## SPARC 门禁
 

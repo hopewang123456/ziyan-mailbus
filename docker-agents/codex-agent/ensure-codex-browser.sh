@@ -7,10 +7,10 @@ GATEWAY_PORT="${DEEPSEEK_GATEWAY_PORT:-3000}"
 
 render-codex-config.sh
 
-if [ -x /usr/local/bin/sync-codex-agent-skills.sh ]; then
-  sync-codex-agent-skills.sh "${CODEX_AGENT:-lingxiao}" "${CODEX_HOME}" "/mailbus/store" || true
-elif [ -f "/mailbus/tools/sync-codex-agent-skills.sh" ]; then
-  bash /mailbus/tools/sync-codex-agent-skills.sh "${CODEX_AGENT:-lingxiao}" "${CODEX_HOME}" "/mailbus/store" || true
+if [ -x /usr/local/bin/tools/ops/sync-codex-agent-skills.sh ]; then
+  tools/ops/sync-codex-agent-skills.sh "${CODEX_AGENT:-lingxiao}" "${CODEX_HOME}" "/mailbus/store" || true
+elif [ -f "/mailbus/tools/ops/tools/ops/sync-codex-agent-skills.sh" ]; then
+  bash /mailbus/tools/ops/tools/ops/sync-codex-agent-skills.sh "${CODEX_AGENT:-lingxiao}" "${CODEX_HOME}" "/mailbus/store" || true
 fi
 
 rm -f "${CODEX_HOME}/auth.json"

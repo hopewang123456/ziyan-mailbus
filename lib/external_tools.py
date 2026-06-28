@@ -31,7 +31,12 @@ def external_tools_dir(data_dir: str) -> str:
     env = os.environ.get("MAILBUS_EXTERNAL_TOOLS_DIR", "").strip()
     if env:
         return env
-    return os.path.join(mailbus_root(data_dir), "external-tools")
+    root = mailbus_root(data_dir)
+    v3 = os.path.join(root, "access", "external-tools")
+    if os.path.isdir(v3):
+        return v3
+    legacy = os.path.join(root, "external-tools")
+    return legacy
 
 
 def _read_json(path: str) -> dict:

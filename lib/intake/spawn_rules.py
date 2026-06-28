@@ -9,6 +9,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from ..constants import MAILBUS_ROOT
 from ..tracker import TaskTracker
 from ..utils import json_read
 from .store import get, load_all
@@ -53,8 +54,12 @@ class RuleMatch:
 
 
 def load_bridge_config(data_dir: str) -> dict:
-    cfg = json_read(os.path.join(data_dir, "config.json"), {})
+    """SoT: store config mailbus_intake_bridge ← init-store 聚合 config/intake/bridge.json。"""
     bridge = dict(DEFAULT_BRIDGE_CONFIG)
+    static_path = MAILBUS_ROOT / "config" / "intake" / "bridge.json"
+    if static_path.is_file():
+        bridge.update(json_read(str(static_path), {}))
+    cfg = json_read(os.path.join(data_dir, "config.json"), {})
     bridge.update(cfg.get("mailbus_intake_bridge") or {})
     return bridge
 

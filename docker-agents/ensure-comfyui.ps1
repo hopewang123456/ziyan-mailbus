@@ -12,9 +12,9 @@ Set-Location $root
 
 $gpu = wsl docker inspect mailbus-comfyui-gpu --format "{{.State.Running}}" 2>$null
 if ($gpu -eq "true" -and ($Start -or $Smoke)) {
-  Write-Host "[WARN] mailbus-comfyui-gpu 已在 WSL 运行；跳过 Windows CPU 启动。用 tools/sync-comfyui-url.ps1 同步 URL。" -ForegroundColor Yellow
+  Write-Host "[WARN] mailbus-comfyui-gpu 已在 WSL 运行；跳过 Windows CPU 启动。用 tools/tools/ops/sync-comfyui-url.ps1 同步 URL。" -ForegroundColor Yellow
   if ($Smoke) {
-    python tools/smoke-comfyui-gpu.py
+    python tools/tools/ops/smoke-comfyui-gpu.py
     exit $LASTEXITCODE
   }
   exit 0
@@ -33,7 +33,7 @@ if (Test-Path $envFile) {
   }
 }
 
-$args = @("tools/ensure-comfyui.py")
+$args = @("tools/tools/ops/ensure-comfyui.py")
 if ($DownloadModel) { $args += "--download-model" }
 if ($Start -or $Smoke) { $args += "--start" }
 if ($Smoke) { $args += "--smoke" }

@@ -1,7 +1,7 @@
 #!/bin/bash
 # 快速查看任务流转快照
 TASK_ID="${1:-mailbus-hardening-20260616}"
-BASE="http://127.0.0.1:9812"
+BASE="$MAILBUS_API_BASE"
 
 echo "=== $(date '+%Y-%m-%d %H:%M:%S') task flow snapshot ==="
 

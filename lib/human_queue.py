@@ -81,6 +81,10 @@ def enqueue(data_dir: str, item: dict) -> str:
             existing = _find_pending(doc, task_id=task_id, qtype="final_acceptance")
             if existing:
                 return existing["id"]
+        if qtype == "owner_confirmation" and task_id:
+            existing = _find_pending(doc, task_id=task_id, qtype="owner_confirmation")
+            if existing:
+                return existing["id"]
 
         iid = item.get("id") or _new_id()
         now = _now_iso()

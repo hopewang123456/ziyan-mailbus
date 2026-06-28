@@ -3,6 +3,8 @@
 set -uo pipefail
 
 COMPOSE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${COMPOSE_DIR}/lib/api-url.sh"
+
 PS="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
 PASS=0
 FAIL=0
@@ -73,19 +75,19 @@ test_deepseek_from_hermes() {
 
 test_endpoints() {
   local label="$1"
-  local code9812 code9120 code9121 win9812
-  code9812=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://127.0.0.1:9812/ 2>/dev/null || echo "000")
+  local code_api code9120 code9121 win_api
+  code_api=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://127.0.0.1:${MAILBUS_API_PORT}/ 2>/dev/null || echo "000")
   code9120=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://127.0.0.1:9120/ 2>/dev/null || echo "000")
   code9121=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://127.0.0.1:9121/ 2>/dev/null || echo "000")
   if [ -x /mnt/c/Windows/System32/curl.exe ]; then
-    win9812=$(/mnt/c/Windows/System32/curl.exe -s -o /mnt/c/Windows/NUL -w '%{http_code}' \
-      --connect-timeout 8 http://localhost:9812/ 2>/dev/null | tr -d '\r\n')
+    win_api=$(/mnt/c/Windows/System32/curl.exe -s -o /mnt/c/Windows/NUL -w '%{http_code}' \
+      --connect-timeout 8 http://localhost:${MAILBUS_API_PORT}/ 2>/dev/null | tr -d '\r\n')
   else
-    win9812="skip"
+    win_api="skip"
   fi
-  log "  [$label] wsl9812=$code9812 wsl9120=$code9120 wsl9121=$code9121 win9812=$win9812"
-  if [ "$code9812" = "200" ] && [ "$code9120" = "200" ] && [ "$code9121" = "200" ]; then
-    if [ "$win9812" = "200" ] || [ "$win9812" = "skip" ]; then
+  log "  [$label] wsl_api=$code_api wsl9120=$code9120 wsl9121=$code9121 win_api=$win_api"
+  if [ "$code_api" = "200" ] && [ "$code9120" = "200" ] && [ "$code9121" = "200" ]; then
+    if [ "$win_api" = "200" ] || [ "$win_api" = "skip" ]; then
       ok "$label: all web endpoints up"
       return
     fi
@@ -94,9 +96,9 @@ test_endpoints() {
   /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -ExecutionPolicy Bypass \
     -File "E:\\ai_tools\\scripts\\fix-wsl-localhost.ps1" >/dev/null 2>&1 || true
   sleep 2
-  win9812=$(/mnt/c/Windows/System32/curl.exe -s -o /mnt/c/Windows/NUL -w '%{http_code}' \
-    --connect-timeout 8 http://localhost:9812/ 2>/dev/null | tr -d '\r\n')
-  if [ "$code9812" = "200" ] && [ "$win9812" = "200" ]; then
+  win_api=$(/mnt/c/Windows/System32/curl.exe -s -o /mnt/c/Windows/NUL -w '%{http_code}' \
+    --connect-timeout 8 http://localhost:${MAILBUS_API_PORT}/ 2>/dev/null | tr -d '\r\n')
+  if [ "$code_api" = "200" ] && [ "$win_api" = "200" ]; then
     ok "$label: endpoints recovered after port fix"
   fi
 }

@@ -123,6 +123,11 @@ def maybe_block_after_step(
 
     mode = wf.get("mode") or "fixed_phases"
 
+    # 显式 planned_role_types 链耗尽 → 不走 llm_adaptive spawn，由 resolve_transition 进 terminal
+    head = chain[0] if chain else {}
+    if mode == "llm_adaptive" and head.get("planned_role_types") is not None:
+        return None
+
     if mode == "fixed_phases":
         phase = find_phase(wf, wf_e.get("phase") or "")
         after = (phase or {}).get("after_agent") or {}

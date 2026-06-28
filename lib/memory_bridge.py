@@ -10,6 +10,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from .agentmemory_config import agentmemory_url, pending_dir as integration_pending_dir
 from .team_memory_store import (
     format_mailbus_content,
     is_available as sqlite_available,
@@ -21,7 +22,12 @@ SYNC_MARKER_FILE = "sync_to_memory.json"
 PENDING_DIR = "agentmemory-pending"
 BRIDGE_STATUS_FILE = "memory-bridge-last.json"
 
-AGENTMEMORY_URL = os.environ.get("AGENTMEMORY_URL", "http://localhost:3111")
+
+def _default_agentmemory_url() -> str:
+    return agentmemory_url()
+
+
+AGENTMEMORY_URL = os.environ.get("AGENTMEMORY_URL") or _default_agentmemory_url()
 
 
 def _env_flag(name: str, default: bool = True) -> bool:
@@ -219,13 +225,13 @@ def write_memory_to_sqlite(
 
 
 def process_pending_queue(data_dir: str, limit: int = 5, url: str = "") -> int:
-    pending_dir = Path(data_dir) / PENDING_DIR
-    if not pending_dir.is_dir() or not bridge_agentmemory_enabled():
+    pending_root = integration_pending_dir(data_dir)
+    if not pending_root.is_dir() or not bridge_agentmemory_enabled():
         return 0
     if not agentmemory_healthy(url):
         return 0
     done = 0
-    for fpath in sorted(pending_dir.glob("*.json"))[:limit]:
+    for fpath in sorted(pending_root.glob("*.json"))[:limit]:
         data = json.loads(fpath.read_text(encoding="utf-8"))
         payload = data.get("payload") or data
         result = post_to_agentmemory("/agentmemory/remember", payload, url=url)

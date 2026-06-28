@@ -2,10 +2,13 @@
 # 监控工作流任务链流转（轮询直到超时或完成）
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/lib/api-url.sh"
+
 TASK_PREFIX="${1:-game-lvup}"
 MAX_WAIT="${2:-300}"
 INTERVAL="${3:-15}"
-BASE="http://127.0.0.1:9812"
+BASE="$MAILBUS_API_BASE"
 
 log() { echo "[workflow-watch] $(date '+%H:%M:%S') $*"; }
 

@@ -25,11 +25,11 @@ def save_alerts(data_dir: str, alerts_data: dict):
 
 
 def push_alert(data_dir: str, alert_type: str, severity: str,
-               agent: str, message: str):
+               agent: str, message: str, *, dedupe_key: str = ""):
     """
     记录一条告警 + 推送到管理员 inbox。
 
-    alert_type: agent_offline / agentmemory_down / disk_full / inbox_overflow / key_missing
+    alert_type: agent_offline / agentmemory_down / disk_full / inbox_overflow / key_missing / api_unreachable
     severity: info / warn / critical
     """
     alerts = load_alerts(data_dir)
@@ -44,11 +44,17 @@ def push_alert(data_dir: str, alert_type: str, severity: str,
         "created_at": now,
         "status": "active",
     }
+    if dedupe_key:
+        alert["dedupe_key"] = dedupe_key
 
-    # 同类型+同 agent 已有 active 告警 → 不重复写 inbox（防 key_missing 刷屏）
+    # 同 dedupe_key 或同 type+agent 已有 active 告警 → 不重复写 inbox
     for existing in reversed(alerts["alerts"]):
+        if existing.get("status", "active") != "active":
+            continue
+        if dedupe_key and existing.get("dedupe_key") == dedupe_key:
+            return
         if (
-            existing.get("status", "active") == "active"
+            not dedupe_key
             and existing.get("type") == alert_type
             and existing.get("agent") == agent
         ):

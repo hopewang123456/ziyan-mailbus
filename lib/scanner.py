@@ -14,10 +14,12 @@ from .utils import json_read, json_write, resolve_paths, _now_iso
 from .constants import DEFAULT_ACK_TIMEOUT, DEFAULT_PUSH_COOLDOWN_MINUTES, DEFAULT_MAX_PUSHES_PER_MESSAGE
 from .mbus_log import debug, warn
 from .self_heal import agent_cli_active
+from .agent_adapters import agent_cli_active_for
 from .pipeline_task import (
     extract_task_id,
     is_current_pipeline_assignee,
     pipeline_inbox_message_stale,
+    pipeline_message_protected_from_auto_close,
     pipeline_repush_cooldown_minutes,
 )
 from .tracker import _parse_iso_dt
@@ -91,6 +93,15 @@ def should_skip_push(data_dir: str, msg, config: dict) -> tuple:
         if state not in ("failed", "done", "closed", "archived"):
             _block_message_max_pushes(data_dir, agent_name, mid, pc, max_pushes)
         return True, f"msg={mid} max_pushes {pc}>={max_pushes}"
+    repush_after = msg.get("repush_after") if isinstance(msg, dict) else getattr(msg, "repush_after", "")
+    if repush_after:
+        from .api_stall_recovery import repush_after_elapsed, repush_after_remaining_minutes
+        entry = msg if isinstance(msg, dict) else {}
+        if not repush_after_elapsed(entry):
+            left = repush_after_remaining_minutes(entry)
+            return True, f"msg={mid} api_stall cooldown {left:.1f}min"
+    if state == MsgStatus.PENDING and pc == 0:
+        return False, ""
     if not last:
         return False, ""
     try:
@@ -111,7 +122,7 @@ def _block_message_max_pushes(
     pushed_count: int,
     max_pushes: int,
 ) -> None:
-    """推送达上限 → blocked + 通知灵昭（零 LLM notice）。"""
+    """推送达上限 → pipeline failover 或 blocked + 通知灵昭。"""
     if not agent_name or not msg_id:
         return
     paths = resolve_paths(data_dir)
@@ -128,6 +139,27 @@ def _block_message_max_pushes(
         state = get_msg_state(m_raw)
         if state in (MsgStatus.FAILED, MsgStatus.DONE, MsgStatus.CLOSED):
             return
+        content = inbox.msg_field(m_raw, "content", "")
+        tid = extract_task_id(content or "")
+        if tid:
+            from .dispatch.pipeline_step_failover import try_failover_on_delivery_failure
+
+            new_agent = try_failover_on_delivery_failure(
+                data_dir, tid, msg_id,
+                reason="max_pushes", old_agent=agent_name,
+            )
+            if new_agent:
+                inbox.set_msg_status(
+                    mid, MsgStatus.CLOSED, state=MsgStatus.CLOSED,
+                    done_at=_now_iso(),
+                    done_note=f"max_pushes {pushed_count}>={max_pushes} failover->{new_agent}",
+                )
+                changed = True
+                warn(
+                    f"[scanner] pipeline failover {tid[:24]} "
+                    f"{agent_name}->{new_agent} (max_pushes)"
+                )
+                break
         inbox.set_msg_status(
             mid, MsgStatus.FAILED, state=MsgStatus.FAILED,
             done_note=f"max_pushes {pushed_count}>={max_pushes}",
@@ -163,8 +195,8 @@ def _block_message_max_pushes(
         e_inbox.messages.append(warn_msg)
         e_inbox.has_unread = True
         json_write(escalate_file, e_inbox.to_dict())
-    except Exception:
-        pass
+    except Exception as exc:
+        warn(f"[scanner] max-push escalate notify failed: {exc}")
 
 
 def _get_running_pipeline_task_ids(data_dir: str, agent_name: str) -> set:
@@ -176,7 +208,8 @@ def _get_running_pipeline_task_ids(data_dir: str, agent_name: str) -> set:
             if not is_task_executable(t):
                 continue
             step = get_active_step(t)
-            if step and step.get("to_person") == agent_name:
+            assignee = step.get("to_person") or step.get("to_agent") if step else ""
+            if step and assignee == agent_name:
                 tid = t.get("task_id") or t.get("id")
                 if tid:
                     ids.add(tid)
@@ -260,7 +293,7 @@ def recover_inbox_stale_states(data_dir: str, agents: dict) -> dict:
             continue
         cur = chain[-1]
         if cur.get("status") == "running":
-            person = cur.get("to_person", "")
+            person = cur.get("to_person") or cur.get("to_agent") or ""
             tid = t.get("task_id", "")
             if person and tid:
                 pipeline_by_agent.setdefault(person, set()).add(tid)
@@ -304,12 +337,17 @@ def recover_inbox_stale_states(data_dir: str, agents: dict) -> dict:
                     recovered += 1
                     continue
 
-            # 当前 assignee 的 resending/closed 工单 → 重置 pending 以便 scan 重推
+            # 当前 assignee 的 resending/closed/failed 工单 → 重置 pending 以便 scan 重推
             if mtype == "task" and execute:
                 tid = extract_task_id(content)
                 if tid and is_current_pipeline_assignee(data_dir, tid, name):
+                    done_note = inbox.msg_field(m_raw, "done_note", "") or ""
                     if state in (MsgStatus.RESENDING, MsgStatus.FAILED) or (
-                        state == MsgStatus.CLOSED and status_field == MsgStatus.RESENDING
+                        state == MsgStatus.CLOSED and (
+                            status_field == MsgStatus.RESENDING
+                            or "3次催办" in done_note
+                            or done_note.startswith("max_pushes")
+                        )
                     ):
                         inbox.set_msg_status(
                             mid, MsgStatus.PENDING, state=MsgStatus.PENDING,
@@ -321,6 +359,22 @@ def recover_inbox_stale_states(data_dir: str, agents: dict) -> dict:
 
             # done_at 已写但 state 仍为 processing（auto_ack 覆盖）
             if state == MsgStatus.PROCESSING and inbox.msg_field(m_raw, "done_at", ""):
+                entry = m_raw if isinstance(m_raw, dict) else (
+                    m_raw.to_dict() if hasattr(m_raw, "to_dict") else {}
+                )
+                if mtype == "task" and execute:
+                    from .pipeline_task import (
+                        is_pipeline_execute_message,
+                        pipeline_inbox_may_mark_done,
+                    )
+                    if is_pipeline_execute_message(entry, data_dir):
+                        ok, reason = pipeline_inbox_may_mark_done(data_dir, name, entry)
+                        if not ok:
+                            debug(
+                                f"[scanner] {name}: skip done for {mid} — "
+                                f"pipeline not verified ({reason})"
+                            )
+                            continue
                 inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, state=MsgStatus.DONE)
                 recovered += 1
                 continue
@@ -351,7 +405,7 @@ def recover_inbox_stale_states(data_dir: str, agents: dict) -> dict:
                 continue
 
             if state == MsgStatus.PUSHED and age_min > 30:
-                inbox.set_msg_status(mid, MsgStatus.PENDING, state=MsgStatus.PENDING, pushed_count=0)
+                inbox.set_msg_status(mid, MsgStatus.PENDING, state=MsgStatus.PENDING, pushed_count=0, last_pushed_at=None)
                 recovered += 1
                 continue
 
@@ -359,7 +413,7 @@ def recover_inbox_stale_states(data_dir: str, agents: dict) -> dict:
                 is_primary = bool(primary_tid and primary_tid in content)
                 cd = pipeline_repush_cooldown_minutes(config, is_primary=is_primary and is_pipeline_task)
                 if age_min > cd:
-                    inbox.set_msg_status(mid, MsgStatus.PENDING, state=MsgStatus.PENDING, pushed_count=0)
+                    inbox.set_msg_status(mid, MsgStatus.PENDING, state=MsgStatus.PENDING, pushed_count=0, last_pushed_at=None)
                     recovered += 1
                 continue
 
@@ -393,13 +447,40 @@ def recover_inbox_stale_states(data_dir: str, agents: dict) -> dict:
 
                 # 可执行 task 卡在 processing
                 if execute and mtype == "task":
+                    from .api_stall_recovery import maybe_release_api_stall_for_repush
+
+                    if maybe_release_api_stall_for_repush(
+                        data_dir, name, m_raw if isinstance(m_raw, dict) else {}, inbox, agents=agents,
+                    ):
+                        recovered += 1
+                        continue
+
                     primary_tid = _get_primary_pipeline_task_id(data_dir)
                     is_primary = bool(primary_tid and primary_tid in content)
                     result_missing = is_primary and not os.path.exists(
                         os.path.join(data_dir, "msg-results", f"{primary_tid}.json")
                     )
-                    # 无 CLI 进程 = 僵尸 ACK，2 分钟后释放推送槽
-                    cli_dead = not agent_cli_active(name, agents)
+                    tid = extract_task_id(content)
+                    cli_dead = not agent_cli_active_for(
+                        name, agents,
+                        msg_id=mid,
+                        task_id=tid or (inbox.msg_field(m_raw, "task_id", "") or ""),
+                    )
+                    # 静默失败 → 同工种/相近工种 failover（优先于单纯 reset pending）
+                    if cli_dead and tid and is_pipeline_task:
+                        from .pipeline_result_check import pipeline_step_result_matches
+                        from .dispatch.pipeline_step_failover import try_silent_failure_failover
+
+                        task_obj = TaskTracker(data_dir).get(tid)
+                        if task_obj and is_current_pipeline_assignee(data_dir, tid, name):
+                            ok_res, _ = pipeline_step_result_matches(data_dir, task_obj, name)
+                            if not ok_res:
+                                new_agent = try_silent_failure_failover(
+                                    data_dir, tid, name, mid, age_min=age_min,
+                                )
+                                if new_agent:
+                                    recovered += 1
+                                    continue
                     is_primary = bool(primary_tid and primary_tid in content)
                     cd = pipeline_repush_cooldown_minutes(config, is_primary=is_primary and is_pipeline_task)
                     if cli_dead and age_min > cd:
@@ -474,12 +555,35 @@ def _scan_one_agent(data_dir: str, name: str, inbox_base: str) -> Optional[Tuple
     
     if replied_ids:
         from datetime import datetime
+        from .pipeline_task import is_pipeline_execute_message, verify_pipeline_step_delivery
+
         ts = datetime.now().isoformat()
         for m_raw in inbox.messages:
             mid = inbox.msg_field(m_raw, 'id', '')
             if mid in replied_ids:
                 mstate = get_msg_state(m_raw)
                 if mstate in (MsgStatus.PENDING, MsgStatus.PUSHED, MsgStatus.PROCESSING):
+                    entry = m_raw if isinstance(m_raw, dict) else (
+                        m_raw.to_dict() if hasattr(m_raw, "to_dict") else {}
+                    )
+                    if is_pipeline_execute_message(entry, data_dir):
+                        ok, reason = verify_pipeline_step_delivery(data_dir, name, entry)
+                        if not ok:
+                            debug(
+                                f"[scanner] {name}: reply for {mid} but pipeline "
+                                f"not verified ({reason}) — skip auto-done"
+                            )
+                            tid = entry.get("task_id") or extract_task_id(
+                                inbox.msg_field(m_raw, "content", "")
+                            )
+                            if tid:
+                                from .dispatch.pipeline_step_failover import (
+                                    note_pipeline_verify_failure,
+                                )
+                                note_pipeline_verify_failure(
+                                    data_dir, tid, name, mid, reason=reason,
+                                )
+                            continue
                     inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, acknowledged_at=ts)
                     mtype = inbox.msg_field(m_raw, 'type', '')
                     cur_state = inbox.msg_field(m_raw, 'state', '')
@@ -801,7 +905,9 @@ def _check_timeouts(data_dir: str, agents: dict, inbox_base: str, paths: dict):
             # running pipeline 当前步骤：等 agent 写 msg-results，禁止 ACK 催办/3次关闭
             if msg_type == "task":
                 tid = extract_task_id(msg_content)
-                if tid and is_current_pipeline_assignee(data_dir, name, tid):
+                if tid and is_current_pipeline_assignee(data_dir, tid, name):
+                    continue
+                if pipeline_message_protected_from_auto_close(data_dir, name, m_raw, inbox):
                     continue
             
             # ── 1. ACK 超时检测：pending/pushed 消息超过 timeout 分钟未 ack ──
@@ -853,25 +959,35 @@ def _check_timeouts(data_dir: str, agents: dict, inbox_base: str, paths: dict):
                                                              reminded_count=remind_count,
                                                              last_reminded_at=datetime.now(timezone.utc).isoformat())
                                         
-                                        # 3 次催办后自动标记为 failed
+                                        # 3 次催办后自动标记为 failed（pipeline 当前步骤永不关闭）
                                         if remind_count >= 3:
-                                            inbox.set_msg_status(msg.id, MsgStatus.FAILED,
-                                                                 state=MsgStatus.CLOSED,
-                                                                 done_at=datetime.now(timezone.utc).isoformat(),
-                                                                 done_note="3次催办无响应，自动关闭")
+                                            if pipeline_message_protected_from_auto_close(
+                                                data_dir, name, m_raw, inbox,
+                                            ):
+                                                warn(
+                                                    f"[scanner] skip remind-close pipeline "
+                                                    f"{name} msg={msg.id[:24]}"
+                                                )
+                                            else:
+                                                inbox.set_msg_status(msg.id, MsgStatus.FAILED,
+                                                                     state=MsgStatus.CLOSED,
+                                                                     done_at=datetime.now(timezone.utc).isoformat(),
+                                                                     done_note="3次催办无响应，自动关闭")
                                         
                                         # 原消息重推（如果是 pending/pushed 状态）
                                         if mstate in (MsgStatus.PENDING, MsgStatus.PUSHED, MsgStatus.ACKNOWLEDGED):
                                             inbox.set_msg_status(msg.id, MsgStatus.RESENDING)
                                         
                                         reminded.append(name)
-                                    except Exception:
-                                        pass
+                                    except Exception as exc:
+                                        warn(f"[scanner] ack timeout remind failed {name}: {exc}")
             
             # ── 2. 执行超时检测：ACK（received/acknowledged）后 30 分钟未 done ──
             if msg_type == "task":
                 tid = extract_task_id(msg_content)
-                if tid and is_current_pipeline_assignee(data_dir, name, tid):
+                if tid and is_current_pipeline_assignee(data_dir, tid, name):
+                    continue
+                if pipeline_message_protected_from_auto_close(data_dir, name, m_raw, inbox):
                     continue
             if mstate in (MsgStatus.ACKNOWLEDGED, MsgStatus.RECEIVED) and msg_type in ("task", "task_reply"):
                 if mstate != MsgStatus.DONE and msg.state not in (MsgStatus.DONE, MsgStatus.CLOSED, MsgStatus.REJECTED):
@@ -934,8 +1050,8 @@ def _check_timeouts(data_dir: str, agents: dict, inbox_base: str, paths: dict):
                                             inbox.set_msg_field(m_raw, 'last_exec_reminded_at', datetime.now(timezone.utc).isoformat())
                                             
                                             reminded.append(name)
-                                        except Exception:
-                                            pass
+                                        except Exception as exc:
+                                            warn(f"[scanner] exec timeout remind failed {name}: {exc}")
         
         if reminded:
             json_write(inbox_file, inbox.to_dict())
@@ -1001,12 +1117,22 @@ def _agent_has_active_work(inbox, data_dir: str, agent_name: str, agents: dict =
         for tid in pipeline_ids:
             if tid in (content or ""):
                 from .pipeline_result_check import has_valid_pipeline_result_for_agent
+                from .pipeline_task import extract_task_id
+                from .self_heal import agent_cli_active_for
+
+                mid = inbox.msg_field(m_raw, "id", "")
                 tasks_cache = _list_tasks_cached(data_dir)
                 if has_valid_pipeline_result_for_agent(
                     data_dir, tid, agent_name, tasks_cache=tasks_cache,
                 ):
                     return False
-                if age_min > 3 and not agent_cli_active(agent_name, agents or {}):
+                cli_busy = agent_cli_active_for(
+                    agent_name,
+                    agents or {},
+                    msg_id=mid,
+                    task_id=extract_task_id(content or "") or tid,
+                )
+                if age_min > 3 and not cli_busy:
                     return False
                 return True
         if age_min > 3 and not agent_cli_active(agent_name, agents or {}):
@@ -1056,7 +1182,7 @@ def build_queues(data_dir: str, agents: dict, config: dict = None) -> Tuple[dict
             if t and t.get("status") == "running":
                 chain = t.get("chain") or []
                 if chain:
-                    mini_gate_assignee = chain[-1].get("to_person", "") or ""
+                    mini_gate_assignee = chain[-1].get("to_person", "") or chain[-1].get("to_agent", "") or ""
         except Exception:
             pass
     
@@ -1094,7 +1220,16 @@ def build_queues(data_dir: str, agents: dict, config: dict = None) -> Tuple[dict
         
         # 每次最多推 1 条（加急优先）；冷却期内跳过，避免每轮 scan 重 spawn CLI
         def _pick_pushable(msgs):
+            from .pipeline_task import (
+                is_side_audit_message,
+                side_audit_deferred_for_reviewer,
+            )
+
             for m in msgs:
+                mid = m.id if hasattr(m, "id") else (m.get("id", "") if isinstance(m, dict) else "")
+                if side_audit_deferred_for_reviewer(data_dir, name) and is_side_audit_message(mid):
+                    debug(f"[scanner] {name}: defer side-audit push {mid}")
+                    continue
                 skip, reason = should_skip_push(data_dir, m, config)
                 if skip:
                     debug(f"[scanner] {name}: skip push ({reason})")
@@ -1254,6 +1389,7 @@ def update_message_status(data_dir: str, agent_name: str, msg_id: str, new_statu
     if new_status == MsgStatus.PENDING:
         extra["state"] = MsgStatus.PENDING
         extra["pushed_count"] = 0
+        extra["last_pushed_at"] = None
         extra["reminded_count"] = 0
         extra["done_at"] = None
         extra["done_note"] = None

@@ -3,6 +3,8 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/lib/api-url.sh"
+
 
 pass=0
 fail=0
@@ -29,7 +31,7 @@ echo "=== smoke test $(date '+%Y-%m-%d %H:%M:%S') ==="
 echo "waiting ${WAIT_SEC}s for services..."
 sleep "$WAIT_SEC"
 
-check_http "mailbus"           "http://127.0.0.1:9812/"
+check_http "mailbus"           "http://127.0.0.1:${MAILBUS_API_PORT}/"
 check_http "lingzhao-9120"     "http://127.0.0.1:9120/"
 check_http "lingjin-9121"      "http://127.0.0.1:9121/"
 check_http "lingxi-9122"       "http://127.0.0.1:9122/"
@@ -48,12 +50,12 @@ check_http "claude-lingyun"    "http://127.0.0.1:9260/"
 check_http "claude-lingyan"    "http://127.0.0.1:9261/"
 
 if [ -x /mnt/c/Windows/System32/curl.exe ]; then
-  win_code=$(/mnt/c/Windows/System32/curl.exe -s -o /mnt/c/Windows/NUL -w '%{http_code}' --connect-timeout 8 http://localhost:9812/ 2>/dev/null | tr -d '\r\n')
+  win_code=$(/mnt/c/Windows/System32/curl.exe -s -o /mnt/c/Windows/NUL -w '%{http_code}' --connect-timeout 8 http://localhost:${MAILBUS_API_PORT}/ 2>/dev/null | tr -d '\r\n')
   if [ "$win_code" = "200" ]; then
-    echo "OK  windows-localhost-9812  http://localhost:9812/  ($win_code)"
+    echo "OK  windows-localhost-api  http://localhost:${MAILBUS_API_PORT}/  ($win_code)"
     pass=$((pass + 1))
   else
-    echo "FAIL windows-localhost-9812  http://localhost:9812/  ($win_code)"
+    echo "FAIL windows-localhost-api  http://localhost:${MAILBUS_API_PORT}/  ($win_code)"
     fail=$((fail + 1))
   fi
 fi
@@ -82,7 +84,7 @@ else
 fi
 
 echo "--- Internal LLM health ---"
-llm_out=$(docker exec docker-agents-mailbus-1 python3 /mailbus/tools/setup-internal-llm.py --data-dir /mailbus/store --json 2>/dev/null || echo "{}")
+llm_out=$(docker exec docker-agents-mailbus-1 python3 /mailbus/tools/ops/tools/ops/setup-internal-llm.py --data-dir /mailbus/store --json 2>/dev/null || echo "{}")
 if echo "$llm_out" | grep -q '"ready": true'; then
   echo "OK  internal-llm ready"
   pass=$((pass + 1))
@@ -96,7 +98,7 @@ fi
 
 if [ "${SMOKE_AM_PERSIST:-0}" = "1" ]; then
   echo "--- AgentMemory persistence probe ---"
-  if python3 "$SCRIPT_DIR/../tools/check-agentmemory-persistence.py" --url http://127.0.0.1:3111; then
+  if python3 "$SCRIPT_DIR/../tools/tools/ops/check-agentmemory-persistence.py" --url http://127.0.0.1:3111; then
     echo "OK  agentmemory-persistence"
     pass=$((pass + 1))
   else

@@ -1,0 +1,25 @@
+{
+  "schema": "mailbus-agent-v3",
+  "agent_id": "dali",
+  "framework": "opencode",
+  "archetype": "coding-executor",
+  "skills": [
+    "mail/skills/common/agent-universal",
+    "mail/skills/common/mailbus-file-protocol",
+    "mail/skills/frameworks/opencode",
+    "mail/skills/roles/archetypes/coding-executor",
+    "mail/skills/roles/overlays/dali"
+  ],
+  "rules": [
+    "mail/rules/common/execution-order.md",
+    "mail/rules/common/task-fsm.md",
+    "mail/rules/common/team-secrets-policy.md",
+    "mail/rules/frameworks/opencode/delivery.md",
+    "mail/rules/roles/coding-executor/boundaries.md"
+  ],
+  "workspace": "/mnt/e/ai_tools/opencode",
+  "docker": {
+    "service": "opencode-agent",
+    "profile": "dali"
+  }
+}

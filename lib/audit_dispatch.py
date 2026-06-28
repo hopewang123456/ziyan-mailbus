@@ -241,6 +241,14 @@ def dispatch_pending_audits(data_dir: str, agents: dict, paths: dict) -> int:
     if AUDIT_REVIEWER not in agents:
         return 0
 
+    from .pipeline_task import side_audit_deferred_for_reviewer
+
+    if side_audit_deferred_for_reviewer(data_dir, AUDIT_REVIEWER):
+        debug(
+            f"[audit] defer side-audit: primary pipeline assignee is {AUDIT_REVIEWER}"
+        )
+        return 0
+
     tracker = TaskTracker(data_dir)
     pending = [
         t for t in list_pending_audit_tasks(data_dir, 100)

@@ -1,0 +1,12 @@
+{
+  "schema": "mailbus-service-v1",
+  "name": "agentmemory",
+  "compose_file": "docker-agents/agentmemory/docker-compose.iii.yml",
+  "ports": {
+    "http": 3111,
+    "iii": 49134
+  },
+  "volumes": [
+    "iii-data"
+  ]
+}

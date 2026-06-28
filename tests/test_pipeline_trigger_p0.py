@@ -6,13 +6,36 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.pipeline_trigger import (
-    _find_result,
-    _result_applies_to_step,
-    trigger,
-)
+from lib.pipeline_results import find_legacy_result_file
+from lib.pipeline_trigger import trigger
+from lib.task_fsm import result_applies_to_step, result_mtime_ok
 from lib.tracker import TaskTracker
 from lib.utils import json_write, _now_iso
+
+
+def _result_applies_with_file(result, result_file, task_id, current, chain):
+    """测试辅助：含 mtime 的 result_applies_to_step。"""
+    mtime_ok = True
+    step_started = current.get("started_at") or ""
+    result_ts = result.get("timestamp") or result.get("updated_at") or ""
+    if step_started and result_ts:
+        from lib.tracker import _parse_iso_dt
+        try:
+            mtime_ok = _parse_iso_dt(result_ts) >= _parse_iso_dt(step_started)
+        except Exception:
+            mtime_ok = True
+    elif step_started and result_file and os.path.isfile(result_file):
+        from datetime import datetime, timezone
+        from lib.tracker import _parse_iso_dt
+        try:
+            mtime = datetime.fromtimestamp(os.path.getmtime(result_file), tz=timezone.utc)
+            mtime_ok = mtime >= _parse_iso_dt(step_started)
+        except (OSError, Exception):
+            pass
+    ok, _ = result_applies_to_step(
+        result, task_id, current, chain, result_mtime_ok=mtime_ok,
+    )
+    return ok
 
 
 def _write_result(data_dir, task_id, payload):
@@ -58,9 +81,9 @@ def test_find_result_exact_only():
         other = os.path.join(td, "msg-results", "other-task.json")
         os.makedirs(os.path.dirname(other), exist_ok=True)
         json_write(other, {"conclusion": "done"})
-        assert _find_result(td, "target-task") is None
+        assert find_legacy_result_file(td, "target-task") is None
         exact = _write_result(td, "target-task", {"conclusion": "done"})
-        assert _find_result(td, "target-task") == exact
+        assert find_legacy_result_file(td, "target-task") == exact
     print("  ok test_find_result_exact_only")
 
 
@@ -75,7 +98,7 @@ def test_reject_wrong_pipeline_step():
             "timestamp": started,
             "agent": "dali",
         })
-        assert not _result_applies_to_step(
+        assert not _result_applies_with_file(
             json.load(open(path, encoding="utf-8")),
             path, task_id, current, chain,
         )
@@ -93,7 +116,7 @@ def test_reject_stale_timestamp():
             "timestamp": "2020-01-01T00:00:00+00:00",
             "agent": "dali",
         })
-        assert not _result_applies_to_step(
+        assert not _result_applies_with_file(
             json.load(open(path, encoding="utf-8")),
             path, task_id, current, chain,
         )
@@ -188,7 +211,7 @@ def test_reject_wrong_agent():
             "timestamp": started,
             "agent": "xiaoqi",
         })
-        assert not _result_applies_to_step(
+        assert not _result_applies_with_file(
             json.load(open(path, encoding="utf-8")),
             path, task_id, current, chain,
         )
@@ -207,7 +230,7 @@ def test_reject_untrusted_mailbus_agent():
             "agent": "mailbus",
             "task_id": task_id,
         })
-        assert not _result_applies_to_step(
+        assert not _result_applies_with_file(
             json.load(open(path, encoding="utf-8")),
             path, task_id, current, chain,
         )
@@ -227,7 +250,7 @@ def test_reject_auto_linked_result():
             "task_id": task_id,
             "source": "auto-linked-from-mailbus-scheduler-validation-20260616",
         })
-        assert not _result_applies_to_step(
+        assert not _result_applies_with_file(
             json.load(open(path, encoding="utf-8")),
             path, task_id, current, chain,
         )

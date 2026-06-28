@@ -13,6 +13,8 @@ from pathlib import Path
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+from lib.agent_registry import get_agent
+from lib.agentmemory_config import agentmemory_url
 from lib.claude_launch import (
     ensure_claude_agent_settings,
     load_mailbus_claude,
@@ -26,6 +28,7 @@ from lib.framework_skills import (
     framework_skill_id,
     sync_agent_skills_from_index,
 )
+from lib.sync_layers import default_use_symlink, normalize_host_path
 from lib.utils import identity_candidates, json_read
 
 
@@ -39,11 +42,13 @@ def _resolve_path(rel: str) -> Path:
         raise ValueError("empty path")
     if rel.startswith(".codex/"):
         return _ai_tools_root() / rel
-    if rel.startswith("store/") or rel.startswith("mail/"):
-        return _ai_tools_root() / "mail" / rel.replace("mail/", "", 1)
+    if rel.startswith("mail/"):
+        return normalize_host_path(rel, mail_root=Path(ROOT))
+    if rel.startswith("store/"):
+        return Path(ROOT) / rel.replace("store/", "", 1)
     p = Path(rel)
     if p.is_absolute():
-        return p
+        return normalize_host_path(rel, mail_root=Path(ROOT))
     return _ai_tools_root() / rel
 
 
@@ -64,7 +69,7 @@ def _load_identity(data_dir: str, agent: str, agent_cfg: dict) -> str:
 
 
 def _fetch_agentmemory_snippet(agent: str, limit: int = 5) -> str:
-    base = os.environ.get("AGENTMEMORY_URL", "http://127.0.0.1:3111").rstrip("/")
+    base = agentmemory_url().rstrip("/")
     url = f"{base}/agentmemory/memories?agentId={agent}&limit={limit}&includeOrphans=true"
     try:
         with urllib.request.urlopen(url, timeout=8) as resp:
@@ -112,7 +117,7 @@ def _sync_skills_from_index(
         skills_dir,
         index,
         mail_root=Path(ROOT),
-        use_symlink=link_codex_skills,
+        use_symlink=link_codex_skills and default_use_symlink(),
     )
 
 
@@ -147,7 +152,12 @@ def sync_agent(agent: str, data_dir: str) -> dict:
     _, plat_cfg = resolve_claude_plat_cfg(global_cfg)
     ensure_claude_agent_settings(agent, data_dir)
     claude_home = Path(resolve_claude_home(plat_cfg, agent))
-    project_dir = Path(resolve_claude_workspace(agent_cfg, plat_cfg, agent))
+    access_rec = get_agent(agent) or {}
+    ws = access_rec.get("workspace")
+    if ws:
+        project_dir = normalize_host_path(str(ws), mail_root=Path(ROOT))
+    else:
+        project_dir = Path(resolve_claude_workspace(agent_cfg, plat_cfg, agent))
     push_cwd = Path(resolve_project_dir(agent_cfg, plat_cfg, agent))
     skills_dir = claude_home / "skills"
     index = _load_skills_index(data_dir)

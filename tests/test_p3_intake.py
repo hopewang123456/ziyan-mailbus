@@ -46,32 +46,17 @@ class _FakeHandler:
 
 
 def _seed(tmp: str) -> None:
-    root = os.path.join(os.path.dirname(__file__), "..", "store")
-    for sub in ("roles/json", "workflows", "dispatch", "rules", "leads", "inbox/dali", "inbox/lingxiao", "msg-files"):
-        src = os.path.join(root, sub)
-        dst = os.path.join(tmp, sub)
-        if os.path.isdir(src):
-            shutil.copytree(src, dst, dirs_exist_ok=True)
-    os.makedirs(os.path.join(tmp, "tasks"), exist_ok=True)
-    json_write(os.path.join(tmp, "inbox", "dali", "inbox.json"), {"agent": "dali", "messages": []})
-    json_write(os.path.join(tmp, "inbox", "lingxiao", "inbox.json"), {"agent": "lingxiao", "messages": []})
-    json_write(os.path.join(tmp, "human-queue.json"), {"version": "1.0.0", "updated_at": "2026-06-18T00:00:00+08:00", "items": []})
-    json_write(os.path.join(tmp, "config.json"), {
-        "mailbus_internal_llm": {
-            "enabled": False,
-            "guardrails": {"await_plan_approval_tier_min": "L"},
-        },
-    })
-    example = os.path.join(root, "examples", "order-intake.pursue.example.json")
-    with open(example, encoding="utf-8") as f:
-        intake = json.load(f)
-    for g in intake.get("commercial_gates") or []:
+    from tests.test_helpers import load_pursue_intake_example, seed_runtime_from_sot
+
+    seed_runtime_from_sot(tmp)
+    example = load_pursue_intake_example()
+    for g in example.get("commercial_gates") or []:
         if g.get("gate_id") == "req_to_lingzhao":
             g["status"] = "pending"
         if g.get("gate_id") in ("customer_design_ok", "start_delivery"):
             g["status"] = "pending"
-    intake["pipeline_link"] = {}
-    json_write(os.path.join(tmp, "leads", "order-intake.json"), [intake])
+    example["pipeline_link"] = {}
+    json_write(os.path.join(tmp, "leads", "order-intake.json"), [example])
 
 
 class TestP3Intake(unittest.TestCase):

@@ -1,0 +1,25 @@
+{
+  "schema": "mailbus-agent-v3",
+  "agent_id": "xiaoqi",
+  "framework": "openclaw",
+  "archetype": "orchestrator",
+  "skills": [
+    "mail/skills/common/agent-universal",
+    "mail/skills/common/mailbus-file-protocol",
+    "mail/skills/frameworks/openclaw",
+    "mail/skills/roles/archetypes/orchestrator",
+    "mail/skills/roles/overlays/xiaoqi"
+  ],
+  "rules": [
+    "mail/rules/common/execution-order.md",
+    "mail/rules/common/task-fsm.md",
+    "mail/rules/common/team-secrets-policy.md",
+    "mail/rules/frameworks/openclaw/delivery.md",
+    "mail/rules/roles/orchestrator/boundaries.md"
+  ],
+  "workspace": "/mnt/e/ai_tools/openclaw_space",
+  "docker": {
+    "service": "openclaw-agent",
+    "profile": "xiaoqi"
+  }
+}

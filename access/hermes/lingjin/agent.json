@@ -1,0 +1,26 @@
+{
+  "schema": "mailbus-agent-v3",
+  "agent_id": "lingjin",
+  "framework": "hermes_profile",
+  "archetype": "security-auditor",
+  "skills": [
+    "mail/skills/common/agent-universal",
+    "mail/skills/common/mailbus-file-protocol",
+    "mail/skills/frameworks/hermes_profile",
+    "mail/skills/roles/archetypes/security-auditor",
+    "mail/skills/roles/overlays/lingjin"
+  ],
+  "rules": [
+    "mail/rules/common/execution-order.md",
+    "mail/rules/common/task-fsm.md",
+    "mail/rules/common/team-secrets-policy.md",
+    "mail/rules/frameworks/hermes_profile/delivery.md",
+    "mail/rules/roles/security-auditor/boundaries.md"
+  ],
+  "workspace": null,
+  "docker": {
+    "service": "hermes",
+    "profile": "lingjin",
+    "port": 9121
+  }
+}

@@ -7,6 +7,7 @@ ziyan-mailbus HTTP API — 任务/公告板/Skill 相关路由处理器
 
 import os
 import json
+import sys
 from lib.utils import json_read, json_write, _now_iso
 from lib.tracker import TaskTracker, TaskStatus, SKIP_TIMEOUT_PREFIXES
 from lib.pipeline_chain import normalize_task_chain, is_pipeline_step
@@ -472,9 +473,13 @@ def handle_skill_usage(handler):
         )
 
     # 1. Hermes usage.json（补充不在 bus 记录中的 skill）
+    hermes_base = os.environ.get(
+        "HERMES_DATA",
+        "E:/hermes-data" if sys.platform == "win32" else "/mnt/e/hermes-data",
+    ).replace("\\", "/").rstrip("/")
     hermes_profiles = {
-        "lingzhao": "/mnt/e/hermes-data/.hermes/skills/.usage.json",
-        "lingxi": "/mnt/e/hermes-data/.hermes/profiles/lingxi/skills/.usage.json",
+        "lingzhao": f"{hermes_base}/.hermes/skills/.usage.json",
+        "lingxi": f"{hermes_base}/.hermes/profiles/lingxi/skills/.usage.json",
     }
     for agent, path in hermes_profiles.items():
         if os.path.isfile(path):
@@ -503,37 +508,35 @@ def handle_skill_usage(handler):
             except Exception:
                 pass
 
-    # 2. CLI 框架 skill 目录扫描（只有名称，没有使用次数）
-    cli_skills = {
-        "lingxiao": "/home/administrator/.codex/skills",
-        "xiaoqi": "/mnt/e/ai_tools/openclaw_space/skills",
-        "yige": "/mnt/e/ai_tools/openclaw_space/skills",
-        "dali": "/mnt/e/ai_tools/opencode/.opencode/skills",
-        "lingjin": "/mnt/e/hermes-data/.hermes/profiles/lingjin/skills",
-    }
+    # 2. CLI 框架 skill 目录扫描（registry → host skills 路径）
+    from ..sync_layers import dashboard_skills_dirs
+
+    cli_skills = dashboard_skills_dirs()
     for agent, skill_dir in cli_skills.items():
-        if os.path.isdir(skill_dir):
-            for root, dirs, files in os.walk(skill_dir):
-                for f in files:
-                    if f == "SKILL.md" or f.endswith("-skill.md"):
-                        skill_name = os.path.basename(root) if f == "SKILL.md" else f.replace("-skill.md", "").replace(".md", "")
-                        if skill_name:
-                            if skill_name not in merged:
-                                merged[skill_name] = {"agents": {}}
-                            if agent not in merged[skill_name]["agents"]:
-                                merged[skill_name]["agents"][agent] = {
-                                    "use_count": 0,
-                                    "view_count": 0,
-                                    "last_used": "",
-                                    "state": "installed",
-                                }
-                            merged[skill_name]["total_use"] = sum(
-                                a.get("use_count", 0) for a in merged[skill_name]["agents"].values()
-                            )
-                            merged[skill_name]["last_used"] = max(
-                                (a.get("last_used", "") for a in merged[skill_name]["agents"].values()),
-                                default="",
-                            )
+        skill_dir = skill_dir.replace("\\", "/")
+        if not os.path.isdir(skill_dir):
+            continue
+        for root, dirs, files in os.walk(skill_dir):
+            for f in files:
+                if f == "SKILL.md" or f.endswith("-skill.md"):
+                    skill_name = os.path.basename(root) if f == "SKILL.md" else f.replace("-skill.md", "").replace(".md", "")
+                    if skill_name:
+                        if skill_name not in merged:
+                            merged[skill_name] = {"agents": {}}
+                        if agent not in merged[skill_name]["agents"]:
+                            merged[skill_name]["agents"][agent] = {
+                                "use_count": 0,
+                                "view_count": 0,
+                                "last_used": "",
+                                "state": "installed",
+                            }
+                        merged[skill_name]["total_use"] = sum(
+                            a.get("use_count", 0) for a in merged[skill_name]["agents"].values()
+                        )
+                        merged[skill_name]["last_used"] = max(
+                            (a.get("last_used", "") for a in merged[skill_name]["agents"].values()),
+                            default="",
+                        )
 
     # 按使用次数排序
     sorted_skills = sorted(
@@ -618,6 +621,34 @@ def handle_human_queue(handler):
     })
 
 
+def handle_human_queue_resolve(handler, item_id: str):
+    """POST /api/human-queue/<id>/resolve — 审批/驳回人工待办。"""
+    from lib.human_queue_resolve import resolve_human_queue_item
+
+    body = handler._read_post_body()
+    decision = (body.get("decision") or "approved").lower()
+    if decision not in ("approved", "denied"):
+        handler._send_json({"error": "decision must be approved or denied"}, 400)
+        return
+    resolution = {
+        "decision": decision,
+        "reviewer": body.get("reviewer") or "dashboard",
+        "comment": body.get("comment") or body.get("reason") or "",
+        "reason": body.get("reason") or "",
+    }
+    for key in ("attachments", "selected_copy_id", "brief", "action"):
+        if key in body:
+            resolution[key] = body[key]
+    item, side = resolve_human_queue_item(handler.data_dir, item_id, resolution)
+    if not item:
+        handler._send_json({"error": side.get("error", "not_found")}, 404)
+        return
+    if side.get("error") and not side.get("ok", True):
+        handler._send_json({"status": "partial", "item": item, **side}, 400)
+        return
+    handler._send_json({"status": "ok", "item": item, **side})
+
+
 def handle_task_fsm_action(handler, task_id: str, action: str):
     """POST /api/tasks/<id>/fsm/{rollback|skip|cancel|pause|priority}"""
     from lib.task_fsm import (
@@ -694,6 +725,23 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
         outcome = apply_skip(task, reason=reason)
     elif action == "cancel":
         outcome = apply_cancel(task, reason=reason)
+    elif action == "continue":
+        from lib.task_recover import recover_continue
+
+        outcome = recover_continue(
+            handler.data_dir, task_id, reason=reason or "dashboard_continue",
+        )
+        if outcome.get("ok"):
+            task = tracker.get(task_id) or task
+            ensure_fsm(task)
+            handler._send_json({
+                "status": "ok",
+                "action": outcome.get("action"),
+                "fsm": fsm_summary(task),
+                "dispatch_ok": outcome.get("dispatch_ok"),
+                "step_id": outcome.get("step_id"),
+            })
+            return
     elif action == "pause":
         outcome = apply_pause(task, reason=reason)
     elif action == "priority":

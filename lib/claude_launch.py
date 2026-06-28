@@ -20,15 +20,18 @@ PS_HELPER = "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
 
 
 def _default_data_dir() -> str:
+    from .constants import MAILBUS_DATA_STR
+
     for cand in (
         os.environ.get("DATA_DIR"),
+        os.environ.get("MAILBUS_DATA"),
+        MAILBUS_DATA_STR,
         os.path.join(ROOT, "store"),
         "/mailbus/store",
-        "/mnt/e/ai_tools/mail/store",
     ):
         if cand and os.path.isfile(os.path.join(cand, "config.json")):
             return os.path.abspath(cand)
-    return os.path.join(ROOT, "store")
+    return MAILBUS_DATA_STR if os.path.isdir(MAILBUS_DATA_STR) else os.path.join(ROOT, "store")
 
 
 def _powershell_exe() -> str:
@@ -460,17 +463,58 @@ def _model_flag(agent_cfg: dict, agent_types: dict, model_alias: Optional[str]) 
     return f"--model {mid}" if mid else ""
 
 
+def _claude_push_permission(agent_name: str, agent_cfg: dict) -> str:
+    claude_cfg = agent_cfg.get("claude") or {}
+    permission = (claude_cfg.get("permission_mode") or "").strip()
+    if not permission:
+        permission = "dontAsk" if agent_name == "lingyan" else "acceptEdits"
+    return permission
+
+
+def _claude_push_argv(
+    agent_name: str,
+    agent_cfg: dict,
+    agent_types: dict,
+    model_alias: Optional[str],
+    prompt: str,
+    *,
+    model_name: Optional[str] = None,
+) -> list[str]:
+    """Claude push 参数列表（prompt 为独立 argv，不经 shell 转义）。"""
+    permission = _claude_push_permission(agent_name, agent_cfg)
+    argv: list[str] = [
+        "-p",
+        prompt,
+        "--permission-mode",
+        permission,
+        "--output-format",
+        "json",
+    ]
+    if model_name:
+        argv.extend(["--model", model_name])
+    else:
+        mflag = _model_flag(agent_cfg, agent_types, model_alias)
+        if mflag:
+            argv.extend(shlex.split(mflag))
+    max_turns = agent_cfg.get("max_turns")
+    if max_turns is not None:
+        argv.extend(["--max-turns", str(int(max_turns))])
+    claude_cfg = agent_cfg.get("claude") or {}
+    extra = (claude_cfg.get("push_flags") or "").strip()
+    if extra:
+        argv.extend(shlex.split(extra))
+    elif agent_name == "lingyan" and permission == "dontAsk":
+        argv.extend(["--allowedTools", "Bash,Read,Glob,Grep"])
+    return argv
+
+
 def _claude_push_flags(
     agent_name: str,
     agent_cfg: dict,
     agent_types: dict,
     model_alias: Optional[str],
 ) -> str:
-    claude_cfg = agent_cfg.get("claude") or {}
-    permission = (claude_cfg.get("permission_mode") or "").strip()
-    if not permission:
-        permission = "dontAsk" if agent_name == "lingyan" else "acceptEdits"
-
+    permission = _claude_push_permission(agent_name, agent_cfg)
     parts = [
         "-p",
         "'MSG'",
@@ -483,12 +527,101 @@ def _claude_push_flags(
     max_turns = agent_cfg.get("max_turns")
     if max_turns is not None:
         parts.append(f"--max-turns {int(max_turns)}")
+    claude_cfg = agent_cfg.get("claude") or {}
     extra = claude_cfg.get("push_flags") or ""
     if extra.strip():
         parts.append(extra.strip())
     elif agent_name == "lingyan" and permission == "dontAsk":
         parts.append('--allowedTools "Bash,Read,Glob,Grep"')
     return " ".join(parts)
+
+
+def _claude_executable_argv(claude_bin: str) -> list[str]:
+    """Windows 上解析 claude 可执行文件（.ps1/.cmd/.exe）。"""
+    norm = _normalize_windows_path(claude_bin)
+    low = norm.lower()
+    if low.endswith(".ps1"):
+        ps = _powershell_exe()
+        if not ps:
+            raise RuntimeError("PowerShell 不可用")
+        return [ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", norm]
+    if low.endswith(".cmd") or low.endswith(".bat"):
+        comspec = os.environ.get("ComSpec", r"C:\Windows\System32\cmd.exe")
+        return [comspec, "/c", norm]
+    return [norm]
+
+
+def _push_direct_env(agent_name: str, claude_home: str, data_dir: str) -> dict[str, str]:
+    ensure_claude_agent_settings(agent_name, data_dir)
+    env = os.environ.copy()
+    home = claude_home
+    if len(home) >= 2 and home[1] == ":":
+        home = home.replace("/", os.sep)
+    env["CLAUDE_CONFIG_DIR"] = home
+    settings = _read_settings_file(_claude_settings_path(claude_home))
+    for key, val in (settings.get("env") or {}).items():
+        if val is not None and str(val).strip():
+            env[str(key)] = str(val)
+    return env
+
+
+def try_build_push_direct(
+    agent_name: str,
+    agent_cfg: dict,
+    agent_types: dict,
+    *,
+    data_dir: str,
+    prompt: str,
+    model_alias: Optional[str] = None,
+    model_name: Optional[str] = None,
+) -> Optional[dict]:
+    """宿主机直连 claude -p（prompt 独立 argv），避免 shell 嵌套 MSG 引号/换行炸裂。"""
+    if (agent_cfg.get("type") or "") != "claude_code":
+        return None
+    dd = os.path.abspath(data_dir)
+    global_cfg = load_mailbus_claude(dd)
+    plat, plat_cfg = resolve_claude_plat_cfg(global_cfg)
+    sync_py = os.path.join(ROOT, "tools", "sync-claude-agent-context.py")
+    if os.path.isfile(sync_py):
+        try:
+            subprocess.run(
+                [sys.executable, sync_py, agent_name, "--data-dir", dd],
+                capture_output=True,
+                timeout=45,
+                check=False,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+    if plat == "windows":
+        claude_bin = resolve_windows_claude_bin(plat_cfg)
+    else:
+        claude_bin = resolve_claude_bin(plat_cfg) or "claude"
+    claude_home = resolve_claude_home(plat_cfg, agent_name)
+    project_dir = resolve_project_dir(agent_cfg, plat_cfg, agent_name)
+    claude_argv = _claude_push_argv(
+        agent_name,
+        agent_cfg,
+        agent_types,
+        model_alias,
+        prompt,
+        model_name=model_name,
+    )
+    cwd = project_dir
+    if len(cwd) >= 2 and cwd[1] == ":":
+        cwd = cwd.replace("/", os.sep)
+    return {
+        "argv": _claude_executable_argv(claude_bin) + claude_argv,
+        "cwd": cwd,
+        "env": _push_direct_env(agent_name, claude_home, dd),
+    }
+
+
+def parse_model_name_from_push_template(cmd_template: str) -> Optional[str]:
+    """从 build_push_command 模板提取 --model 值（多模型 fallback 用）。"""
+    m = re.search(r"--model\s+([^\s']+)", cmd_template or "")
+    if not m:
+        return None
+    return m.group(1).strip("'\"")
 
 
 def _running_in_wsl() -> bool:

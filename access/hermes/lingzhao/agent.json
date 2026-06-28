@@ -1,0 +1,26 @@
+{
+  "schema": "mailbus-agent-v3",
+  "agent_id": "lingzhao",
+  "framework": "hermes_profile",
+  "archetype": "spec-designer",
+  "skills": [
+    "mail/skills/common/agent-universal",
+    "mail/skills/common/mailbus-file-protocol",
+    "mail/skills/frameworks/hermes_profile",
+    "mail/skills/roles/archetypes/spec-designer",
+    "mail/skills/roles/overlays/lingzhao"
+  ],
+  "rules": [
+    "mail/rules/common/execution-order.md",
+    "mail/rules/common/task-fsm.md",
+    "mail/rules/common/team-secrets-policy.md",
+    "mail/rules/frameworks/hermes_profile/delivery.md",
+    "mail/rules/roles/spec-designer/boundaries.md"
+  ],
+  "workspace": null,
+  "docker": {
+    "service": "hermes",
+    "profile": "lingzhao",
+    "port": 9120
+  }
+}
