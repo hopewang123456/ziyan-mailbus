@@ -1,0 +1,19 @@
+{
+  "version": "1.0.0",
+  "max_failures_per_step": 2,
+  "same_archetype_only": true,
+  "5": {
+    "same_role": true,
+    "similar_role_types": [
+      8,
+      1
+    ]
+  },
+  "8": {
+    "same_role": true,
+    "similar_role_types": [
+      8,
+      1
+    ]
+  }
+}

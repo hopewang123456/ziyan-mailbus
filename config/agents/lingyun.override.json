@@ -1,0 +1,23 @@
+{
+  "models": ["deepseek-flash"],
+  "claude": {
+    "permission_mode": "dontAsk",
+    "interactive_permission_mode": "acceptEdits"
+  },
+  "launch": {
+    "template": "claude_host",
+    "launch_via_api": true,
+    "has_browser": true,
+    "cli": { "kind": "shell", "start_wait_seconds": 0 },
+    "browser": {
+      "kind": "claude_ttyd",
+      "url": "http://127.0.0.1:{port}/",
+      "start_wait_seconds": 15,
+      "web_port": "9260"
+    }
+  },
+  "profile_paths": {
+    "identity": "team-pack/skills/roles/overlays/lingyun/SKILL.md"
+  },
+  "push_timeout_seconds": 900
+}

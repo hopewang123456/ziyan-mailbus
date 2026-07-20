@@ -1,0 +1,14 @@
+{
+  "schema": "mailbus-transport-v1",
+  "agent_id": "yige",
+  "framework": "openclaw",
+  "workspace": "/path/to/openclaw_space/a-yige",
+  "docker": {
+    "service": "openclaw-agent",
+    "compose_service": "openclaw",
+    "profile": "yige"
+  },
+  "push": {
+    "cwd": "/path/to/openclaw_space/a-yige"
+  }
+}

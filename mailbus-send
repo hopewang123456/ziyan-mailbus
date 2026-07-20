@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""
+mailbus-send — 邮件发送 CLI 工具
+
+用法:
+  mailbus-send --to lingzhao --from lingxi --content "消息内容" [--type notice] [--priority normal] [--subject "标题"]
+
+功能:
+  1. 写入收件人的 inbox（触发 daemon 处理）
+  2. 同时写入发件人的 inbox 作为已发送记录
+  3. 返回新消息的 msg_id
+
+所有 agent 类型（Hermes / Cline / OpenClaw）均可通过 subprocess 调用。
+"""
+import argparse
+import json
+import os
+import sys
+from datetime import datetime, timezone, timedelta
+
+_MAIL_DIR = os.path.dirname(os.path.abspath(__file__))
+if _MAIL_DIR not in sys.path:
+    sys.path.insert(0, _MAIL_DIR)
+
+from lib.constants import DEFAULT_DATA_DIR  # noqa: E402
+
+TZ_CST = timezone(timedelta(hours=8))
+
+
+def now_iso():
+    return datetime.now(TZ_CST).isoformat()
+
+
+def generate_msg_id():
+    now = datetime.now()
+    date_part = now.strftime("%Y%m%d")
+    seq = int(now.timestamp() * 1000) % 100000
+    return f"msg-{date_part}-{seq:05d}"
+
+
+def read_json(path, default=None):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return default
+
+
+def write_json(path, data):
+    import tempfile
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp_", suffix=".json")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except Exception:
+            pass
+        raise
+
+
+def ensure_inbox_format(inbox, agent_name):
+    """确保 inbox dict 包含 agent/has_unread/since 字段"""
+    if "agent" not in inbox:
+        inbox["agent"] = agent_name
+    inbox.setdefault("has_unread", False)
+    inbox.setdefault("since", "")
+    inbox.setdefault("messages", [])
+    return inbox
+
+
+def send_message(to, content, from_agent="mailbus", msg_type="notice",
+                 priority="normal", subject="", data_dir=DEFAULT_DATA_DIR):
+    """
+    发送消息的核心逻辑。
+    返回: (success: bool, msg_id: str, error: str)
+    """
+    if not to or not content:
+        return False, "", "缺少 to 或 content"
+
+    # 生成消息
+    msg_id = generate_msg_id()
+    ts = now_iso()
+    msg = {
+        "id": msg_id,
+        "from": from_agent,
+        "to": to if isinstance(to, str) else (to[0] if to else ""),
+        "type": msg_type,
+        "priority": priority,
+        "content": content,
+        "status": "pending",
+        "state": "pending",
+        "created_at": ts,
+        "timestamp": ts,
+    }
+    if subject:
+        msg["subject"] = subject
+
+    inbox_dir = os.path.join(data_dir, "inbox")
+
+    # Step 1: 写入收件人 inbox
+    recipient_inbox_path = os.path.join(inbox_dir, to, "inbox.json")
+    recipient_inbox = read_json(recipient_inbox_path, {})
+    recipient_inbox = ensure_inbox_format(recipient_inbox, to)
+    recipient_inbox["messages"].append(msg)
+    recipient_inbox["has_unread"] = True
+    os.makedirs(os.path.dirname(recipient_inbox_path), exist_ok=True)
+    write_json(recipient_inbox_path, recipient_inbox)
+
+    # Step 2: 写入发件人 inbox（已发送记录）
+    if from_agent and from_agent != "mailbus":
+        sender_inbox_path = os.path.join(inbox_dir, from_agent, "inbox.json")
+        sender_inbox = read_json(sender_inbox_path, {})
+        sender_inbox = ensure_inbox_format(sender_inbox, from_agent)
+        # 在发件记录中标记为已发送
+        sent_msg = dict(msg)
+        sent_msg["state"] = "sent"
+        sent_msg["delivered_to"] = [to] if isinstance(to, str) else to
+        sender_inbox["messages"].append(sent_msg)
+        sender_inbox["has_unread"] = True
+        write_json(sender_inbox_path, sender_inbox)
+
+    return True, msg_id, ""
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="mailbus-send — 发送消息到指定 agent 的邮箱",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  mailbus-send --to lingzhao --from lingxi --content "方案已确认"
+  mailbus-send --to dali --from lingxiao --content "请实现这个模块" --type task --priority urgent
+  mailbus-send --to lingzhao --from lingxi --subject "周报" --content "内容..."
+        """
+    )
+    parser.add_argument("--to", required=True, help="收件人 agent 名称")
+    parser.add_argument("--from", dest="from_agent", default="mailbus", help="发件人 agent 名称")
+    parser.add_argument("--content", required=True, help="消息内容")
+    parser.add_argument("--subject", default="", help="消息主题")
+    parser.add_argument("--type", default="notice",
+                        choices=["notice", "task", "reply", "forward", "discuss", "task_reply"],
+                        help="消息类型 (默认: notice)")
+    parser.add_argument("--priority", default="normal",
+                        choices=["normal", "urgent", "low"],
+                        help="优先级 (默认: normal)")
+    parser.add_argument("--data-dir", default=DEFAULT_DATA_DIR, help="mailbus store 目录")
+    parser.add_argument("--json", action="store_true", help="以 JSON 格式输出结果（供程序解析）")
+    parser.add_argument("--dry-run", action="store_true", help="仅打印要发送的消息，不实际写入")
+
+    args = parser.parse_args()
+
+    if args.dry_run:
+        msg_id = generate_msg_id()
+        result = {
+            "dry_run": True,
+            "msg_id": msg_id,
+            "from": args.from_agent,
+            "to": args.to,
+            "type": args.type,
+            "priority": args.priority,
+            "subject": args.subject,
+            "content_preview": args.content[:100],
+        }
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(f"[DRY RUN] 将发送消息:")
+            print(f"  收件人: {args.to}")
+            print(f"  发件人: {args.from_agent}")
+            print(f"  类型:   {args.type}")
+            print(f"  主题:   {args.subject or '(无)'}")
+            print(f"  内容:   {args.content[:100]}{'...' if len(args.content) > 100 else ''}")
+            print(f"  msg_id: {msg_id}")
+        return
+
+    success, msg_id, error = send_message(
+        to=args.to,
+        content=args.content,
+        from_agent=args.from_agent,
+        msg_type=args.type,
+        priority=args.priority,
+        subject=args.subject,
+        data_dir=args.data_dir,
+    )
+
+    if success:
+        if args.json:
+            print(json.dumps({
+                "status": "sent",
+                "msg_id": msg_id,
+                "to": args.to,
+                "from": args.from_agent,
+            }, ensure_ascii=False))
+        else:
+            print(f"✅ 消息已发送")
+            print(f"   msg_id: {msg_id}")
+            print(f"   收件人: {args.to}")
+            print(f"   发件人: {args.from_agent}")
+        sys.exit(0)
+    else:
+        if args.json:
+            print(json.dumps({"status": "error", "error": error}, ensure_ascii=False))
+        else:
+            print(f"❌ 发送失败: {error}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

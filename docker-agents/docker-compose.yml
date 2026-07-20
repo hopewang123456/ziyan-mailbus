@@ -1,0 +1,350 @@
+﻿networks:
+  ziyan-net:
+    # Fixed network name so COMPOSE_PROJECT_NAME changes do not recreate the subnet
+    name: docker-agents_ziyan-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  mailbus-data:
+  iii-data:
+
+# Host paths: repo-relative under ../ (mail root). External deps via env
+# (see migrate/env.template). Machine/Vault absolute paths belong only in
+# docker-compose.override.yml (gitignored) — copy from override.example.yml.
+
+services:
+
+  mailbus:
+    build:
+      context: ./mailbus
+      dockerfile: Dockerfile
+    ports:
+      - "${MAILBUS_API_PORT:-9814}:${MAILBUS_API_PORT:-9814}"
+    networks:
+      - ziyan-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ..:/mailbus
+      # Default: in-repo skills/rules (demo). Local Vault SoT → override.yml
+      - ../skills:/mailbus/skills:ro
+      - ../rules:/mailbus/rules:ro
+      - ../docs:/mailbus/docs:ro
+      - ../plans:/mailbus/plans:ro
+      - ${TEAM_PACK_ROOT:-../team-pack}/skills:/team-pack/skills:ro
+      - ${TEAM_PACK_ROOT:-../team-pack}/rules:/team-pack/rules:ro
+      - ../access:/mailbus/access:ro
+      - ${HERMES_DATA:-../.local/hermes}/.env:/run/hermes/.env:ro
+      - ${HERMES_DATA:-../.local/hermes}/shared-memory:/hermes/shared-memory
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DATA_DIR=/mailbus/store
+      - TZ=Asia/Shanghai
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-ziyan-team}
+      - AGENTMEMORY_URL=http://iii-engine:3111
+      - TEAM_MEMORY_DB=/hermes/shared-memory/team-memory.db
+      - MEMORY_BRIDGE_SQLITE=1
+      - MEMORY_BRIDGE_AGENTMEMORY=1
+      - MAILBUS_OLLAMA_BASE_URL=${MAILBUS_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - MAILBUS_OLLAMA_MODEL=${MAILBUS_OLLAMA_MODEL:-qwen2.5:3b-instruct-q4_K_M}
+      - MAILBUS_INTERNAL_LLM_API_KEY=${MAILBUS_INTERNAL_LLM_API_KEY:-${DEEPSEEK_API_KEY:-}}
+      - MAILBUS_INTERNAL_LLM_PROVIDER_PRIORITY=${MAILBUS_INTERNAL_LLM_PROVIDER_PRIORITY:-local,remote}
+      - IMAGE_GENERATE_WEBHOOK_URL=${IMAGE_GENERATE_WEBHOOK_URL:-}
+      - MAILBUS_API_PORT=${MAILBUS_API_PORT:-9814}
+      - MAILBUS_LAUNCH_QUEUE=/mailbus/run/launch-queue
+      # In-container knowledge roots = mount points (never host Vault abs paths)
+      - MAILBUS_SKILLS_ROOT=/mailbus/skills
+      - MAILBUS_RULES_ROOT=/mailbus/rules
+      - MAILBUS_DOCS_ROOT=/mailbus/docs
+      - MAILBUS_PLANS_ROOT=/mailbus/plans
+      - TEAM_PACK_SKILLS_ROOT=/team-pack/skills
+      - TEAM_PACK_RULES_ROOT=/team-pack/rules
+      - TEAM_PACK_ROOT=/team-pack
+    restart: unless-stopped
+    command: ["python3", "-m", "bus", "serve", "--host", "0.0.0.0", "--port", "9814", "--data-dir", "/mailbus/store"]
+
+  iii-init:
+    image: busybox:1.36
+    user: "0:0"
+    volumes:
+      - iii-data:/data
+    entrypoint: ["sh", "-c", "chown -R 65532:65532 /data && chmod 755 /data"]
+    restart: "no"
+
+  iii-engine:
+    image: iiidev/iii:0.11.2
+    user: "65532:65532"
+    depends_on:
+      iii-init:
+        condition: service_completed_successfully
+    ports:
+      - "49134:49134"
+      - "3111:3111"
+      - "3112:3112"
+    networks:
+      - ziyan-net
+    volumes:
+      - iii-data:/data
+      - ./agentmemory/iii-config.docker.yaml:/app/config.yaml:ro
+    environment:
+      - III_ENGINE_URL=ws://localhost:49134
+    healthcheck:
+      test: ["CMD", "/app/iii", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  agentmemory:
+    image: node:22
+    user: "65532:65532"
+    depends_on:
+      iii-engine:
+        condition: service_healthy
+    networks:
+      - ziyan-net
+    volumes:
+      - ${NODE_MODULES:-../node_modules}:/node_modules:ro
+    working_dir: /node_modules/@agentmemory/agentmemory
+    environment:
+      - NODE_PATH=/node_modules
+      - III_ENGINE_URL=ws://iii-engine:49134
+      - HOST=0.0.0.0
+    command: ["node", "dist/index.mjs"]
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://iii-engine:3111/agentmemory/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    restart: unless-stopped
+
+  hermes:
+    build:
+      context: ./hermes-base
+      args:
+        HERMES_VERSION: ""
+    ports:
+      - "9120:9120"
+      - "9121:9121"
+      - "9122:9122"
+      - "9123:9123"
+      - "9124:9124"
+      - "9125:9125"
+      - "9126:9126"
+      - "9127:9127"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ziyan-net
+    volumes:
+      - ${HERMES_DATA:-../.local/hermes}:/home/hermes/.hermes
+      - ../store:/mailbus/store
+      - ../tools:/mailbus/tools:ro
+      - ../skills:/mailbus/skills:ro
+      - ../rules:/mailbus/rules:ro
+      - ../access:/mailbus/access:ro
+      - ../access/external-tools:/mailbus/external-tools:ro
+      - ../access/hermes/.sync:/mailbus/access/hermes/.sync
+      # Runtime skills SoT = Vault via profiles/*/skills under HERMES_DATA;
+      # .sync is optional framework-skill mirror only (not Hermes load path).
+      - ../store/inbox:/home/hermes/inbox:ro
+    environment:
+      - HERMES_HOME=/home/hermes/.hermes
+      - AGENTMEMORY_URL=http://iii-engine:3111
+      - TZ=Asia/Shanghai
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - AGENT_BROWSER_EXECUTABLE_PATH=/dev/null
+      - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
+      - HTTPS_PROXY=${CONTAINER_HTTPS_PROXY:-}
+      - NO_PROXY=localhost,127.0.0.1,::1,iii-engine,agentmemory,mailbus,172.28.0.0/16,host.docker.internal
+    restart: unless-stopped
+    depends_on:
+      - mailbus
+      - iii-engine
+    command: ["tail", "-f", "/dev/null"]
+
+  openclaw:
+    build:
+      context: ./openclaw-agent
+      args:
+        OPENCLAW_VERSION: ""
+    ports:
+      - "18789:18789"
+      - "18790:18790"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ziyan-net
+    volumes:
+      - ${OPENCLAW_WORKSPACE:-../openclaw_space}:/workspace
+      - ../store:/mailbus/store
+      - ../tools:/mailbus/tools:ro
+      - ../skills:/mailbus/skills:ro
+      - ../rules:/mailbus/rules:ro
+      # Default: workspace skills/memory. Local Vault overlay: override.yml
+      - ${OPENCLAW_WORKSPACE:-../openclaw_space}/skills:/workspace/skills:ro
+      - ${OPENCLAW_WORKSPACE:-../openclaw_space}/memory:/workspace/memory
+      - ../access:/mailbus/access:ro
+      - ../access/external-tools:/mailbus/external-tools:ro
+      - ../store/inbox:/inbox:ro
+      - ${HERMES_DATA:-../.local/hermes}:/hermes-secrets:ro
+    environment:
+      - TZ=Asia/Shanghai
+      - HERMES_SECRETS_DIR=/hermes-secrets
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-ziyan-team}
+      - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
+      - HTTPS_PROXY=${CONTAINER_HTTPS_PROXY:-}
+      - NO_PROXY=localhost,127.0.0.1,::1,iii-engine,agentmemory,mailbus,172.28.0.0/16,host.docker.internal
+    restart: unless-stopped
+    depends_on:
+      - mailbus
+      - iii-engine
+    command: ["tail", "-f", "/dev/null"]
+
+  lingxiao:
+    build:
+      context: ./codex-agent
+      args:
+        CODEX_VERSION: ""
+    ports:
+      - "9220:3000"
+      - "9240:7681"
+      - "9250:7682"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ziyan-net
+    volumes:
+      - ../store:/mailbus/store
+      - ../tools:/mailbus/tools:ro
+      - ../skills:/mailbus/skills:ro
+      - ../rules:/mailbus/rules:ro
+      - ../access:/mailbus/access:ro
+      - ../access/external-tools:/mailbus/external-tools:ro
+      - ${LINGXIAO_WORKSPACE:-../lingxiao}:/workspace/lingxiao:ro
+      - ${HERMES_DATA:-../.local/hermes}/.env:/run/hermes/.env:ro
+      - ${CODEX_SKILLS:-../.codex/skills}:/home/node/.codex/skills
+      - ${NODE_MODULES:-../node_modules}:/node_modules:ro
+      - ./codex-agent/deepseek-model-catalog.json:/usr/local/share/codex/deepseek-model-catalog.json:ro
+      - ./codex-agent/deepseek-model-aliases.json:/usr/local/share/codex/deepseek-model-aliases.json:ro
+    environment:
+      - TZ=Asia/Shanghai
+      - CODEX_HOME=/home/node/.codex
+      - CODEX_AGENT=lingxiao
+      - CODEX_MODEL=deepseek-v4-flash
+      - CODEX_UI_PORT=7681
+      - CODEX_UI_CWD=/home/node/agent-workspace/lingxiao
+      - CODEX_PROJECT_DIR=/home/node/agent-workspace/lingxiao
+      - CODEX_UI_ENABLED=1
+      - CODEX_WEB_PORT=7682
+      - CODEX_WEB_CWD=/mailbus/store
+      - CODEX_WEB_ENABLED=1
+      - AGENTMEMORY_URL=http://iii-engine:3111
+      - DEEPSEEK_GATEWAY_PORT=3000
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_API_KEY=${DEEPSEEK_API_KEY}
+      - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
+      - HTTPS_PROXY=${CONTAINER_HTTPS_PROXY:-}
+      - NO_PROXY=localhost,127.0.0.1,::1,iii-engine,agentmemory,mailbus,172.28.0.0/16,host.docker.internal
+    restart: unless-stopped
+    depends_on:
+      - mailbus
+      - iii-engine
+    command: ["tail", "-f", "/dev/null"]
+
+  lingjian:
+    build:
+      context: ./codex-agent
+      args:
+        CODEX_VERSION: ""
+    ports:
+      - "9221:3000"
+      - "9241:7681"
+      - "9251:7682"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ziyan-net
+    volumes:
+      - ../store:/mailbus/store
+      - ../tools:/mailbus/tools:ro
+      - ../skills:/mailbus/skills:ro
+      - ../rules:/mailbus/rules:ro
+      - ../access:/mailbus/access:ro
+      - ../access/external-tools:/mailbus/external-tools:ro
+      - ${LINGJIAN_WORKSPACE:-../lingjian}:/workspace/lingjian:ro
+      - ${HERMES_DATA:-../.local/hermes}/.env:/run/hermes/.env:ro
+      - ${CODEX_SKILLS:-../.codex/skills}:/home/node/.codex/skills
+      - ${NODE_MODULES:-../node_modules}:/node_modules:ro
+      - ./codex-agent/deepseek-model-catalog.json:/usr/local/share/codex/deepseek-model-catalog.json:ro
+      - ./codex-agent/deepseek-model-aliases.json:/usr/local/share/codex/deepseek-model-aliases.json:ro
+    environment:
+      - TZ=Asia/Shanghai
+      - CODEX_HOME=/home/node/.codex
+      - CODEX_AGENT=lingjian
+      - CODEX_MODEL=deepseek-reasoner
+      - CODEX_UI_PORT=7681
+      - CODEX_UI_CWD=/home/node/agent-workspace/lingjian
+      - CODEX_PROJECT_DIR=/home/node/agent-workspace/lingjian
+      - CODEX_UI_ENABLED=1
+      - CODEX_WEB_PORT=7682
+      - CODEX_WEB_CWD=/mailbus/store
+      - CODEX_WEB_ENABLED=1
+      - AGENTMEMORY_URL=http://iii-engine:3111
+      - DEEPSEEK_GATEWAY_PORT=3000
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_API_KEY=${DEEPSEEK_API_KEY}
+      - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
+      - HTTPS_PROXY=${CONTAINER_HTTPS_PROXY:-}
+      - NO_PROXY=localhost,127.0.0.1,::1,iii-engine,agentmemory,mailbus,172.28.0.0/16,host.docker.internal
+    restart: unless-stopped
+    depends_on:
+      - mailbus
+      - iii-engine
+    command: ["tail", "-f", "/dev/null"]
+
+  dali:
+    build:
+      context: ./opencode-agent
+      args:
+        OPENCODE_VERSION: ""
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ziyan-net
+    volumes:
+      - ../store:/mailbus/store
+      - ../tools:/mailbus/tools:ro
+      - ../skills:/mailbus/skills:ro
+      - ../rules:/mailbus/rules:ro
+      - ../access:/mailbus/access:ro
+      - ../access/external-tools:/mailbus/external-tools:ro
+      - ./codex-agent/wait-agentmemory.sh:/mailbus/docker-agents/codex-agent/wait-agentmemory.sh:ro
+      - ${OPENCODE_ROOT:-../opencode}:/workspace/opencode:rw
+      - ${OPENCODE_ROOT:-../opencode}/skills:/workspace/opencode/skills
+      - ${HERMES_DATA:-../.local/hermes}/.env:/run/hermes/.env:ro
+    environment:
+      - TZ=Asia/Shanghai
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_API_KEY=${DEEPSEEK_API_KEY}
+      - OPENAI_BASE_URL=https://api.deepseek.com/v1
+      - AGENTMEMORY_URL=http://iii-engine:3111
+      - MEMORY_BRIDGE_AGENTMEMORY=1
+      - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
+      - HTTPS_PROXY=${CONTAINER_HTTPS_PROXY:-}
+      - NO_PROXY=localhost,127.0.0.1,::1,iii-engine,agentmemory,mailbus,172.28.0.0/16,host.docker.internal
+    restart: unless-stopped
+    depends_on:
+      - mailbus
+      - iii-engine
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /mailbus/store/config.json || exit 0"]
+      interval: 60s
+      timeout: 5s
+      retries: 2
+    command: ["tail", "-f", "/dev/null"]

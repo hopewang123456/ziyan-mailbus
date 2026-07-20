@@ -1,0 +1,18 @@
+{
+
+  "kind": "ollama",
+
+  "base_url": "http://127.0.0.1:11434",
+
+  "model": "qwen2.5:3b-instruct-q4_K_M",
+
+  "default_model": "qwen2.5:3b-instruct-q4_K_M",
+
+  "timeout_seconds": 60,
+
+  "temperature": 0.1,
+
+  "max_tokens": 1024
+
+}
+

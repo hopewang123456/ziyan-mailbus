@@ -1,0 +1,38 @@
+{
+  "schema": "mailbus-harness-stub-v1",
+  "path": "d",
+  "agent_id": "dali",
+  "transport_channel": "file_bus",
+  "a2a": null,
+  "opencode_reply": {
+    "_file": "store/replies/dali.json",
+    "agent": "dali",
+    "msg_ids": [
+      "msg-feat-auth-001-s3"
+    ],
+    "reply": "已完成: auth 模块 JWT 登录 + refresh 接口，见 patch。",
+    "patch": "store/patches/0001-feat-auth-jwt.patch",
+    "timestamp": "2026-06-30T14:30:00Z"
+  },
+  "on_complete_step_result": {
+    "task_id": "feat-auth-001",
+    "step_id": "s3",
+    "agent": "dali",
+    "role_type": 8,
+    "conclusion": "done",
+    "summary": "已完成: auth 模块 JWT 登录 + refresh 接口，见 patch。",
+    "timestamp": "2026-06-30T14:30:00Z",
+    "msg_id": "msg-feat-auth-001-s3",
+    "attachments": [
+      {
+        "path": "store/patches/0001-feat-auth-jwt.patch",
+        "mimeType": "text/x-patch",
+        "kind": "git-patch"
+      }
+    ],
+    "source": "file_bus",
+    "transport_used": "file_bus",
+    "normalized_from": "opencode_replies",
+    "a2a_task_id": null
+  }
+}

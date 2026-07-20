@@ -1,0 +1,17 @@
+{
+  "launch": {
+    "template": "codex_docker",
+    "launch_via_api": true,
+    "has_browser": true,
+    "browser": {
+      "kind": "codex_docker",
+      "url": "http://127.0.0.1:{port}/",
+      "web_port": "9241",
+      "ttyd_url": "http://127.0.0.1:9251/"
+    }
+  },
+  "profile_paths": {
+    "identity": "team-pack/skills/roles/overlays/lingjian/SKILL.md"
+  },
+  "push_timeout_seconds": 900
+}

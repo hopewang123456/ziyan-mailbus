@@ -1,0 +1,79 @@
+﻿# EXAMPLE — local-only override for Vault / machine absolute paths
+# Copy to docker-compose.override.yml (gitignored).
+#
+# Replace /path/to/... with your host paths (WSL Docker: use /mnt/<drive>/...).
+# Do not commit override.yml — it is machine-private.
+#
+# Regenerate from transport (optional): mailbus compose sync
+
+services:
+  hermes:
+    volumes:
+      - /path/to/mail/store:/mailbus/store
+      - /path/to/mail/tools:/mailbus/tools:ro
+      - /path/to/vault/skills/mailbus:/mailbus/skills:ro
+      - /path/to/vault/rules/mailbus:/mailbus/rules:ro
+      - /path/to/mail/access:/mailbus/access:ro
+      - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
+      - /path/to/vault:/path/to/vault
+      - /path/to/mail/access/hermes/.sync:/mailbus/access/hermes/.sync
+      - /path/to/mail/store/inbox:/home/hermes/inbox:ro
+      - /path/to/hermes-data/.hermes:/home/hermes/.hermes:rw
+  openclaw:
+    volumes:
+      - /path/to/mail/store:/mailbus/store
+      - /path/to/mail/tools:/mailbus/tools:ro
+      - /path/to/vault/skills/mailbus:/mailbus/skills:ro
+      - /path/to/vault/rules/mailbus:/mailbus/rules:ro
+      - /path/to/mail/access:/mailbus/access:ro
+      - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
+      - /path/to/vault:/path/to/vault
+      - /path/to/openclaw_space:/workspace:rw
+      - /path/to/vault/skills/library/openclaw:/workspace/skills:ro
+      - /path/to/vault/memories/xiaoqi:/workspace/memory
+  lingxiao:
+    volumes:
+      - /path/to/mail/store:/mailbus/store
+      - /path/to/mail/tools:/mailbus/tools:ro
+      - /path/to/vault/skills/mailbus:/mailbus/skills:ro
+      - /path/to/vault/rules/mailbus:/mailbus/rules:ro
+      - /path/to/mail/access:/mailbus/access:ro
+      - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
+      - /path/to/vault:/path/to/vault
+      - /path/to/node_modules:/node_modules:ro
+      - /path/to/lingxiao:/workspace/lingxiao:ro
+      - /path/to/vault/skills/02-agent-specific/codex:/home/node/.codex/skills:ro
+  lingjian:
+    volumes:
+      - /path/to/mail/store:/mailbus/store
+      - /path/to/mail/tools:/mailbus/tools:ro
+      - /path/to/vault/skills/mailbus:/mailbus/skills:ro
+      - /path/to/vault/rules/mailbus:/mailbus/rules:ro
+      - /path/to/mail/access:/mailbus/access:ro
+      - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
+      - /path/to/vault:/path/to/vault
+      - /path/to/node_modules:/node_modules:ro
+      - /path/to/lingjian:/workspace/lingjian:ro
+      - /path/to/vault/skills/02-agent-specific/codex:/home/node/.codex/skills:ro
+  dali:
+    volumes:
+      - /path/to/mail/store:/mailbus/store
+      - /path/to/mail/tools:/mailbus/tools:ro
+      - /path/to/vault/skills/mailbus:/mailbus/skills:ro
+      - /path/to/vault/rules/mailbus:/mailbus/rules:ro
+      - /path/to/mail/access:/mailbus/access:ro
+      - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
+      - /path/to/vault:/path/to/vault
+      - /path/to/opencode:/workspace/opencode:rw
+      - /path/to/vault/skills/02-agent-specific/opencode:/workspace/opencode/skills:rw
+  mailbus:
+    volumes:
+      - /path/to/mail:/mailbus
+      - /path/to/mail/store:/mailbus/store
+      - /path/to/mail/run:/mailbus/run
+      - /path/to/mail/tools:/mailbus/tools:ro
+      - /path/to/vault/skills/mailbus:/mailbus/skills:ro
+      - /path/to/vault/rules/mailbus:/mailbus/rules:ro
+      - /path/to/mail/access:/mailbus/access:ro
+      - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
+      - /path/to/vault:/path/to/vault

@@ -1,0 +1,41 @@
+# ComfyUI GPU（WSL2 + NVIDIA Container Toolkit）
+# 依赖已 bake 进镜像；仅挂载 models（勿挂载整个 ComfyUI-win，避免 Windows venv 污染）
+#
+# 前置：wsl -u root bash docker-agents/install-comfyui-gpu-wsl.sh
+# 构建+启动：wsl bash docker-agents/start-comfyui-gpu.sh --build
+
+services:
+  comfyui:
+    build:
+      context: ./comfyui-gpu
+      args:
+        HTTP_PROXY: http://172.20.128.1:7897
+        HTTPS_PROXY: http://172.20.128.1:7897
+    image: mailbus-comfyui-gpu:cu128
+    container_name: mailbus-comfyui-gpu
+    ports:
+      - "8188:8188"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - /mnt/e/ai_tools/ComfyUI-win/models:/opt/ComfyUI/models
+      - /mnt/e/ai_tools/ComfyUI-win/output:/opt/ComfyUI/output
+      - comfyui-input:/opt/ComfyUI/input
+    gpus: all
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8188/system_stats', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    command: ["python", "main.py", "--listen", "0.0.0.0", "--port", "8188", "--lowvram"]
+
+volumes:
+  comfyui-input:

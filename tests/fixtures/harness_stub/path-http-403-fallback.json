@@ -1,0 +1,26 @@
+{
+  "schema": "mailbus-harness-stub-v1",
+  "path": "b403",
+  "agent_id": "lingzhao",
+  "transport_channel": "file_bus",
+  "a2a": {
+    "errors": ["http_403"]
+  },
+  "file_bus": {
+    "ack_delay_ms": 0
+  },
+  "on_complete_step_result": {
+    "task_id": "feat-auth-001",
+    "step_id": "s2",
+    "agent": "lingzhao",
+    "role_type": 1,
+    "conclusion": "done",
+    "summary": "403 降级后 file_bus 完成",
+    "timestamp": "2026-06-30T11:05:00Z",
+    "source": "file_bus",
+    "transport_used": "file_bus",
+    "a2a_task_id": null,
+    "a2a_retries_exhausted": true,
+    "msg_id": "msg-feat-auth-001-s2-403"
+  }
+}

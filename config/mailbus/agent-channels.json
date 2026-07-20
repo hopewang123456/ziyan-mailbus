@@ -1,0 +1,44 @@
+{
+  "schema": "mailbus-agent-channels-v1",
+  "defaults": {
+    "hermes_profile": {
+      "channels": {
+        "a2a": { "enabled": true },
+        "file_bus": { "enabled": true }
+      },
+      "endpoint": {
+        "base_url": "https://mailbus.example/api/a2a/rpc/{agent_id}"
+      }
+    },
+    "codex": {
+      "channels": { "a2a": { "enabled": false }, "file_bus": { "enabled": true } },
+      "transport": "local_cli"
+    },
+    "claude_code": {
+      "channels": { "a2a": { "enabled": false }, "file_bus": { "enabled": true } },
+      "transport": "local_cli"
+    },
+    "opencode": {
+      "channels": { "a2a": { "enabled": false }, "file_bus": { "enabled": true } },
+      "transport": "local_cli"
+    },
+    "openclaw": {
+      "channels": { "a2a": { "enabled": false }, "file_bus": { "enabled": true } }
+    }
+  },
+  "functional_group": {
+    "lingzhao": "product",
+    "lingxi": "product",
+    "lingjin": "security",
+    "lingtuo": "operations",
+    "lingjian": "engineering",
+    "lingyan": "engineering",
+    "lingxiao": "engineering",
+    "lingyun": "engineering",
+    "dali": "engineering",
+    "lingxun": "ops",
+    "lingzhang": "operations",
+    "yige": "operations",
+    "xiaoqi": "execution"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schema": "mailbus-harness-stub-v1",
+  "path": "c",
+  "agent_id": "lingzhao",
+  "transport_channel": "a2a_standard",
+  "a2a": {
+    "get_task_sequence": [
+      {
+        "id": "a2a-aaa-bbb",
+        "status": "input-required",
+        "statusMessage": "请确认采用 OAuth2 还是自建 JWT",
+        "lastModified": "2026-06-30T12:00:00Z"
+      }
+    ],
+    "after_resolve_get_task_sequence": [
+      {
+        "id": "a2a-aaa-bbb",
+        "status": "working",
+        "lastModified": "2026-06-30T12:05:00Z"
+      },
+      {
+        "id": "a2a-aaa-bbb",
+        "status": "completed",
+        "lastModified": "2026-06-30T12:30:00Z"
+      }
+    ]
+  },
+  "human_queue": {
+    "id": "hq-20260630-a1b2c3",
+    "type": "a2a_input_required",
+    "status": "pending",
+    "task_id": "feat-auth-001",
+    "title": "灵昭需确认认证方案选型",
+    "context": {
+      "step_id": "s1",
+      "a2a_task_id": "a2a-aaa-bbb",
+      "prompt": "请确认采用 OAuth2 还是自建 JWT"
+    }
+  }
+}

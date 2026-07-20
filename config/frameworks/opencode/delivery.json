@@ -1,0 +1,8 @@
+{
+  "version": "1.0.0",
+  "enabled": true,
+  "agent_types": ["opencode"],
+  "sources": ["replies", "patches"],
+  "require_patch_for_done": false,
+  "notes": "OpenCode legacy 三源归一化至 msg-results；FSM 只读 msg-results"
+}

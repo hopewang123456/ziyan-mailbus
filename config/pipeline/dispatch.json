@@ -1,0 +1,6 @@
+{
+  "version": "1.0.0",
+  "initial_dispatch": "round_robin",
+  "failover_dispatch": "role_failover",
+  "notes": "首派 RR；同 step 失败改派走 role_failover.json"
+}

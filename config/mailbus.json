@@ -1,0 +1,23 @@
+{
+  "schema": "mailbus-runtime-v1",
+  "api_port": 9814,
+  "api_host": "127.0.0.1",
+  "canonical_root": "E:/ai_tools/mail",
+  "ports": {
+    "mailbus_api": 9814,
+    "agentmemory": 3111,
+    "hermes": [9120, 9121, 9122, 9123, 9124, 9125, 9126, 9127],
+    "openclaw_xiaoqi": 18789,
+    "openclaw_yige": 18790,
+    "codex_web": [9240, 9241],
+    "codex_ttyd": [9250, 9251],
+    "claude_ttyd": [9260, 9261]
+  },
+  "env_chain": [
+    "mail/config/env.template",
+    "mail/.env",
+    "mail/docker-agents/.env",
+    "lib/env_bootstrap.py (Python serve/CLI)"
+  ],
+  "notes": "Docker compose maps ${MAILBUS_API_PORT:-9814}; native serve defaults 9814 per lib/constants.py"
+}

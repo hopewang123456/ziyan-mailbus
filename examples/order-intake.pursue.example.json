@@ -1,0 +1,21 @@
+{
+  "intake_id": "intake-20260615-a3f9c2",
+  "source_platform": "douyin",
+  "title": "示例商机 — 短视频代运营",
+  "score": 82,
+  "decision": "pursue",
+  "stage": "analyzed",
+  "created_at": "2026-06-15T10:00:00+08:00",
+  "updated_at": "2026-06-15T10:00:00+08:00",
+  "contact": {"status": "not_contacted"},
+  "commercial_gates": [
+    {"gate_id": "contact_done", "status": "pending"},
+    {"gate_id": "req_to_lingzhao", "status": "pending"},
+    {"gate_id": "customer_design_ok", "status": "pending"},
+    {"gate_id": "start_delivery", "status": "pending"},
+    {"gate_id": "content_start", "status": "pending"}
+  ],
+  "pipeline_link": {},
+  "tech_stack": ["python"],
+  "tags": ["demo"]
+}

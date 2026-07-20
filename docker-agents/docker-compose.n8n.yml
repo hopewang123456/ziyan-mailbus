@@ -1,0 +1,32 @@
+# n8n + ComfyUI 本地栈（可选 sidecar）
+# Usage: docker compose -f docker-compose.n8n.yml up -d
+# 注：mailbus 已可直接调 ComfyUI；n8n 用于发布编排 / 可视化 workflow
+
+services:
+  n8n:
+    image: n8nio/n8n:1.76.1
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://127.0.0.1:5678/
+      - N8N_EDITOR_BASE_URL=http://127.0.0.1:5678/
+      - GENERIC_TIMEZONE=Asia/Shanghai
+      - TZ=Asia/Shanghai
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+    volumes:
+      - n8n-data:/home/node/.n8n
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5678/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  n8n-data:

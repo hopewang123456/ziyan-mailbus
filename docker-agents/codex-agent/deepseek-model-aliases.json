@@ -1,0 +1,8 @@
+{
+  "big-pickle": { "model": "deepseek-v4-flash", "thinking": "auto" },
+  "minimax-m2.5-free": { "model": "deepseek-v4-flash", "thinking": "auto" },
+  "nemotron-3-super-free": { "model": "deepseek-v4-flash", "thinking": "auto" },
+  "trinity-large-preview-free": { "model": "deepseek-v4-flash", "thinking": "auto" },
+  "gpt-4o": { "model": "deepseek-v4-flash", "thinking": "auto" },
+  "gpt-4.1": { "model": "deepseek-v4-flash", "thinking": "auto" }
+}

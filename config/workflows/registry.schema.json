@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mailbus.local/schemas/workflows/registry.schema.json",
+  "title": "Workflow Registry",
+  "type": "object",
+  "required": ["version", "workflows"],
+  "properties": {
+    "version": { "type": "integer" },
+    "updated_at": { "type": "string" },
+    "defaults": { "type": "object" },
+    "workflows": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string" },
+          "mode": { "type": "string" },
+          "task_types": { "type": "array", "items": { "type": "string" } },
+          "phases": { "type": "array" },
+          "gates": { "type": "array" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "schema": "mailbus-harness-stub-v1",
+  "path": "b",
+  "agent_id": "lingzhao",
+  "transport_channel": "file_bus",
+  "a2a": {
+    "errors": [
+      "timeout",
+      "503",
+      "503"
+    ]
+  },
+  "file_bus": {
+    "ack_delay_ms": 0
+  },
+  "on_complete_step_result": {
+    "task_id": "feat-auth-001",
+    "step_id": "s2",
+    "agent": "lingzhao",
+    "role_type": 1,
+    "conclusion": "done",
+    "summary": "已补充安全约束：MFA 可选、密钥走 env。",
+    "timestamp": "2026-06-30T11:20:00Z",
+    "source": "file_bus",
+    "transport_used": "file_bus",
+    "a2a_task_id": null,
+    "a2a_retries_exhausted": true,
+    "msg_id": "msg-feat-auth-001-s2"
+  },
+  "transport_audit": {
+    "task_id": "feat-auth-001",
+    "step_id": "s2",
+    "transport_used": "file_bus",
+    "a2a_retries_exhausted": true,
+    "transport_attempts": [
+      {
+        "channel": "a2a_standard",
+        "attempt": 1,
+        "outcome": "fail",
+        "error": "timeout",
+        "ts": "2026-06-30T11:00:02Z"
+      },
+      {
+        "channel": "a2a_standard",
+        "attempt": 2,
+        "outcome": "fail",
+        "error": "503",
+        "ts": "2026-06-30T11:00:07Z"
+      },
+      {
+        "channel": "a2a_standard",
+        "attempt": 3,
+        "outcome": "fail",
+        "error": "503",
+        "ts": "2026-06-30T11:00:17Z"
+      },
+      {
+        "channel": "file_bus",
+        "attempt": 1,
+        "outcome": "ok",
+        "fallback_from": "a2a_standard",
+        "ts": "2026-06-30T11:00:18Z"
+      }
+    ]
+  }
+}

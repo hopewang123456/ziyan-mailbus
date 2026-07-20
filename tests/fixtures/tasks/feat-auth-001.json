@@ -1,0 +1,24 @@
+{
+  "schema": "mailbus-task-v3",
+  "task_id": "feat-auth-001",
+  "title": "用户认证模块",
+  "status": "running",
+  "chain": [
+    {
+      "step": 1,
+      "step_id": "s1",
+      "role_type": 1,
+      "to_agent": "lingzhao",
+      "to_person": "lingzhao",
+      "planned_role_types": [1, 8],
+      "status": "running",
+      "fsm_state": "queued",
+      "task_id": "feat-auth-001",
+      "result_ref": "msg-results/feat-auth-001/step-s1.json"
+    }
+  ],
+  "fsm": {
+    "state": "executing",
+    "version": 1
+  }
+}

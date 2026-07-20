@@ -1,0 +1,27 @@
+{
+  "schema": "mailbus-wipe-manifest-v1",
+  "updated_at": "2026-06-26T00:13:16+0800",
+  "wipe": [
+    "mail/store/ (runtime: deliverables, patches, replies, human-queue, agentmemory-pending, board, sent, archive, tasks, inbox)",
+    "mail/logs/",
+    "pollution: path-garbage dirs under mail/",
+    "/path/to/legacy-sibling/store/",
+    "backup-pre-merge/",
+    "adapters/.sync/ (generated)"
+  ],
+  "preserve": [
+    "team-memory.db",
+    "hermes-data",
+    "AgentMemory Docker volume",
+    "mail/skills/",
+    "mail/rules/",
+    "mail/access/",
+    "mail/config/",
+    "mail/org/",
+    ".mailbus/claude/",
+    "opencode/",
+    "openclaw_space/"
+  ],
+  "phase": 6,
+  "notes": "legacy adapters/roles/identities removed 2026-07-01; mailbus-core junction removed"
+}

@@ -1,0 +1,36 @@
+{
+  "_doc": {
+    "async_dispatch": "仅 scanner 后台路径（A2ATransport.dispatch_async + lib/a2a_poll.py）使用；Router 不读取。若启用，在 store config.json 的 transport.a2a.async_dispatch 配置，不在本 template 中。",
+    "use_streaming": "全局 transport.a2a.use_streaming（默认 false）。可被 agent registry/card 中 channels.a2a.use_streaming 按 agent 覆盖（true/false 均生效，未设置则继承全局）。",
+    "per_agent_example": {
+      "agents": {
+        "lingzhao": {
+          "channels": {
+            "a2a": {
+              "enabled": true,
+              "use_streaming": true
+            }
+          }
+        }
+      }
+    }
+  },
+  "transport": {
+    "channel_order": ["a2a_standard", "file_bus"],
+    "use_router": false,
+    "a2a": {
+      "max_retries": 3,
+      "retry_backoff_sec": [2, 5, 10],
+      "input_required_timeout_sec": 86400,
+      "use_streaming": false
+    },
+    "file_bus": {
+      "enabled": true
+    },
+    "fallback_alerts": {
+      "enabled": true,
+      "notify_agent": "lingxun",
+      "escalate_per_agent_per_hour": 3
+    }
+  }
+}

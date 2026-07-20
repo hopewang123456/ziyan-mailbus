@@ -1,0 +1,41 @@
+# iii-engine config for mailbus AgentMemory stack (Docker, persistent /data volume)
+workers:
+  - name: iii-worker-manager
+    config:
+      port: 49134
+
+  - name: iii-http
+    config:
+      host: 0.0.0.0
+      port: 3111
+
+  - name: iii-stream
+    config:
+      host: 0.0.0.0
+      port: 3112
+
+  - name: iii-state
+    config:
+      adapter:
+        name: kv
+        config:
+          store_method: file_based
+          file_path: /data/state_store
+
+  - name: iii-queue
+    config:
+      queue_configs:
+        default:
+          max_retries: 5
+          concurrency: 5
+          type: standard
+      adapter:
+        name: builtin
+        config:
+          store_method: file_based
+          file_path: /data/queue_store
+
+  - name: iii-observability
+    config:
+      enabled: true
+      level: info

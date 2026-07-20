@@ -1,0 +1,29 @@
+{
+  "frameworks": {
+    "hermes_profile": {
+      "enabled": true,
+      "path_env": "HERMES_DATA",
+      "probe": "dir"
+    },
+    "opencode": {
+      "enabled": true,
+      "path_env": "OPENCODE_ROOT",
+      "probe": "dir"
+    },
+    "openclaw": {
+      "enabled": true,
+      "path_env": "OPENCLAW_WORKSPACE",
+      "probe": "dir"
+    },
+    "claude_code": {
+      "enabled": true,
+      "path_env": "CLAUDE_WORKSPACE_ROOT",
+      "probe": "dir:.mailbus/claude"
+    },
+    "codex": {
+      "enabled": true,
+      "path_env": "LINGXIAO_WORKSPACE",
+      "probe": "dir"
+    }
+  }
+}

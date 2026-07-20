@@ -1,0 +1,232 @@
+{
+  "version": 1,
+  "updated_at": "2026-06-26",
+  "defaults": {
+    "unknown_task_type_workflow": "llm_adaptive",
+    "llm_route_require_human_confirm": true
+  },
+  "workflows": {
+    "llm_adaptive": {
+      "id": "llm_adaptive",
+      "version": "1.0.0",
+      "display": { "zh": "LLM 自适应编排", "en": "LLM Adaptive" },
+      "mode": "llm_adaptive",
+      "task_types": ["custom", "unknown"],
+      "tags": ["adaptive"],
+      "llm_policy": {
+        "confirm_gate_id": "llm_step_confirm",
+        "max_llm_routes_per_task": 12,
+        "require_human_confirm": true
+      },
+      "gates": [
+        {
+          "gate_id": "llm_step_confirm",
+          "display": { "zh": "确认 LLM 路由步骤", "en": "Confirm LLM route" },
+          "actor": "human",
+          "required_attachments_min": 0
+        }
+      ],
+      "phases": []
+    },
+    "bugfix_s": {
+      "id": "bugfix_s",
+      "version": "1.0.0",
+      "display": { "zh": "S 级缺陷修复", "en": "Bugfix S" },
+      "mode": "fixed_phases",
+      "task_types": ["bugfix"],
+      "phases": [
+        {
+          "id": "fix",
+          "display": { "zh": "修复" },
+          "steps": [{ "node_type": "agent", "role_type": 8 }]
+        }
+      ],
+      "gates": []
+    },
+    "feature_s": {
+      "id": "feature_s",
+      "version": "1.0.0",
+      "display": { "zh": "S 级功能交付", "en": "Feature S" },
+      "mode": "fixed_phases",
+      "task_types": ["feature"],
+      "phases": [
+        {
+          "id": "design",
+          "display": { "zh": "方案" },
+          "steps": [{ "node_type": "agent", "role_type": 1 }]
+        }
+      ],
+      "gates": []
+    },
+    "intake_analyze": {
+      "id": "intake_analyze",
+      "version": "1.0.0",
+      "display": { "zh": "商前研判", "en": "Intake Analyze" },
+      "mode": "fixed_phases",
+      "task_types": ["intake"],
+      "phases": [
+        {
+          "id": "analyze",
+          "display": { "zh": "研判" },
+          "steps": [{ "node_type": "agent", "role_type": 4 }]
+        }
+      ],
+      "gates": []
+    },
+    "commercial_solution": {
+      "id": "commercial_solution",
+      "version": "1.0.0",
+      "display": { "zh": "商单方案链", "en": "Commercial Solution" },
+      "mode": "fixed_phases",
+      "task_types": [],
+      "phases": [
+        {
+          "id": "design",
+          "display": { "zh": "方案设计" },
+          "steps": [{ "node_type": "agent", "role_type": 1 }]
+        }
+      ],
+      "gates": []
+    },
+    "video_publish": {
+      "id": "video_publish",
+      "version": "1.0.0",
+      "display": { "zh": "多平台发布", "en": "Video Publish" },
+      "mode": "fixed_phases",
+      "task_types": ["video_publish"],
+      "phases": [
+        {
+          "id": "research",
+          "display": { "zh": "选题研究" },
+          "steps": [{ "node_type": "agent", "role_type": 3 }],
+          "after_agent": { "gate_id": "publish_go" }
+        }
+      ],
+      "gates": [
+        {
+          "gate_id": "publish_go",
+          "display": { "zh": "确认发布", "en": "Publish go" },
+          "actor": "human",
+          "required_attachments_min": 0,
+          "on_approve": {
+            "action": "execute_tool",
+            "tool_id": "webhook-multi-publish",
+            "tool_live": true
+          }
+        }
+      ]
+    },
+    "finance": {
+      "id": "finance",
+      "version": "1.0.0",
+      "display": { "zh": "财务跟进", "en": "Finance" },
+      "mode": "fixed_phases",
+      "task_types": ["finance"],
+      "phases": [
+        {
+          "id": "setup",
+          "display": { "zh": "建账" },
+          "steps": [{ "node_type": "agent", "role_type": 10 }],
+          "after_agent": { "gate_id": "remind_approve" }
+        },
+        {
+          "id": "remind",
+          "display": { "zh": "回款提醒" },
+          "steps": [{ "node_type": "agent", "role_type": 10 }]
+        }
+      ],
+      "gates": [
+        {
+          "gate_id": "remind_approve",
+          "display": { "zh": "批准提醒", "en": "Approve reminder" },
+          "actor": "human",
+          "required_attachments_min": 0,
+          "on_approve": { "action": "append_phase", "phase_id": "remind" }
+        }
+      ]
+    },
+    "intake_commercial": {
+      "id": "intake_commercial",
+      "version": "1.0.0",
+      "display": { "zh": "商前闸门", "en": "Intake Commercial Gates" },
+      "mode": "fixed_phases",
+      "task_types": [],
+      "phases": [],
+      "gates": [
+        {
+          "gate_id": "contact_done",
+          "display": { "zh": "联系完成", "en": "Contact done" },
+          "actor": "human",
+          "required_attachments_min": 0,
+          "on_approve": { "set_stage": "qualified" }
+        },
+        {
+          "gate_id": "req_to_lingzhao",
+          "display": { "zh": "需求转灵昭", "en": "Req to lingzhao" },
+          "actor": "human",
+          "required_attachments_min": 0,
+          "require_brief": false,
+          "brief_field": "requirements_brief"
+        },
+        {
+          "gate_id": "customer_design_ok",
+          "display": { "zh": "客户确认方案", "en": "Customer design OK" },
+          "actor": "human",
+          "required_attachments_min": 0
+        },
+        {
+          "gate_id": "start_delivery",
+          "display": { "zh": "开始交付", "en": "Start delivery" },
+          "actor": "human",
+          "required_attachments_min": 0,
+          "on_approve": { "set_stage": "delivery" }
+        },
+        {
+          "gate_id": "content_start",
+          "display": { "zh": "内容启动", "en": "Content start" },
+          "actor": "human",
+          "required_attachments_min": 0
+        }
+      ]
+    },
+    "coding-dual": {
+      "id": "coding-dual",
+      "version": "1.0.0",
+      "display": { "zh": "双开发并行", "en": "Dual coding" },
+      "mode": "fixed_phases",
+      "task_types": [],
+      "description": "constraints.dispatch.dual_coding 时灵云+大力并行首步",
+      "phases": [
+        {
+          "id": "dual_dev",
+          "display": { "zh": "并行开发" },
+          "role_types": [8],
+          "collab": "dual_coding"
+        }
+      ],
+      "gates": []
+    },
+    "coding-peer-review": {
+      "id": "coding-peer-review",
+      "version": "1.0.0",
+      "display": { "zh": "开发互审", "en": "Peer review" },
+      "mode": "fixed_phases",
+      "task_types": [],
+      "description": "action.peer_review 编码完成后互审",
+      "phases": [
+        {
+          "id": "dev",
+          "display": { "zh": "开发" },
+          "role_types": [8]
+        },
+        {
+          "id": "peer_review",
+          "display": { "zh": "互审" },
+          "role_types": [8],
+          "collab": "peer_review"
+        }
+      ],
+      "gates": []
+    }
+  }
+}

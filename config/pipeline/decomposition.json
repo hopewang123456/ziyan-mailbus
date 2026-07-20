@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "require_decomposition_gate": true,
+  "design_role_types": [1],
+  "coding_role_types": [8],
+  "require_for_tiers": ["L", "S"],
+  "min_planned_steps_for_complex": 3,
+  "clarification_conclusions": [
+    "clarifications_needed",
+    "return_to_owner",
+    "needs_clarification"
+  ],
+  "notes": "Phase 6 · 模糊→human_queue owner_confirmation；复杂→subtasks[] 写入 planned_role_types"
+}

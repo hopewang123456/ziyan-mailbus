@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Runtime data (do not commit)
+store/
+data/
+run/
+logs/
+*.tmp
+deliverables/
+
+# IDE / Cursor
+.vscode/
+.idea/
+.cursor/
+*.swp
+*.swo
+
+# Path-garbage / local scratch
+_verify_out.txt
+
+# Cline checkpoints
+.git/refs/cline/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets / local env
+.env
+docker-agents/.env
+docker-agents/.env.secrets
+docker-agents/.proxy-state
+docker-agents/*.log
+docker-agents/*.env.local
+
+# Generated sync copies
+access/hermes/.sync/
+
+# Runtime messages / ad-hoc scripts
+bus/send/
+outbox/
+patrol_reports/
+mnt/
+_git_ops*.txt
+_git_ops*.sh
+_agent_git_ops.sh
+_run_*.sh
+_wsl_*.sh
+
+# Path pollution (drive-letter junk from bad Windows mounts)
+# Note: do NOT use /E*/ ? that would ignore examples/
+/E:/
+/C:/
+docker-agents/E:/
+docker-agents/C:/
+
+# Local Vault / machine absolute mounts ? keep override.example.yml only
+docker-agents/docker-compose.override.yml
+
+# Knowledge dirs are often NTFS junctions ? private Vault.
+# Do not follow into Vault on publish; demos live under examples/.
+/skills/
+/rules/
+/plans/
+/docs/
+
+# Local-only trees
+external-tools/
+
+# Test / tool scratch
+tests/_tmp_codex_home/
+tools/tmp-launch-resp.json
+tools/tmp-*.json
+.pytest_cache/

@@ -1,0 +1,20 @@
+{
+  "mailbus_root": "../..",
+  "publish": false,
+  "projects": [
+    {
+      "name": "mail",
+      "repo": "../.."
+    },
+    {
+      "name": "mail",
+      "repo": "../../../mail"
+    },
+    {
+      "name": "opencode",
+      "repo": "../../../opencode",
+      "publish": false
+    },
+    "../../../Agent-Reach"
+  ]
+}

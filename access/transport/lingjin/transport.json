@@ -1,0 +1,11 @@
+{
+  "schema": "mailbus-transport-v1",
+  "agent_id": "lingjin",
+  "framework": "hermes_profile",
+  "docker": {
+    "service": "hermes",
+    "compose_service": "hermes",
+    "profile": "lingjin",
+    "port": 9121
+  }
+}

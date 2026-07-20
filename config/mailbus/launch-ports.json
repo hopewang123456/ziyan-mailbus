@@ -1,0 +1,42 @@
+{
+  "_doc": {
+    "purpose": "各 agent 浏览器/控制台默认端口。可被 store/config.json 中 agents.<id>.launch.browser 覆盖（dashboard_port / web_port / gateway_port / port），或 transport.json 的 docker.port。",
+    "custom_example": {
+      "agents": {
+        "lingxi": {
+          "launch": {
+            "browser": {
+              "dashboard_port": 9122
+            }
+          }
+        }
+      }
+    }
+  },
+  "hermes_dashboard": {
+    "lingzhao": 9120,
+    "lingjin": 9121,
+    "lingxi": 9122,
+    "lingxun": 9125,
+    "lingtuo": 9126,
+    "lingzhang": 9127,
+    "_fallback": 9119
+  },
+  "codex_web": {
+    "lingxiao": 9240,
+    "lingjian": 9241
+  },
+  "codex_ttyd": {
+    "lingxiao": 9250,
+    "lingjian": 9251
+  },
+  "claude_browser": {
+    "lingyun": 9260,
+    "lingyan": 9261
+  },
+  "openclaw_gateway": {
+    "xiaoqi": 18789,
+    "yige": 18790,
+    "_fallback": 18789
+  }
+}

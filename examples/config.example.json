@@ -1,0 +1,264 @@
+{
+  "_docs": {
+    "skills_and_memory": [
+      "profile_paths.skills_dirs: optional list of host skill roots for Dashboard / profile cards.",
+      "profile_paths.memory_dir: optional host memory root (OpenClaw/OpenCode/Hermes profile).",
+      "Omit skills_dirs / memory_dir, or set skills_dirs to [] — mailbus does NOT inject paths;",
+      "each runtime then uses its own default skills/ and memory/ under the agent home/workspace.",
+      "Local setup: do NOT put Obsidian Vault absolute paths in committed config;",
+      "use host junctions (setup-windows.ps1) + docker-compose.override.yml (see override.example.yml)."
+    ]
+  },
+  "project": "ziyan-mailbus",
+  "version": "1.1.0",
+  "data_dir": "/path/to/your/store",
+  "ack_timeout": 30,
+  "max_retries": 3,
+  "archive_days": 3,
+  "archive_max_messages": 300,
+  "smart_routing": {
+    "enabled": true,
+    "use_ollama": true,
+    "log_decisions": false,
+    "tier_map": {
+      "L0": "ollama-local",
+      "L1": "ollama-local",
+      "L2": "ollama-local",
+      "L3": "deepseek-pro"
+    }
+  },
+  "reminder_minutes": 5,
+  "max_reminders": 3,
+  "heartbeat_interval": 300,
+  "heartbeat_missed_limit": 3,
+  "agents": {
+    "agent-a": {
+      "name": "Agent A",
+      "role": "设计",
+      "type": "hermes",
+      "models": [
+        "deepseek-chat"
+      ],
+      "inbox": "/path/to/your/store/inbox/agent-a/inbox.json",
+      "profile_paths": {
+        "identity": "/path/to/agent-a/IDENTITY.md",
+        "soul": "/path/to/agent-a/SOUL.md",
+        "skills_dirs": [
+          "/path/to/external-or-vault/skills/"
+        ],
+        "memory_dir": "/path/to/external-or-vault/memories/agent-a/"
+      }
+    },
+    "agent-b": {
+      "name": "Agent B",
+      "role": "编码",
+      "type": "opencode",
+      "models": [
+        "deepseek-chat",
+        "qwen-max"
+      ],
+      "inbox": "/path/to/your/store/inbox/agent-b/inbox.json",
+      "profile_paths": {
+        "identity": "/path/to/agent-b/AGENTS.md",
+        "soul": "",
+        "skills_dirs": [],
+        "memory_dir": ""
+      }
+    },
+    "lingyun": {
+      "name": "灵云",
+      "role": "开发工程师 · Claude Code pro",
+      "type": "claude_code",
+      "models": [
+        "deepseek-pro"
+      ],
+      "max_concurrency": 1,
+      "file_task_for_executable": true,
+      "launch": {
+        "browser_ports": {
+          "lingyun": 9260
+        },
+        "default_project_roots": {
+          "lingyun": "/path/to/your/workspace"
+        }
+      }
+    },
+    "agent-c": {
+      "name": "Agent C",
+      "role": "调度",
+      "type": "openclaw",
+      "agent": "main",
+      "models": [
+        "deepseek-chat"
+      ],
+      "inbox": "/path/to/your/store/inbox/agent-c/inbox.json",
+      "profile_paths": {
+        "identity": "/path/to/agent-c/IDENTITY.md",
+        "soul": "",
+        "skills_dirs": [
+          "/path/to/agent-c/skills/"
+        ],
+        "memory_dir": "/path/to/agent-c/memory/"
+      }
+    }
+  },
+  "agent_types": {
+    "hermes": {
+      "push": "hermes chat -q 'MSG' -Q",
+      "description": "Hermes Agent（无需传模型参数）"
+    },
+    "hermes_profile": {
+      "push": "hermes chat -q 'MSG' -Q --profile PROFILE",
+      "description": "Hermes Profile 实例"
+    },
+    "openclaw": {
+      "push": "openclaw agent --local --agent AGENT --message 'MSG' MODEL --timeout 120",
+      "description": "OpenClaw Gateway agent"
+    },
+    "opencode": {
+      "push": "opencode run 'MSG' --dangerously-skip-permissions MODEL",
+      "description": "OpenCode CLI（大力 dali）"
+    },
+    "codex": {
+      "push": "codex exec 'MSG'",
+      "description": "Codex CLI（灵霄 lingxiao / 灵鉴 lingjian，Docker codex-agent）"
+    },
+    "cline": {
+      "push": "cline 'MSG' PROVIDER --timeout 120",
+      "description": "Cline CLI（legacy：仅 WSL 宿主机直连；Docker lingxiao/lingjian 已迁移 codex）"
+    },
+    "claude_code": {
+      "push": "claude -p 'MSG'",
+      "description": "Claude Code CLI（宿主机 headless，Windows/Linux 可选）"
+    },
+    "none": {
+      "push": "",
+      "description": "纯文件通信（无 CLI 推送）"
+    },
+    "models": {
+      "deepseek-flash": {
+        "opencode": "--model deepseek/deepseek-chat",
+        "cline": "--provider openai-compatible",
+        "codex": "--model deepseek-v4-flash",
+        "openclaw": "--model deepseek/deepseek-chat",
+        "hermes": "--model deepseek-chat",
+        "hermes_profile": "--model deepseek-chat",
+        "claude_code": "--model deepseek-v4-flash"
+      },
+      "deepseek-pro": {
+        "opencode": "--model deepseek/deepseek-reasoner",
+        "cline": "--provider openai-compatible",
+        "codex": "--model deepseek-v4-pro",
+        "openclaw": "--model deepseek/deepseek-reasoner",
+        "hermes": "--model deepseek-v4-pro",
+        "hermes_profile": "--model deepseek-v4-pro",
+        "claude_code": "--model deepseek-v4-pro"
+      },
+      "deepseek-chat": {
+        "opencode": "--model deepseek/deepseek-chat",
+        "cline": "--provider openai-compatible",
+        "openclaw": "--model deepseek/deepseek-chat",
+        "hermes": "",
+        "hermes_profile": ""
+      },
+      "qwen-max": {
+        "opencode": "--model qwen/qwen-max",
+        "cline": "--provider openai-compatible",
+        "openclaw": "--model qwen/qwen-max",
+        "hermes": "",
+        "hermes_profile": ""
+      },
+      "zhipu-4": {
+        "opencode": "--model zhipu/glm-4",
+        "cline": "--provider openai-compatible",
+        "openclaw": "--model zhipu/glm-4",
+        "hermes": "",
+        "hermes_profile": ""
+      },
+      "minimax-m2": {
+        "claude_code": "--model deepseek-v4-flash"
+      }
+    },
+    "launch_templates": {
+      "codex_docker": {
+        "cli": {
+          "kind": "shell",
+          "start_wait_seconds": 5
+        },
+        "browser": {
+          "kind": "codex_docker",
+          "url": "http://127.0.0.1:{port}/",
+          "web_port": "9240",
+          "ttyd_url": "http://127.0.0.1:9250/",
+          "start_wait_seconds": 15
+        },
+        "desktop": {
+          "enabled": false,
+          "kind": "codex_desktop"
+        }
+      },
+      "claude_host": {
+        "cli": {
+          "kind": "shell",
+          "start_wait_seconds": 0
+        },
+        "browser": {
+          "kind": "claude_ttyd",
+          "url": "http://127.0.0.1:{port}/",
+          "web_port": "9260",
+          "start_wait_seconds": 15
+        },
+        "desktop": {
+          "enabled": false,
+          "kind": "claude_interactive"
+        }
+      }
+    }
+  },
+  "mailbus_codex": {
+    "platform": "auto",
+    "windows": {
+      "sync_on_launch": true,
+      "ensure_gateway_container": true
+    },
+    "linux": {
+      "sync_on_launch": true,
+      "ensure_gateway_container": true
+    }
+  },
+  "mailbus_claude": {
+    "platform": "auto",
+    "windows": {
+      "enabled": true,
+      "claude_home": "C:\\Users\\yourname\\.claude",
+      "claude_bin": "claude",
+      "default_project_dir": "/path/to/workspace",
+      "ttyd_bin": "ttyd",
+      "ensure_on_launch": true,
+      "browser_ports": {
+        "lingyun": 9260,
+        "lingyan": 9261
+      },
+      "default_project_roots": {
+        "lingyun": "/path/to/workspace",
+        "lingyan": "/path/to/workspace"
+      }
+    },
+    "linux": {
+      "enabled": false,
+      "claude_home": "/home/administrator/.claude",
+      "claude_bin": "claude",
+      "default_project_dir": "/path/to/your/workspace",
+      "ttyd_bin": "ttyd",
+      "ensure_on_launch": true,
+      "browser_ports": {
+        "lingyun": 9260,
+        "lingyan": 9261
+      },
+      "default_project_roots": {
+        "lingyun": "/path/to/your/workspace",
+        "lingyan": "/path/to/your/workspace"
+      }
+    }
+  }
+}

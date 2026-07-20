@@ -1,0 +1,21 @@
+{
+  "harness": {
+    "mode": "production",
+    "supervisor": "embedded",
+    "file_bus": {
+      "ack_timeout_sec": 300,
+      "max_push_retries": 3
+    },
+    "stub_fixtures_dir": "tests/fixtures/harness_stub"
+  },
+  "transport": {
+    "use_router": true
+  },
+  "quality_harness": {
+    "post_commit": {
+      "publish_on_warn_fail": true,
+      "auto_create_task": true,
+      "trusted_source": "post-commit-harness"
+    }
+  }
+}

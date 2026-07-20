@@ -1,0 +1,112 @@
+{
+  "hermes": {
+    "push": "docker exec CONTAINER hermes chat --profile PROFILE --yolo -q 'MSG' -Q",
+    "description": "Hermes CLI（Docker）"
+  },
+  "hermes_profile": {
+    "push": "docker exec CONTAINER hermes chat --profile PROFILE --yolo -q 'MSG' -Q",
+    "description": "Hermes profile agent"
+  },
+  "openclaw": {
+    "push": "docker exec CONTAINER openclaw agent --local --agent AGENT --message 'MSG'",
+    "description": "OpenClaw agent"
+  },
+  "opencode": {
+    "push": "docker exec CONTAINER opencode run 'MSG'",
+    "description": "OpenCode CLI"
+  },
+  "codex": {
+    "push": "docker exec CONTAINER codex exec 'MSG'",
+    "description": "OpenAI Codex CLI（Docker）"
+  },
+  "cline": {
+    "push": "docker exec CONTAINER cline 'MSG'",
+    "description": "Cline CLI（legacy）"
+  },
+  "claude_code": {
+    "push": "claude -p 'MSG'",
+    "description": "Claude Code CLI（Python argv 直启，跨平台）"
+  },
+  "none": {
+    "push": "",
+    "description": "纯文件通信"
+  },
+  "models": {
+    "deepseek-flash": {
+      "opencode": "--model deepseek/deepseek-chat",
+      "cline": "--provider openai-compatible",
+      "codex": "--model deepseek-v4-flash",
+      "openclaw": "--model deepseek/deepseek-chat",
+      "hermes": "--model deepseek-chat",
+      "hermes_profile": "--model deepseek-chat",
+      "claude_code": "--model deepseek-v4-flash"
+    },
+    "deepseek-pro": {
+      "opencode": "--model deepseek/deepseek-reasoner",
+      "cline": "--provider openai-compatible",
+      "codex": "--model deepseek-v4-pro",
+      "openclaw": "--model deepseek/deepseek-reasoner",
+      "hermes": "--model deepseek-v4-pro",
+      "hermes_profile": "--model deepseek-v4-pro",
+      "claude_code": "--model deepseek-v4-pro"
+    },
+    "deepseek-chat": {
+      "opencode": "--model deepseek/deepseek-chat",
+      "cline": "--provider openai-compatible",
+      "openclaw": "--model deepseek/deepseek-chat",
+      "hermes": "",
+      "hermes_profile": ""
+    },
+    "qwen-max": {
+      "opencode": "--model qwen/qwen-max",
+      "cline": "--provider openai-compatible",
+      "openclaw": "--model qwen/qwen-max",
+      "hermes": "",
+      "hermes_profile": ""
+    },
+    "zhipu-4": {
+      "opencode": "--model zhipu/glm-4",
+      "cline": "--provider openai-compatible",
+      "openclaw": "--model zhipu/glm-4",
+      "hermes": "",
+      "hermes_profile": ""
+    },
+    "minimax-m2": {
+      "claude_code": "--model deepseek-v4-flash"
+    },
+    "ollama-local": {
+      "opencode": "--model ollama/{model}",
+      "openclaw": "--model ollama/{model}",
+      "hermes": "--provider ollama --model {model}",
+      "hermes_profile": "--provider ollama --model {model}",
+      "cline": "--provider ollama --model {model}"
+    }
+  },
+  "launch_templates": {
+    "codex_docker": {
+      "cli": { "kind": "python", "start_wait_seconds": 5 },
+      "browser": {
+        "kind": "codex_docker",
+        "url": "http://127.0.0.1:{port}/",
+        "web_port": "9240",
+        "ttyd_url": "http://127.0.0.1:9250/",
+        "start_wait_seconds": 15
+      },
+      "desktop": { "enabled": false, "kind": "codex_desktop" }
+    },
+    "claude_host": {
+      "cli": { "kind": "python", "start_wait_seconds": 0 },
+      "browser": {
+        "kind": "claude_ttyd",
+        "url": "http://127.0.0.1:{port}/",
+        "web_port": "9260",
+        "start_wait_seconds": 15
+      },
+      "desktop": { "enabled": false, "kind": "claude_interactive" }
+    },
+    "opencode_cli": {
+      "cli": { "kind": "shell", "start_wait_seconds": 5 },
+      "browser": { "kind": "none" }
+    }
+  }
+}

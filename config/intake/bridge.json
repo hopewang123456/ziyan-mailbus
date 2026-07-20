@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "auto_spawn_analyze": true,
+  "auto_spawn_content": false,
+  "auto_spawn_solution": false,
+  "score_hint_min_for_ui": 75,
+  "solution_tier_default": "M",
+  "await_plan_approval_on_solution": true
+}

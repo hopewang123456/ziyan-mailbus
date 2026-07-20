@@ -1,0 +1,47 @@
+# Mailbus 迁移 manifest — 各路径独立声明，无单一 REPO_ROOT
+#
+# tier: required | framework | infra
+# env: 写入 .env 的变量名
+# path: 相对 install_prefix 的默认子路径（可被 --mapping 覆盖）
+
+required:
+  - env: MAILBUS_ROOT
+    description: mail 源码树
+    path: mail
+  - env: MAILBUS_DATA
+    description: store + run 运行时数据
+    path: mail/store
+
+infra:
+  - env: NODE_MODULES
+    description: AgentMemory npm 包（@agentmemory/agentmemory）
+    path: node_modules
+    optional: true
+  - env: HERMES_DATA
+    description: Hermes secrets 与 shared-memory
+    path: hermes-data/.hermes
+    optional: true
+  - env: OPENCLAW_WORKSPACE
+    description: OpenClaw 容器 /workspace
+    path: openclaw_space
+    optional: true
+  - env: OPENCODE_ROOT
+    description: OpenCode（大力）工作区
+    path: opencode
+    optional: true
+  - env: TEAM_PACK_ROOT
+    description: team-pack 组织配置
+    path: team-pack
+    optional: true
+
+# framework agent workspace — 也可在 import 时从 transport.json 推导
+framework_workspaces:
+  - env: LINGXIAO_WORKSPACE
+    agent_id: lingxiao
+    default_subpath: lingxiao
+
+path_rewrite_globs:
+  - "store/**/*.json"
+  - "store/**/*.md"
+  - "access/transport/**/*.json"
+  - "access/hermes/.sync/**/*"

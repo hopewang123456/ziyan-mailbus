@@ -1,0 +1,45 @@
+#!/bin/sh
+# mailbus Quality Harness — post-commit hook 模板
+# 安装: python tools/harness/install-hook.py --repo /path/to/project [--publish]
+# 规范: mail/docs/quality-harness-pipeline-spec.md
+
+set -e
+ROOT="$(git rev-parse --show-toplevel)"
+SHA="$(git rev-parse HEAD)"
+REPORT_DIR="${ROOT}/store/reports"
+mkdir -p "${REPORT_DIR}"
+MAILBUS_ROOT="${MAILBUS_ROOT:-/mnt/e/ai_tools/mail}"
+
+# 生成 harness 报告（pytest Layer 1；Layer 2 默认关，按需加 --static-analysis --run-ai-review）
+if [ -f "${MAILBUS_ROOT}/tools/harness/generate-report.py" ]; then
+  python "${MAILBUS_ROOT}/tools/harness/generate-report.py" \
+    --repo "${ROOT}" \
+    --out "${REPORT_DIR}/${SHA}.json" || true
+fi
+
+# Layer 2 完整示例（失败不阻塞 commit）:
+# python "${MAILBUS_ROOT}/tools/harness/generate-report.py" \
+#   --repo "${ROOT}" --out "${REPORT_DIR}/${SHA}.json" \
+#   --static-analysis --run-ai-review || true
+
+# 推送 mailbus task（warn/fail 时）；默认 dry-run，install-hook --publish 去掉
+REPORT="${REPORT_DIR}/${SHA}.json"
+PUBLISH_FLAG="--dry-run"
+if [ "${MAILBUS_PUBLISH:-0}" = "1" ]; then
+  PUBLISH_FLAG=""
+fi
+if [ -f "${MAILBUS_ROOT}/tools/harness/publish-report.py" ] && [ -f "${REPORT}" ]; then
+  python "${MAILBUS_ROOT}/tools/harness/publish-report.py" \
+    --report "${REPORT}" \
+    --create-task-if warn,fail \
+    ${PUBLISH_FLAG} || true
+fi
+
+# auto-revert（aggregate_status=fail 时回退 commit；默认关，需显式 AUTO_REVERT=1 + --enable）
+# AUTO_REVERT=0
+# if [ "${AUTO_REVERT:-0}" = "1" ] && [ -f "${REPORT}" ]; then
+#   python "${MAILBUS_ROOT}/tools/harness/auto-revert.py" \
+#     --report "${REPORT}" --repo "${ROOT}" --enable || true
+# fi
+
+exit 0

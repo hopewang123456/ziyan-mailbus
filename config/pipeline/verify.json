@@ -1,0 +1,7 @@
+{
+  "version": "1.0.0",
+  "deliverables_dir": "deliverables",
+  "required_fields": ["task_id", "step_id", "conclusion", "summary"],
+  "strict": false,
+  "notes": "deliverables/{task_id}/ 契约；verify 失败可触发 failover"
+}

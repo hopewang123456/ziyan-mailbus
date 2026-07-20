@@ -1,0 +1,8 @@
+{
+  "enabled": true,
+  "check_interval_seconds": 60,
+  "stale_launch_minutes": 15,
+  "agents": ["dali", "lingyun", "lingyan", "lingxiao", "lingjian"],
+  "compose_dir_env": "MAILBUS_COMPOSE_DIR",
+  "notes": "WSL Launch Watchdog — 读 agent.json launch 块 + 本配置；DEPRECATED mailbus-boot.sh"
+}

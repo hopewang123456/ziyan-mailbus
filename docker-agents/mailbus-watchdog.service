@@ -1,0 +1,16 @@
+[Unit]
+Description=子言AI mailbus 终端弹窗 Watchdog
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+User=root
+Environment=MAILBUS_ROOT=@MAILBUS_ROOT@
+Environment=MAILBUS_LAUNCH_QUEUE=@MAILBUS_LAUNCH_QUEUE@
+ExecStart=/usr/bin/python3 @MAILBUS_ROOT@/tools/mailbus.py watchdog run
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

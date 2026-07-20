@@ -1,0 +1,24 @@
+{
+  "schema": "mailbus-a2a-protocol-tracker-v1",
+  "wire_standard": "google-a2a",
+  "wire_version_negotiated": "1.0",
+  "wire_version_latest_known": "1.0.1",
+  "wire_version_latest_release": "1.0.1",
+  "canonical_protocol": "mailbus-a2a/1",
+  "spec_url": "https://a2a-protocol.org/latest/specification/",
+  "spec_etag": null,
+  "last_sync_at": null,
+  "last_sync_source": "init-template",
+  "sync_policy": {
+    "auto_check_interval_hours": 168,
+    "on_new_minor": "alert_ops",
+    "on_new_patch": "log_only"
+  },
+  "supported_interfaces": [
+    {
+      "protocolBinding": "JSONRPC",
+      "protocolVersion": "1.0",
+      "preferred": true
+    }
+  ]
+}
