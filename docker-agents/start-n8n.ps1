@@ -1,10 +1,12 @@
-# 启动 n8n（Docker）— 无需全局 npm 安装
-# 前置：Docker Desktop 已启动
-# Usage: .\docker-agents\start-n8n.ps1
+# 启动 n8n — Windows 薄包装；Linux：python tools/mailbus.py docker start-n8n
 $ErrorActionPreference = "Stop"
-$here = Split-Path -Parent $MyInvocation.MyCommand.Path
-Set-Location $here
-docker compose -f docker-compose.n8n.yml up -d
-Write-Host "n8n UI: http://127.0.0.1:5678" -ForegroundColor Green
-Write-Host "Deploy workflow: ..\tools\setup-n8n.ps1" -ForegroundColor Cyan
-Write-Host "  (or WSL: bash docker-agents/ensure-n8n-workflow.sh)" -ForegroundColor DarkGray
+$root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+Set-Location $root
+$py = $null
+foreach ($name in @("python", "python3", "py")) {
+    $cmd = Get-Command $name -ErrorAction SilentlyContinue
+    if ($cmd) { $py = $cmd.Source; break }
+}
+if (-not $py) { Write-Host "[ERROR] python not found"; exit 2 }
+& $py tools/mailbus.py docker start-n8n
+exit $LASTEXITCODE

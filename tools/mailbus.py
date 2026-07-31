@@ -144,9 +144,8 @@ def cmd_smoke(args: argparse.Namespace) -> int:
 
 
 def cmd_portproxy(_args: argparse.Namespace) -> int:
-    if detect_platform() == "win32":
-        return fix_portproxy()
-    return run_wsl(mailbus_py_in_wsl(["portproxy"]), timeout=120)
+    # Native Linux/macOS: no-op inside fix_portproxy. Win32/WSL: refresh portproxy when script exists.
+    return fix_portproxy()
 
 
 def cmd_claude(args: argparse.Namespace) -> int:
@@ -209,6 +208,29 @@ def cmd_scripts(args: argparse.Namespace) -> int:
         for s in scripts:
             print(s)
     return 0
+
+
+def cmd_docker(args: argparse.Namespace) -> int:
+    from lib.application.ops.docker_helpers import (
+        ensure_ollama_cli,
+        restart_mailbus_container,
+        start_n8n,
+        up_comfyui_gpu,
+    )
+
+    if args.action == "restart-mailbus":
+        return restart_mailbus_container()
+    if args.action == "start-n8n":
+        return start_n8n()
+    if args.action == "up-comfyui":
+        return up_comfyui_gpu()
+    if args.action == "ensure-ollama":
+        return ensure_ollama_cli(
+            data_dir=args.data_dir or "",
+            no_pull=not args.pull,
+            wait_seconds=args.wait_seconds,
+        )
+    return 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -290,6 +312,20 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("scripts", help="inventory remaining shell scripts")
     p.add_argument("action", choices=("list", "count"), default="count", nargs="?")
     p.set_defaults(func=cmd_scripts)
+
+    dock = sub.add_parser("docker", help="cross-platform docker helpers (replaces *.ps1 ops)")
+    dock_sub = dock.add_subparsers(dest="action", required=True)
+    p = dock_sub.add_parser("restart-mailbus", help="docker compose restart mailbus")
+    p.set_defaults(func=cmd_docker)
+    p = dock_sub.add_parser("start-n8n", help="up n8n compose stack")
+    p.set_defaults(func=cmd_docker)
+    p = dock_sub.add_parser("up-comfyui", help="up ComfyUI GPU compose")
+    p.set_defaults(func=cmd_docker)
+    p = dock_sub.add_parser("ensure-ollama", help="run tools/ensure-ollama.py")
+    p.add_argument("--data-dir", default="")
+    p.add_argument("--pull", action="store_true", help="allow model pull")
+    p.add_argument("--wait-seconds", type=int, default=90)
+    p.set_defaults(func=cmd_docker)
 
     return ap
 

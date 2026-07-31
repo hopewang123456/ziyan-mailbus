@@ -11,38 +11,15 @@ from __future__ import annotations
 
 import os
 import re
-from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
 from lib.role_flow import get_next_role, pick_person_for_role
 from lib.application.orchestration.pipeline.step import step_agent, step_role_type, step_role_zh, is_v3_task
+from lib.domain.fsm import StepFsmState, TaskFsmState
 from lib.utils import _now_iso, json_read, json_write
 from lib.tracker import _parse_iso_dt
 
-# ── 状态枚举 ─────────────────────────────────────────────────────────────
-
-class TaskFsmState(str, Enum):
-    CREATED = "created"
-    EXECUTING = "executing"
-    ACCEPTING = "accepting"   # 链完成，等待人工终验
-    BLOCKED = "blocked"       # 步骤 fail 等待人工决策
-    PAUSED = "paused"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-class StepFsmState(str, Enum):
-    PENDING = "pending"           # 尚未轮到
-    QUEUED = "queued"             # 等待 dispatch
-    DISPATCHED = "dispatched"     # 消息已写入 inbox
-    IN_PROGRESS = "in_progress"   # agent 已 ack / CLI 活跃
-    AWAITING_RESULT = "awaiting_result"  # 等待 msg-results
-    COMPLETED = "completed"
-    FAILED = "failed"
-    SKIPPED = "skipped"
-    SUPERSEDED = "superseded"     # 被回退覆盖
-
+# ── 状态枚举：定义在 lib.domain.fsm（此处再导出供既有 import）─────────────
 
 # 结论 → 是否视为步骤完成（可流转）
 _DONE_CONCLUSIONS = frozenset({

@@ -28,7 +28,6 @@ from .platform_runner import (
     probe_http,
     run,
     run_legacy_bash,
-    run_powershell_file,
     run_stream,
     run_wsl,
     upsert_env_file,
@@ -520,11 +519,21 @@ def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
         log("Syncing L0-L2 agent layer skills + Claude context (host)...")
         _sync_layers(log)
 
-        log("Ensuring Windows host Ollama (internal LLM)...")
-        _ensure_windows_ollama(log)
+        from lib.platform_runner import detect_platform
 
-        log("Starting WSL Ollama proxy (Docker → Windows host)...")
-        ensure_ollama_wsl_proxy("start", log)
+        plat = detect_platform()
+        if plat == "win32":
+            log("Ensuring Windows host Ollama (internal LLM)...")
+            _ensure_windows_ollama(log)
+            log("Starting WSL Ollama proxy (Docker → Windows host)...")
+            ensure_ollama_wsl_proxy("start", log)
+        elif plat == "wsl":
+            log("Ensuring Ollama via ensure-ollama.py (WSL)...")
+            _ensure_windows_ollama(log)
+            log("Starting WSL Ollama proxy...")
+            ensure_ollama_wsl_proxy("start", log)
+        else:
+            log(f"Skip Windows/WSL Ollama glue on {plat} — use host Ollama or MAILBUS_OLLAMA_URL")
 
         log("Configuring container proxy (Clash on/off)...")
         new_proxy = setup_container_proxy(log)
@@ -639,10 +648,8 @@ def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
         log("Starting mailbus CLI watchdog...")
         restart_watchdog(log)
 
-        log("Refreshing Windows localhost port forwarding...")
-        fix_ps1 = paths["fix_portproxy_ps1"]
-        if os.path.isfile(fix_ps1):
-            run_powershell_file(fix_ps1)
+        log("Refreshing Windows localhost port forwarding (no-op on Linux)...")
+        fix_portproxy(log)
 
         fast = os.environ.get("MAILBUS_START_FAST") == "1" or os.environ.get("SKIP_SMOKE") == "1"
         smoke_rc = 0

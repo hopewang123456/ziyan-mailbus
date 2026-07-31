@@ -35,12 +35,21 @@ Thumbs.db
 
 # Secrets / local env
 .env
+.env.*
+!.env.example
+!**/.env.example
+!**/*.env.example
 store/secrets.json
+**/secrets.json
+**/*credentials*.json
+**/*credential*.json
 docker-agents/.env
 docker-agents/.env.secrets
 docker-agents/.proxy-state
 docker-agents/*.log
 docker-agents/*.env.local
+docker-agents/docker-compose.comfyui-gpu.override.yml
+docker-agents/comfyui-data/
 
 # Generated sync copies
 access/hermes/.sync/
@@ -81,6 +90,8 @@ external-tools/
 
 # ── Private team pack (not for GitHub) ──────────────────────────
 # Per-agent transport + overrides stay on disk for local use only
+access/transport/*/
+!access/transport/README.md
 access/transport/lingzhao/
 access/transport/lingjin/
 access/transport/lingxi/
@@ -95,11 +106,15 @@ access/transport/xiaoqi/
 access/transport/yige/
 access/transport/lingzhang/
 config/agents/*.override.json
+!config/agents/*.override.example.json
+!config/agents/*.example.json
 config/mailbus/launch-ports.json
+!config/mailbus/launch-ports.example.json
 README.local.md
 team-pack/
 access/external-tools/registry.json
 access/external-tools/grants.json
+!access/external-tools/*.example.json
 
 # Demo transports that ARE published live under examples/
 !examples/

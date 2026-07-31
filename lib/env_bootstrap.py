@@ -139,7 +139,13 @@ def mailbus_paths() -> dict[str, str]:
         ),
         "api_port": os.environ["MAILBUS_API_PORT"],
         "compose_project": os.environ["COMPOSE_PROJECT_NAME"],
-        "fix_portproxy_ps1": str(scripts / "fix-wsl-localhost.ps1"),
+        # Prefer in-repo windows/; fall back to legacy sibling scripts/ for older layouts
+        "fix_portproxy_ps1": str(
+            (root / "windows" / "fix-wsl-localhost.ps1")
+            if (root / "windows" / "fix-wsl-localhost.ps1").is_file()
+            else (scripts / "fix-wsl-localhost.ps1")
+        ),
+        "windows_dir": str(root / "windows"),
         "ensure_ollama_ps1": str(compose / "ensure-ollama.ps1"),
         "run_dir": str(root / "run"),
         "compose_override": str(compose / "docker-compose.override.yml"),

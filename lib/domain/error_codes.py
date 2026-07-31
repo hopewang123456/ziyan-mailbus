@@ -25,3 +25,21 @@ ALL_TRANSPORT_CODES = (
     DELIVERY_FAILED,
     A2A_FALLBACK,
 )
+
+# Domain + common HTTP API codes (W7e D21 cockpit locale catalog)
+ALL_DOMAIN_CODES = (
+    "mailbus_error",
+    "retryable",
+    "fatal",
+    "needs_human",
+    "lock_busy",
+    "unauthorized",
+    "write_auth_required",
+    "framework_or_role_disabled",
+    "budget_paused",
+    "escalation_needed",
+    "not_found",
+    "method_not_allowed",
+)
+
+ALL_STABLE_CODES = ALL_DOMAIN_CODES + ALL_TRANSPORT_CODES

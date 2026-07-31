@@ -36,6 +36,15 @@ from lib.adapters.frameworks.registry import (  # noqa: F401
     validate_agents,
 )
 
+try:
+    from lib.adapters.frameworks.entry_point_discovery import (  # noqa: F401
+        discover_and_register_frameworks,
+        ensure_framework_plugins_loaded,
+    )
+except Exception:  # pragma: no cover
+    discover_and_register_frameworks = None  # type: ignore[assignment]
+    ensure_framework_plugins_loaded = None  # type: ignore[assignment]
+
 __all__ = [
     "ADAPTERS",
     "A2ARemoteAdapter",
@@ -62,6 +71,8 @@ __all__ = [
     "provider_flag",
     "push_timeout_for",
     "register_framework",
+    "discover_and_register_frameworks",
+    "ensure_framework_plugins_loaded",
     "resolve_container",
     "resolve_interactive_cli",
     "resolve_push_cli",

@@ -24,10 +24,14 @@ def today_cn() -> str:
 
 
 def load_leads_sources(data_dir: str) -> dict:
+    from lib.config_files import resolve_config_path, warn_if_missing
+
     path = os.path.join(data_dir, "config", "leads-sources.json")
-    if not os.path.isfile(path):
-        path = os.path.join(data_dir, "config", "leads-sources.example.json")
-    return json_read(path, {})
+    res = resolve_config_path(path)
+    if res.path is None:
+        warn_if_missing(path)
+        return {}
+    return json_read(str(res.path), {})
 
 
 def keyword_match(text: str, include: list[str], exclude: list[str]) -> bool:

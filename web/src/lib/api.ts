@@ -11,7 +11,20 @@ export function setToken(token: string) {
 
 export type ApiResult<T = unknown> =
   | { ok: true; data: T; status: number }
-  | { ok: false; error: string; status: number; data?: unknown };
+  | { ok: false; error: string; status: number; data?: unknown; errorCode?: string };
+
+/** Prefer message_zh (D21), then error / HTTP status. */
+export function formatApiError(data: unknown, status: number): { error: string; errorCode?: string } {
+  if (typeof data === "object" && data) {
+    const o = data as Record<string, unknown>;
+    const code = typeof o.error_code === "string" ? o.error_code : typeof o.error === "string" ? o.error : undefined;
+    const zh = typeof o.message_zh === "string" ? o.message_zh : "";
+    if (zh) return { error: code && code !== zh ? `${zh}（${code}）` : zh, errorCode: code };
+    if (typeof o.error === "string" && o.error) return { error: o.error, errorCode: code };
+    if (typeof o.message === "string" && o.message) return { error: o.message, errorCode: code };
+  }
+  return { error: `HTTP ${status}` };
+}
 
 export async function api<T = unknown>(
   path: string,
@@ -37,11 +50,8 @@ export async function api<T = unknown>(
       }
     }
     if (!res.ok) {
-      const err =
-        typeof data === "object" && data && "error" in data
-          ? String((data as { error: string }).error)
-          : `HTTP ${res.status}`;
-      return { ok: false, error: err, status: res.status, data };
+      const formatted = formatApiError(data, res.status);
+      return { ok: false, error: formatted.error, status: res.status, data, errorCode: formatted.errorCode };
     }
     return { ok: true, data: data as T, status: res.status };
   } catch (e) {

@@ -1,7 +1,0 @@
-{
-  "launch": {
-    "browser": {
-      "gateway_port": 18789
-    }
-  }
-}

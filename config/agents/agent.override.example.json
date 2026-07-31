@@ -1,0 +1,15 @@
+{
+  "_doc": "Copy to config/agents/<agent_id>.override.json (gitignored). No secrets — only launch/UI prefs.",
+  "models": ["deepseek-flash"],
+  "launch": {
+    "template": "claude_host",
+    "launch_via_api": true,
+    "has_browser": true,
+    "browser": {
+      "kind": "claude_ttyd",
+      "url": "http://127.0.0.1:{port}/",
+      "web_port": "9260"
+    }
+  },
+  "push_timeout_seconds": 900
+}

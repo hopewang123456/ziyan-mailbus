@@ -9,15 +9,18 @@ from unittest.mock import patch
 
 from lib.adapters.transport.file_bus import FileBusMessageTransport
 from lib.adapters.transport.router import SelectingMessageTransport, resolve_channel
-from lib.domain.error_codes import ALL_TRANSPORT_CODES
+from lib.domain.error_codes import ALL_STABLE_CODES, ALL_TRANSPORT_CODES
 from lib.domain.types import OutboundMessage
-from lib.locale.errors_zh import ERROR_ZH, message_zh, transport_codes_covered
+from lib.locale.errors_zh import ERROR_ZH, message_zh, stable_codes_covered, transport_codes_covered
 
 
 class TestLocaleTransport(unittest.TestCase):
     def test_all_codes_have_zh(self):
         self.assertTrue(transport_codes_covered())
+        self.assertTrue(stable_codes_covered())
         for c in ALL_TRANSPORT_CODES:
+            self.assertIn(c, ERROR_ZH)
+        for c in ALL_STABLE_CODES:
             self.assertIn(c, ERROR_ZH)
             self.assertTrue(message_zh(c))
 
@@ -85,6 +88,72 @@ class TestSendOutbound(unittest.TestCase):
             out = send_outbound(tmp, agent_id="b", msg_id="m2", intent="hi", channel="file_bus")
             self.assertTrue(out["ok"])
             self.assertEqual(out["channel"], "file_bus")
+
+
+class TestFileBusWaitPort(unittest.TestCase):
+    """W7c: MessageTransportPort file_bus + Harness wait."""
+
+    def test_wait_with_prewritten_step_result(self):
+        from lib.adapters.transport.file_bus import FileBusMessageTransport
+        from lib.transport.step_result_io import write_step_result_file
+
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "config.json").write_text(
+                json.dumps({"harness": {"mode": "production"}}),
+                encoding="utf-8",
+            )
+            write_step_result_file(
+                tmp, "t-w7c", "s1",
+                {"conclusion": "done", "agent": "agent-a", "summary": "ok"},
+            )
+            msg = OutboundMessage(
+                agent_id="agent-a",
+                msg_id="msg-t-w7c-s1",
+                body_path="",
+                headers={
+                    "data_dir": tmp,
+                    "intent": "do it",
+                    "task_id": "t-w7c",
+                    "step_id": "s1",
+                    "wait": "1",
+                    "allow_no_spawn": "1",
+                    "wait_timeout_sec": "5",
+                },
+            )
+            r = FileBusMessageTransport().send(msg)
+            self.assertTrue(r.accepted, msg=r.detail)
+            self.assertEqual(r.channel, "file_bus")
+            self.assertIn("step_result", r.detail)
+            inbox = json.loads(Path(tmp, "inbox", "agent-a", "inbox.json").read_text(encoding="utf-8"))
+            self.assertEqual(inbox["messages"][0]["id"], "msg-t-w7c-s1")
+
+    def test_dispatch_via_message_port_flag(self):
+        from lib.transport.dispatch_integration import dispatch_pipeline_step
+        from lib.transport.step_result_io import write_step_result_file
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = {
+                "transport": {"use_router": True, "use_message_port": True},
+                "harness": {"mode": "production"},
+                "agents": {"agent-a": {"type": "opencode"}},
+            }
+            Path(tmp, "config.json").write_text(json.dumps(cfg), encoding="utf-8")
+            write_step_result_file(
+                tmp, "t2", "s2",
+                {"conclusion": "done", "agent": "agent-a", "summary": "ok"},
+            )
+            out = dispatch_pipeline_step(
+                tmp,
+                task_id="t2",
+                step_id="s2",
+                to_agent="agent-a",
+                role_type=8,
+                intent="hi",
+                config=cfg,
+            )
+            self.assertTrue(out.get("ok"), msg=str(out))
+            self.assertEqual(out.get("via"), "message_transport_port")
+            self.assertEqual(out.get("transport_used"), "file_bus")
 
 
 class TestTransportErrorDomain(unittest.TestCase):

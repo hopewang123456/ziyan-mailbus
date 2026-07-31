@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ErrorAlert } from "../components/ErrorAlert";
 import { api } from "../lib/api";
 
 export function InboxPage() {
@@ -115,7 +116,7 @@ export function InboxPage() {
           拉取 inbox
         </button>
       </div>
-      {err && <p className="text-sm text-flare">{err}</p>}
+      <ErrorAlert message={err} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div>

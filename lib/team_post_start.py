@@ -506,7 +506,13 @@ def smoke_test(*, wait_sec: int | None = None, am_persist: bool = False) -> int:
 
 
 def fix_portproxy(log: LogFn | None = None) -> int:
-    """刷新 Windows localhost→WSL portproxy。"""
+    """刷新 Windows localhost→WSL portproxy。非 Windows 平台直接跳过（Linux 可原生监听）。"""
+    from lib.platform_runner import detect_platform
+
+    plat = detect_platform()
+    if plat in ("linux", "darwin"):
+        _log_line(log, f"portproxy skipped on {plat} (native listen; no Windows portproxy)")
+        return 0
     paths = mailbus_paths()
     ps1 = paths["fix_portproxy_ps1"]
     if not os.path.isfile(ps1):

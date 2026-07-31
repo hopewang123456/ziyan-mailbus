@@ -32,15 +32,12 @@ _CRITICAL_FILES = (
     "bus/__main__.py",
 )
 
-_EXPECTED_TRANSPORT_AGENTS = (
-    "dali", "lingjian", "lingjin", "lingtuo", "lingxi", "lingxiao", "lingxun",
-    "lingyan", "lingyun", "lingzhang", "lingzhao", "xiaoqi", "yige",
-)
+_EXPECTED_TRANSPORT_AGENTS = ()  # personal roster is local-only; see examples/transport/
 
 _THIN_DIRS_WARN_BELOW = {
     "access/hermes": 2,
     "skills": 30,
-    "config/agents": 3,
+    # overrides are personal (*.override.json); examples live as *.override.example.json
 }
 
 
@@ -123,23 +120,20 @@ def check_data_integrity(*, mail_root: Path | None = None) -> list[DoctorItem]:
         for p in transport_dir.glob("*/transport.json")
         if p.is_file()
     )
-    missing_agents = [a for a in _EXPECTED_TRANSPORT_AGENTS if a not in found]
-    if missing_agents:
-        items.append(DoctorItem(
-            "fail",
-            "integrity",
-            f"transport 缺失 {len(missing_agents)} 个 agent",
-            ", ".join(missing_agents),
-        ))
-    elif len(found) != len(_EXPECTED_TRANSPORT_AGENTS):
+    if not found:
         items.append(DoctorItem(
             "warn",
             "integrity",
-            f"transport 数量异常: {len(found)}",
-            ", ".join(found),
+            "尚无本机 transport（个人 Agent 未配置）",
+            "复制 examples/transport/agent-*/transport.json → access/transport/<your-id>/；见 config/README.md",
         ))
     else:
-        items.append(DoctorItem("ok", "integrity", f"transport 注册完整 ({len(found)} agents)", ""))
+        items.append(DoctorItem(
+            "ok",
+            "integrity",
+            f"本机 transport {len(found)} agents",
+            ", ".join(found[:16]) + ("…" if len(found) > 16 else ""),
+        ))
 
     for rel, min_files in _THIN_DIRS_WARN_BELOW.items():
         d = root / rel
@@ -171,13 +165,20 @@ def check_data_integrity(*, mail_root: Path | None = None) -> list[DoctorItem]:
 
 
 def check_locale_transport_codes() -> list[DoctorItem]:
-    """Wave3: locale 覆盖 MessageTransport 稳定错误码（对齐 clinic 文案）。"""
+    """Wave3 + W7e: locale 覆盖 transport 与稳定错误码目录。"""
     try:
-        from lib.locale.errors_zh import transport_codes_covered
+        from lib.locale.errors_zh import stable_codes_covered, transport_codes_covered
 
+        items: list[DoctorItem] = []
         if transport_codes_covered():
-            return [DoctorItem("ok", "locale", "transport 错误码中文齐全", "Wave3 S3")]
-        return [DoctorItem("fail", "locale", "transport 错误码 locale 缺失", "补全 errors_zh.ERROR_ZH")]
+            items.append(DoctorItem("ok", "locale", "transport 错误码中文齐全", "Wave3 S3"))
+        else:
+            items.append(DoctorItem("fail", "locale", "transport 错误码 locale 缺失", "补全 errors_zh.ERROR_ZH"))
+        if stable_codes_covered():
+            items.append(DoctorItem("ok", "locale", "稳定错误码 locale 目录齐全", "W7e D21"))
+        else:
+            items.append(DoctorItem("fail", "locale", "稳定错误码 locale 缺失", "补全 ALL_STABLE_CODES → ERROR_ZH"))
+        return items
     except Exception as exc:
         return [DoctorItem("fail", "locale", "locale 检查失败", str(exc))]
 

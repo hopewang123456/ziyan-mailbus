@@ -1,0 +1,10 @@
+# EXAMPLE — local ComfyUI host mounts (gitignored when copied).
+# Copy to: docker-compose.comfyui-gpu.override.yml
+#
+# services:
+#   comfyui:
+#     volumes:
+#       - /mnt/<drive>/path/to/ComfyUI/models:/opt/ComfyUI/models
+#       - /mnt/<drive>/path/to/ComfyUI/output:/opt/ComfyUI/output
+
+services: {}

@@ -1,8 +1,8 @@
-{
+﻿{
   "schema": "mailbus-runtime-v1",
   "api_port": 9814,
   "api_host": "127.0.0.1",
-  "canonical_root": "E:/ai_tools/mail",
+  "canonical_root": "/path/to/mail",
   "ports": {
     "mailbus_api": 9814,
     "agentmemory": 3111,
@@ -19,5 +19,5 @@
     "mail/docker-agents/.env",
     "lib/env_bootstrap.py (Python serve/CLI)"
   ],
-  "notes": "Docker compose maps ${MAILBUS_API_PORT:-9814}; native serve defaults 9814 per lib/constants.py"
+  "notes": "Docker compose maps ${MAILBUS_API_PORT:-9814}; native serve defaults 9814 per lib/constants.py. Do not put API keys here."
 }

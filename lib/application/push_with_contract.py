@@ -19,8 +19,32 @@ def push_with_contract(
     timeout_seconds: int = 300,
     wait: bool = False,
     allow_no_spawn: bool = False,
+    via_message_port: bool = False,
 ) -> dict[str, Any]:
-    """Build contract, spawn via ProductionHarness, optionally wait."""
+    """Build contract, spawn via ProductionHarness, optionally wait.
+
+    via_message_port=True（W7c）：先经 MessageTransportPort 写 inbox，再 Harness wait
+    （file_bus 厚路径统一入口）。
+    """
+    if via_message_port and wait:
+        from lib.application.transport_send import send_outbound
+
+        mid = msg_id or (f"msg-{task_id}-{step_id}" if task_id and step_id else "")
+        out = send_outbound(
+            data_dir,
+            agent_id=agent_id,
+            msg_id=mid,
+            intent=prompt,
+            task_id=task_id,
+            step_id=step_id,
+            channel="file_bus",
+            wait=True,
+            allow_no_spawn=allow_no_spawn,
+            wait_timeout_sec=timeout_seconds,
+        )
+        out["via"] = "message_transport_port"
+        return out
+
     contract = build_contract(
         agent_id=agent_id,
         msg_id=msg_id,
@@ -53,8 +77,8 @@ def push_with_contract(
         outcome = harness.wait_completion(session, timeout=timeout_seconds)
         out["outcome"] = {
             "ok": outcome.ok,
-            "status": outcome.status,
-            "detail": getattr(outcome, "detail", "") or "",
+            "status": outcome.status if hasattr(outcome, "status") else ("ok" if outcome.ok else "error"),
+            "detail": getattr(outcome, "detail", "") or getattr(outcome, "error", "") or "",
         }
         out["ok"] = bool(outcome.ok)
     return out

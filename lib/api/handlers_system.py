@@ -1142,6 +1142,20 @@ def handle_doctor(handler):
         handler._send_json({"ok": False, "error": str(exc)}, 500)
 
 
+def handle_locale_errors(handler):
+    """GET /api/locale/errors — W7e D21 驾驶舱错误码中文目录。"""
+    from lib.domain.error_codes import ALL_STABLE_CODES
+    from lib.locale.errors_zh import locale_catalog, stable_codes_covered
+
+    catalog = locale_catalog()
+    handler._send_json({
+        "ok": True,
+        "errors": catalog,
+        "stable_codes": list(ALL_STABLE_CODES),
+        "covered": stable_codes_covered(),
+    })
+
+
 def handle_clinic_run(handler):
     """POST /api/clinic/run — 执行诊所工具"""
     from lib.clinic_tools import run_clinic_tool

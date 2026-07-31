@@ -1,0 +1,23 @@
+{
+  "_doc": {
+    "purpose": "Default browser/console ports per agent. Copy to launch-ports.json (gitignored) and replace placeholder ids with yours.",
+    "note": "Runtime reads launch-ports.json only — never *.example.json."
+  },
+  "hermes_dashboard": {
+    "agent-a": 9120,
+    "_fallback": 9119
+  },
+  "codex_web": {
+    "agent-coder": 9240
+  },
+  "codex_ttyd": {
+    "agent-coder": 9250
+  },
+  "claude_browser": {
+    "agent-c": 9260
+  },
+  "openclaw_gateway": {
+    "agent-chat": 18789,
+    "_fallback": 18789
+  }
+}

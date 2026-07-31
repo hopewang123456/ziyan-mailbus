@@ -1,7 +1,7 @@
-"""Locale: error code → Chinese message (Q9 + Wave3 transport)."""
+"""Locale: error code → Chinese message (Q9 + Wave3 transport + W7e D21)."""
 from __future__ import annotations
 
-from lib.domain.error_codes import ALL_TRANSPORT_CODES
+from lib.domain.error_codes import ALL_STABLE_CODES, ALL_TRANSPORT_CODES
 
 ERROR_ZH: dict[str, str] = {
     "mailbus_error": "邮件总线错误",
@@ -14,6 +14,8 @@ ERROR_ZH: dict[str, str] = {
     "framework_or_role_disabled": "框架或角色已禁用",
     "budget_paused": "链路日预算已暂停，请确认 Ollama 或恢复预算",
     "escalation_needed": "重试已达上限，需人工升级处理",
+    "not_found": "资源不存在",
+    "method_not_allowed": "HTTP 方法不允许",
     # Wave3 transport / observability
     "transport_retryable": "传输可重试失败，将自动重试或回退",
     "transport_fatal": "传输致命失败，请检查通道配置",
@@ -35,3 +37,13 @@ def message_zh(code: str, fallback: str = "") -> str:
 def transport_codes_covered() -> bool:
     """Doctor/clinic: locale 覆盖全部 transport 稳定码。"""
     return all(c in ERROR_ZH for c in ALL_TRANSPORT_CODES)
+
+
+def stable_codes_covered() -> bool:
+    """W7e: locale 覆盖 domain + transport + 常用 API 码。"""
+    return all(c in ERROR_ZH for c in ALL_STABLE_CODES)
+
+
+def locale_catalog() -> dict[str, str]:
+    """Public catalog for cockpit D21."""
+    return dict(ERROR_ZH)

@@ -1,5 +1,14 @@
 # ComfyUI GPU（WSL2 + NVIDIA Container Toolkit）
-# 依赖已 bake 进镜像；仅挂载 models（勿挂载整个 ComfyUI-win，避免 Windows venv 污染）
+# Models/output paths via env (no machine-absolute defaults in git).
+#
+# Example (WSL):
+#   export COMFYUI_MODELS_HOST=/mnt/e/path/to/ComfyUI/models
+#   export COMFYUI_OUTPUT_HOST=/mnt/e/path/to/ComfyUI/output
+#   export HTTP_PROXY=http://host.docker.internal:7897
+#   export HTTPS_PROXY=http://host.docker.internal:7897
+#
+# Or copy docker-compose.comfyui-gpu.override.example.yml →
+# docker-compose.comfyui-gpu.override.yml (gitignored).
 #
 # 前置：wsl -u root bash docker-agents/install-comfyui-gpu-wsl.sh
 # 构建+启动：wsl bash docker-agents/start-comfyui-gpu.sh --build
@@ -9,8 +18,8 @@ services:
     build:
       context: ./comfyui-gpu
       args:
-        HTTP_PROXY: http://172.20.128.1:7897
-        HTTPS_PROXY: http://172.20.128.1:7897
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
     image: mailbus-comfyui-gpu:cu128
     container_name: mailbus-comfyui-gpu
     ports:
@@ -18,8 +27,8 @@ services:
     environment:
       - TZ=Asia/Shanghai
     volumes:
-      - /mnt/e/ai_tools/ComfyUI-win/models:/opt/ComfyUI/models
-      - /mnt/e/ai_tools/ComfyUI-win/output:/opt/ComfyUI/output
+      - ${COMFYUI_MODELS_HOST:-./comfyui-data/models}:/opt/ComfyUI/models
+      - ${COMFYUI_OUTPUT_HOST:-./comfyui-data/output}:/opt/ComfyUI/output
       - comfyui-input:/opt/ComfyUI/input
     gpus: all
     restart: unless-stopped

@@ -1,0 +1,13 @@
+{
+  "schema": "mailbus-transport-v1",
+  "agent_id": "agent-coder",
+  "framework": "codex",
+  "workspace": "/path/to/workspace",
+  "docker": {
+    "service": "codex-agent",
+    "profile": ""
+  },
+  "push": {
+    "cwd": "/path/to/workspace"
+  }
+}

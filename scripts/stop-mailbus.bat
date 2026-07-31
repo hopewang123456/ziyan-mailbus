@@ -10,11 +10,17 @@ if not exist "%CD%\tools\mailbus.py" (
   exit /b 1
 )
 
-where wsl >nul 2>&1
-if errorlevel 1 (
+where python >nul 2>&1
+if not errorlevel 1 (
   python "%CD%\tools\mailbus.py" stop
 ) else (
-  call "%~dp0_invoke-mailbus.bat" stop --windows
+  where py >nul 2>&1
+  if errorlevel 1 (
+    echo [ERROR] Python not found
+    pause
+    exit /b 1
+  )
+  py -3 "%CD%\tools\mailbus.py" stop
 )
 echo.
 pause

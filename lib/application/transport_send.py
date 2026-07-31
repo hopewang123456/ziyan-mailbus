@@ -20,10 +20,16 @@ def send_outbound(
     task_id: str = "",
     step_id: str = "",
     role_type: int = 0,
+    wait: bool = False,
+    allow_no_spawn: bool = False,
+    wait_timeout_sec: int | None = None,
     extra_headers: Mapping[str, str] | None = None,
     config: dict | None = None,
 ) -> dict[str, Any]:
-    """Unified send — returns dict with ok + receipt fields + message_zh on failure."""
+    """Unified send — returns dict with ok + receipt fields + message_zh on failure.
+
+    wait=True：file_bus 厚路径（写 inbox + Harness spawn/wait），见 W7c。
+    """
     headers: dict[str, str] = {
         "data_dir": data_dir,
         "intent": intent,
@@ -33,6 +39,12 @@ def send_outbound(
     }
     if channel:
         headers["channel"] = channel
+    if wait:
+        headers["wait"] = "1"
+    if allow_no_spawn:
+        headers["allow_no_spawn"] = "1"
+    if wait_timeout_sec is not None:
+        headers["wait_timeout_sec"] = str(int(wait_timeout_sec))
     if extra_headers:
         headers.update({str(k): str(v) for k, v in extra_headers.items()})
     msg = OutboundMessage(

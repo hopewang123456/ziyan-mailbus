@@ -1,0 +1,15 @@
+{
+  "_doc": "Copy to config/agents/<your-id>.override.json (gitignored). Coding-agent skeleton (rename id).",
+  "models": ["deepseek-flash"],
+  "launch": {
+    "template": "codex_host",
+    "launch_via_api": true,
+    "has_browser": true,
+    "browser": {
+      "kind": "codex_docker",
+      "url": "http://127.0.0.1:{port}/",
+      "web_port": "9240"
+    }
+  },
+  "push_timeout_seconds": 900
+}

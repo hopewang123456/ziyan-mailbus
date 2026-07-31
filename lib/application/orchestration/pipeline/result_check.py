@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
-from lib.adapters.orchestration.task_fsm import (
-    ensure_fsm,
-    get_active_step,
-    read_step_result,
-    result_applies_to_step,
-)
+from lib.composition import get_fsm
+
+
+def _fsm():
+    return get_fsm()
 
 
 def pipeline_step_result_matches(
@@ -22,8 +21,9 @@ def pipeline_step_result_matches(
     """当前 running pipeline 步骤是否已有有效 msg-results。"""
     if not task or task.get("status") != "running":
         return False, "task_not_running"
-    ensure_fsm(task)
-    step = get_active_step(task)
+    f = _fsm()
+    f.ensure(task)
+    step = f.get_active_step(task)
     if not step or step.get("to_person") != agent_name:
         return False, "not_assignee"
     if step.get("status") not in ("running", None) and step.get("fsm_state") not in (
@@ -32,10 +32,10 @@ def pipeline_step_result_matches(
         if step.get("status") != "running":
             return False, "step_not_running"
     tid = task.get("task_id") or task.get("id") or ""
-    result = read_step_result(data_dir, tid, step)
+    result = f.read_step_result(data_dir, tid, step)
     if not result:
         return False, "missing_msg_results"
-    ok, reason = result_applies_to_step(result, tid, step, task.get("chain") or [])
+    ok, reason = f.result_applies_to_step(result, tid, step, task.get("chain") or [])
     if not ok:
         return False, reason
     if require_consumed and step.get("result_consumed") is not True:

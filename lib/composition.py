@@ -87,6 +87,17 @@ def bind_data_dir(data_dir: str) -> AppContext:
     ctx.data_dir = data_dir
     ctx.paths = DataPathRoot(data_dir)
     ctx.config_repo = build_config_repo(data_dir)
+    try:
+        from lib.adapters.frameworks.entry_point_discovery import ensure_framework_plugins_loaded
+        from lib.adapters.integrations.entry_point_discovery import ensure_integration_plugins_loaded
+        from lib.config_files import ensure_sensitive_config_files
+        from lib.constants import MAILBUS_ROOT
+
+        ensure_sensitive_config_files(MAILBUS_ROOT)
+        ensure_framework_plugins_loaded(data_dir=data_dir)
+        ensure_integration_plugins_loaded(data_dir=data_dir)
+    except Exception:
+        pass
     return ctx
 
 
@@ -130,6 +141,13 @@ def build_orchestration(
     )
 
 
+def get_fsm() -> TaskFsmPort:
+    """Stateless TaskFsmPort (composition entry for application)."""
+    from lib.adapters.orchestration import build_task_fsm
+
+    return build_task_fsm()
+
+
 def build_transport(data_dir: str, config: dict | None = None) -> MessageTransportPort:
     from lib.adapters.transport import build_message_transport
 
@@ -152,6 +170,7 @@ __all__ = [
     "build_transport",
     "FakeClock",
     "get_context",
+    "get_fsm",
     "reset_context",
     "set_context",
 ]

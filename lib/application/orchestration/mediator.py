@@ -6,7 +6,7 @@ from typing import Any
 
 from lib.composition import build_orchestration
 from lib.domain.errors import PAUSE_REASON_BUDGET, BudgetPaused, NeedsHuman
-from lib.adapters.orchestration.task_fsm import TaskFsmState
+from lib.domain.fsm import TaskFsmState
 from lib.tracker import TaskTracker
 from lib.utils import json_read, json_write
 

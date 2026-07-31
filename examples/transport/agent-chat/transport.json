@@ -1,0 +1,13 @@
+{
+  "schema": "mailbus-transport-v1",
+  "agent_id": "agent-chat",
+  "framework": "openclaw",
+  "workspace": "/path/to/openclaw_workspace",
+  "docker": {
+    "service": "openclaw",
+    "profile": ""
+  },
+  "push": {
+    "cwd": "/path/to/openclaw_workspace"
+  }
+}

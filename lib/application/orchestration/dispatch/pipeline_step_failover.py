@@ -8,7 +8,11 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from ..locale.role_labels import role_type_candidates, role_type_to_zh
 from ..models import Inbox, MsgStatus
 from ..pipeline_trigger import _send_task
-from lib.adapters.orchestration.task_fsm import get_active_step, read_step_result
+from lib.composition import get_fsm
+
+
+def _fsm():
+    return get_fsm()
 from ..tracker import TaskTracker
 from ..utils import json_read, json_write, resolve_paths, _now_iso
 from .role_resolver import resolve_agent_for_role_type
@@ -118,7 +122,7 @@ def next_failover_agent_for_step(
     if not failover_enabled(config):
         return None
 
-    step = get_active_step(task)
+    step = get_fsm().get_active_step(task)
     if not step or step.get("status") != "running":
         return None
 
@@ -196,7 +200,7 @@ def _close_agent_task_inbox(data_dir: str, agent: str, task_id: str) -> int:
 def _step_summary_for_dispatch(data_dir: str, task_id: str, step: dict) -> str:
     step_num = int(step.get("step") or 0)
     prev_id = f"s{max(step_num - 1, 1)}"
-    prev = read_step_result(data_dir, task_id, {"step_id": prev_id})
+    prev = get_fsm().read_step_result(data_dir, task_id, {"step_id": prev_id})
     if prev and prev.get("summary"):
         return str(prev["summary"])
     if step.get("summary"):
@@ -221,7 +225,7 @@ def failover_pipeline_step(
     if not task or task.get("status") != "running":
         return None
     config = json_read(os.path.join(data_dir, "config.json"), {})
-    step = get_active_step(task)
+    step = get_fsm().get_active_step(task)
     if not step:
         return None
 
@@ -318,7 +322,7 @@ def note_pipeline_verify_failure(
     task = tr.get(task_id)
     if not task:
         return None
-    step = get_active_step(task)
+    step = get_fsm().get_active_step(task)
     if not step:
         return None
     should_failover = record_step_delivery_failure(step, config)
@@ -359,7 +363,7 @@ def try_silent_failure_failover(
         return None
 
     max_attempts = int(sf.get("max_failovers_per_step", 3))
-    step = get_active_step(task) or {}
+    step = get_fsm().get_active_step(task) or {}
     if len(step.get("failover_tried") or []) >= max_attempts:
         return None
 

@@ -1,0 +1,5 @@
+{
+  "_doc": "Copy to access/external-tools/registry.json (gitignored). No live webhook secrets.",
+  "tools": [],
+  "agent_grants": {}
+}

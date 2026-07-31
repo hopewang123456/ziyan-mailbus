@@ -7,8 +7,13 @@ from typing import Any, Dict, Optional
 
 from .human_queue import close_by_task, enqueue_final_acceptance, enqueue_plan_approval
 from lib.application.orchestration.pipeline.step import step_role_type
-from lib.adapters.orchestration.task_fsm import TaskFsmState, _append_history, ensure_fsm, step_result_dir
+from lib.composition import get_fsm
+from lib.domain.fsm import TaskFsmState
 from .utils import _now_iso, json_write
+
+
+def _fsm():
+    return get_fsm()
 
 
 def _task_envelope(task: dict) -> dict:
@@ -26,7 +31,7 @@ def _task_envelope(task: dict) -> dict:
 
 def enter_accepting_or_succeed(task: dict, result: dict, *, data_dir: str) -> str:
     """链走完：S+验收员自动终验，否则 entering accepting + human-queue。"""
-    ensure_fsm(task)
+    _fsm().ensure(task)
     tier = (task.get("tier") or "M").upper()
     conclusion = (result.get("conclusion") or "").lower()
     chain = task.get("chain") or []
@@ -44,7 +49,7 @@ def enter_accepting_or_succeed(task: dict, result: dict, *, data_dir: str) -> st
         task["status"] = "success"
         task["fsm"].pop("substate", None)
         task["fsm"].pop("human_queue_id", None)
-        _append_history(task, "auto_accept", {"method": "auto"})
+        _fsm().append_history(task, "auto_accept", {"method": "auto"})
         return "auto_accept"
 
     task["fsm"]["state"] = TaskFsmState.ACCEPTING.value
@@ -52,7 +57,7 @@ def enter_accepting_or_succeed(task: dict, result: dict, *, data_dir: str) -> st
     task["status"] = "pending"
     hq_id = enqueue_final_acceptance(data_dir, task)
     task["fsm"]["human_queue_id"] = hq_id
-    _append_history(task, "accepting", {"human_queue_id": hq_id})
+    _fsm().append_history(task, "accepting", {"human_queue_id": hq_id})
     return "accepting"
 
 
@@ -68,7 +73,7 @@ def _write_acceptance(
     attachments: Optional[list] = None,
 ) -> str:
     tid = task.get("task_id") or task.get("id") or ""
-    out_dir = step_result_dir(data_dir, tid)
+    out_dir = _fsm().step_result_dir(data_dir, tid)
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "acceptance.json")
     payload = {
@@ -87,7 +92,7 @@ def _write_acceptance(
 
 
 def apply_approve_plan(task: dict, body: dict, *, data_dir: str) -> Dict[str, Any]:
-    ensure_fsm(task)
+    _fsm().ensure(task)
     fsm = task["fsm"]
     tid = task.get("task_id") or task.get("id") or ""
 
@@ -113,7 +118,7 @@ def apply_approve_plan(task: dict, body: dict, *, data_dir: str) -> Dict[str, An
         dispatch_ok = dispatch_first_step(data_dir, task)
         close_by_task(data_dir, tid, "plan_approval", resolution)
         fsm.pop("human_queue_id", None)
-        _append_history(task, "approve_plan", {"reviewer": reviewer, "dispatch_ok": dispatch_ok})
+        _fsm().append_history(task, "approve_plan", {"reviewer": reviewer, "dispatch_ok": dispatch_ok})
         return {"ok": True, "action": "approve_plan", "dispatch_ok": dispatch_ok, "task": task}
 
     if decision == "denied":
@@ -145,21 +150,21 @@ def apply_approve_plan(task: dict, body: dict, *, data_dir: str) -> Dict[str, An
             set_await_plan_approval(task)
             hq_id = enqueue_plan_approval(data_dir, task)
             task["fsm"]["human_queue_id"] = hq_id
-            _append_history(task, "deny_replan", {"reason": reason, "human_queue_id": hq_id})
+            _fsm().append_history(task, "deny_replan", {"reason": reason, "human_queue_id": hq_id})
             return {"ok": True, "action": "deny_replan", "task": task}
 
         task["fsm"]["state"] = TaskFsmState.CANCELLED.value
         task["fsm"].pop("substate", None)
         task["status"] = "cancelled"
         task["error"] = {"reason": reason, "action": action}
-        _append_history(task, "deny_cancel", {"reason": reason})
+        _fsm().append_history(task, "deny_cancel", {"reason": reason})
         return {"ok": True, "action": "deny_cancel", "task": task}
 
     return {"ok": False, "error": "invalid_decision"}
 
 
 def apply_accept(task: dict, body: dict, *, data_dir: str) -> Dict[str, Any]:
-    ensure_fsm(task)
+    _fsm().ensure(task)
     fsm = task["fsm"]
     tid = task.get("task_id") or task.get("id") or ""
 
@@ -188,7 +193,7 @@ def apply_accept(task: dict, body: dict, *, data_dir: str) -> Dict[str, Any]:
             "attachments": attachments,
         })
         fsm.pop("human_queue_id", None)
-        _append_history(task, "accept", {"reviewer": reviewer})
+        _fsm().append_history(task, "accept", {"reviewer": reviewer})
         return {"ok": True, "action": "accept", "task": task}
 
     if decision == "denied":
@@ -211,9 +216,7 @@ def apply_accept(task: dict, body: dict, *, data_dir: str) -> Dict[str, Any]:
         })
         action = body.get("action") or "rollback"
         if action == "rollback":
-            from lib.adapters.orchestration.task_fsm import apply_rollback
-
-            outcome = apply_rollback(
+            outcome = _fsm().apply_rollback(
                 task,
                 to_step=body.get("rollback_to_step"),
                 to_person=body.get("target_agent") or body.get("to_agent"),
@@ -222,14 +225,14 @@ def apply_accept(task: dict, body: dict, *, data_dir: str) -> Dict[str, Any]:
             if not outcome.get("ok"):
                 return outcome
             fsm.pop("human_queue_id", None)
-            _append_history(task, "accept_deny_rollback", {"reason": reason})
+            _fsm().append_history(task, "accept_deny_rollback", {"reason": reason})
             return {"ok": True, "action": "accept_deny_rollback", "task": task, "next_step": outcome.get("next_step")}
 
         fsm["state"] = TaskFsmState.BLOCKED.value
         task["status"] = "failed"
         task["error"] = {"reason": reason, "action": action}
         fsm.pop("human_queue_id", None)
-        _append_history(task, "accept_deny", {"reason": reason})
+        _fsm().append_history(task, "accept_deny", {"reason": reason})
         return {"ok": True, "action": "accept_deny", "task": task}
 
     return {"ok": False, "error": "invalid_decision"}

@@ -16,19 +16,13 @@ from lib.application.orchestration.pipeline.step import planned_agents_remaining
 from .transport.dispatch_integration import transport_router_enabled
 from .models import Inbox
 from .utils import json_read, json_write, _now_iso
-from lib.adapters.orchestration.task_fsm import (
-    TaskFsmState,
-    apply_submit,
-    ensure_fsm,
-    get_active_step,
-    is_task_executable,
-    mark_step_dispatched,
-    read_step_result,
-    result_applies_to_step,
-    step_result_path,
-    legacy_result_path,
-    write_step_result,
-)
+from lib.composition import get_fsm
+from lib.domain.fsm import TaskFsmState
+
+
+def _fsm():
+    return get_fsm()
+
 
 TRUSTED_RESULT_SOURCES = (
     "validate-scheduler",
@@ -58,11 +52,12 @@ def trigger_task(data_dir: str, task_id: str, agents: dict, paths: dict) -> dict
 
 def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tra: TaskTracker) -> dict:
     """处理单个 pipeline 任务的 result → apply_submit → dispatch。"""
+    f = _fsm()
     task_id = t.get("task_id", t.get("id", ""))
     task_file = os.path.join(tra.tasks_dir, "%s.json" % task_id)
     raw_chain = t.get("chain")
     t = normalize_task_chain(t)
-    t = ensure_fsm(t)
+    t = f.ensure(t)
     if t.get("chain") != raw_chain or t.get("fsm"):
         json_write(task_file, t)
 
@@ -74,7 +69,7 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
     if fsm_state in (TaskFsmState.PAUSED.value, TaskFsmState.CANCELLED.value):
         return {"ok": True, "skipped": "paused_or_cancelled"}
 
-    current = get_active_step(t)
+    current = f.get_active_step(t)
     if not current:
         return {"ok": True, "skipped": "no_active_step"}
 
@@ -96,7 +91,7 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
                 info(f"[fsm] accepting {task_id[:30]}")
         return {"ok": True, "skipped": "step_completed"}
 
-    if not is_task_executable(t):
+    if not f.is_executable(t):
         return {"ok": True, "skipped": "not_executable"}
 
     from lib.application.orchestration.pipeline.step import step_agent
@@ -107,7 +102,7 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
     if current.get("result_consumed"):
         return {"ok": True, "skipped": "result_consumed"}
 
-    result = read_step_result(data_dir, task_id, current)
+    result = f.read_step_result(data_dir, task_id, current)
     if not result:
         try:
             from .delivery_normalizer import normalize_opencode_deliveries
@@ -116,12 +111,12 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
             normalize_opencode_deliveries(data_dir, agents, config=cfg)
         except Exception:
             pass
-        result = read_step_result(data_dir, task_id, current)
+        result = f.read_step_result(data_dir, task_id, current)
     if not result:
         return {"ok": True, "skipped": "no_result"}
 
     mtime_ok = _result_mtime_ok(data_dir, task_id, current, result)
-    ok, reason = result_applies_to_step(
+    ok, reason = f.result_applies_to_step(
         result, task_id, current, chain, result_mtime_ok=mtime_ok,
     )
     if not ok:
@@ -136,14 +131,13 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
         )
 
     sid = current.get("step_id")
-    if sid and not os.path.isfile(step_result_path(data_dir, task_id, sid)):
-        write_step_result(data_dir, task_id, current, result, immediate_advance=False)
+    if sid and not os.path.isfile(f.step_result_path(data_dir, task_id, sid)):
+        f.write_step_result(data_dir, task_id, current, result, immediate_advance=False)
 
-    outcome = apply_submit(t, result, agents=agents, data_dir=data_dir)
+    outcome = f.apply_submit(t, result, agents=agents, data_dir=data_dir)
     if not outcome.get("ok"):
         if outcome.get("action") == "retry_same_step":
-            from lib.adapters.orchestration.task_fsm import archive_step_result_for_retry, revert_failed_retry
-            archived = archive_step_result_for_retry(data_dir, task_id, current, result)
+            archived = f.archive_step_result_for_retry(data_dir, task_id, current, result)
             t = outcome.get("task") or t
             json_write(task_file, t)
             summary = result.get("summary", "") or outcome.get("message", "verify retry")
@@ -156,7 +150,7 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
             ):
                 info(f"[fsm] verify retry redispatch {task_id[:24]} -> {to_person}")
                 return {"ok": True, "action": "retry_same_step"}
-            revert_failed_retry(data_dir, task_id, current, result, archived_path=archived)
+            f.revert_failed_retry(data_dir, task_id, current, result, archived_path=archived)
             json_write(task_file, t)
             warn(f"[fsm] verify retry dispatch failed rollback {task_id[:30]}")
             return {"ok": False, "error": "dispatch_failed"}
@@ -201,13 +195,12 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
             step_id=nxt.get("step_id"),
             result_ref=nxt.get("result_ref"),
         ):
-            from lib.adapters.orchestration.task_fsm import revert_failed_advance
-            revert_failed_advance(t, current, nxt)
+            f.revert_failed_advance(t, current, nxt)
             json_write(task_file, t)
             warn(f"[fsm] dispatch failed rollback {task_id[:30]}")
             return {"ok": False, "error": "dispatch_failed"}
 
-        mark_step_dispatched(nxt)
+        f.mark_step_dispatched(nxt)
         t["assignee"] = n_person
         json_write(task_file, t)
         return {"ok": True, "action": "advance"}
@@ -216,9 +209,7 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
 
 
 def _result_mtime_ok(data_dir: str, task_id: str, current: dict, result: dict) -> bool:
-    from lib.adapters.orchestration.task_fsm import result_mtime_ok
-
-    return result_mtime_ok(data_dir, task_id, current, result)
+    return _fsm().result_mtime_ok(data_dir, task_id, current, result)
 
 
 def _close_pipeline_inbox(data_dir: str, paths: dict, task_id: str, agents: dict) -> int:
@@ -333,9 +324,9 @@ def _send_task(
         if result_ref:
             rf = os.path.join(data_dir, result_ref.replace("/mailbus/store/", "").lstrip("/"))
         elif step_id:
-            rf = step_result_path(data_dir, task_id, step_id)
+            rf = _fsm().step_result_path(data_dir, task_id, step_id)
         else:
-            rf = legacy_result_path(data_dir, task_id)
+            rf = _fsm().legacy_result_path(data_dir, task_id)
 
         agents = json_read(os.path.join(data_dir, "config.json"), {}).get("agents", {})
         to_cfg = agents.get(to_person) or {}

@@ -237,7 +237,7 @@ def verify_pipeline_step_delivery(
     data_dir: str, agent_name: str, msg_entry: dict,
 ) -> tuple[bool, str]:
     """CLI 结束后验收：msg-results 须存在且 agent/step 匹配当前 chain。"""
-    from lib.adapters.orchestration.task_fsm import get_active_step, read_step_result, result_applies_to_step
+    from lib.composition import get_fsm
 
     content = msg_entry.get("content", "") if isinstance(msg_entry, dict) else ""
     tid = msg_entry.get("task_id") or extract_task_id(content or "")
@@ -246,14 +246,15 @@ def verify_pipeline_step_delivery(
     t = get_running_pipeline_task(data_dir, tid)
     if not t:
         return True, "task_not_running"
-    step = get_active_step(t) or (t.get("chain") or [])[-1]
+    f = get_fsm()
+    step = f.get_active_step(t) or (t.get("chain") or [])[-1]
     sa = step.get("to_agent") or step.get("to_person")
     if sa != agent_name or step.get("status") != "running":
         return True, "not_current_step"
-    result = read_step_result(data_dir, tid, step)
+    result = f.read_step_result(data_dir, tid, step)
     if not result:
         return False, "missing_msg_results"
-    ok, reason = result_applies_to_step(result, tid, step, t.get("chain") or [])
+    ok, reason = f.result_applies_to_step(result, tid, step, t.get("chain") or [])
     if not ok:
         if reason == "stale_prior_step":
             return False, "missing_msg_results"

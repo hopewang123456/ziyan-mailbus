@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { ErrorAlert } from "../components/ErrorAlert";
 import { api } from "../lib/api";
 
 type QueueItem = {
@@ -73,7 +74,7 @@ export function HumanQueuePage() {
           刷新
         </button>
       </header>
-      {err && <p className="text-sm text-flare">{err}</p>}
+      <ErrorAlert message={err} />
       {msg && <p className="text-xs text-amber-signal">{msg}</p>}
 
       {items.length === 0 ? (

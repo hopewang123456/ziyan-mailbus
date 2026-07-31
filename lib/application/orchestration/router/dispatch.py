@@ -1,21 +1,26 @@
-"""Router dispatch 鈥?start_executing / await_plan_approval / first-step inbox push."""
+"""Router dispatch — start_executing / await_plan_approval / first-step inbox push."""
 
 from __future__ import annotations
 
 from lib.application.orchestration.step_dispatch import dispatch_fsm_step
-from lib.adapters.orchestration.task_fsm import TaskFsmState, ensure_fsm, mark_step_dispatched
+from lib.composition import get_fsm
+from lib.domain.fsm import TaskFsmState
 from lib.utils import json_write
 
 
+def _fsm():
+    return get_fsm()
+
+
 def set_await_plan_approval(task: dict) -> None:
-    ensure_fsm(task)
+    _fsm().ensure(task)
     task["fsm"]["state"] = TaskFsmState.CREATED.value
     task["fsm"]["substate"] = "await_plan_approval"
     task["status"] = "pending"
 
 
 def start_executing(task: dict) -> None:
-    ensure_fsm(task)
+    _fsm().ensure(task)
     task["fsm"]["state"] = TaskFsmState.EXECUTING.value
     task["fsm"].pop("substate", None)
     task["fsm"].pop("gate_id", None)
@@ -49,10 +54,9 @@ def dispatch_first_step(data_dir: str, task: dict) -> bool:
         summary=task.get("intent") or task.get("summary") or "",
     )
     if ok:
-        mark_step_dispatched(step)
+        _fsm().mark_step_dispatched(step)
         task["fsm"]["active_step_id"] = step.get("step_id")
         task["assignee"] = step.get("to_agent") or step.get("to_person") or ""
-        # persist if tracker path known
         try:
             from lib.tracker import TaskTracker
 

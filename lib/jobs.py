@@ -351,9 +351,11 @@ def run_platform_scout(data_dir: str) -> int:
     if not os.path.isfile(script):
         return 0
     sources_path = os.path.join(data_dir, "config", "leads-sources.json")
-    example_path = os.path.join(data_dir, "config", "leads-sources.example.json")
-    if not os.path.isfile(sources_path) and not os.path.isfile(example_path):
-        print("[platform-scout] skip: no leads-sources config")
+    if not os.path.isfile(sources_path):
+        print(
+            "[platform-scout] skip: missing store/config/leads-sources.json "
+            "(copy leads-sources.example.json if present)"
+        )
         return 0
     try:
         r = subprocess.run(

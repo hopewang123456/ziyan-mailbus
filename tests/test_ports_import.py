@@ -53,12 +53,22 @@ class TestLayerImports(unittest.TestCase):
                     offenders.append(f"{path.name}:{mod}")
         self.assertEqual(offenders, [], msg=f"layer violation: {offenders}")
 
+    def test_application_does_not_import_task_fsm(self):
+        app_dir = ROOT / "application"
+        bad = "lib.adapters.orchestration.task_fsm"
+        offenders: list[str] = []
+        for path in app_dir.rglob("*.py"):
+            for mod in _imports_of(path):
+                if mod == bad or mod.startswith(bad + "."):
+                    offenders.append(f"{path.relative_to(ROOT)}:{mod}")
+        self.assertEqual(offenders, [], msg=f"layer violation: {offenders}")
+
     def test_adapters_do_not_import_application(self):
         ad_dir = ROOT / "adapters"
         if not ad_dir.is_dir():
             self.skipTest("no adapters yet")
         # Legacy: task_fsm still calls into application.orchestration.pipeline
-        # until Wave6 Port-only cutover; exclude from this guard.
+        # until a future Port-only cutover; exclude from this guard.
         allow = {"task_fsm.py"}
         offenders: list[str] = []
         for path in ad_dir.rglob("*.py"):

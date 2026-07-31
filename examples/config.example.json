@@ -6,7 +6,9 @@
       "Omit skills_dirs / memory_dir, or set skills_dirs to [] — mailbus does NOT inject paths;",
       "each runtime then uses its own default skills/ and memory/ under the agent home/workspace.",
       "Local setup: do NOT put Obsidian Vault absolute paths in committed config;",
-      "use host junctions (setup-windows.ps1) + docker-compose.override.yml (see override.example.yml)."
+      "use host junctions (setup-windows.ps1) + docker-compose.override.yml (see override.example.yml).",
+      "frameworks.plugins: optional list of module specs (module or module:callable) loaded at serve start via register_framework; also MAILBUS_FRAMEWORK_PLUGINS env and pkg entry-points group mailbus.frameworks (no hot-reload).",
+      "integrations.plugins: same for register_integration; MAILBUS_INTEGRATION_PLUGINS / mailbus.integrations."
     ]
   },
   "project": "ziyan-mailbus",

@@ -45,27 +45,46 @@ def _read_json(path: str) -> dict:
 
 
 def _resolve_file(base_dir: str, name: str, example_name: str) -> str:
+    """Return path to the runtime file only (never bind *.example as production SoT)."""
+    from lib.config_files import resolve_config_path
+
     primary = os.path.join(base_dir, name)
-    if os.path.isfile(primary):
-        return primary
-    return os.path.join(base_dir, example_name)
+    res = resolve_config_path(primary)
+    if res.path is not None:
+        return str(res.path)
+    # Keep example path only for messaging / materialize callers — not as loaded SoT
+    return primary
 
 
 def load_registry(data_dir: str) -> dict:
     base = external_tools_dir(data_dir)
     if os.path.isdir(base):
-        return _read_json(_resolve_file(base, "registry.json", "registry.example.json"))
-    # legacy
+        primary = os.path.join(base, "registry.json")
+        from lib.config_files import resolve_config_path, warn_if_missing
+
+        res = resolve_config_path(primary)
+        if res.path is None:
+            warn_if_missing(primary)
+            return {}
+        return _read_json(str(res.path))
     legacy = os.path.join(data_dir, "config", "external-tools.json")
     if os.path.isfile(legacy):
         return _read_json(legacy)
-    return _read_json(os.path.join(data_dir, "config", "external-tools.example.json"))
+    return {}
 
 
 def load_grants(data_dir: str) -> dict:
     base = external_tools_dir(data_dir)
     if os.path.isdir(base):
-        g = _read_json(_resolve_file(base, "grants.json", "grants.example.json"))
+        primary = os.path.join(base, "grants.json")
+        from lib.config_files import resolve_config_path, warn_if_missing
+
+        res = resolve_config_path(primary)
+        if res.path is None:
+            warn_if_missing(primary)
+            reg = load_registry(data_dir)
+            return {"agent_grants": reg.get("agent_grants") or {}}
+        g = _read_json(str(res.path))
         if g.get("agent_grants"):
             return g
     reg = load_registry(data_dir)
@@ -80,8 +99,8 @@ def load_external_tools_config(data_dir: str) -> dict:
     merged["agent_grants"] = grants.get("agent_grants") or {}
     merged["_paths"] = {
         "external_tools_dir": external_tools_dir(data_dir),
-        "registry": _resolve_file(external_tools_dir(data_dir), "registry.json", "registry.example.json"),
-        "grants": _resolve_file(external_tools_dir(data_dir), "grants.json", "grants.example.json"),
+        "registry": os.path.join(external_tools_dir(data_dir), "registry.json"),
+        "grants": os.path.join(external_tools_dir(data_dir), "grants.json"),
     }
     return merged
 

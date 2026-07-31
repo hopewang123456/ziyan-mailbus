@@ -28,6 +28,18 @@ def serve(data_dir: str, agents: dict, agent_types: dict = None,
     configure_stdio_utf8()
     if port is None:
         port = DEFAULT_API_PORT
+
+    try:
+        from lib.adapters.frameworks.entry_point_discovery import ensure_framework_plugins_loaded
+        from lib.adapters.integrations.entry_point_discovery import ensure_integration_plugins_loaded
+        from lib.composition import bind_data_dir
+
+        bind_data_dir(data_dir)
+        ensure_framework_plugins_loaded(data_dir=data_dir, config=config)
+        ensure_integration_plugins_loaded(data_dir=data_dir, config=config)
+    except Exception:
+        pass
+
     MailbusAPIHandler.data_dir = data_dir
     MailbusAPIHandler.agents = agents
     MailbusAPIHandler.agent_types = agent_types or {}

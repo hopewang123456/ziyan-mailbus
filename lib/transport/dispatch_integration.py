@@ -57,6 +57,40 @@ def context_from_pipeline_step(
     )
 
 
+def send_via_message_port(
+    data_dir: str,
+    *,
+    to_agent: str,
+    msg_id: str,
+    intent: str = "",
+    channel: str = "",
+    task_id: str = "",
+    step_id: str = "",
+    role_type: int = 0,
+    wait: bool = False,
+    allow_no_spawn: bool = False,
+    wait_timeout_sec: int | None = None,
+    config: Optional[dict] = None,
+) -> dict[str, Any]:
+    """Wave3/W7c: MessageTransportPort 统一发送（可选 Harness wait）。"""
+    from lib.application.transport_send import send_outbound
+
+    return send_outbound(
+        data_dir,
+        agent_id=to_agent,
+        msg_id=msg_id,
+        intent=intent,
+        channel=channel,
+        task_id=task_id,
+        step_id=step_id,
+        role_type=role_type,
+        wait=wait,
+        allow_no_spawn=allow_no_spawn,
+        wait_timeout_sec=wait_timeout_sec,
+        config=config,
+    )
+
+
 def dispatch_pipeline_step(
     data_dir: str,
     *,
@@ -68,10 +102,26 @@ def dispatch_pipeline_step(
     agents: Optional[dict] = None,
     config: Optional[dict] = None,
 ) -> dict[str, Any]:
-    """pipeline 派发：启用 use_router 时走 TransportRouter，否则返回 skipped。"""
+    """pipeline 派发：启用 use_router 时走 TransportRouter，否则返回 skipped。
+
+    W7c：`transport.use_message_port` 为真时，file_bus 厚路径（含 wait）走 MessageTransportPort。
+    """
     cfg = config or json_read(os.path.join(data_dir, "config.json"), {})
     if not transport_router_enabled(cfg):
         return {"skipped": True, "reason": "use_router_disabled"}
+
+    tcfg = cfg.get("transport") or {}
+    if tcfg.get("use_message_port"):
+        return _dispatch_via_message_port(
+            data_dir,
+            task_id=task_id,
+            step_id=step_id,
+            to_agent=to_agent,
+            role_type=role_type,
+            intent=intent,
+            config=cfg,
+        )
+
     agents = merge_agent_transport_config(agents or cfg.get("agents") or {})
     router = build_router(data_dir, cfg)
     ctx = context_from_pipeline_step(
@@ -94,7 +144,6 @@ def dispatch_pipeline_step(
         out["step_result_path"] = result.step_result_path
     if result.error:
         out["error"] = result.error
-        # Wave3: surface stable error_code for locale/doctor
         err = str(result.error)
         if err.startswith("retryable:"):
             out["error_code"] = "transport_retryable"
@@ -118,29 +167,53 @@ def dispatch_pipeline_step(
     return out
 
 
-def send_via_message_port(
+def _dispatch_via_message_port(
     data_dir: str,
     *,
+    task_id: str,
+    step_id: str,
     to_agent: str,
-    msg_id: str,
-    intent: str = "",
-    channel: str = "",
-    task_id: str = "",
-    step_id: str = "",
-    role_type: int = 0,
-    config: Optional[dict] = None,
+    role_type: int,
+    intent: str,
+    config: dict,
 ) -> dict[str, Any]:
-    """Wave3: MessageTransportPort 统一发送入口（file_bus / http_a2a / webhook）。"""
-    from lib.application.transport_send import send_outbound
-
-    return send_outbound(
+    """W7c：调度经 MessageTransportPort（默认 file_bus + wait）。"""
+    msg_id = f"msg-{task_id}-{step_id}"
+    timeout = int(
+        ((config.get("harness") or {}).get("file_bus") or {}).get("ack_timeout_sec")
+        or config.get("ack_timeout")
+        or 300
+    )
+    receipt = send_via_message_port(
         data_dir,
-        agent_id=to_agent,
+        to_agent=to_agent,
         msg_id=msg_id,
         intent=intent,
-        channel=channel,
+        channel="file_bus",
         task_id=task_id,
         step_id=step_id,
         role_type=role_type,
+        wait=True,
+        allow_no_spawn=True,
+        wait_timeout_sec=timeout,
         config=config,
     )
+    out: dict[str, Any] = {
+        "ok": bool(receipt.get("ok")),
+        "transport_used": receipt.get("channel") or "file_bus",
+        "msg_id": receipt.get("msg_id") or msg_id,
+        "detail": receipt.get("detail") or "",
+        "via": "message_transport_port",
+    }
+    if not out["ok"]:
+        out["error"] = receipt.get("detail") or "transport_failed"
+        out["error_code"] = receipt.get("error_code") or "delivery_failed"
+        if receipt.get("message_zh"):
+            out["message_zh"] = receipt["message_zh"]
+    else:
+        from lib.application.orchestration.pipeline.results import step_result_path
+
+        path = step_result_path(data_dir, task_id, step_id)
+        if os.path.isfile(path):
+            out["step_result_path"] = path
+    return out

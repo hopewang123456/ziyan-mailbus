@@ -99,7 +99,7 @@ def _collect_external_tool_entries(data_dir: str) -> list[dict]:
             "tool_id": tool_id,
             "provider": provider,
             "agent_id": ",".join(granted),
-            "path": os.path.join(base, "registry.example.json"),
+            "path": os.path.join(base, "registry.json"),
         })
 
     for agent_id, tool_ids in grants.items():

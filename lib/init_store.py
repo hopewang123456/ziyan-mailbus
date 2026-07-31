@@ -177,13 +177,18 @@ def load_config_fragments(mail_root: Path | None = None) -> dict[str, Any]:
 
     agents_dir = cfg_dir / "agents"
     if agents_dir.is_dir():
+        from lib.config_files import iter_runtime_json_files
+
         merged["_agent_overrides"] = {}
-        for path in sorted(agents_dir.glob("*.json")):
+        for path in iter_runtime_json_files(agents_dir):
             stem = path.stem
             if stem.endswith(".override"):
                 agent_id = stem[: -len(".override")]
             else:
                 agent_id = stem
+            # Skip leftover misnamed seeds
+            if ".example" in agent_id:
+                continue
             merged["_agent_overrides"][agent_id] = _read_json(path, {})
 
     transport_tpl = cfg_dir / "mailbus" / "transport.template.json"

@@ -21,11 +21,15 @@ PORT_KEY_BY_TYPE: dict[str, str] = {
 
 @lru_cache(maxsize=1)
 def load_launch_port_defaults() -> dict[str, Any]:
+    from lib.config_files import resolve_config_path, warn_if_missing
+
     path = MAILBUS_ROOT / "config" / "mailbus" / "launch-ports.json"
-    if not path.is_file():
+    res = resolve_config_path(path)
+    if res.path is None:
+        warn_if_missing(path)
         return {}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(res.path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
     return {k: v for k, v in data.items() if not str(k).startswith("_")}

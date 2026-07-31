@@ -21,11 +21,19 @@ jobs:
           python -m pip install -U pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest
-      - name: pytest e2e + v_suite + wave_f3_f4
+      - name: pytest e2e + v_suite + wave_f3_f4 + ports_import + clock_lint
         env:
           PYTHONUTF8: "1"
         run: |
           python -m pytest tests/e2e -q \
             tests/test_acceptance_v_suite.py \
             tests/test_v6_enable_rollback.py \
-            tests/test_wave_f3_f4_gates.py -q
+            tests/test_wave_f3_f4_gates.py \
+            tests/test_ports_import.py \
+            tests/test_application_clock_lint.py \
+            tests/test_transport_wave3.py \
+            tests/test_framework_entry_points.py \
+            tests/test_integration_entry_points.py \
+            tests/test_no_secrets_in_git.py \
+            tests/test_config_files.py \
+            tests/test_config_readers_no_example.py -q

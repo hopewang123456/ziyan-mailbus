@@ -1,6 +1,5 @@
-# ComfyUI Windows 入口
-# Usage: .\docker-agents\ensure-comfyui.ps1 [-Start] [-DownloadModel] [-Smoke]
-# 注意：WSL GPU 容器已启用时勿 -Start（会抢 8188 端口）
+# ComfyUI — Windows 薄包装；Linux：python tools/mailbus.py docker up-comfyui
+# -Start / 默认：compose up GPU 栈；-Smoke：可选 smoke 脚本
 param(
   [switch]$Start,
   [switch]$DownloadModel,
@@ -10,33 +9,26 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $root
 
-$gpu = wsl docker inspect mailbus-comfyui-gpu --format "{{.State.Running}}" 2>$null
-if ($gpu -eq "true" -and ($Start -or $Smoke)) {
-  Write-Host "[WARN] mailbus-comfyui-gpu 已在 WSL 运行；跳过 Windows CPU 启动。用 tools/sync-comfyui-url.ps1 同步 URL。" -ForegroundColor Yellow
-  if ($Smoke) {
-    python tools/smoke-comfyui-gpu.py
-    exit $LASTEXITCODE
-  }
-  exit 0
+$py = $null
+foreach ($name in @("python", "python3", "py")) {
+    $cmd = Get-Command $name -ErrorAction SilentlyContinue
+    if ($cmd) { $py = $cmd.Source; break }
+}
+if (-not $py) { Write-Host "[ERROR] python not found"; exit 2 }
+
+if ($DownloadModel) {
+    Write-Host "[WARN] --download-model 请用 tools/ensure-comfyui.py（若存在）或手动拉模型；本入口仅 compose up"
 }
 
-# 加载 env
-$envFile = Join-Path $root ".env"
-if (Test-Path $envFile) {
-  Get-Content $envFile | ForEach-Object {
-    if ($_ -match '^\s*([^#=]+)=(.*)$') {
-      $k = $matches[1].Trim(); $v = $matches[2].Trim().Trim('"')
-      if ($v -and -not [Environment]::GetEnvironmentVariable($k)) {
-        Set-Item -Path "Env:$k" -Value $v
-      }
-    }
-  }
-}
-
-$args = @("tools/ensure-comfyui.py")
-if ($DownloadModel) { $args += "--download-model" }
-if ($Start -or $Smoke) { $args += "--start" }
-if ($Smoke) { $args += "--smoke" }
-python @args
+& $py tools/mailbus.py docker up-comfyui
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-Write-Host "ComfyUI: http://127.0.0.1:8188" -ForegroundColor Green
+
+if ($Smoke) {
+    $smoke = Join-Path $root "tools\smoke-comfyui-gpu.py"
+    if (Test-Path $smoke) {
+        & $py $smoke
+        exit $LASTEXITCODE
+    }
+    Write-Host "[WARN] missing tools/smoke-comfyui-gpu.py"
+}
+exit 0

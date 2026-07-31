@@ -91,6 +91,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
 
     def _check_auth(self, *, write: bool = False) -> bool:
         """Read: legacy token-if-configured. Write: localhost free; remote requires token."""
+        from lib.locale.errors_zh import message_zh
+
         if not write:
             if not self.auth_token:
                 return True
@@ -99,12 +101,15 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                 return True
             if self.headers.get("X-API-Key") == self.auth_token:
                 return True
-            self._send_json({"error": "unauthorized"}, 401)
+            self._send_json({
+                "error": "unauthorized",
+                "error_code": "unauthorized",
+                "message_zh": message_zh("unauthorized"),
+            }, 401)
             return False
 
         from lib.application.mailbus_token import authorize_write, client_context_from_handler
         from lib.domain.types import AuthDecision
-        from lib.locale.errors_zh import message_zh
 
         ctx = client_context_from_handler(self)
         decision = authorize_write(self.data_dir, ctx)
@@ -273,6 +278,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/external-tools": lambda: h["system"].handle_external_tools(self),
             "/api/clinic/tools": lambda: h["system"].handle_clinic_tools(self),
             "/api/doctor": lambda: h["system"].handle_doctor(self),
+            "/api/locale/errors": lambda: h["system"].handle_locale_errors(self),
             "/api/workload": lambda: h["system"].handle_workload(self),
             "/api/send-msg": lambda: h["inbox"].handle_send_msg(self),
             "/api/internal-llm/status": lambda: h["internal_llm"].handle_internal_llm_status(self),

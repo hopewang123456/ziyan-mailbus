@@ -19,13 +19,18 @@ echo   API: http://localhost:9814/
 echo ==========================================
 echo.
 
-where wsl >nul 2>&1
-if errorlevel 1 (
-  echo [WARN] WSL not found — trying host Python...
+where python >nul 2>&1
+if not errorlevel 1 (
   python "%CD%\tools\mailbus.py" start
   set "RC=!ERRORLEVEL!"
 ) else (
-  call "%~dp0_invoke-mailbus.bat" start --windows
+  where py >nul 2>&1
+  if errorlevel 1 (
+    echo [ERROR] Python not found
+    pause
+    exit /b 1
+  )
+  py -3 "%CD%\tools\mailbus.py" start
   set "RC=!ERRORLEVEL!"
 )
 

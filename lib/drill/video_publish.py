@@ -149,7 +149,9 @@ def run_video_publish_drill(
                     "n8n webhook 不可达或未注册 workflow — 导入 mailbus-multi-publish.workflow.json 并 Activate"
                 )
         else:
-            warnings.append("N8N_PUBLISH_WEBHOOK_URL 未设置 — 运行 sync-n8n-url.ps1")
+            warnings.append(
+                "N8N_PUBLISH_WEBHOOK_URL 未设置 — 先 python tools/mailbus.py docker start-n8n，再配置 webhook URL"
+            )
 
         if mode == "live":
             if not url:

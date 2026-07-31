@@ -1,10 +1,10 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul 2>&1
 title Mailbus - Fix localhost port
 
 cd /d "%~dp0.."
-if not exist "%CD%/tools/mailbus.py" (
+if not exist "%CD%\tools\mailbus.py" (
   echo [ERROR] mailbus root not found: %CD%
   pause
   exit /b 1
@@ -18,25 +18,31 @@ echo   Click Yes if UAC prompts
 echo ==========================================
 echo.
 
-where wsl >nul 2>&1
-if errorlevel 1 (
-  echo [ERROR] WSL not found. Start WSL Ubuntu first.
-  pause
-  exit /b 1
+where python >nul 2>&1
+if not errorlevel 1 (
+  set "PY=python"
+) else (
+  where py >nul 2>&1
+  if errorlevel 1 (
+    echo [ERROR] Python not found
+    pause
+    exit /b 1
+  )
+  set "PY=py -3"
 )
 
-call "%~dp0_invoke-mailbus.bat" portproxy
-set "RC=%ERRORLEVEL%"
+call %PY% "%CD%\tools\mailbus.py" portproxy
+set "RC=!ERRORLEVEL!"
 
 echo.
-if %RC% equ 0 (
-  call "%~dp0_invoke-mailbus.bat" recover health
-  set "RC=%ERRORLEVEL%"
+if !RC! equ 0 (
+  call %PY% "%CD%\tools\mailbus.py" recover health
+  set "RC=!ERRORLEVEL!"
 )
 
-if %RC% neq 0 (
+if !RC! neq 0 (
   echo.
-  echo [FAILED] Port fix exited with code %RC%
+  echo [FAILED] Port fix exited with code !RC!
   echo   If UAC was denied, right-click and Run as administrator
   echo   Or run scripts\start-mailbus.bat / Desktop Start-Mailbus.bat first
 ) else (
@@ -45,4 +51,4 @@ if %RC% neq 0 (
 
 echo.
 pause
-exit /b %RC%
+exit /b !RC!

@@ -18,19 +18,25 @@ echo   mailbus: http://localhost:9814/
 echo ==========================================
 echo.
 
-where wsl >nul 2>&1
-if errorlevel 1 (
-  echo [ERROR] WSL not found
-  pause
-  exit /b 1
+where python >nul 2>&1
+if not errorlevel 1 (
+  set "PY=python"
+) else (
+  where py >nul 2>&1
+  if errorlevel 1 (
+    echo [ERROR] Python not found
+    pause
+    exit /b 1
+  )
+  set "PY=py -3"
 )
 
-call "%~dp0_invoke-mailbus.bat" start --windows --fast
+call %PY% "%CD%\tools\mailbus.py" start --fast
 set "RC=!ERRORLEVEL!"
 
 echo.
 if !RC! equ 0 (
-  call "%~dp0_invoke-mailbus.bat" recover health
+  call %PY% "%CD%\tools\mailbus.py" recover health
   set "RC=!ERRORLEVEL!"
 )
 

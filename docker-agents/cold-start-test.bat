@@ -22,7 +22,7 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo [3/4] Fixing Windows localhost ports...
-powershell -NoProfile -ExecutionPolicy Bypass -File "E:\ai_tools\scripts\fix-wsl-localhost.ps1" >> "%LOG%" 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -File "%MAILBUS_ROOT%\windows\fix-wsl-localhost.ps1" >> "%LOG%" 2>&1
 
 echo [4/4] Waiting 60s then smoke test...
 ping -n 61 127.0.0.1 >nul

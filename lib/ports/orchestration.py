@@ -1,9 +1,7 @@
 """Wave2 orchestration ports."""
 from __future__ import annotations
 
-from typing import Any, Mapping, Protocol, runtime_checkable
-
-from lib.domain.types import StepRef
+from typing import Any, Mapping, Optional, Protocol, runtime_checkable
 
 
 @runtime_checkable
@@ -19,6 +17,80 @@ class TaskFsmPort(Protocol):
     def bump_retry(self, task: dict, *, step_id: str = "") -> int: ...
 
     def summary(self, task: dict) -> dict: ...
+
+    def get_active_step(self, task: dict) -> Optional[dict]: ...
+
+    def mark_step_dispatched(self, step: dict) -> None: ...
+
+    def apply_submit(
+        self,
+        task: dict,
+        result: dict,
+        *,
+        agents: Optional[dict] = None,
+        data_dir: str = "",
+    ) -> dict: ...
+
+    def apply_rollback(
+        self,
+        task: dict,
+        *,
+        to_step: Optional[int] = None,
+        to_person: Optional[str] = None,
+        reason: str = "",
+    ) -> dict: ...
+
+    def read_step_result(self, data_dir: str, task_id: str, step: dict) -> Optional[dict]: ...
+
+    def write_step_result(
+        self,
+        data_dir: str,
+        task_id: str,
+        step: dict,
+        result: dict,
+        *,
+        immediate_advance: bool = True,
+    ) -> str: ...
+
+    def result_applies_to_step(
+        self,
+        result: dict,
+        task_id: str,
+        step: dict,
+        chain: list,
+        *,
+        result_mtime_ok: bool = True,
+    ) -> tuple[bool, str]: ...
+
+    def result_mtime_ok(
+        self, data_dir: str, task_id: str, step: dict, result: dict,
+    ) -> bool: ...
+
+    def step_result_path(self, data_dir: str, task_id: str, step_id: str) -> str: ...
+
+    def legacy_result_path(self, data_dir: str, task_id: str) -> str: ...
+
+    def step_result_dir(self, data_dir: str, task_id: str) -> str: ...
+
+    def archive_step_result_for_retry(
+        self, data_dir: str, task_id: str, step: dict, result: dict,
+    ) -> str: ...
+
+    def revert_failed_retry(
+        self,
+        data_dir: str,
+        task_id: str,
+        step: dict,
+        result: dict,
+        *,
+        archived_path: str = "",
+    ) -> None: ...
+
+    def revert_failed_advance(
+        self, task: dict, completed_step: dict, next_step: dict,
+    ) -> None: ...
+
+    def append_history(self, task: dict, event: str, detail: dict) -> None: ...
 
 
 @runtime_checkable
