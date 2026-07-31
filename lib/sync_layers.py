@@ -1,6 +1,7 @@
 """Phase 3.3 — registry-driven skill sync targets + rules mirror."""
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import platform
 import re
 import shutil
@@ -236,7 +237,7 @@ def build_skills_index_from_registry(
         }
 
     index["agents"] = agents_out
-    index["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    index["updated_at"] = now_utc_dt().strftime("%Y-%m-%d")
     index["schema"] = index.get("schema") or "skills-index-v2"
     index["source"] = "team-pack/profiles + access/transport"
     return index

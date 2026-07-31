@@ -12,7 +12,7 @@ from lib.delivery_normalizer import (
     normalize_from_reply_record,
     normalize_opencode_deliveries,
 )
-from lib.task_fsm import read_step_result, step_result_path
+from lib.adapters.orchestration.task_fsm import read_step_result, step_result_path
 from lib.utils import json_write
 
 

@@ -22,16 +22,19 @@ else
 fi
 
 mkdir -p "$TARGET"
+# Prefer sync-all (opt-in via MAILBUS_SYNC_LAYERS); framework-specific helper if present.
 SYNC_PY=""
 if [ -f "$ROOT/tools/sync_framework_workspace_skills.py" ]; then
   SYNC_PY="$ROOT/tools/sync_framework_workspace_skills.py"
-elif [ -f "$ROOT/tools/_archive/sync_framework_workspace_skills.py" ]; then
-  SYNC_PY="$ROOT/tools/_archive/sync_framework_workspace_skills.py"
+elif [ -f "$ROOT/tools/sync-all-agent-layers.py" ]; then
+  SYNC_PY="$ROOT/tools/sync-all-agent-layers.py"
 fi
-if [ -n "$SYNC_PY" ]; then
+if [ -n "$SYNC_PY" ] && [ "$(basename "$SYNC_PY")" = "sync_framework_workspace_skills.py" ]; then
   # shellcheck disable=SC2086
   python3 "$SYNC_PY" "$AGENT" "$TARGET" --data-dir "$DATA_DIR" --symlink $COPY_FLAG
+elif [ "${MAILBUS_SYNC_LAYERS:-0}" = "1" ] && [ -f "$ROOT/tools/sync-all-agent-layers.py" ]; then
+  python3 "$ROOT/tools/sync-all-agent-layers.py" --data-dir "$DATA_DIR" --skip-codex --skip-claude || true
 else
-  echo "[sync-hermes-framework-skill] warn: sync_framework_workspace_skills.py missing; skip"
+  echo "[sync-hermes-framework-skill] skip mass sync (Vault SoT; set MAILBUS_SYNC_LAYERS=1 to enable)"
 fi
 echo "[sync-hermes-framework-skill] agent=$AGENT target=$TARGET (SoT=Vault; .sync=mirror)"

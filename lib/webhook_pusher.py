@@ -11,7 +11,7 @@ import urllib.request
 from typing import Any
 
 from .models import MsgStatus
-from .scanner import mark_as_pushed, update_message_status
+from lib.scan import mark_as_pushed, update_message_status
 from .utils import _now_iso
 
 

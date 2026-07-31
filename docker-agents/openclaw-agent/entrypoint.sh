@@ -56,21 +56,45 @@ start_gateway() {
   if [ "$name" = "yige" ]; then
     extra=("OPENCLAW_ALLOW_OLDER_BINARY_DESTRUCTIVE_ACTIONS=1")
   fi
-  # 容器重建后浏览器 localStorage 里的 device token 常与服务端不一致 → 清空后强制重新配对
-  rm -rf "${statedir}/devices" "${statedir}/identity" 2>/dev/null || true
+  # 默认保留 pairing；仅 RESET_OPENCLAW_PAIRING=1 时清理（避免普通重启丢配对）
+  if [ "${RESET_OPENCLAW_PAIRING:-0}" = "1" ]; then
+    rm -rf "${statedir}/devices" "${statedir}/identity" 2>/dev/null || true
+  fi
+  # 清理可能卡住的迁移锁（升级版本后常见）
+  find "$statedir" -maxdepth 3 \( -name "*.lock" -o -name "*.migrating" -o -name "migration.lock" \) -delete 2>/dev/null || true
+  # 2026.7+：缺 deepseek plugin 会弹出交互警告并卡住 gateway
+  env OPENCLAW_STATE_DIR="$statedir" OPENCLAW_CONFIG_PATH="${statedir}/openclaw.json" \
+    openclaw --no-color plugins install @openclaw/deepseek-provider \
+    >/tmp/openclaw-plugin-${name}.log 2>&1 || true
   nohup env \
     "${extra[@]}" \
     OPENCLAW_STATE_DIR="$statedir" \
     OPENCLAW_CONFIG_PATH="${statedir}/openclaw.json" \
+    CI=1 NO_COLOR=1 \
     "${gateway_env_base[@]}" \
-    openclaw gateway run --allow-unconfigured --auth token --token "$OPENCLAW_TOKEN" \
-      --port "$port" --bind auto --force \
+    openclaw --no-color gateway run --allow-unconfigured --auth token --token "$OPENCLAW_TOKEN" \
+      --port "$port" --bind lan --force \
     >"/tmp/openclaw-gw-${port}.log" 2>&1 &
-  echo "  ${name} (${port}) started [state=${statedir}]"
+  echo "  ${name} (${port}) started [state=${statedir}] pid=$!"
 }
 
 start_gateway "xiaoqi" 18789
+# 错开启动，避免两 profile 同时抢迁移锁
+sleep 12
 start_gateway "yige" 18790
+
+# 等待端口就绪（最多 ~90s）
+for port in 18789 18790; do
+  ok=0
+  for _ in $(seq 1 30); do
+    if python3 -c "import socket;s=socket.socket();s.settimeout(1);r=s.connect_ex(('127.0.0.1',$port));s.close();raise SystemExit(0 if r==0 else 1)" 2>/dev/null; then
+      ok=1
+      break
+    fi
+    sleep 3
+  done
+  echo "  port ${port}: $([ "$ok" = 1 ] && echo ready || echo NOT-ready — see /tmp/openclaw-gw-${port}.log)"
+done
 
 echo "[entrypoint] All OpenClaw gateways launched"
 tail -f /dev/null

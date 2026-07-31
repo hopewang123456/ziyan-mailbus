@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.pipeline_task import (
+from lib.application.orchestration.pipeline.task import (
     is_side_audit_message,
     side_audit_deferred_for_reviewer,
 )

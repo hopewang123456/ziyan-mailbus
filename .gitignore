@@ -4,6 +4,9 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+web/node_modules/
+web/dist/
+docs/dist/
 
 # Runtime data (do not commit)
 store/
@@ -32,6 +35,7 @@ Thumbs.db
 
 # Secrets / local env
 .env
+store/secrets.json
 docker-agents/.env
 docker-agents/.env.secrets
 docker-agents/.proxy-state
@@ -53,17 +57,19 @@ _run_*.sh
 _wsl_*.sh
 
 # Path pollution (drive-letter junk from bad Windows mounts)
-# Note: do NOT use /E*/ ? that would ignore examples/
 /E:/
 /C:/
 docker-agents/E:/
 docker-agents/C:/
+/E/
+/C/
+docker-agents/E/
+docker-agents/C/
 
-# Local Vault / machine absolute mounts ? keep override.example.yml only
+# Local Vault / machine absolute mounts — keep override.example.yml only
 docker-agents/docker-compose.override.yml
 
-# Knowledge dirs are often NTFS junctions ? private Vault.
-# Do not follow into Vault on publish; demos live under examples/.
+# Knowledge dirs are often NTFS junctions → private Vault.
 /skills/
 /rules/
 /plans/
@@ -71,6 +77,32 @@ docker-agents/docker-compose.override.yml
 
 # Local-only trees
 external-tools/
+.local/
+
+# ── Private team pack (not for GitHub) ──────────────────────────
+# Per-agent transport + overrides stay on disk for local use only
+access/transport/lingzhao/
+access/transport/lingjin/
+access/transport/lingxi/
+access/transport/lingtuo/
+access/transport/lingjian/
+access/transport/lingyan/
+access/transport/lingxun/
+access/transport/lingxiao/
+access/transport/dali/
+access/transport/lingyun/
+access/transport/xiaoqi/
+access/transport/yige/
+access/transport/lingzhang/
+config/agents/*.override.json
+config/mailbus/launch-ports.json
+README.local.md
+team-pack/
+access/external-tools/registry.json
+access/external-tools/grants.json
+
+# Demo transports that ARE published live under examples/
+!examples/
 
 # Test / tool scratch
 tests/_tmp_codex_home/

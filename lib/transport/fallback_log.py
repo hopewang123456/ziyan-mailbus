@@ -1,6 +1,7 @@
 """A2A 降级告警 jsonl。"""
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import os
 from datetime import datetime, timezone
 from typing import Any
@@ -10,7 +11,7 @@ from .types import DispatchContext
 
 
 def _iso_week() -> str:
-    dt = datetime.now(timezone.utc)
+    dt = now_utc_dt()
     return f"{dt.isocalendar().year}-W{dt.isocalendar().week:02d}"
 
 

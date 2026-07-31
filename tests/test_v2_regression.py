@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from lib.agent_config import validate_agents
 from lib.models import Inbox, MsgStatus
 from lib.pipeline_routing import resolve_next_assignee
-from lib.pipeline_task import (
+from lib.application.orchestration.pipeline.task import (
     should_auto_ack_message,
     should_create_tracker_for_send,
     verify_pipeline_step_delivery,
@@ -19,7 +19,7 @@ from lib.pipeline_task import (
     is_current_pipeline_assignee,
     pipeline_inbox_message_stale,
 )
-from lib.pipeline_trigger import _close_pipeline_inbox
+from lib.application.orchestration.pipeline.trigger import _close_pipeline_inbox
 from lib.scanner import _cleanup_stale_queue_files, recover_inbox_stale_states
 from lib.self_heal import sync_tracker_and_inbox, normalize_legacy_tracker_audit_flags
 from lib.tracker import TaskTracker, TaskStatus

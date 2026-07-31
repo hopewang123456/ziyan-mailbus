@@ -3,7 +3,7 @@
 在 run_housekeeping 中被调用。扫描所有活跃告警并检测解除条件。
 """
 import os
-import time as _time
+from lib.adapters.clock import now_ts as clock_now_ts
 from .alerter import load_alerts, save_alerts, resolve_alert
 from .tracker import TaskTracker
 from .utils import json_read
@@ -12,7 +12,7 @@ from .utils import json_read
 def resolve(data_dir: str, paths: dict):
     """主入口：扫描活跃告警，检测解除条件"""
     alerts = load_alerts(data_dir)
-    now_ts = int(_time.time())
+    now_ts = int(clock_now_ts())
 
     for alert in alerts.get("alerts", []):
         if alert.get("status") != "active":

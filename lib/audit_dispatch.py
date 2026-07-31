@@ -3,8 +3,9 @@
 import os
 from typing import List, Optional
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 from .tracker import TaskTracker, TaskStatus, SKIP_TIMEOUT_PREFIXES
-from .pipeline_chain import is_pipeline_step
+from lib.application.orchestration.pipeline.chain import is_pipeline_step
 from .models import Inbox
 from .utils import json_read, json_write, _now_iso
 from .mbus_log import debug
@@ -61,7 +62,7 @@ def infer_requires_audit(
     if pipeline_chain is not None and _chain_needs_audit(pipeline_chain):
         return True
     if chain_hops is not None:
-        from .pipeline_chain import init_pipeline_chain
+        from lib.application.orchestration.pipeline.chain import init_pipeline_chain
 
         chain = init_pipeline_chain(chain_hops, "", task_id)
         if _chain_needs_audit(chain):
@@ -212,7 +213,7 @@ def _audit_inbox_stale(inbox: Inbox, msg_id: str, *, hours: float = 6.0) -> bool
         if not created:
             return True
         try:
-            age_h = (datetime.now(timezone.utc) - _parse_iso_dt(created)).total_seconds() / 3600
+            age_h = (now_utc_dt() - _parse_iso_dt(created)).total_seconds() / 3600
             return age_h >= hours
         except Exception:
             return True
@@ -241,7 +242,7 @@ def dispatch_pending_audits(data_dir: str, agents: dict, paths: dict) -> int:
     if AUDIT_REVIEWER not in agents:
         return 0
 
-    from .pipeline_task import side_audit_deferred_for_reviewer
+    from lib.application.orchestration.pipeline.task import side_audit_deferred_for_reviewer
 
     if side_audit_deferred_for_reviewer(data_dir, AUDIT_REVIEWER):
         debug(

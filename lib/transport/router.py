@@ -5,7 +5,7 @@ import os
 import time
 from typing import Any, Optional
 
-from ..pipeline_results import step_result_path
+from lib.application.orchestration.pipeline.results import step_result_path
 from ..utils import _now_iso, json_read
 from .step_result_io import read_step_result_file, write_step_result_file
 from .a2a_standard import A2ATransport

@@ -9,7 +9,7 @@ import urllib.request
 from typing import Any, Dict, List
 
 from ..env_bootstrap import load_mailbus_env
-from ..external_tools import invoke_tool
+from lib.adapters.integrations.external_tools import invoke_tool
 from ..utils import json_read
 from ..workflow.registry import get_gate_def, load_registry
 from ..workflow.tool_exec import mark_tool_live_after_gate, run_tool_step, tool_live_enabled
@@ -32,7 +32,7 @@ def probe_n8n_webhook(url: str, *, timeout: float = 10.0) -> dict:
         "assets": [],
     }
     try:
-        from ..n8n.wsl_bridge import post_json_with_wsl_fallback
+        from lib.adapters.integrations.n8n.wsl_bridge import post_json_with_wsl_fallback
 
         status, body = post_json_with_wsl_fallback(
             url,

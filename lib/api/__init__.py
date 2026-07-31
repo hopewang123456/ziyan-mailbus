@@ -31,7 +31,14 @@ def serve(data_dir: str, agents: dict, agent_types: dict = None,
     MailbusAPIHandler.data_dir = data_dir
     MailbusAPIHandler.agents = agents
     MailbusAPIHandler.agent_types = agent_types or {}
-    MailbusAPIHandler.auth_token = token
+    # Prefer explicit token arg; else ensure/resolve from secrets / env / legacy
+    try:
+        from lib.application.mailbus_token import ensure_token, resolve_token
+
+        resolved = (token or "").strip() or resolve_token(data_dir, config) or ensure_token(data_dir)
+    except Exception:
+        resolved = token or ""
+    MailbusAPIHandler.auth_token = resolved
     MailbusAPIHandler.require_api_auth = bool((config or {}).get("require_api_auth", False))
 
     # 公告板 + 权限文件路径

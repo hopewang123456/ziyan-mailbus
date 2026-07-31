@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import os
 import sqlite3
 import time
@@ -77,7 +78,7 @@ def store_memory(
         os.makedirs(parent, exist_ok=True)
         conn = sqlite3.connect(path)
         _ensure_schema(conn)
-        now = time.time()
+        now = now_ts()
         existing = conn.execute("SELECT key FROM memories WHERE key=?", (key,)).fetchone()
         if existing:
             conn.execute(

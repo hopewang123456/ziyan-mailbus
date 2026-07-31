@@ -7,7 +7,7 @@ from ..internal_llm.client import LLMError, complete
 from ..internal_llm.planner_llm import load_llm_config
 from ..internal_llm.rag.context import fetch_rag_context
 from ..locale.role_labels import role_type_candidates, valid_role_types
-from ..router.planner import PlanError
+from lib.application.orchestration.router.planner import PlanError
 
 
 def route_next_step(task: dict, *, data_dir: str) -> dict:

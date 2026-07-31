@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Expose Windows Ollama (127.0.0.1:11434) on WSL 0.0.0.0:11434 for Docker mailbus.
+"""Expose Windows Ollama on WSL for Docker mailbus.
 
-Docker-in-WSL cannot reach Windows localhost directly. This proxy forwards HTTP
-to Windows via curl.exe, which can access the host Ollama API.
+Listen defaults come from config/services/ollama.json (wsl.proxy).
+Forwards HTTP to Windows via curl.exe (host Ollama API).
 """
 from __future__ import annotations
 
@@ -13,9 +13,27 @@ import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 CURL = os.environ.get("OLLAMA_WSL_PROXY_CURL", "/mnt/c/Windows/System32/curl.exe")
-TARGET = os.environ.get("OLLAMA_WSL_PROXY_TARGET", "http://127.0.0.1:11434")
 TIMEOUT = os.environ.get("OLLAMA_WSL_PROXY_TIMEOUT", "120")
-SKIP_HEADERS = frozenset({"host", "content-length", "connection", "keep-alive", "transfer-encoding"})
+SKIP_HEADERS = frozenset(
+    {"host", "content-length", "connection", "keep-alive", "transfer-encoding", "proxy-connection"}
+)
+TARGET = os.environ.get("OLLAMA_WSL_PROXY_TARGET", "http://127.0.0.1:11434")
+
+
+def _default_listen_and_target() -> tuple[str, int, str]:
+    """Prefer config/services/ollama.json; fall back to env / hardcoded."""
+    try:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        if root not in sys.path:
+            sys.path.insert(0, root)
+        from lib.service_registry import ollama_proxy_listen
+
+        return ollama_proxy_listen()
+    except Exception:
+        host = "0.0.0.0"
+        port = int(os.environ.get("OLLAMA_WSL_PROXY_PORT", "11435"))
+        target = os.environ.get("OLLAMA_WSL_PROXY_TARGET", "http://127.0.0.1:11434").rstrip("/")
+        return host, port, target
 
 
 class OllamaProxyHandler(BaseHTTPRequestHandler):
@@ -33,12 +51,26 @@ class OllamaProxyHandler(BaseHTTPRequestHandler):
     def _proxy(self, method: str) -> None:
         length = int(self.headers.get("Content-Length", 0) or 0)
         body = self.rfile.read(length) if length else b""
-        cmd = [CURL, "-sS", "--max-time", TIMEOUT, "-w", "\n%{http_code}", "-X", method]
+        target = os.environ.get("OLLAMA_WSL_PROXY_TARGET", TARGET).rstrip("/")
+        cmd = [
+            CURL,
+            "-sS",
+            "--noproxy",
+            "*",
+            "--max-time",
+            TIMEOUT,
+            "-w",
+            "\n%{http_code}",
+            "-X",
+            method,
+        ]
         for key, val in self.headers.items():
             if key.lower() in SKIP_HEADERS:
                 continue
             cmd += ["-H", f"{key}: {val}"]
-        cmd.append(f"{TARGET}{self.path}")
+        if body:
+            cmd += ["--data-binary", "@-"]
+        cmd.append(f"{target}{self.path}")
         try:
             proc = subprocess.run(
                 cmd,
@@ -75,23 +107,30 @@ class OllamaProxyHandler(BaseHTTPRequestHandler):
 
 
 def main() -> int:
+    listen_host, listen_port, target = _default_listen_and_target()
+    target = os.environ.get("OLLAMA_WSL_PROXY_TARGET", target).rstrip("/")
     ap = argparse.ArgumentParser(description="WSL Ollama proxy for Docker mailbus")
-    ap.add_argument("--host", default="0.0.0.0")
-    ap.add_argument("--port", type=int, default=11434)
+    ap.add_argument("--host", default=listen_host)
+    ap.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("OLLAMA_WSL_PROXY_PORT", listen_port)),
+    )
     args = ap.parse_args()
     if not os.path.isfile(CURL):
         print(f"curl.exe not found: {CURL}", file=sys.stderr)
         return 2
-    ok, _ = subprocess.run(
-        [CURL, "-sf", "--max-time", "5", f"{TARGET}/api/tags"],
+    ok = subprocess.run(
+        [CURL, "-sf", "--noproxy", "*", "--max-time", "5", f"{target}/api/tags"],
         capture_output=True,
         check=False,
-    ).returncode, None
+    ).returncode
     if ok != 0:
-        print(f"Windows Ollama unreachable at {TARGET}", file=sys.stderr)
+        print(f"Windows Ollama unreachable at {target}", file=sys.stderr)
         return 1
+    os.environ["OLLAMA_WSL_PROXY_TARGET"] = target
     server = ThreadingHTTPServer((args.host, args.port), OllamaProxyHandler)
-    print(f"[ollama-wsl-proxy] listening {args.host}:{args.port} -> {TARGET}", flush=True)
+    print(f"[ollama-wsl-proxy] listening {args.host}:{args.port} -> {target}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

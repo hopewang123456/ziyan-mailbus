@@ -14,7 +14,7 @@ def notify_verify_failure(
     attempt: int,
     escalate_cfg: Optional[Dict[str, Any]] = None,
 ) -> None:
-    """按 attempt 向 escalate_cfg 指定 agent 写 inbox 提醒（best-effort）。"""
+    """按 attempt 向 escalate_cfg 指定 agent 写 inbox，并经 NotifierPort 落看板（best-effort）。"""
     if not data_dir or not task_id:
         return
     target = (escalate_cfg or {}).get(str(attempt))
@@ -45,5 +45,21 @@ def notify_verify_failure(
         })
         inbox.has_unread = True
         json_write(inbox_path, inbox.to_dict())
+    except Exception:
+        pass
+    try:
+        from lib.composition import build_orchestration
+
+        build_orchestration(data_dir).notifier.notify(
+            "verify_fail_escalation",
+            {
+                "task_id": task_id,
+                "agent": agent,
+                "role_label": role_label,
+                "reason": reason,
+                "attempt": attempt,
+                "escalate_to": target,
+            },
+        )
     except Exception:
         pass

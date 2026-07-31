@@ -10,6 +10,7 @@ from datetime import datetime, timezone, timedelta
 import json
 from .constants import DEFAULT_DATA_DIR, _now_iso
 
+from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
 # ── 消息状态 ──────────────────────────────────────────────────────────
 
 class MsgStatus:
@@ -234,7 +235,7 @@ class Message:
         filtered = {k: v for k, v in d.items() if k in known}
         # 缺 id 的自动生成
         if "id" not in filtered or not filtered["id"]:
-            ts = int(datetime.now(timezone.utc).timestamp())
+            ts = int(now_utc_dt().timestamp())
             filtered["id"] = f"auto-{ts}-{hash(d.get('from_', '')) % 10000:04d}"
         return cls(**filtered)
 
@@ -359,7 +360,7 @@ class BusConfig:
 
 def generate_msg_id() -> str:
     """生成唯一消息 ID: msg-20260521-XXXXX"""
-    now = datetime.now()
+    now = now_dt()
     date_part = now.strftime("%Y%m%d")
     seq = int(now.timestamp() * 1000) % 100000
     return f"msg-{date_part}-{seq:05d}"

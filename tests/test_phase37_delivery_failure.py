@@ -9,7 +9,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.dispatch.pipeline_step_failover import note_pipeline_verify_failure
+from lib.application.orchestration.dispatch.pipeline_step_failover import note_pipeline_verify_failure
 from lib.tracker import TaskTracker
 
 

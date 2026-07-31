@@ -94,6 +94,20 @@ def dispatch_pipeline_step(
         out["step_result_path"] = result.step_result_path
     if result.error:
         out["error"] = result.error
+        # Wave3: surface stable error_code for locale/doctor
+        err = str(result.error)
+        if err.startswith("retryable:"):
+            out["error_code"] = "transport_retryable"
+        elif "http_" in err:
+            out["error_code"] = "transport_http"
+        else:
+            out["error_code"] = "delivery_failed"
+        try:
+            from lib.locale.errors_zh import message_zh
+
+            out["message_zh"] = message_zh(out["error_code"], err)
+        except Exception:
+            pass
     if result.awaiting_human and result.human_queue_payload:
         from ..human_queue import enqueue
 
@@ -102,3 +116,31 @@ def dispatch_pipeline_step(
         hq_id = enqueue(data_dir, hq)
         out["human_queue_id"] = hq_id
     return out
+
+
+def send_via_message_port(
+    data_dir: str,
+    *,
+    to_agent: str,
+    msg_id: str,
+    intent: str = "",
+    channel: str = "",
+    task_id: str = "",
+    step_id: str = "",
+    role_type: int = 0,
+    config: Optional[dict] = None,
+) -> dict[str, Any]:
+    """Wave3: MessageTransportPort 统一发送入口（file_bus / http_a2a / webhook）。"""
+    from lib.application.transport_send import send_outbound
+
+    return send_outbound(
+        data_dir,
+        agent_id=to_agent,
+        msg_id=msg_id,
+        intent=intent,
+        channel=channel,
+        task_id=task_id,
+        step_id=step_id,
+        role_type=role_type,
+        config=config,
+    )

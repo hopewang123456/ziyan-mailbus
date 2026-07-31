@@ -44,7 +44,7 @@ class AgentHarness:
 
     def reconcile(self, data_dir: str) -> list[dict]:
         """薄包装 execution_orchestrator.run_orchestrator(mode=light)。"""
-        from ..execution_orchestrator import run_orchestrator
+        from lib.application.orchestration.execution import run_orchestrator
         from ..utils import json_read
 
         cfg = json_read(os.path.join(data_dir, "config.json"), {})
@@ -86,3 +86,6 @@ def get_harness(config: Optional[dict] = None) -> AgentHarness:
     from .production import ProductionHarness
 
     return ProductionHarness()
+
+
+from .contract import HarnessContract, build_contract, write_d1_step_result  # noqa: E402

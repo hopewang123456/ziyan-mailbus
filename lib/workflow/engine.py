@@ -7,8 +7,8 @@ import os
 from typing import Any, Dict, List, Optional
 
 from ..human_queue import close_by_task, enqueue, find_by_task_gate
-from ..pipeline_step import planned_agents_remaining, planned_role_types_remaining
-from ..task_fsm import TaskFsmState, ensure_fsm, get_active_step
+from lib.application.orchestration.pipeline.step import planned_agents_remaining, planned_role_types_remaining
+from lib.adapters.orchestration.task_fsm import TaskFsmState, ensure_fsm, get_active_step
 from ..utils import _now_iso, json_write
 from .gate_validator import validate_approve, validate_deny
 from .phase_append import append_phase_steps, append_single_role_type, spawn_phase_chain
@@ -346,7 +346,7 @@ def on_gate_deny(
         ziyan.pop("llm_route", None)
         actions.append({"action": "replan_llm"})
         from ..router.dispatch import start_executing
-        from ..task_fsm import TaskFsmState
+        from lib.adapters.orchestration.task_fsm import TaskFsmState
 
         task["fsm"]["state"] = TaskFsmState.EXECUTING.value
         task["fsm"].pop("substate", None)
@@ -372,7 +372,7 @@ def on_gate_deny(
 
 def _dispatch_first_step(data_dir: str, task: dict) -> bool:
     from ..fsm_dispatch import dispatch_fsm_step
-    from ..task_fsm import mark_step_dispatched
+    from lib.adapters.orchestration.task_fsm import mark_step_dispatched
 
     chain = task.get("chain") or []
     if not chain:
@@ -390,8 +390,8 @@ def _dispatch_first_step(data_dir: str, task: dict) -> bool:
 def _maybe_dispatch_next(data_dir: str, task: dict) -> bool:
     """gate 批准后：若链上无 active 步或当前步已完成，dispatch 下一步。"""
     from ..fsm_dispatch import dispatch_fsm_step
-    from ..task_fsm import mark_step_dispatched
-    from ..pipeline_step import step_agent
+    from lib.adapters.orchestration.task_fsm import mark_step_dispatched
+    from lib.application.orchestration.pipeline.step import step_agent
 
     chain = task.get("chain") or []
     active = get_active_step(task)
@@ -410,7 +410,7 @@ def _maybe_dispatch_next(data_dir: str, task: dict) -> bool:
     from ..dispatch.role_resolver import resolve_agent_for_role_type
     from ..dispatch.tier_filter import dispatch_action_from_envelope
     from ..locale.role_labels import role_type_to_zh
-    from ..task_fsm import create_next_step
+    from lib.adapters.orchestration.task_fsm import create_next_step
     from ..utils import json_read
 
     action = dispatch_action_from_envelope(task)

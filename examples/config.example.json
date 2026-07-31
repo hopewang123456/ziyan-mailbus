@@ -235,6 +235,7 @@
       "default_project_dir": "/path/to/workspace",
       "ttyd_bin": "ttyd",
       "ensure_on_launch": true,
+      "_comment_ensure_on_launch": "false=不写 per-agent settings.json；true=无则创建、有则只补缺省 env",
       "browser_ports": {
         "lingyun": 9260,
         "lingyan": 9261
@@ -251,6 +252,7 @@
       "default_project_dir": "/path/to/your/workspace",
       "ttyd_bin": "ttyd",
       "ensure_on_launch": true,
+      "_comment_ensure_on_launch": "false=不写 per-agent settings.json；true=无则创建、有则只补缺省 env",
       "browser_ports": {
         "lingyun": 9260,
         "lingyan": 9261

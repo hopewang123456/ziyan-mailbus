@@ -1,0 +1,31 @@
+# Mailbus gate subset — e2e L-gates + V acceptance + Wave F3/F4.
+# Full suite: python -m pytest tests -q
+name: mailbus-gates
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pytest
+      - name: pytest e2e + v_suite + wave_f3_f4
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          python -m pytest tests/e2e -q \
+            tests/test_acceptance_v_suite.py \
+            tests/test_v6_enable_rollback.py \
+            tests/test_wave_f3_f4_gates.py -q

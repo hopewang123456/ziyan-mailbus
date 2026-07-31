@@ -14,7 +14,7 @@ from lib.pipeline_results import (
     result_paths_to_try,
     step_result_path,
 )
-from lib.task_fsm import write_step_result
+from lib.adapters.orchestration.task_fsm import write_step_result
 from lib.utils import json_write
 
 

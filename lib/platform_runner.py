@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import contextlib
 import os
 import re
@@ -209,8 +210,8 @@ def ensure_docker(max_wait: int = 90, log: LogFn | None = None) -> bool:
     plat = detect_platform()
     if plat in ("linux", "wsl"):
         run(["sudo", "service", "docker", "start"], timeout=30)
-    deadline = time.time() + max_wait
-    while time.time() < deadline:
+    deadline = now_ts() + max_wait
+    while now_ts() < deadline:
         if docker_ready():
             if log:
                 log("Docker ready")

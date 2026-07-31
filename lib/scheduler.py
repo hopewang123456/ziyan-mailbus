@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
 import io
 import os
 import sys
@@ -173,7 +174,7 @@ def _run_job(job: dict, data_dir: str, config: dict, sched_cfg: dict) -> None:
 
 
 def _run_job_locked(job: dict, jid: str, runner, data_dir: str, config: dict, sched_cfg: dict) -> None:
-    started = time.time()
+    started = now_ts()
     ts = _now_iso()
     header = f"\n[{ts}] scheduler job={jid} start\n"
     rc = 0
@@ -193,15 +194,15 @@ def _run_job_locked(job: dict, jid: str, runner, data_dir: str, config: dict, sc
         body = traceback.format_exc()
         rc = 1
 
-    elapsed = round(time.time() - started, 2)
+    elapsed = round(now_ts() - started, 2)
     footer = f"[{_now_iso()}] scheduler job={jid} done rc={rc} elapsed={elapsed}s\n"
     if body:
         _log_lines(data_dir, sched_cfg, header + body + footer)
     else:
         _log_lines(data_dir, sched_cfg, header + footer)
 
-    now = time.time()
-    now_dt = datetime.now(TZ_CN)
+    now = now_ts()
+    now_dt = now_dt()
     with _state_lock:
         st = _hub_state["jobs"].setdefault(jid, {})
         st["last_run_at"] = now
@@ -228,8 +229,8 @@ def _scheduler_loop(data_dir: str, config: dict, sched_cfg: dict, stop: threadin
     _log_lines(data_dir, sched_cfg, f"[{_now_iso()}] scheduler hub started tick={tick}s\n")
 
     while not stop.is_set():
-        now = time.time()
-        now_dt = datetime.now(TZ_CN)
+        now = now_ts()
+        now_dt = now_dt()
         agents = config.get("agents") or {}
         scan_interval = None
         activity = {}

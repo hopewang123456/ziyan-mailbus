@@ -13,6 +13,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 from pathlib import Path
 
+from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
 from .utils import json_read, json_write, resolve_paths, _now_iso
 
 
@@ -170,10 +171,14 @@ def check_api_keys(config: dict) -> list:
 def check_agentmemory(url: str = "") -> dict:
     """检查 AgentMemory 是否可连接（多重回退策略）"""
     if not url:
-        import os
-        url = os.environ.get("AGENTMEMORY_URL", "")
-        if not url:
-            url = "http://iii-engine:3111" if os.path.exists("/.dockerenv") else "http://localhost:3111"
+        try:
+            from .service_registry import service_url
+
+            url = service_url("agentmemory")
+        except Exception:
+            import os
+
+            url = os.environ.get("AGENTMEMORY_URL", "") or "http://127.0.0.1:3111"
     try:
         import urllib.request
 
@@ -216,7 +221,7 @@ def check_agentmemory(url: str = "") -> dict:
 
 def check_inbox_size(data_dir: str, agents: dict, warn_limit: int = DEFAULT_INBOX_WARN_LIMIT) -> list:
     """检查各 Agent inbox 活跃消息数量（不含 done/archived/closed）"""
-    from .scanner import get_msg_state
+    from lib.scan import get_msg_state
     from .models import MsgStatus
 
     terminal = {
@@ -265,7 +270,7 @@ def ping_agent(agent_cfg: dict, agent_types: dict, ping_timeout: int = DEFAULT_P
     hb_file = os.path.join(hb_dir, f"heartbeat.{agent_name}.json")
     try:
         mtime = os.path.getmtime(hb_file)
-        return (time.time() - mtime) < ping_timeout * 3  # 30s 内有心跳即视为在线
+        return (now_ts() - mtime) < ping_timeout * 3  # 30s 内有心跳即视为在线
     except OSError:
         return False
 
@@ -336,7 +341,7 @@ def heartbeat_scan(agents: dict, agent_types: dict, data_dir: str,
         if last_hb:
             try:
                 last_dt = datetime.strptime(last_hb, "%Y-%m-%dT%H:%M:%S%z")
-                now_dt = datetime.now(timezone(timedelta(hours=8)))
+                now_dt = now_dt()
                 if (now_dt - last_dt).total_seconds() < interval:
                     continue
             except (ValueError, TypeError):
@@ -365,7 +370,7 @@ def heartbeat_scan(agents: dict, agent_types: dict, data_dir: str,
     if last_health_check:
         try:
             last_dt = datetime.strptime(last_health_check, "%Y-%m-%dT%H:%M:%S%z")
-            now_dt = datetime.now(timezone(timedelta(hours=8)))
+            now_dt = now_dt()
             if (now_dt - last_dt).total_seconds() < full_health_interval:
                 do_health_check = False
         except (ValueError, TypeError):

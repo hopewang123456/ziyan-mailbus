@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.api.handlers_a2a import handle_a2a_rpc
-from lib.task_fsm import TaskFsmState, apply_cancel, ensure_fsm
+from lib.adapters.orchestration.task_fsm import TaskFsmState, apply_cancel, ensure_fsm
 from lib.transport.a2a_cancel import cancel_inflight_a2a_for_task
 from lib.transport.a2a_standard import A2ATransport
 from lib.transport.types import DispatchContext

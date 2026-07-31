@@ -18,44 +18,24 @@ def _mail_root() -> str:
 
 
 def resolve_ollama_settings(config: Optional[dict] = None, data_dir: str = "") -> dict:
-    """合并 config/llm/ollama.json · mailbus_internal_llm · 环境变量。"""
-    base_url = os.environ.get("MAILBUS_OLLAMA_BASE_URL", "").strip()
-    model = os.environ.get("MAILBUS_OLLAMA_MODEL", "").strip()
+    """Resolve Ollama base_url/model via service_registry (+ legacy llm aliases)."""
+    from .service_registry import service_settings
 
-    ollama_block: dict = {}
-    if config:
-        ollama_block = dict((config.get("mailbus_internal_llm") or {}).get("ollama") or {})
+    settings = service_settings("ollama", config=config, data_dir=data_dir)
+    # Legacy mailbus_internal_llm.providers.local may still override model if services empty
+    if config and not (settings.get("model") or "").strip():
         providers = (config.get("mailbus_internal_llm") or {}).get("providers") or {}
         for name, pc in providers.items():
             if not isinstance(pc, dict):
                 continue
             if (pc.get("kind") or name) == "ollama" or name == "local":
-                ollama_block = {**ollama_block, **pc}
+                if pc.get("model"):
+                    settings["model"] = pc["model"]
                 break
-
-    if not base_url or not model:
-        try:
-            from .utils import json_read
-            seed = json_read(os.path.join(_mail_root(), "config", "llm", "ollama.json"), {})
-            if seed:
-                ollama_block = {**seed, **ollama_block}
-        except Exception:
-            pass
-
-    if data_dir and not ollama_block:
-        try:
-            from .utils import json_read
-            root = json_read(os.path.join(data_dir, "config.json"), {})
-            ollama_block = dict((root.get("mailbus_internal_llm") or {}).get("ollama") or {})
-        except Exception:
-            pass
-
-    base_url = base_url or (ollama_block.get("base_url") or "http://127.0.0.1:11434")
-    model = model or (ollama_block.get("model") or "qwen2.5:3b-instruct-q4_K_M")
     return {
-        "base_url": str(base_url).rstrip("/"),
-        "model": model,
-        "timeout_seconds": int(ollama_block.get("timeout_seconds") or 10),
+        "base_url": settings["base_url"],
+        "model": settings.get("model") or "qwen2.5:3b-instruct-q4_K_M",
+        "timeout_seconds": int(settings.get("timeout_seconds") or 60),
     }
 
 
@@ -112,7 +92,7 @@ def ollama_model_flag(
 
 def prepare_gpu_for_ollama_push(config: Optional[dict]) -> dict:
     """推送前释放 ComfyUI 显存，便于 Ollama 使用本机 GPU（不长期占锁）。"""
-    from .gpu_coordinator import load_gpu_sharing_config, release_comfyui_vram
+    from lib.adapters.integrations.gpu import load_gpu_sharing_config, release_comfyui_vram
 
     gs = load_gpu_sharing_config(config)
     if not gs.get("enabled") or not gs.get("release_comfyui_before_llm"):

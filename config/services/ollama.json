@@ -1,0 +1,27 @@
+{
+  "id": "ollama",
+  "kind": "ollama",
+  "model": "qwen2.5:3b-instruct-q4_K_M",
+  "default_model": "qwen2.5:3b-instruct-q4_K_M",
+  "timeout_seconds": 60,
+  "temperature": 0.1,
+  "max_tokens": 1024,
+  "env_base_url": "MAILBUS_OLLAMA_BASE_URL",
+  "env_model": "MAILBUS_OLLAMA_MODEL",
+  "profiles": {
+    "windows": {
+      "base_url": "http://127.0.0.1:11434"
+    },
+    "wsl": {
+      "base_url": "http://127.0.0.1:11435",
+      "proxy": {
+        "listen_host": "0.0.0.0",
+        "listen_port": 11435,
+        "target": "http://127.0.0.1:11434"
+      }
+    },
+    "docker": {
+      "base_url": "http://host.docker.internal:11435"
+    }
+  }
+}

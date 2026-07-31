@@ -1,0 +1,74 @@
+"""Guard layering: application must not import concrete framework adapters."""
+from __future__ import annotations
+
+import ast
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1] / "lib"
+
+
+def _imports_of(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    out: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for n in node.names:
+                out.append(n.name)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            out.append(node.module)
+    return out
+
+
+class TestLayerImports(unittest.TestCase):
+    def test_ports_and_domain_import(self):
+        from lib.domain import AgentRef, BudgetPaused, Fatal, Retryable
+        from lib.ports import (
+            AgentRuntimePort,
+            AuditPort,
+            BudgetMeterPort,
+            HumanGatePort,
+            ResultStorePort,
+            TaskFsmPort,
+        )
+
+        self.assertTrue(AgentRef)
+        self.assertTrue(Fatal)
+        self.assertTrue(Retryable)
+        self.assertTrue(BudgetPaused)
+        self.assertTrue(AgentRuntimePort)
+        self.assertTrue(ResultStorePort)
+        self.assertTrue(TaskFsmPort)
+        self.assertTrue(BudgetMeterPort)
+        self.assertTrue(HumanGatePort)
+        self.assertTrue(AuditPort)
+
+    def test_application_does_not_import_framework_adapters(self):
+        app_dir = ROOT / "application"
+        bad_prefix = "lib.adapters.frameworks"
+        offenders: list[str] = []
+        for path in app_dir.rglob("*.py"):
+            for mod in _imports_of(path):
+                if mod.startswith(bad_prefix):
+                    offenders.append(f"{path.name}:{mod}")
+        self.assertEqual(offenders, [], msg=f"layer violation: {offenders}")
+
+    def test_adapters_do_not_import_application(self):
+        ad_dir = ROOT / "adapters"
+        if not ad_dir.is_dir():
+            self.skipTest("no adapters yet")
+        # Legacy: task_fsm still calls into application.orchestration.pipeline
+        # until Wave6 Port-only cutover; exclude from this guard.
+        allow = {"task_fsm.py"}
+        offenders: list[str] = []
+        for path in ad_dir.rglob("*.py"):
+            if path.name in allow:
+                continue
+            for mod in _imports_of(path):
+                if mod.startswith("lib.application"):
+                    offenders.append(f"{path.relative_to(ROOT)}:{mod}")
+        self.assertEqual(offenders, [], msg=f"layer violation: {offenders}")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -2,6 +2,10 @@
 
 > **2026-06-25 更新**：`tests/test_*.py` 共 56 文件、432 用例。运行：`python -m pytest tests -q`  
 > Windows 本机建议 `set PYTHONUTF8=1`；Docker/WSL 为 CI 推荐环境。
+>
+> **CI 指针**（`.github/workflows/mailbus-gates.yml`）：  
+> `python -m pytest tests/e2e -q tests/test_acceptance_v_suite.py tests/test_v6_enable_rollback.py tests/test_wave_f3_f4_gates.py -q`  
+> V6 enable 回滚契约：mocked plane，见 `tests/test_v6_enable_rollback.py`（无 Docker）。
 
 ## 现有测试覆盖（摘要）
 

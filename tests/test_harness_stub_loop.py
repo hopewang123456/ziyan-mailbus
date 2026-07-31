@@ -12,8 +12,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.harness import get_harness
 from lib.pipeline_results import step_result_path
-from lib.pipeline_trigger import trigger
-from lib.task_fsm import StepFsmState
+from lib.application.orchestration.pipeline.trigger import trigger
+from lib.adapters.orchestration.task_fsm import StepFsmState
 from lib.tracker import TaskTracker
 from lib.transport.a2a_standard import A2ATransport
 from lib.transport.dispatch_integration import build_router

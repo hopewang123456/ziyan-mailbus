@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.task_fsm import TaskFsmState, ensure_fsm
+from lib.adapters.orchestration.task_fsm import TaskFsmState, ensure_fsm
 from lib.task_recover import apply_cancel_task, recover_continue
 from lib.utils import json_read, json_write
 

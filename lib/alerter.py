@@ -7,6 +7,7 @@ from datetime import datetime
 
 from .utils import json_read, json_write, _now_iso
 from .models import Message, MsgType, MsgStatus, Priority
+from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
 
 
 ALERT_FILE = "alerts.json"  # 告警记录文件（store 目录下）
@@ -36,7 +37,7 @@ def push_alert(data_dir: str, alert_type: str, severity: str,
     now = _now_iso()
 
     alert = {
-        "id": f"alert-{int(datetime.now().timestamp())}",
+        "id": f"alert-{int(now_ts())}",
         "type": alert_type,
         "severity": severity,
         "agent": agent,

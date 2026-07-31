@@ -11,12 +11,12 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lib.models import Inbox, MsgStatus
-from lib.pipeline_task import (
+from lib.application.orchestration.pipeline.task import (
     pipeline_inbox_may_mark_done,
     pipeline_repush_cooldown_minutes,
     side_audit_deferred_for_reviewer,
 )
-from lib.task_fsm import (
+from lib.adapters.orchestration.task_fsm import (
     apply_submit,
     ensure_fsm,
     result_applies_to_step,

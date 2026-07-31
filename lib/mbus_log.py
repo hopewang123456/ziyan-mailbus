@@ -1,6 +1,7 @@
 """Mailbus 结构化日志 — stderr + 可选 data_dir/logs/mbus.log。"""
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import os
 import sys
 from datetime import datetime, timezone
@@ -17,7 +18,7 @@ def _enabled(level: str) -> bool:
 
 def _format(level: str, msg: str, *args: Any) -> str:
     text = msg % args if args else msg
-    ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ts = now_utc_dt().strftime("%Y-%m-%dT%H:%M:%SZ")
     return f"{ts} [{level.upper()}] {text}"
 
 

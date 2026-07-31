@@ -31,7 +31,7 @@ def apply_human_queue_resolution(
     outcome: Dict[str, Any] = {"routed": qtype}
 
     if qtype == "plan_approval" and task_id:
-        from .fsm_actions import apply_approve_plan
+        from lib.application.orchestration.actions import apply_approve_plan
 
         tr = TaskTracker(data_dir)
         task = tr.get(task_id)
@@ -45,7 +45,7 @@ def apply_human_queue_resolution(
         return {"routed": qtype, **result}
 
     if qtype == "owner_confirmation" and task_id:
-        from .task_fsm import TaskFsmState, ensure_fsm
+        from lib.adapters.orchestration.task_fsm import TaskFsmState, ensure_fsm
 
         tr = TaskTracker(data_dir)
         task = tr.get(task_id)
@@ -72,7 +72,7 @@ def apply_human_queue_resolution(
         return {"routed": qtype, "ok": True, "action": "cancelled_after_denial"}
 
     if qtype == "final_acceptance" and task_id:
-        from .fsm_actions import apply_accept
+        from lib.application.orchestration.actions import apply_accept
 
         tr = TaskTracker(data_dir)
         task = tr.get(task_id)
@@ -132,7 +132,7 @@ def apply_human_queue_resolution(
                 data_dir, task_id, step_id, outcome["step_result"],
                 agent=reviewer, role_type=ctx.role_type,
             )
-            from .pipeline_trigger import trigger_task
+            from lib.application.orchestration.pipeline.trigger import trigger_task
 
             trigger_task(data_dir, task_id, agents, __import__("lib.utils", fromlist=["resolve_paths"]).resolve_paths(data_dir))
             return {"routed": qtype, "ok": True, "action": "a2a_resumed"}

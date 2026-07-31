@@ -11,6 +11,7 @@ import json
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
 from .models import MsgStatus, Inbox
 from .utils import json_read, json_write, jsonl_append, resolve_paths, _now_iso
 
@@ -77,7 +78,7 @@ def archive_agent(data_dir: str, agent_name: str, archive_days: int = 3, max_mes
         return 0
     
     # 写入归档文件（按周分文件）
-    week = datetime.now().strftime("%Y-W%V")
+    week = now_dt().strftime("%Y-W%V")
     archive_file = f"{paths['archive']}/{agent_name}/{week}.jsonl"
     os.makedirs(os.path.dirname(archive_file), exist_ok=True)
     
@@ -138,7 +139,7 @@ def _is_old_msg(ack_at: str, archive_days: int) -> bool:
     """检查 ISO 时间字符串是否超过归档天数"""
     try:
         ack_time = datetime.fromisoformat(ack_at)
-        delta = datetime.now(timezone.utc) - (ack_time.replace(tzinfo=timezone.utc) if ack_time.tzinfo is None else ack_time)
+        delta = now_utc_dt() - (ack_time.replace(tzinfo=timezone.utc) if ack_time.tzinfo is None else ack_time)
         return delta.days >= archive_days
     except (ValueError, TypeError):
         return False

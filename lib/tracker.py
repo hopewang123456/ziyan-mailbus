@@ -10,7 +10,12 @@ from pathlib import Path
 
 from .models import MsgStatus, _now_iso
 from .utils import json_read, json_write, jsonl_append, resolve_paths, log_error
-from .pipeline_chain import init_pipeline_chain, is_pipeline_step, normalize_task_chain
+from lib.adapters.clock import now_dt
+from lib.application.orchestration.pipeline.chain import (
+    init_pipeline_chain,
+    is_pipeline_step,
+    normalize_task_chain,
+)
 
 # 不参与 tracker 超时判定的 task_id 前缀（系统通知/催办噪音）
 SKIP_TIMEOUT_PREFIXES = (
@@ -95,7 +100,7 @@ class TaskTracker:
                requires_audit: bool = None, priority: int = 50) -> dict:
         """创建新任务"""
         from .audit_dispatch import infer_requires_audit
-        from .task_fsm import ensure_fsm
+        from lib.adapters.orchestration.task_fsm import ensure_fsm
 
         pipeline_chain = init_pipeline_chain(chain_hops, assignee, task_id)
         req_audit = infer_requires_audit(task_id, chain_hops, requires_audit, pipeline_chain)
@@ -127,10 +132,10 @@ class TaskTracker:
     ) -> dict:
         """v3 Envelope 落盘。"""
         from .audit_dispatch import infer_requires_audit
-        from .dispatch.role_resolver import resolve_agent_for_role_type
-        from .dispatch.tier_filter import dispatch_action_from_envelope, dispatch_action_from_step
-        from .pipeline_chain import init_chain_from_planned
-        from .task_fsm import TaskFsmState, ensure_fsm
+        from lib.application.orchestration.dispatch.role_resolver import resolve_agent_for_role_type
+        from lib.application.orchestration.dispatch.tier_filter import dispatch_action_from_envelope, dispatch_action_from_step
+        from lib.application.orchestration.pipeline.chain import init_chain_from_planned
+        from lib.adapters.orchestration.task_fsm import TaskFsmState, ensure_fsm
 
         task_id = envelope["task_id"]
         priority = int((envelope.get("fsm") or {}).get("priority", 50))
@@ -367,7 +372,7 @@ class TaskTracker:
         """
         import re
         escalated = []
-        now = datetime.now(timezone(timedelta(hours=8)))
+        now = now_dt()
 
         msg_states = {}   # msg_id -> state
         task_states = {}  # 逻辑 task_id -> state
@@ -419,7 +424,7 @@ class TaskTracker:
 
             if inbox_state in INBOX_DONE_STATES:
                 from .audit_dispatch import task_requires_audit
-                from .pipeline_chain import is_pipeline_step
+                from lib.application.orchestration.pipeline.chain import is_pipeline_step
                 chain = task.get("chain") or []
                 multi_step = len(chain) > 1 or (
                     chain and isinstance(chain[0], dict) and chain[0].get("planned_agents")
@@ -454,8 +459,8 @@ class TaskTracker:
             elif elapsed_min >= reminder_minutes and task["reminded_count"] >= max_reminders:
                 chain = task.get("chain") or []
                 if chain:
-                    from .pipeline_chain import is_pipeline_step
-                    from .task_fsm import get_active_step
+                    from lib.application.orchestration.pipeline.chain import is_pipeline_step
+                    from lib.adapters.orchestration.task_fsm import get_active_step
                     if is_pipeline_step(chain[0]) or chain[0].get("planned_agents"):
                         active = get_active_step(task)
                         if active and active.get("status") == "running":

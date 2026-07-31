@@ -42,13 +42,10 @@ def clear_agentmemory_config_cache() -> None:
 
 
 def agentmemory_url(*, mail_root: Path | str | None = None) -> str:
-    env = os.environ.get("AGENTMEMORY_URL", "").strip()
-    if env:
-        return env.rstrip("/")
-    if os.path.isdir("/mailbus"):
-        return CONTAINER_URL
-    cfg = load_integration_config(str(mail_root or MAILBUS_ROOT))
-    return (cfg.get("agentmemory_url") or DEFAULT_URL).rstrip("/")
+    """Resolved AgentMemory HTTP base URL (config/services + env + runtime)."""
+    from .service_registry import service_url
+
+    return service_url("agentmemory", mail_root=mail_root)
 
 
 def team_memory_db_path(*, mail_root: Path | str | None = None) -> str:
@@ -60,9 +57,17 @@ def team_memory_db_path(*, mail_root: Path | str | None = None) -> str:
 
 
 def pending_relative_dir(*, mail_root: Path | str | None = None) -> str:
-    cfg = load_integration_config(str(mail_root or MAILBUS_ROOT))
-    bridge = cfg.get("bridge") or {}
-    rel = (bridge.get("pending_dir") or "store/agentmemory-pending").strip()
+    from .service_registry import service_settings
+
+    settings = service_settings("agentmemory", mail_root=mail_root)
+    bridge = settings.get("bridge") or {}
+    # legacy access/agentmemory/integration.json still wins for bridge paths if present
+    legacy = load_integration_config(str(mail_root or MAILBUS_ROOT))
+    legacy_bridge = legacy.get("bridge") or {}
+    rel = (
+        (legacy_bridge.get("pending_dir") or bridge.get("pending_dir") or "store/agentmemory-pending")
+        .strip()
+    )
     return rel.replace("\\", "/")
 
 

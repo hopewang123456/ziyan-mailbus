@@ -11,7 +11,7 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 
-from lib.agent_adapters import OpenClawAdapter, resolve_container  # noqa: E402
+from lib.adapters.frameworks import OpenClawAdapter, resolve_container  # noqa: E402
 from lib.launch_ports import resolve_port  # noqa: E402
 from lib.claude_browser_launch import launch_claude_browser  # noqa: E402
 from lib.claude_launch import enqueue_launch_queue, launch_claude_cli  # noqa: E402

@@ -102,5 +102,10 @@ TZ_CST = timezone(timedelta(hours=8))
 
 
 def _now_iso() -> str:
-    """返回当前时间的 ISO 格式字符串（本地时间 +08:00）"""
-    return datetime.now(TZ_CST).strftime("%Y-%m-%dT%H:%M:%S%z")
+    """当前时间 ISO（+08:00）；经 AppContext.clock，测时可注入 FakeClock。"""
+    try:
+        from lib.adapters.clock import now_iso
+
+        return now_iso()
+    except Exception:
+        return datetime.now(TZ_CST).strftime("%Y-%m-%dT%H:%M:%S%z")

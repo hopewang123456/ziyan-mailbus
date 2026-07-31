@@ -1,0 +1,12 @@
+# Optional local overrides for compose.public.yml (do not commit real paths).
+#   cp compose.public.override.example.yml compose.public.override.yml
+#
+# docker compose -f compose.public.yml -f compose.public.override.yml up -d
+
+services:
+  mailbus:
+    environment:
+      - MAILBUS_OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # - DEEPSEEK_API_KEY=your-key
+    # volumes:
+    #   - /path/to/your/skills:/mailbus/skills:ro

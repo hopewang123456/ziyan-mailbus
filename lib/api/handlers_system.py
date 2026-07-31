@@ -20,6 +20,7 @@ from lib.utils import json_read, json_write, resolve_paths, resolve_mailbus_path
 from lib.heartbeat import load_status as load_heartbeat
 from lib.alerter import get_recent_alerts
 from lib.scheduler import get_scheduler_status
+from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
 
 
 def _reload_store_config(handler) -> tuple[dict, dict]:
@@ -489,7 +490,7 @@ def handle_stats(handler):
     agent_stats = {}
     total_messages = 0
     status_distribution = {}
-    now = datetime.now(timezone(timedelta(hours=8)))
+    now = now_dt()
 
     for name in handler.agents:
         inbox_file = f"{paths['inbox']}/{name}/inbox.json"
@@ -848,8 +849,7 @@ def handle_agent_recruit(handler):
     inbox.messages.append(msg_dict)
     json_write(inbox_file, inbox.to_dict())
     try:
-        from ..scanner import push_messages
-        from ..pusher import resolve_cli_chain
+        from lib.pusher import push_messages, resolve_cli_chain
 
         agent_cfg = handler.agents.get(to, {})
         cli_chain = resolve_cli_chain(agent_cfg, handler.agent_types)
@@ -932,7 +932,7 @@ def _get_launch_url(handler, agent_name: str) -> str:
     url = browser_cfg.get("url", "")
     tmpl_name = launch.get("template", "")
     if tmpl_name == "openclaw_gateway" or cfg.get("type") == "openclaw":
-        from lib.agent_adapters import OpenClawAdapter
+        from lib.adapters.frameworks import OpenClawAdapter
 
         port = OpenClawAdapter.resolve_gateway_port(agent_name, browser_cfg)
     else:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import json
 import os
 import platform
@@ -542,7 +543,7 @@ def resolve_project_dir(agent_cfg: dict, plat_cfg: dict, agent_name: str = "") -
 
 
 def _model_flag(agent_cfg: dict, agent_types: dict, model_alias: Optional[str]) -> str:
-    from .agent_adapters import model_flag, _flag_value
+    from lib.adapters.frameworks import model_flag, _flag_value
 
     if agent_cfg.get("model"):
         return f"--model {agent_cfg['model']}"
@@ -612,7 +613,7 @@ def enqueue_launch_queue(cmd: str, title: str, *, mode: str = "") -> bool:
             continue
         try:
             os.makedirs(queue_dir, exist_ok=True)
-            path = os.path.join(queue_dir, f"{safe_title}-{int(time.time())}.launch")
+            path = os.path.join(queue_dir, f"{safe_title}-{int(now_ts())}.launch")
             with open(path, "w", encoding="utf-8") as f:
                 f.write((cmd or "").strip() + "\n")
                 f.write(safe_title + "\n")

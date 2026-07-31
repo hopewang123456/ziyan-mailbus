@@ -9,8 +9,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from lib.api.security import safe_report_path
 from lib.archiver import _is_old
 from lib.models import Inbox
-from lib.pipeline_result_check import pipeline_step_result_matches
-from lib.task_fsm import ensure_fsm, revert_failed_advance, write_step_result
+from lib.application.orchestration.pipeline.result_check import pipeline_step_result_matches
+from lib.adapters.orchestration.task_fsm import ensure_fsm, revert_failed_advance, write_step_result
 from lib.utils import json_write
 
 

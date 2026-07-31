@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from typing import Any, Optional
 
-from ..pipeline_results import step_result_path
+from lib.application.orchestration.pipeline.results import step_result_path
 from ..utils import _now_iso, json_read, json_write
 
 

@@ -1,6 +1,6 @@
 """ziyan-mailbus 管道引擎（历史遗留，已归档）
 
-2026-06-18 起由 lib/task_fsm.py + lib/pipeline_trigger.py 接管。
+2026-06-18 起由 lib/task_fsm.py + application/orchestration/pipeline 接管。
 完整实现见 lib/_archived/pipeline_engine_legacy.py
 """
 

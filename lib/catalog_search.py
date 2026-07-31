@@ -10,7 +10,7 @@ import os
 import sqlite3
 from typing import Any, Optional
 
-from .external_tools import (
+from lib.adapters.integrations.external_tools import (
     external_tools_dir,
     list_adapters_for_agent,
     load_grants,

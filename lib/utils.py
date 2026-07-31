@@ -15,6 +15,7 @@ import tempfile
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Any
 
+from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
 if sys.platform == "win32":
     import msvcrt
 else:
@@ -102,7 +103,7 @@ def rewrite_host_store_refs(data_dir: str, text: str, agent_cfg: dict) -> str:
     """推送正文内宿主机 store 路径 → /mailbus/store（Docker agent）。"""
     if not text:
         return text or ""
-    from .agent_adapters import get_adapter
+    from lib.adapters.frameworks import get_adapter
 
     adapter = get_adapter((agent_cfg or {}).get("type", ""))
     if not adapter or not adapter.container_service:
@@ -296,10 +297,10 @@ def file_lock(timeout: float = 10.0, path: str = ""):
     os.makedirs(_LOCK_ROOT, exist_ok=True)
     lock_file = _lock_path(path)
     lock_fd = _open_lock_file(lock_file)
-    deadline = time.time() + timeout
+    deadline = now_ts() + timeout
     acquired = False
     try:
-        while time.time() < deadline:
+        while now_ts() < deadline:
             if _try_acquire_lock(lock_fd, non_blocking=True):
                 acquired = True
                 break
@@ -309,8 +310,8 @@ def file_lock(timeout: float = 10.0, path: str = ""):
             if lock_file != fallback:
                 lock_fd.close()
                 lock_fd = open(fallback, "w")
-                deadline2 = time.time() + 5.0
-                while time.time() < deadline2:
+                deadline2 = now_ts() + 5.0
+                while now_ts() < deadline2:
                     if _try_acquire_lock(lock_fd, non_blocking=True):
                         acquired = True
                         break
@@ -338,7 +339,7 @@ def named_lock(name: str, *, blocking: bool = False, timeout: float = 10.0):
     path = os.path.join(_LOCK_ROOT, f"{name}.lock")
     lock_fd = open(path, "w")
     acquired = False
-    deadline = time.time() + (timeout if blocking else 0.0)
+    deadline = now_ts() + (timeout if blocking else 0.0)
     try:
         while True:
             if _try_acquire_lock(lock_fd, non_blocking=not blocking):
@@ -346,7 +347,7 @@ def named_lock(name: str, *, blocking: bool = False, timeout: float = 10.0):
                 break
             if not blocking:
                 break
-            if time.time() >= deadline:
+            if now_ts() >= deadline:
                 break
             time.sleep(0.05)
         yield acquired
@@ -384,7 +385,7 @@ def _cleanup_bak_files(filepath: str, max_keep: int = 5):
 
 def json_read(filepath: str, default: Any = None, ttl: float = 5.0) -> Any:
     """读 JSON 文件（带锁 + 内存缓存），遇到损坏 JSON 尝试修复"""
-    now = time.time()
+    now = now_ts()
     cached = _JSON_CACHE.get(filepath)
     if cached is not None:
         data, expiry, cached_mtime = cached
@@ -431,7 +432,7 @@ def json_read(filepath: str, default: Any = None, ttl: float = 5.0) -> Any:
             except (json.JSONDecodeError, Exception):
                 # 修复失败 → 备份损坏文件（最多保留5个）
                 _cleanup_bak_files(filepath, max_keep=5)
-                bak = filepath + f".bak.{int(datetime.now().timestamp())}"
+                bak = filepath + f".bak.{int(now_ts())}"
                 try:
                     shutil.copy2(filepath, bak)
                 except OSError:
@@ -480,7 +481,7 @@ def jsonl_append(filepath: str, entry: dict):
 
 def log_error(errors_dir: str, msg_id: str, to: str, error: str, level: str = Level.ERROR):
     """写一条错误日志到 errors/ 目录（按周分文件）"""
-    week = datetime.now().strftime("%Y-W%V")
+    week = now_dt().strftime("%Y-W%V")
     filepath = f"{errors_dir}/{week}.jsonl"
     entry = {
         "ts": _now_iso(),

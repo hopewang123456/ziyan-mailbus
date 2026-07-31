@@ -8,7 +8,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from lib.agent_adapters import resolve_interactive_cli, resolve_push_cli
+from lib.adapters.frameworks import resolve_interactive_cli, resolve_push_cli
 
 
 def main() -> int:

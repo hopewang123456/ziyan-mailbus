@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from lib.agent_adapters import resolve_push_cli
+from lib.adapters.frameworks import resolve_push_cli
 
 
 def probe_profile(agent_id: str, agent_cfg: dict, agent_types: dict, timeout: int) -> tuple[bool, str]:

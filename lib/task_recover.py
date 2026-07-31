@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, Optional
 
-from .task_fsm import (
+from lib.adapters.orchestration.task_fsm import (
     StepFsmState,
     TaskFsmState,
     apply_pause,
@@ -114,7 +114,7 @@ def apply_cancel_task(
     reason: str = "",
 ) -> Dict[str, Any]:
     """CLI/API 取消：apply_cancel + 释放 task lock。"""
-    from .task_fsm import apply_cancel
+    from lib.adapters.orchestration.task_fsm import apply_cancel
 
     tr = TaskTracker(data_dir)
     task = tr.get(task_id)
@@ -133,7 +133,7 @@ def apply_cancel_task(
 
 
 def _repush_step(data_dir: str, task_id: str, task: dict, step: dict) -> bool:
-    from .pipeline_trigger import _send_task
+    from lib.application.orchestration.pipeline.trigger import _send_task
 
     paths = resolve_paths(data_dir)
     to_person = step.get("to_agent") or step.get("to_person") or task.get("assignee") or ""

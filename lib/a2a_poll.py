@@ -1,13 +1,14 @@
 """scanner 轮询 A2A 在途 step + input-required 超时。"""
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import os
 from datetime import datetime, timezone
 from typing import Any
 
 from .human_queue import load_queue, queue_path
 from .tracker import TaskTracker, _parse_iso_dt
-from .task_fsm import TaskFsmState, ensure_fsm
+from lib.adapters.orchestration.task_fsm import TaskFsmState, ensure_fsm
 from .transport.config import load_transport_config
 from .transport.dispatch_integration import build_router, merge_agent_transport_config, transport_router_enabled
 from .transport.fallback_log import log_input_required_timeout
@@ -70,7 +71,7 @@ def poll_pending_a2a_tasks(data_dir: str, agents: dict, paths: dict) -> int:
                 )
                 updated += 1
     if updated:
-        from .pipeline_trigger import trigger
+        from lib.application.orchestration.pipeline.trigger import trigger
 
         trigger(data_dir, agents, paths)
     return updated
@@ -83,7 +84,7 @@ def check_input_required_timeouts(data_dir: str, agents: dict, paths: dict) -> i
     if timeout_sec <= 0:
         return 0
 
-    now = datetime.now(timezone.utc)
+    now = now_utc_dt()
     handled = 0
     tra = TaskTracker(data_dir)
 

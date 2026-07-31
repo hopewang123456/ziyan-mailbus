@@ -7,6 +7,7 @@ recover continue 持锁贯穿 repush；若需「单写者贯穿 step 执行」�
 
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import os
 from typing import Any, Optional
 
@@ -36,7 +37,7 @@ def _is_stale(lock: dict, *, ttl_seconds: float) -> bool:
         from datetime import datetime, timezone
 
         ts = _parse_iso_dt(acquired)
-        age = (datetime.now(timezone.utc) - ts).total_seconds()
+        age = (now_utc_dt() - ts).total_seconds()
         return age > ttl_seconds
     except Exception:
         return True

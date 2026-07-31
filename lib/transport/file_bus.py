@@ -1,13 +1,14 @@
 """file_bus 通道 — stub 直写 step-result；生产路径写 inbox + Harness wait。"""
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import json
 import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from ..constants import MAILBUS_ROOT
-from ..pipeline_results import step_result_path
+from lib.application.orchestration.pipeline.results import step_result_path
 from .step_result_io import write_step_result_file
 from ..utils import json_write, json_read, jsonl_append, _now_iso
 from .types import DispatchContext, DispatchResult
@@ -51,7 +52,7 @@ class FileBusTransport:
     ) -> None:
         errors_dir = os.path.join(ctx.data_dir, "errors")
         os.makedirs(errors_dir, exist_ok=True)
-        dt = datetime.now(timezone.utc)
+        dt = now_utc_dt()
         week = f"{dt.isocalendar().year}-W{dt.isocalendar().week:02d}"
         path = os.path.join(errors_dir, f"file-bus-wait-{week}.jsonl")
         jsonl_append(path, {

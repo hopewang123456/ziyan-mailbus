@@ -23,6 +23,7 @@ services:
     volumes:
       - /path/to/mail/store:/mailbus/store
       - /path/to/mail/tools:/mailbus/tools:ro
+      - /path/to/mail/lib:/mailbus/lib:ro
       - /path/to/vault/skills/mailbus:/mailbus/skills:ro
       - /path/to/vault/rules/mailbus:/mailbus/rules:ro
       - /path/to/mail/access:/mailbus/access:ro
@@ -35,6 +36,7 @@ services:
     volumes:
       - /path/to/mail/store:/mailbus/store
       - /path/to/mail/tools:/mailbus/tools:ro
+      - /path/to/mail/lib:/mailbus/lib:ro
       - /path/to/vault/skills/mailbus:/mailbus/skills:ro
       - /path/to/vault/rules/mailbus:/mailbus/rules:ro
       - /path/to/mail/access:/mailbus/access:ro
@@ -47,6 +49,7 @@ services:
     volumes:
       - /path/to/mail/store:/mailbus/store
       - /path/to/mail/tools:/mailbus/tools:ro
+      - /path/to/mail/lib:/mailbus/lib:ro
       - /path/to/vault/skills/mailbus:/mailbus/skills:ro
       - /path/to/vault/rules/mailbus:/mailbus/rules:ro
       - /path/to/mail/access:/mailbus/access:ro
@@ -66,6 +69,7 @@ services:
       - /path/to/vault:/path/to/vault
       - /path/to/opencode:/workspace/opencode:rw
       - /path/to/vault/skills/02-agent-specific/opencode:/workspace/opencode/skills:rw
+      - /path/to/vault/memories/dali:/workspace/opencode/memory
   mailbus:
     volumes:
       - /path/to/mail:/mailbus

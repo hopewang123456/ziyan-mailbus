@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.dispatch.pipeline_step_failover import (
+from lib.application.orchestration.dispatch.pipeline_step_failover import (
     max_failures_per_step,
     record_step_delivery_failure,
     should_failover_after_failures,

@@ -1,0 +1,6 @@
+{
+  "schema": "mailbus-transport-v1",
+  "agent_id": "agent-a",
+  "framework": "none",
+  "workspace": ""
+}

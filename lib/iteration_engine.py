@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 from .constants import MAILBUS_ROOT
 from .utils import json_read, json_write, resolve_paths, _now_iso
 from .tracker import TaskTracker, TaskStatus
-from .pipeline_chain import is_pipeline_step
+from lib.application.orchestration.pipeline.chain import is_pipeline_step
 
 TZ = timezone(timedelta(hours=8))
 ITER_DIR = "iterations"

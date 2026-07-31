@@ -10,6 +10,7 @@ import subprocess
 import time
 from datetime import datetime
 
+from lib.adapters.clock import now_dt
 from .claude_browser_launch import ensure_claude_web
 from .env_bootstrap import mailbus_paths
 from .platform_runner import (
@@ -130,7 +131,13 @@ def apply_codex_ui(log: LogFn | None = None) -> int:
 
 
 def fix_openclaw_gateways(log: LogFn | None = None) -> int:
-    """修复小七/一哥 OpenClaw gateway（原 fix-openclaw-gateways.sh）。"""
+    """修复小七/一哥 OpenClaw gateway（原 fix-openclaw-gateways.sh）。
+
+    2026.7+ 常见坑：
+    - 双 gateway 同时抢 startup-migration lease（sqlite state_leases）
+    - 缺 deepseek plugin 时交互警告卡住
+    - 配置了 codex 等无关插件时在 NTFS(/workspace) 上 npm rename → EACCES
+    """
     paths = mailbus_paths()
     container = f"{paths['compose_project']}-openclaw-1"
     token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "ziyan-team")
@@ -140,23 +147,91 @@ def fix_openclaw_gateways(log: LogFn | None = None) -> int:
         _log_line(log, f"[fix-openclaw] container {container} not running — skip")
         return 0
 
-    _log_line(log, f"[fix-openclaw] resetting device pairing + restarting gateways in {container} ...")
+    reset_pairing = os.environ.get("RESET_OPENCLAW_PAIRING", "0") == "1"
+    fix_plugins = os.environ.get("FIX_OPENCLAW_PLUGINS", "0") == "1"
+    _log_line(
+        log,
+        f"[fix-openclaw] restarting gateways in {container}"
+        f" (reset_pairing={int(reset_pairing)} fix_plugins={int(fix_plugins)}) ...",
+    )
+    # 预修复：清 lease / 坏 npm 代际目录；插件与 pairing 仅 opt-in
     inner_script = f"""
 set -euo pipefail
-for profile in xiaoqi yige; do
-  rm -rf "/workspace/data/.openclaw-${{profile}}/devices" \\
-         "/workspace/data/.openclaw-${{profile}}/identity" 2>/dev/null || true
-done
-bash /init-openclaw-profiles.sh
-pkill -x openclaw 2>/dev/null || true
-sleep 2
+export PYTHONPATH="/mailbus${{PYTHONPATH:+:$PYTHONPATH}}"
+export CI=1 NO_COLOR=1
 TOKEN={token!r}
+RESET_OPENCLAW_PAIRING={int(reset_pairing)}
+FIX_OPENCLAW_PLUGINS={int(fix_plugins)}
+
+# 1) 停掉旧 gateway（只杀二进制名，避免误杀本 shell）
+kill -9 $(pgrep -x openclaw) 2>/dev/null || true
+sleep 1
+
+# 2) 清迁移租约 + 权限/坏缓存；写 openclaw.json 插件仅 FIX_OPENCLAW_PLUGINS=1
+python3 - <<'PY'
+import json, os, sqlite3, shutil
+from pathlib import Path
+
+def clear_leases(db: str) -> None:
+    if not os.path.isfile(db):
+        return
+    con = sqlite3.connect(db)
+    try:
+        con.execute("DELETE FROM state_leases")
+        con.commit()
+        print("[fix-openclaw] cleared leases", db)
+    except Exception as e:
+        print("[fix-openclaw] lease skip", db, e)
+    finally:
+        con.close()
+
+fix_plugins = os.environ.get("FIX_OPENCLAW_PLUGINS", "0") == "1"
+for profile in ("xiaoqi", "yige", ""):
+    base = Path("/workspace/data") / (f".openclaw-{{profile}}" if profile else ".openclaw")
+    clear_leases(str(base / "state" / "openclaw.sqlite"))
+    npm = base / "npm"
+    if npm.is_dir():
+        # NTFS 上残留的 generation 目录常导致 npm rename EACCES
+        for p in npm.rglob("*"):
+            pass
+        for gen in npm.glob("projects/*__openclaw-generation__*"):
+            print("[fix-openclaw] rm gen", gen)
+            shutil.rmtree(gen, ignore_errors=True)
+        os.system(f"chmod -R u+rwX {{npm}} 2>/dev/null || true")
+    if not fix_plugins:
+        continue
+    cfg_path = base / "openclaw.json"
+    if not cfg_path.is_file():
+        continue
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    entries = cfg.setdefault("plugins", {{}}).setdefault("entries", {{}})
+    changed = False
+    for bad in ("codex", "@openclaw/codex"):
+        if bad in entries:
+            del entries[bad]
+            changed = True
+            print("[fix-openclaw]", profile or "shared", "drop plugin", bad)
+    if "deepseek" not in entries:
+        entries["deepseek"] = {{"enabled": True}}
+        changed = True
+    if changed:
+        cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\\n", encoding="utf-8")
+PY
+
+bash /init-openclaw-profiles.sh || true
+
 start_one() {{
   local name="$1" port="$2"
   local statedir="/workspace/data/.openclaw-${{name}}"
   local extra=()
   [ "$name" = "yige" ] && extra=("OPENCLAW_ALLOW_OLDER_BINARY_DESTRUCTIVE_ACTIONS=1")
-  rm -rf "${{statedir}}/devices" "${{statedir}}/identity" 2>/dev/null || true
+  if [ "${{RESET_OPENCLAW_PAIRING:-0}}" = "1" ]; then
+    rm -rf "${{statedir}}/devices" "${{statedir}}/identity" 2>/dev/null || true
+  fi
+  # 确保 deepseek 插件（缺了会弹交互警告卡住）；不写 openclaw.json
+  env OPENCLAW_STATE_DIR="$statedir" OPENCLAW_CONFIG_PATH="${{statedir}}/openclaw.json" \\
+    openclaw --no-color plugins install @openclaw/deepseek-provider \\
+    >/tmp/openclaw-plugin-${{name}}.log 2>&1 || true
   nohup env "${{extra[@]}}" \\
     OPENCLAW_STATE_DIR="$statedir" \\
     OPENCLAW_CONFIG_PATH="${{statedir}}/openclaw.json" \\
@@ -171,29 +246,43 @@ start_one() {{
     HTTPS_PROXY="${{HTTPS_PROXY:-}}" \\
     NO_PROXY="${{NO_PROXY:-localhost,127.0.0.1,::1,iii-engine,agentmemory,mailbus,172.28.0.0/16,host.docker.internal}}" \\
     OPENCLAW_GATEWAY_TOKEN="$TOKEN" \\
-    openclaw gateway run --allow-unconfigured \\
+    CI=1 NO_COLOR=1 \\
+    openclaw --no-color gateway run --allow-unconfigured \\
       --auth token --token "$TOKEN" \\
-      --port "$port" --bind auto --force \\
+      --port "$port" --bind lan --force \\
     >"/tmp/openclaw-gw-${{port}}.log" 2>&1 &
-  echo "  ${{name}} (${{port}}) restarted"
+  echo "  ${{name}} (${{port}}) restarted pid=$!"
 }}
 start_one xiaoqi 18789
+# 错开，避免抢同一个 migration lease
+sleep 15
 start_one yige 18790
 """
-    run(["docker", "exec", container, "bash", "-lc", inner_script], timeout=300)
+    run(["docker", "exec", container, "bash", "-lc", inner_script], timeout=600)
 
+    fails = 0
     for port in (18789, 18790):
         ok = False
-        for _ in range(25):
+        for _ in range(40):
             if probe_http(f"http://127.0.0.1:{port}/", ok_codes=frozenset({200, 401, 403, 404})):
                 ok = True
                 break
-            time.sleep(1)
+            time.sleep(2)
         _log_line(log, f"[fix-openclaw] :{port} -> {'OK' if ok else 'FAIL'}")
+        if not ok:
+            fails += 1
+            # 拉一点日志方便桌面启动排障
+            tip = run(
+                ["docker", "exec", container, "sh", "-c", f"tail -20 /tmp/openclaw-gw-{port}.log 2>/dev/null || true"],
+                timeout=15,
+            ).stdout.strip()
+            if tip and log:
+                for line in tip.splitlines()[-8:]:
+                    log(f"[fix-openclaw] log:{port}: {line}")
 
     _log_line(log, f"[fix-openclaw] 小七: http://localhost:18789/chat?token={token}")
     _log_line(log, f"[fix-openclaw] 一哥: http://localhost:18790/chat?token={token}")
-    return 0
+    return 1 if fails else 0
 
 
 def ensure_claude_agents(data_dir: str | None = None, log: LogFn | None = None) -> int:
@@ -202,7 +291,12 @@ def ensure_claude_agents(data_dir: str | None = None, log: LogFn | None = None) 
     data = data_dir or paths["data_dir"]
     _log_line(log, "[ensure-claude] Starting Claude Code web terminals...")
 
-    am_url = os.environ.get("AGENTMEMORY_URL", "http://127.0.0.1:3111")
+    try:
+        from .service_registry import service_url
+
+        am_url = service_url("agentmemory")
+    except Exception:
+        am_url = os.environ.get("AGENTMEMORY_URL", "http://127.0.0.1:3111")
     if probe_http(f"{am_url}/agentmemory/health"):
         _log_line(log, f"[ensure-claude] AgentMemory healthy at {am_url}")
     else:
@@ -274,10 +368,16 @@ def smoke_test(*, wait_sec: int | None = None, am_persist: bool = False) -> int:
     wait = int(wait_sec if wait_sec is not None else os.environ.get("SMOKE_WAIT_SEC", "20"))
     passed = [0, 0]
 
-    print(f"=== smoke test {datetime.now():%Y-%m-%d %H:%M:%S} ===")
+    print(f"=== smoke test {now_dt():%Y-%m-%d %H:%M:%S} ===")
     print(f"waiting {wait}s for services...")
     time.sleep(wait)
 
+    try:
+        from .service_registry import service_url
+
+        am_host = service_url("agentmemory", runtime="windows").rstrip("/")
+    except Exception:
+        am_host = "http://127.0.0.1:3111"
     checks = [
         ("mailbus", f"http://127.0.0.1:{port}/api/status"),
         ("lingzhao-9120", "http://127.0.0.1:9120/"),
@@ -288,8 +388,8 @@ def smoke_test(*, wait_sec: int | None = None, am_persist: bool = False) -> int:
         ("lingzhang-9127", "http://127.0.0.1:9127/"),
         ("openclaw-xiaoqi", "http://127.0.0.1:18789/"),
         ("openclaw-yige", "http://127.0.0.1:18790/"),
-        ("iii-engine", "http://127.0.0.1:3111/"),
-        ("agentmemory", "http://127.0.0.1:3111/agentmemory/health"),
+        ("iii-engine", f"{am_host}/"),
+        ("agentmemory", f"{am_host}/agentmemory/health"),
         ("codex-lingxiao", "http://127.0.0.1:9240/"),
         ("codex-lingjian", "http://127.0.0.1:9241/"),
         ("codex-lingxiao-ttyd", "http://127.0.0.1:9250/"),
@@ -387,7 +487,13 @@ def smoke_test(*, wait_sec: int | None = None, am_persist: bool = False) -> int:
         print("--- AgentMemory persistence probe ---")
         probe = os.path.join(paths["root"], "tools", "ops", "check-agentmemory-persistence.py")
         if os.path.isfile(probe):
-            r = run(["python3", probe, "--url", "http://127.0.0.1:3111"], timeout=120)
+            try:
+                from .service_registry import service_url
+
+                am_url = service_url("agentmemory", runtime="windows")
+            except Exception:
+                am_url = "http://127.0.0.1:3111"
+            r = run(["python3", probe, "--url", am_url], timeout=120)
             if r.returncode == 0:
                 print("OK  agentmemory-persistence")
                 passed[0] += 1

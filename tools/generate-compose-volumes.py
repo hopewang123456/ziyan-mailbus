@@ -97,6 +97,12 @@ def hermes_service_mounts(host_prefix: str, *, mail_root: Path | None = None) ->
     return lines
 
 
+def _is_placeholder_workspace(ws: str) -> bool:
+    """Committed transport.json uses /path/to/... placeholders — skip for local override."""
+    raw = (ws or "").strip().replace("\\", "/")
+    return raw.startswith("/path/to") or "/path/to/" in raw
+
+
 def workspace_mounts(host_prefix: str, *, mail_root: Path | None = None) -> dict[str, list[str]]:
     """Per docker compose service → extra workspace volume lines."""
     root = mail_root or MAILBUS_ROOT
@@ -105,7 +111,7 @@ def workspace_mounts(host_prefix: str, *, mail_root: Path | None = None) -> dict
         docker = rec.get("docker") or {}
         service = resolve_compose_service(agent_id, docker)
         ws = rec.get("workspace")
-        if not service or not ws:
+        if not service or not ws or _is_placeholder_workspace(str(ws)):
             continue
         fw = rec.get("framework") or ""
         host_path = normalize_host_path(str(ws), mail_root=root)
@@ -217,6 +223,7 @@ def emit_override(host_prefix: str = "", *, mail_root: Path | None = None) -> st
     shared = [
         f"      - {data}:/mailbus/store",
         f"      - {mroot}/tools:/mailbus/tools:ro",
+        f"      - {mroot}/lib:/mailbus/lib:ro",
         f"      - {skills_hp}:/mailbus/skills:ro",
         f"      - {rules_hp}:/mailbus/rules:ro",
         f"      - {mroot}/access:/mailbus/access:ro",
@@ -246,10 +253,20 @@ def emit_override(host_prefix: str = "", *, mail_root: Path | None = None) -> st
             vols.append(f"      - {inbox}:/home/hermes/inbox:ro")
         vols.extend(infra.get(svc, []))
         vols.extend(ws.get(svc, []))
-        # OpenClaw: Vault SoT mounts MUST come after openclaw_space:/workspace so they win
-        if svc == "openclaw" and vault_hp:
-            vols.append(f"      - {vault_hp}/skills/library/openclaw:/workspace/skills:ro")
-            vols.append(f"      - {vault_hp}/memories/xiaoqi:/workspace/memory")
+        # Runtime skills/memory SoT = Vault（须在 workspace 挂载之后，覆盖本地 junction）
+        if vault_hp:
+            if svc == "openclaw":
+                vols.append(f"      - {vault_hp}/skills/library/openclaw:/workspace/skills:ro")
+                vols.append(f"      - {vault_hp}/memories/xiaoqi:/workspace/memory")
+            elif svc in ("lingxiao", "lingjian"):
+                vols.append(
+                    f"      - {vault_hp}/skills/02-agent-specific/codex:/home/node/.codex/skills:ro"
+                )
+            elif svc == "dali":
+                vols.append(
+                    f"      - {vault_hp}/skills/02-agent-specific/opencode:/workspace/opencode/skills:rw"
+                )
+                vols.append(f"      - {vault_hp}/memories/dali:/workspace/opencode/memory")
         if svc == "mailbus":
             vols = [
                 f"      - {mroot}:/mailbus",
@@ -265,6 +282,22 @@ def emit_override(host_prefix: str = "", *, mail_root: Path | None = None) -> st
             if v not in seen:
                 seen.add(v)
                 out_lines.append(v)
+        # Inject docker-profile service URLs so host .env localhost cannot win
+        if svc == "mailbus":
+            try:
+                from lib.service_registry import compose_env_for_services
+
+                cenv = compose_env_for_services(data_dir=str(Path(paths["data_dir"])))
+            except Exception:
+                cenv = {
+                    "MAILBUS_OLLAMA_BASE_URL": "http://host.docker.internal:11435",
+                    "MAILBUS_OLLAMA_MODEL": "qwen2.5:3b-instruct-q4_K_M",
+                    "AGENTMEMORY_URL": "http://iii-engine:3111",
+                }
+            out_lines.append("    environment:")
+            for key in ("MAILBUS_OLLAMA_BASE_URL", "MAILBUS_OLLAMA_MODEL", "AGENTMEMORY_URL"):
+                val = cenv.get(key) or ""
+                out_lines.append(f"      - {key}={val}")
     return "\n".join(out_lines) + "\n"
 
 

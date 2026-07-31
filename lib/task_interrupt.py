@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from .self_heal import agent_cli_active_for
-from .task_fsm import StepFsmState, TaskFsmState, ensure_fsm, get_active_step, task_priority
+from lib.adapters.orchestration.task_fsm import StepFsmState, TaskFsmState, ensure_fsm, get_active_step, task_priority
 from .task_lock import read_task_lock, task_lock_holder
 from .tracker import TaskTracker, _parse_iso_dt
 from .utils import _now_iso, json_write
@@ -37,7 +38,7 @@ def _step_age_seconds(step: dict) -> float:
         return 0.0
     try:
         dt = _parse_iso_dt(ts)
-        return (datetime.now(timezone.utc) - dt).total_seconds()
+        return (now_utc_dt() - dt).total_seconds()
     except Exception:
         return 0.0
 
@@ -98,7 +99,7 @@ def detect_interrupted_tasks(
             ttl = float(lock.get("ttl_seconds") or 3600)
             try:
                 lock_age = (
-                    datetime.now(timezone.utc) - _parse_iso_dt(acquired)
+                    now_utc_dt() - _parse_iso_dt(acquired)
                 ).total_seconds()
             except Exception:
                 lock_age = 0.0

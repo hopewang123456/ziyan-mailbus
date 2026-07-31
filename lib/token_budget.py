@@ -80,7 +80,7 @@ def measure_mailbus_activity(data_dir: str, agents: dict, config: dict) -> Dict[
         from .tracker import TaskTracker, TaskStatus
         running = TaskTracker(data_dir).list_all(status_filter=TaskStatus.RUNNING)
         running_tasks = len(running)
-        from .task_fsm import ensure_fsm, task_priority
+        from lib.adapters.orchestration.task_fsm import ensure_fsm, task_priority
         for t in running:
             ensure_fsm(t)
             if task_priority(t) <= 25:

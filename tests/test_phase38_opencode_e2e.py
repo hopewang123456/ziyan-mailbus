@@ -9,9 +9,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lib.delivery_normalizer import normalize_opencode_deliveries, normalize_from_reply_record
 from lib.phantom_detect import is_phantom_reply_text
-from lib.pipeline_task import pipeline_inbox_may_mark_done
+from lib.application.orchestration.pipeline.task import pipeline_inbox_may_mark_done
 from lib.file_task_push import verify_file_task_delivery
-from lib.task_fsm import apply_submit, ensure_fsm, read_step_result
+from lib.adapters.orchestration.task_fsm import apply_submit, ensure_fsm, read_step_result
 from lib.utils import json_write
 
 

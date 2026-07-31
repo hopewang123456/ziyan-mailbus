@@ -29,6 +29,13 @@ def _workspaces() -> dict[str, str]:
 
 
 def _init_profile(profile: str, port: int, statedir: Path, src: Path) -> None:
+    statedir.mkdir(parents=True, exist_ok=True)
+    out = statedir / "openclaw.json"
+    # 已有原生配置则跳过，禁止启动时静默覆盖
+    if out.is_file():
+        print(f"  skip {profile} -> {out} (exists)")
+        return
+
     cfg = json.loads(src.read_text(encoding="utf-8"))
     cfg.setdefault("gateway", {})
     cfg["gateway"]["port"] = port
@@ -51,8 +58,6 @@ def _init_profile(profile: str, port: int, statedir: Path, src: Path) -> None:
         ]
     cfg.setdefault("agents", {})["list"] = picked
 
-    statedir.mkdir(parents=True, exist_ok=True)
-    out = statedir / "openclaw.json"
     out.write_text(json.dumps(cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"  init {profile} -> {out} (port {port})")
 

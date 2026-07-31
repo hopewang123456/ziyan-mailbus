@@ -1,0 +1,39 @@
+@echo off
+setlocal EnableExtensions EnableDelayedExpansion
+chcp 65001 >nul 2>&1
+title ziyan-mailbus - Start
+
+rem Resolve mail root = parent of scripts\
+cd /d "%~dp0.."
+if not exist "%CD%\tools\mailbus.py" (
+  echo [ERROR] mailbus root not found: %CD%
+  echo         Place this repo anywhere and run scripts\start-mailbus.bat from it.
+  pause
+  exit /b 1
+)
+
+echo.
+echo ==========================================
+echo   ziyan-mailbus
+echo   API: http://localhost:9814/
+echo ==========================================
+echo.
+
+where wsl >nul 2>&1
+if errorlevel 1 (
+  echo [WARN] WSL not found — trying host Python...
+  python "%CD%\tools\mailbus.py" start
+  set "RC=!ERRORLEVEL!"
+) else (
+  call "%~dp0_invoke-mailbus.bat" start --windows
+  set "RC=!ERRORLEVEL!"
+)
+
+if !RC! equ 0 (
+  echo [OK] Start finished.
+) else (
+  echo [FAILED] exit code !RC!
+)
+echo.
+pause
+exit /b !RC!

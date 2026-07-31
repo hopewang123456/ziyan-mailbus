@@ -1,0 +1,28 @@
+{
+  "schema": "mailbus-demo-roster-v1",
+  "agents": {
+    "agent-a": {
+      "name": "Demo Agent A",
+      "role": "orchestrator",
+      "framework": "none",
+      "archetype": "orchestrator",
+      "enabled": false
+    },
+    "agent-b": {
+      "name": "Demo Agent B",
+      "role": "coding-executor",
+      "framework": "none",
+      "archetype": "coding-executor",
+      "enabled": false
+    },
+    "agent-c": {
+      "name": "Demo Agent C",
+      "role": "reviewer",
+      "framework": "none",
+      "archetype": "code-reviewer",
+      "enabled": false
+    }
+  },
+  "dispatcher_role_id": "",
+  "notes": "GitHub demo roster (T1). Users must set dispatcher_role_id (suggest an OpenClaw role)."
+}

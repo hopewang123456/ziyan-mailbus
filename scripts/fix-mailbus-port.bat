@@ -38,7 +38,7 @@ if %RC% neq 0 (
   echo.
   echo [FAILED] Port fix exited with code %RC%
   echo   If UAC was denied, right-click and Run as administrator
-  echo   Or run Start-Ziyan-AI-Team.bat first
+  echo   Or run scripts\start-mailbus.bat / Desktop Start-Mailbus.bat first
 ) else (
   echo [OK] localhost:9814 is reachable
 )

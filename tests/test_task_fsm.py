@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.task_fsm import (
+from lib.adapters.orchestration.task_fsm import (
     TaskFsmState,
     StepFsmState,
     apply_pause,

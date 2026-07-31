@@ -29,6 +29,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
+from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from lib.models import (
@@ -38,7 +39,7 @@ from lib.utils import (
     json_read, json_write, jsonl_append, log_error, resolve_paths,
     build_message, _now_iso, _ensure_dir, file_lock,
 )
-from lib.scanner import build_queues, run_housekeeping, update_message_status
+from lib.scan import build_queues, run_housekeeping, update_message_status
 from lib.pusher import push_messages, resolve_cli_chain, resolve_cli_for_message
 from lib.webhook_pusher import push_via_webhook
 from lib.ack_handler import scan_ack_files, scan_forward_files, scan_error_reports
@@ -700,7 +701,7 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
         if webhook_url:
             print(f"   🌐 {agent_name} ({label}): {len(messages)} 条 [Webhook]")
             # auto_ack 判定：pipeline 步骤禁止 auto_ack
-            from .pipeline_task import should_auto_ack_message
+            from lib.application.orchestration.pipeline.task import should_auto_ack_message
             msg0 = messages[0] if messages else {}
             auto_ack = should_auto_ack_message(
                 msg0, data_dir, agent_cfg.get("type", ""),
@@ -716,7 +717,7 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
             )
         else:
             from .model_router import is_no_llm_notice
-            from .scanner import _get_primary_pipeline_task_id
+            from lib.scan import _get_primary_pipeline_task_id
 
             primary_tid = _get_primary_pipeline_task_id(data_dir)
             # 零 token：系统 notice 直接 done，不 spawn Hermes
@@ -750,7 +751,7 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
                 continue
             print(f"   → {agent_name} ({label}): {len(messages)} 条")
             auto_ack_types = ("hermes", "hermes_profile", "openclaw")
-            from .pipeline_task import should_auto_ack_message
+            from lib.application.orchestration.pipeline.task import should_auto_ack_message
             auto_ack = should_auto_ack_message(
                 msg0, data_dir, agent_cfg.get("type", ""),
             )
@@ -843,7 +844,7 @@ def cmd_send(args) -> int:
                         forward_to=getattr(args, 'forward_to', None),
                         project=project or None)
     msg_dict = msg.to_dict()
-    from .pipeline_task import extract_task_id
+    from lib.application.orchestration.pipeline.task import extract_task_id
     ptid = extract_task_id(content)
     if ptid and not ptid.startswith("msg-"):
         msg_dict["task_id"] = ptid
@@ -851,7 +852,7 @@ def cmd_send(args) -> int:
     # 即时推送（与 /api/send-msg 一致，不等待 cron scan）
     try:
         from .model_router import is_no_llm_notice
-        from .scanner import finalize_auto_ack
+        from lib.scan import finalize_auto_ack
 
         if is_no_llm_notice(msg_dict):
             finalize_auto_ack(data_dir, to, msg_dict["id"], msg_dict)
@@ -860,7 +861,7 @@ def cmd_send(args) -> int:
             cli_chain = resolve_cli_chain(agents[to], agent_types)
             if cli_chain:
                 cli_cmds = [c[0] for c in cli_chain]
-                from .pipeline_task import should_auto_ack_message
+                from lib.application.orchestration.pipeline.task import should_auto_ack_message
                 auto_ack = should_auto_ack_message(
                     msg_dict, data_dir, agents[to].get("type", ""),
                 )
@@ -869,7 +870,7 @@ def cmd_send(args) -> int:
     except Exception as exc:
         print(f"  ⚠️ 即时推送失败: {exc}")
     if msg_type in (MsgType.TASK, MsgType.TASK_REPLY):
-        from .pipeline_task import extract_task_id, should_create_tracker_for_send
+        from lib.application.orchestration.pipeline.task import extract_task_id, should_create_tracker_for_send
 
         if should_create_tracker_for_send(content, data_dir):
             try:
@@ -1179,7 +1180,7 @@ def cmd_backup(args) -> int:
     data_dir = config["data_dir"]
     
     backup_dir = os.path.join(os.path.dirname(data_dir), "backup")
-    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = now_dt().strftime("%Y%m%d_%H%M%S")
     archive_name = f"store-backup-{ts}.tar.gz"
     archive_path = os.path.join(backup_dir, archive_name)
     
@@ -1525,7 +1526,7 @@ def _cleanup_stale_locks(max_age: int = 300):
     import glob
     from .utils import get_lock_root
 
-    now = time.time()
+    now = now_ts()
     lock_root = get_lock_root()
 
     # 清理 mailbus 锁文件

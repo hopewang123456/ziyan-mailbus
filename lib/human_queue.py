@@ -8,6 +8,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 from .utils import _now_iso, file_lock, json_read, json_write
+from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
 
 _TZ_CN = timezone(timedelta(hours=8))
 _VERSION = "1.0.0"
@@ -42,7 +43,7 @@ def save_queue(data_dir: str, doc: dict) -> None:
 
 
 def _new_id() -> str:
-    day = datetime.now(_TZ_CN).strftime("%Y%m%d")
+    day = now_dt().strftime("%Y%m%d")
     return f"hq-{day}-{secrets.token_hex(3)}"
 
 

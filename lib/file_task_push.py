@@ -74,7 +74,7 @@ def ensure_file_task_work_order(
             step_id = m.group(1)
 
     if task_id and step_id:
-        from .pipeline_work_order import write_pipeline_work_order
+        from lib.application.orchestration.pipeline.work_order import write_pipeline_work_order
 
         step_num = int(msg_entry.get("pipeline_step") or msg_entry.get("step") or 1)
         _, wo_path = write_pipeline_work_order(

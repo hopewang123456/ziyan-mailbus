@@ -8,8 +8,9 @@ import os
 import json
 from lib.models import Inbox, Message, MsgStatus, Priority, MsgType
 from lib.utils import json_read, json_write, resolve_paths, _now_iso, build_message
-from lib.scanner import build_queues, update_message_status
+from lib.scan import build_queues, update_message_status
 from lib.pusher import push_messages, resolve_cli_chain
+from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
 
 
 def handle_inbox(handler, agent: str):
@@ -94,7 +95,7 @@ def handle_mark_read(handler, agent: str):
     if isinstance(data, list):
         data = {"agent": agent, "has_unread": True, "messages": data, "since": _now_iso()}
     inbox = Inbox.from_dict(data)
-    ts = __import__("datetime").datetime.now().isoformat()
+    ts = __import__("datetime").now_dt().isoformat()
     for mid in msg_ids:
         inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, acknowledged_at=ts)
         inbox.set_msg_status(mid, MsgStatus.ACKNOWLEDGED, state=MsgStatus.DONE, done_at=ts)
@@ -143,7 +144,7 @@ def handle_send_msg(handler):
     # 即时推送：写完后立即扫描并推送，不等下次 cron
     try:
         from ..model_router import is_no_llm_notice
-        from ..scanner import finalize_auto_ack
+        from lib.scan import finalize_auto_ack
 
         if is_no_llm_notice(msg_dict):
             finalize_auto_ack(handler.data_dir, to, msg_dict["id"], msg_dict)
@@ -152,7 +153,7 @@ def handle_send_msg(handler):
             cli_chain = resolve_cli_chain(agent_cfg, handler.agent_types)
             if cli_chain:
                 cli_cmds = [c[0] for c in cli_chain]
-                from ..pipeline_task import should_auto_ack_message
+                from lib.application.orchestration.pipeline.task import should_auto_ack_message
                 auto_ack = should_auto_ack_message(
                     msg_dict, handler.data_dir, agent_cfg.get("type", ""),
                 )

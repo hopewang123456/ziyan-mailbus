@@ -1,6 +1,7 @@
 """Agent Card 缓存 — store/agents/cards + registry 合成。"""
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import json
 import os
 import time
@@ -74,7 +75,7 @@ class AgentCardCache:
         self.base_url = base_url
 
     def get(self, agent_id: str, *, force_refresh: bool = False) -> Optional[dict]:
-        now = time.time()
+        now = now_ts()
         if not force_refresh and agent_id in _cache:
             ts, card = _cache[agent_id]
             if now - ts < _TTL_SEC:

@@ -1,0 +1,9 @@
+{
+  "schema": "mailbus-services-v1",
+  "services": ["ollama", "agentmemory"],
+  "runtime_profiles": ["windows", "wsl", "docker"],
+  "notes": {
+    "priority": "env override > store/config.services > config/services/*.json > code fallback",
+    "compose": "Docker containers use profiles.docker; host tools use windows/wsl"
+  }
+}

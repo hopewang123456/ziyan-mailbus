@@ -22,7 +22,7 @@ def is_task_complete(
         should_file_task_push,
         verify_file_task_delivery,
     )
-    from .pipeline_task import extract_task_id, is_pipeline_execute_message, verify_pipeline_step_delivery
+    from lib.application.orchestration.pipeline.task import extract_task_id, is_pipeline_execute_message, verify_pipeline_step_delivery
 
     if not isinstance(msg_entry, dict):
         return False, "invalid_entry"

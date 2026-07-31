@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import json
 import os
 import subprocess
@@ -61,8 +62,8 @@ def ensure_from_config(
         except OSError as exc:
             return {"ok": False, "error": f"start failed: {exc}"}
 
-    deadline = time.time() + max(5.0, float(wait_seconds))
-    while time.time() < deadline:
+    deadline = now_ts() + max(5.0, float(wait_seconds))
+    while now_ts() < deadline:
         probe = probe_provider("local", {**pc, "kind": "ollama", "base_url": base, "model": model})
         if probe.get("ok"):
             break

@@ -15,7 +15,7 @@ from lib.decomposition import (
 )
 from lib.human_queue import load_queue
 from lib.human_queue_resolve import resolve_human_queue_item
-from lib.task_fsm import TaskFsmState, apply_submit
+from lib.adapters.orchestration.task_fsm import TaskFsmState, apply_submit
 from lib.tracker import TaskTracker
 from lib.utils import json_write
 

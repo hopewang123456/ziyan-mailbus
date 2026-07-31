@@ -12,10 +12,11 @@ import random
 from typing import Optional
 from pathlib import Path
 
+from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
 from .models import Message, MsgStatus, Priority, MsgType
 from .constants import DEFAULT_CLI_MSG_MAX_CHARS
 from .utils import json_read, json_write, jsonl_append, log_error, resolve_paths, _now_iso
-from .scanner import mark_as_pushed, update_message_status
+from lib.scan import mark_as_pushed, update_message_status
 from .mbus_log import debug, warn
 
 # agent_name -> subprocess.Popen（后台 CLI，供超时 kill / 自愈查询）
@@ -241,7 +242,7 @@ def push_messages(
     inbox_file = f"{paths['inbox']}/{agent_name}/inbox.json"
     inbox_data = json_read(inbox_file, {})
     if inbox_data:
-        from .scanner import _get_acked_ids
+        from lib.scan import _get_acked_ids
         acked_ids = _get_acked_ids(inbox_data)
         already_acked = [mid for mid in msg_ids if mid in acked_ids]
         if already_acked:
@@ -266,7 +267,7 @@ def push_messages(
     cfg = json_read(os.path.join(data_dir, "config.json"), {})
     agents_cfg = cfg.get("agents", {})
     from .token_budget import load_token_budget
-    from .agent_adapters import store_path_for_agent
+    from lib.adapters.frameworks import store_path_for_agent
     from .utils import format_push_content_for_agent
 
     agent_cfg_entry = agents_cfg.get(agent_name) or {}
@@ -341,7 +342,7 @@ def push_messages(
                     msg_body += f"\n▶ 需转发至: {', '.join(targets)}"
 
             msg_body += "\n---"
-        from .pipeline_task import pipeline_completion_block
+        from lib.application.orchestration.pipeline.task import pipeline_completion_block
         msg_body += pipeline_completion_block(
             data_dir, raw_content, agent_name, agent_cfg_entry,
         )
@@ -365,7 +366,7 @@ def push_messages(
         m if isinstance(m, dict) else (m.to_dict() if hasattr(m, "to_dict") else m)
         for m in (messages or [])
     ]
-    from .pipeline_task import is_pipeline_execute_message
+    from lib.application.orchestration.pipeline.task import is_pipeline_execute_message
 
     pipeline_msg = any(
         is_pipeline_execute_message(e, data_dir) for e in msg_entries_pre
@@ -411,7 +412,7 @@ def push_messages(
     if used_model:
         agents_cfg = json_read(os.path.join(data_dir, "config.json"), {}).get("agents", {})
         agent_cfg = agents_cfg.get(agent_name, {})
-        from .agent_adapters import should_mark_processing_on_push
+        from lib.adapters.frameworks import should_mark_processing_on_push
 
         for mid in msg_ids:
             entry = next(
@@ -420,10 +421,10 @@ def push_messages(
             )
             entry_dict = entry if isinstance(entry, dict) else entry.to_dict()
             if auto_ack:
-                from .scanner import finalize_auto_ack
+                from lib.scan import finalize_auto_ack
                 finalize_auto_ack(data_dir, agent_name, mid, entry_dict)
             elif should_mark_processing_on_push(agent_cfg, entry_dict):
-                from .scanner import finalize_processing_on_push
+                from lib.scan import finalize_processing_on_push
                 finalize_processing_on_push(data_dir, agent_name, mid, entry_dict)
             else:
                 update_message_status(data_dir, agent_name, mid, MsgStatus.PUSHED)
@@ -435,7 +436,7 @@ def push_messages(
                 (m for m in messages if (m.get("id") if isinstance(m, dict) else m.id) == mid),
                 {},
             )
-            from .scanner import finalize_auto_ack
+            from lib.scan import finalize_auto_ack
             finalize_auto_ack(data_dir, agent_name, mid, entry if isinstance(entry, dict) else entry.to_dict())
         else:
             update_message_status(data_dir, agent_name, mid, MsgStatus.FAILED)
@@ -455,7 +456,7 @@ def resolve_cli(
     data_dir: str = "",
 ) -> str:
     """根据 agent 配置解析 push CLI（委托 agent_adapters 适配层）。"""
-    from .agent_adapters import resolve_push_cli
+    from lib.adapters.frameworks import resolve_push_cli
 
     name = agent_name or agent_cfg.get("profile") or agent_cfg.get("agent") or ""
     return resolve_push_cli(
@@ -479,7 +480,7 @@ def resolve_cli_for_message(
         return ""
     pipeline = False
     if data_dir:
-        from .pipeline_task import is_pipeline_execute_message
+        from lib.application.orchestration.pipeline.task import is_pipeline_execute_message
         entry = msg if isinstance(msg, dict) else (msg.to_dict() if hasattr(msg, "to_dict") else {})
         pipeline = is_pipeline_execute_message(entry, data_dir)
     cfg = {}
@@ -648,8 +649,8 @@ def _invoke_cli(
                 m if isinstance(m, dict) else (m.to_dict() if hasattr(m, "to_dict") else m)
                 for m in (messages or [])
             ]
-            from .pipeline_task import is_pipeline_execute_message
-            from .agent_adapters import push_timeout_for
+            from lib.application.orchestration.pipeline.task import is_pipeline_execute_message
+            from lib.adapters.frameworks import push_timeout_for
 
             agents_cfg_pre = json_read(os.path.join(data_dir, "config.json"), {}).get("agents", {})
             agent_cfg_pre = agents_cfg_pre.get(agent_name, {})
@@ -667,7 +668,7 @@ def _invoke_cli(
                         reply_text = (stdout or "").strip()
                     if reply_text and len(reply_text) > 5:
                         from datetime import datetime, timezone, timedelta
-                        ts = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%dT%H:%M:%S+0800")
+                        ts = now_dt().strftime("%Y-%m-%dT%H:%M:%S+0800")
                         reply_data = {
                             "agent": a_name,
                             "msg_ids": mids or [],
@@ -680,12 +681,12 @@ def _invoke_cli(
                     import time
                     time.sleep(2)
                     from .self_heal import agent_cli_active_for
-                    from .pipeline_task import (
+                    from lib.application.orchestration.pipeline.task import (
                         extract_task_id,
                         is_pipeline_execute_message,
                         verify_pipeline_step_delivery,
                     )
-                    from .scanner import update_message_status
+                    from lib.scan import update_message_status
                     from .models import MsgStatus
                     from .utils import json_read as _json_read
 
@@ -695,7 +696,7 @@ def _invoke_cli(
 
                     for entry in entries or []:
                         from .file_task_push import should_file_task_push, verify_file_task_delivery
-                        from .pipeline_task import is_pipeline_execute_message
+                        from lib.application.orchestration.pipeline.task import is_pipeline_execute_message
 
                         is_pipe = is_pipeline_execute_message(entry, dd)
                         raw = entry.get("content", "") if isinstance(entry, dict) else ""
@@ -720,7 +721,7 @@ def _invoke_cli(
                             stall_reason = detect_api_stall(reply_text)
                         if stall_reason and not ok:
                             from .api_stall_recovery import schedule_api_stall_recovery
-                            from .pipeline_task import extract_task_id as _extract_tid
+                            from lib.application.orchestration.pipeline.task import extract_task_id as _extract_tid
 
                             mid = entry.get("id") if isinstance(entry, dict) else ""
                             tid = (
@@ -759,7 +760,7 @@ def _invoke_cli(
                             entry.get("task_id") if isinstance(entry, dict) else ""
                         ) or extract_task_id(raw)
                         if is_pipe and tid:
-                            from .dispatch.pipeline_step_failover import note_pipeline_verify_failure
+                            from lib.application.orchestration.dispatch.pipeline_step_failover import note_pipeline_verify_failure
                             note_pipeline_verify_failure(
                                 dd, tid, a_name, mid, reason=reason,
                             )
@@ -767,7 +768,7 @@ def _invoke_cli(
                 except subprocess.TimeoutExpired:
                     _kill_cli_proc(proc, a_name)
                     from .models import MsgStatus
-                    from .scanner import update_message_status
+                    from lib.scan import update_message_status
                     from .file_task_push import is_executable_task
                     partial = ""
                     try:
@@ -783,7 +784,7 @@ def _invoke_cli(
                         timeout_note = f"{timeout_note}\n{partial[:1500]}"
                     if fpath:
                         from datetime import datetime, timezone, timedelta
-                        ts = datetime.now(timezone(timedelta(hours=8))).strftime(
+                        ts = now_dt().strftime(
                             "%Y-%m-%dT%H:%M:%S+0800"
                         )
                         os.makedirs(os.path.dirname(fpath), exist_ok=True)
@@ -830,10 +831,10 @@ def _wait_for_ack(data_dir: str, agent_name: str, msg_ids: list, timeout: int) -
     paths = resolve_paths(data_dir)
     ack_file = f"{paths['inbox']}/{agent_name}/ack.json"
     
-    deadline = time.time() + timeout
+    deadline = now_ts() + timeout
     acked_ids = set()
     
-    while time.time() < deadline:
+    while now_ts() < deadline:
         ack_data = json_read(ack_file, [])
         if isinstance(ack_data, dict):
             ack_data = [ack_data]  # 兼容单对象格式
@@ -851,19 +852,13 @@ def _wait_for_ack(data_dir: str, agent_name: str, msg_ids: list, timeout: int) -
 
 
 def _get_unacked_ids(data_dir: str, agent_name: str, msg_ids: list) -> list:
-    """获取尚未 ack 的消息 ID 列表"""
-    paths = resolve_paths(data_dir)
-    ack_file = f"{paths['inbox']}/{agent_name}/ack.json"
-    
-    ack_data = json_read(ack_file, [])
-    if isinstance(ack_data, dict):
-        ack_data = [ack_data]
-    
-    acked_ids = {a.get("msg_id") for a in ack_data if isinstance(a, dict) and a.get("action") == "ack"}
-    return [mid for mid in msg_ids if mid not in acked_ids]
+    """获取尚未 ack 的消息 ID 列表（委托 ResultStore ack 适配器）。"""
+    from lib.adapters.results.ack import list_unacked
+
+    return list_unacked(data_dir, agent_name, msg_ids)
 
 
 def _update_status_direct(data_dir: str, agent_name: str, msg_id: str, status: str):
     """直接通过 scanner 更新状态"""
-    from .scanner import update_message_status
+    from lib.scan import update_message_status
     update_message_status(data_dir, agent_name, msg_id, status)

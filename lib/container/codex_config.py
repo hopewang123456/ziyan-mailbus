@@ -176,11 +176,18 @@ def render_codex_config() -> int:
         print(f"[codex-config] agentmemory MCP skipped (missing {mcp_standalone})", file=sys.stderr)
 
     config_path = codex_home / "config.toml"
-    config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
+    force_render = os.environ.get("FORCE_RENDER_CODEX_CONFIG", "0") == "1"
     project_codex = project_dir / ".codex"
     project_codex.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(config_path, project_codex / "config.toml")
+    if config_path.is_file() and not force_render:
+        print(
+            f"[codex-config] skip existing {config_path} "
+            "(set FORCE_RENDER_CODEX_CONFIG=1 to overwrite)",
+            file=sys.stderr,
+        )
+    else:
+        config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        shutil.copy2(config_path, project_codex / "config.toml")
     catalog_dst = codex_home / "deepseek-model-catalog.json"
     if catalog_dst.is_file():
         shutil.copy2(catalog_dst, project_codex / "deepseek-model-catalog.json")

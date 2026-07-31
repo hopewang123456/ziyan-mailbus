@@ -7,8 +7,8 @@ import tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lib.pipeline_results import find_legacy_result_file
-from lib.pipeline_trigger import trigger
-from lib.task_fsm import result_applies_to_step, result_mtime_ok
+from lib.application.orchestration.pipeline.trigger import trigger
+from lib.adapters.orchestration.task_fsm import result_applies_to_step, result_mtime_ok
 from lib.tracker import TaskTracker
 from lib.utils import json_write, _now_iso
 

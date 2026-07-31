@@ -100,7 +100,7 @@ def pick_agent_for_role_type(
     pin_agent: Optional[str] = None,
     action: Optional[dict] = None,
 ) -> Optional[str]:
-    from .dispatch.role_resolver import resolve_agent_for_role_type
+    from lib.application.orchestration.dispatch.role_resolver import resolve_agent_for_role_type
 
     step_action = action or {}
     agent, _ = resolve_agent_for_role_type(

@@ -11,7 +11,7 @@ import subprocess
 import sys
 from typing import Optional
 
-from .agent_adapters import (
+from lib.adapters.frameworks import (
     ClineAdapter,
     CodexAdapter,
     HermesAdapter,
@@ -250,42 +250,50 @@ def try_build_push_direct(
     if not atype or not get_adapter(atype):
         return None
 
+    built = None
     if atype == "claude_code":
-        return _claude_direct(
+        built = _claude_direct(
             agent_name, agent_cfg, agent_types,
             data_dir=data_dir, prompt=prompt, model_name=model_name,
         )
-    if atype == "codex":
-        return _codex_direct(
+    elif atype == "codex":
+        built = _codex_direct(
             agent_name, agent_cfg, agent_types,
             prompt=prompt, model_name=model_name, pipeline=pipeline,
         )
-    if atype == "hermes_profile":
-        return _hermes_direct(
+    elif atype == "hermes_profile":
+        built = _hermes_direct(
             agent_name, agent_cfg, agent_types,
             prompt=prompt, model_name=model_name, profile=True,
         )
-    if atype == "hermes":
-        return _hermes_direct(
+    elif atype == "hermes":
+        built = _hermes_direct(
             agent_name, agent_cfg, agent_types,
             prompt=prompt, model_name=model_name, profile=False,
         )
-    if atype == "openclaw":
-        return _openclaw_direct(
+    elif atype == "openclaw":
+        built = _openclaw_direct(
             agent_name, agent_cfg, agent_types,
             prompt=prompt, model_name=model_name,
         )
-    if atype == "cline":
-        return _cline_direct(
+    elif atype == "cline":
+        built = _cline_direct(
             agent_name, agent_cfg, agent_types,
             prompt=prompt, model_name=model_name,
         )
-    if atype == "opencode":
-        return _opencode_direct(
+    elif atype == "opencode":
+        built = _opencode_direct(
             agent_name, agent_cfg, agent_types,
             prompt=prompt, model_name=model_name,
         )
-    return None
+    if not built or not built.get("argv"):
+        return built
+    from lib.adapters.frameworks.support import assert_spawn_argv_allowed
+    from lib.utils import json_read
+
+    cfg = json_read(os.path.join(data_dir, "config.json"), {}) if data_dir else {}
+    assert_spawn_argv_allowed(list(built["argv"]), cfg)
+    return built
 
 
 def run_push_direct(spec: dict, *, wait: bool = True) -> int:

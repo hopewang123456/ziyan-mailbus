@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import glob
 import os
 import re
@@ -36,7 +37,7 @@ def _docker_container(service: str) -> str:
 
 def agent_cli_active(agent_name: str, agents: dict) -> bool:
     """agent 容器内是否仍有可执行任务 CLI（非 dashboard）。"""
-    from .agent_adapters import agent_cli_active as _adapter_cli_active
+    from lib.adapters.frameworks import agent_cli_active as _adapter_cli_active
     return _adapter_cli_active(agent_name, agents)
 
 
@@ -47,7 +48,7 @@ def agent_cli_active_for(
     msg_id: str = "",
     task_id: str = "",
 ) -> bool:
-    from .agent_adapters import agent_cli_active_for as _for
+    from lib.adapters.frameworks import agent_cli_active_for as _for
     return _for(agent_name, agents, msg_id=msg_id, task_id=task_id)
 
 
@@ -58,7 +59,7 @@ def _extract_task_ids(text: str) -> Set[str]:
 
 
 def _infer_next_role(from_agent: str) -> str:
-    from .pipeline_chain import agent_to_role
+    from lib.application.orchestration.pipeline.chain import agent_to_role
     from .role_flow import get_next_role
     role = agent_to_role(from_agent)
     return get_next_role(role, "done") or "调度员"
@@ -66,7 +67,7 @@ def _infer_next_role(from_agent: str) -> str:
 
 def recover_replies_to_msg_results(data_dir: str, agents: dict) -> int:
     """从 mailbus 回复文件 / replies 目录回收 msg-results（仅限非 pipeline 根任务）。"""
-    from .pipeline_chain import is_pipeline_step
+    from lib.application.orchestration.pipeline.chain import is_pipeline_step
 
     written = 0
     results_dir = os.path.join(data_dir, "msg-results")
@@ -217,7 +218,7 @@ def sync_tracker_and_inbox(data_dir: str, agents: dict) -> Dict[str, int]:
                     done = True
                     break
                 if task and task.get("status") == TaskStatus.RUNNING:
-                    from .pipeline_result_check import pipeline_step_result_matches
+                    from lib.application.orchestration.pipeline.result_check import pipeline_step_result_matches
                     ok, _ = pipeline_step_result_matches(
                         data_dir, task, name, require_consumed=True,
                     )
@@ -289,7 +290,7 @@ def _should_auto_audit(task: dict) -> bool:
 
 def normalize_legacy_tracker_audit_flags(data_dir: str) -> int:
     """历史 msg-* tracker 标记为不要求审计；取消与 running pipeline 重复的 msg-* tracker。"""
-    from .pipeline_task import extract_task_id, get_running_pipeline_task
+    from lib.application.orchestration.pipeline.task import extract_task_id, get_running_pipeline_task
 
     tr = TaskTracker(data_dir)
     fixed = 0
@@ -377,7 +378,7 @@ def trim_stale_notices(data_dir: str, agents: dict, max_age_days: int = 3) -> in
     from .tracker import _parse_iso_dt
 
     paths = resolve_paths(data_dir)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+    cutoff = now_utc_dt() - timedelta(days=max_age_days)
     markers = ("规则更新", "团队规范", "rule-change", "bulletin", "📢", "team-secrets", "execution-order")
     trimmed = 0
     for name in agents:
@@ -430,7 +431,7 @@ def run_self_heal(data_dir: str, agents: dict, *, phase: str = "full") -> dict:
     sync = sync_tracker_and_inbox(data_dir, agents)
     out.update({k: v for k, v in sync.items() if v})
     try:
-        from .execution_orchestrator import run_orchestrator
+        from lib.application.orchestration.execution import run_orchestrator
         orch = run_orchestrator(data_dir, agents, fix=True, mode="light")
         if orch.get("reconcile"):
             out.update({f"orch_{k}": v for k, v in orch["reconcile"].items() if v})

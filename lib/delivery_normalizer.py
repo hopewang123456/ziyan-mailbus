@@ -11,8 +11,8 @@ import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from .constants import MAILBUS_ROOT
-from .pipeline_task import extract_task_id, get_running_pipeline_task
-from .task_fsm import get_active_step, step_result_path, write_step_result
+from lib.application.orchestration.pipeline.task import extract_task_id, get_running_pipeline_task
+from lib.adapters.orchestration.task_fsm import get_active_step, step_result_path, write_step_result
 from .utils import _now_iso, json_read, json_write
 
 _PATCH_RE = re.compile(r"\.patch$", re.I)

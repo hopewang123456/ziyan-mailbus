@@ -1,0 +1,62 @@
+# Public / GitHub Docker stack — minimal mailbus + AgentMemory + Ollama-friendly host.
+# Does NOT replace local docker-compose.yml (keep using that + gitignored override.yml).
+#
+# Usage:
+#   cd docker-agents
+#   docker compose -f compose.public.yml up -d --build
+#
+# Optional: copy compose.public.override.example.yml → compose.public.override.yml
+
+networks:
+  mailbus-public:
+    driver: bridge
+
+volumes:
+  mailbus-store:
+  iii-data:
+
+services:
+  mailbus:
+    build:
+      context: ./mailbus
+      dockerfile: Dockerfile
+    ports:
+      - "${MAILBUS_API_PORT:-9814}:9814"
+    networks:
+      - mailbus-public
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ..:/mailbus
+      - mailbus-store:/mailbus/store
+    environment:
+      - DATA_DIR=/mailbus/store
+      - TZ=UTC
+      - AGENTMEMORY_URL=${AGENTMEMORY_URL:-http://iii-engine:3111}
+      - MAILBUS_OLLAMA_BASE_URL=${MAILBUS_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+    command: ["python3", "-m", "bus", "serve", "--host", "0.0.0.0", "--port", "9814", "--data-dir", "/mailbus/store"]
+    depends_on:
+      - iii-engine
+    restart: unless-stopped
+
+  iii-engine:
+    image: ${III_ENGINE_IMAGE:-ghcr.io/agentmemory/iii-engine:latest}
+    networks:
+      - mailbus-public
+    volumes:
+      - iii-data:/data
+    environment:
+      - PORT=3111
+    ports:
+      - "${AGENTMEMORY_PORT:-3111}:3111"
+    restart: unless-stopped
+
+  agentmemory:
+    image: ${AGENTMEMORY_IMAGE:-ghcr.io/agentmemory/agentmemory:latest}
+    networks:
+      - mailbus-public
+    depends_on:
+      - iii-engine
+    environment:
+      - III_ENGINE_URL=http://iii-engine:3111
+    restart: unless-stopped

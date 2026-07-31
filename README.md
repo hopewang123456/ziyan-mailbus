@@ -1,93 +1,74 @@
-# mail — mailbus source & runtime
+# ziyan-mailbus
 
-[中文说明](README.zh.md)
+File-based **Agent-to-Agent** message bus. Framework-agnostic: Hermes, OpenClaw, Codex, OpenCode, Claude Code, and more via adapters.
 
-mailbus physical root = this repo (`MAILBUS_ROOT`). Set paths via env — **never commit machine absolute paths**.
+No Redis / RabbitMQ required — messages are JSON files, CLI push, agent ack.
 
-| Path | Role |
-|------|------|
-| `store/` | `MAILBUS_DATA` — inbox, config.json, msg-results |
-| `run/` | launch-queue, pid files |
-| `lib/` · `tools/` · `migrate/` · `docker-agents/` | mailbus source (SoT) |
-| `logs/` | historical logs |
-| `skills/` · `rules/` · `plans/` · `docs/` | knowledge dirs; on local hosts often junctions → Vault |
+## Requirements
 
-## CLI
+- Python ≥ 3.10
+- Optional: Docker, Ollama (local routing), AgentMemory
+- At least one agent CLI or a remote A2A endpoint
+
+## Quick start
 
 ```bash
-cd mail
+git clone https://github.com/hopewang123456/ziyan-mailbus.git
+cd ziyan-mailbus
 pip install -e .
-mailbus --help
+
+# Init store (creates store/config.json from seeds + demo agents)
+mailbus init --data-dir ./store
+
+# Or merge after editing templates
+mailbus init --merge --data-dir ./store
+
+# Serve API + built-in scheduler (default port 9814)
+mailbus serve --host 0.0.0.0 --port 9814 --data-dir ./store
+
+# Send a message (demo agents from examples/)
+mailbus send agent-a --msg "Hello" --from agent-b --data-dir ./store
+mailbus status --data-dir ./store
 ```
 
-Typical `.env` (in `mail/.env`, **do not commit**):
+Copy [`migrate/env.template`](migrate/env.template) → `.env` and set keys / paths. **Never commit `.env`.**
+
+### LLM / Ollama
+
+On first start mailbus prefers your local Ollama models (first listed model if none configured).  
+If neither Ollama nor a cloud API key is available, the dashboard prompts you to configure one.
+
+### Docker (public minimal stack)
+
+Does **not** replace a full local team compose. For GitHub / new users:
 
 ```bash
-MAILBUS_ROOT=/path/to/mail
-MAILBUS_DATA=/path/to/mail/store
-HERMES_DATA=/path/to/hermes-data/.hermes
-OPENCLAW_WORKSPACE=/path/to/openclaw_space
-OPENCODE_ROOT=/path/to/opencode
-LINGXIAO_WORKSPACE=/path/to/lingxiao
-LINGJIAN_WORKSPACE=/path/to/lingjian
-CODEX_SKILLS=/path/to/.codex/skills
-NODE_MODULES=/path/to/node_modules
-TEAM_PACK_ROOT=/path/to/team-pack
-DEEPSEEK_API_KEY=your-api-key
+cd docker-agents
+docker compose -f compose.public.yml up -d --build
 ```
 
-Template: [`migrate/env.template`](migrate/env.template).
+Optional: `compose.public.override.example.yml` → `compose.public.override.yml`.
 
-## Skills / Memory mount model
+Local full-stack users keep using `docker-compose.yml` + gitignored `docker-compose.override.yml`.
 
-**Principle: Vault (or any external tree) is the SoT; runtime homes are mount points; the published repo must not hard-code host Vault absolute paths.**
+## Demo agents (T1)
 
-### Local (optional Vault)
+Published examples use generic ids (`agent-a`, `agent-b`, `agent-c`).  
+See [`examples/demo-roster.json`](examples/demo-roster.json) and [`examples/config.example.json`](examples/config.example.json).
 
-| Layer | Approach |
-|-------|----------|
-| Host | Junction/symlink `mail/skills\|rules\|plans\|docs`, per-agent `skills/`, and most `memories/` → your Vault tree |
-| Docker base | [`docker-agents/docker-compose.yml`](docker-agents/docker-compose.yml) uses **repo-relative** `../…` plus `${ENV}` for external homes |
-| Docker local | Machine/Vault absolute mounts only in **`docker-compose.override.yml` (gitignored)** |
-| Template | Copy [`docker-agents/docker-compose.override.example.yml`](docker-agents/docker-compose.override.example.yml) → `override.yml` and replace `/path/to/…` |
+Register your own agents in the cockpit **Settings** (enable is off by default after auto-discovery).
 
-Windows / WSL Docker often **cannot follow NTFS junctions**, so containers that need Vault SoT must bind-mount the real Vault path in `override.yml`.
+## Cockpit
 
-Do **not** point committed `MAILBUS_*_ROOT` env at Vault (avoids dual-source with junctions). Local = junction + override.
+Open `http://127.0.0.1:9814/` after `mailbus serve`.  
+Legacy UI: `/legacy` if present.
 
-### Publish / external consumers
+## Docs
 
-1. See [`examples/config.example.json`](examples/config.example.json) → `profile_paths.skills_dirs` / `memory_dir`.
-2. Leave empty / omit → each runtime uses its own default `skills/` and `memory/`; mailbus **does not inject** paths.
-3. CI may set `MAILBUS_SKILLS_ROOT` etc. to in-repo demos ([`migrate/env.template`](migrate/env.template)).
+- Adapter layer: `docs/agent-adapter-layer.md` (when shipped in-repo)
+- Harness: `docs/harness-runtime-spec.md`
+- Env template: `migrate/env.template`
 
-### Per-agent external mounts
+## License
 
-| Runtime / service | Container (or host) mount | External SoT / how to wire |
-|-------------------|---------------------------|----------------------------|
-| **mailbus** | `../skills` → `/mailbus/skills` (etc.) | Repo demo; override → Vault `skills/mailbus` |
-| **Hermes** (`hermes`) | `${HERMES_DATA}` → `/home/hermes/.hermes`; profiles’ `skills` / `memories` | Set `HERMES_DATA`; optional Vault role views under profiles |
-| **OpenClaw** (`openclaw`) | `${OPENCLAW_WORKSPACE}` → `/workspace`; `skills` · `memory` | Set `OPENCLAW_WORKSPACE`; override can pin Vault `library/openclaw` + agent memory |
-| **Codex · 灵霄** (`lingxiao`) | `${LINGXIAO_WORKSPACE}` → `/workspace/lingxiao`; `${CODEX_SKILLS}` → `/home/node/.codex/skills` | Set workspace + `CODEX_SKILLS` (or Vault `02-agent-specific/codex` via override) |
-| **Codex · 灵鉴** (`lingjian`) | `${LINGJIAN_WORKSPACE}` → `/workspace/lingjian`; same Codex skills mount | Same pattern as lingxiao |
-| **OpenCode · 大力** (`dali`) | `${OPENCODE_ROOT}` → `/workspace/opencode` (+ `skills`) | Set `OPENCODE_ROOT`; override can pin Vault opencode skills |
-| **Claude Code · 灵云/灵验** | Host ttyd (not Docker volumes); `~/.claude/skills` | Host install; optional Vault → `~/.claude/skills` junction |
-| **AgentMemory** | `${NODE_MODULES}` → `/node_modules` | Set `NODE_MODULES` to a tree containing `@agentmemory/agentmemory` |
-| **team-pack** (optional) | `${TEAM_PACK_ROOT}/skills\|rules` → `/team-pack/…` | Set `TEAM_PACK_ROOT` if you ship a sibling pack |
-
-Role views that need mailbus protocol skills must include the **mailbus** stack; `_USE_FULL_LIBRARY` agents mount the full library (often via a `library/mailbus` junction).
-
-### Quick start (Docker team)
-
-```bash
-cp migrate/env.template .env          # edit paths + API keys
-cp docker-agents/docker-compose.override.example.yml \
-   docker-agents/docker-compose.override.yml   # optional Vault binds
-cd docker-agents && docker compose up -d
-# or: bash docker-agents/start-team.sh
-```
-
-## Other docs
-
-- Migration: [`docs/migration-guide.md`](docs/migration-guide.md)
-- Chinese overview: [`README.zh.md`](README.zh.md)
+MIT

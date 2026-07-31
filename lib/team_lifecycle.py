@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import contextlib
 import os
 import signal
@@ -121,6 +122,12 @@ def ensure_ollama_wsl_proxy(action: str = "start", log: LogFn | None = None) -> 
     log_path = "/tmp/ollama-wsl-proxy.log"
     proxy_py = os.path.join(paths["root"], "tools", "ollama-wsl-proxy.py")
     wait_seconds = int(os.environ.get("OLLAMA_WSL_PROXY_WAIT_SECONDS", "90"))
+    try:
+        from .service_registry import ollama_proxy_listen
+
+        listen_host, listen_port, target = ollama_proxy_listen(data_dir=paths.get("data_dir") or "")
+    except Exception:
+        listen_host, listen_port, target = "0.0.0.0", int(os.environ.get("OLLAMA_WSL_PROXY_PORT", "11435")), "http://127.0.0.1:11434"
 
     def _stop() -> None:
         if not os.path.isfile(pid_file):
@@ -149,7 +156,7 @@ def ensure_ollama_wsl_proxy(action: str = "start", log: LogFn | None = None) -> 
                 with open(pid_file, encoding="utf-8") as fh:
                     pid = int(fh.read().strip())
                 os.kill(pid, 0)
-                print(f"running pid={pid}")
+                print(f"running pid={pid} :{listen_port}")
                 return 0
             except OSError:
                 print("stopped")
@@ -164,9 +171,12 @@ def ensure_ollama_wsl_proxy(action: str = "start", log: LogFn | None = None) -> 
 
     curl = win_curl_exe()
     if curl:
-        deadline = time.time() + wait_seconds
-        while time.time() < deadline:
-            if run([curl, "-sf", "--max-time", "3", "http://127.0.0.1:11434/api/tags"], timeout=10).returncode == 0:
+        deadline = now_ts() + wait_seconds
+        while now_ts() < deadline:
+            if run(
+                [curl, "-sf", "--noproxy", "*", "--max-time", "3", f"{target}/api/tags"],
+                timeout=10,
+            ).returncode == 0:
                 break
             time.sleep(1)
         else:
@@ -175,19 +185,23 @@ def ensure_ollama_wsl_proxy(action: str = "start", log: LogFn | None = None) -> 
             return 1
 
     _stop()
+    env = os.environ.copy()
+    env["OLLAMA_WSL_PROXY_TARGET"] = target
+    env["OLLAMA_WSL_PROXY_PORT"] = str(listen_port)
     with open(log_path, "a", encoding="utf-8") as logfh:
         proc = subprocess.Popen(
-            ["python3", proxy_py, "--host", "0.0.0.0", "--port", "11434"],
+            ["python3", proxy_py, "--host", listen_host, "--port", str(listen_port)],
             stdout=logfh,
             stderr=subprocess.STDOUT,
             start_new_session=True,
+            env=env,
         )
     with open(pid_file, "w", encoding="utf-8") as fh:
         fh.write(str(proc.pid))
     time.sleep(1)
-    if probe_http("http://127.0.0.1:11434/api/tags", timeout=5):
+    if probe_http(f"http://127.0.0.1:{listen_port}/api/tags", timeout=5):
         if log:
-            log(f"ollama-wsl-proxy OK pid={proc.pid}")
+            log(f"ollama-wsl-proxy OK pid={proc.pid} :{listen_port} -> {target}")
         return 0
     _stop()
     if log:
@@ -355,6 +369,14 @@ def _ensure_windows_ollama(log: LogFn | None = None) -> None:
 
 
 def _sync_layers(log: LogFn | None = None) -> None:
+    """Default: do NOT mass-sync skills into agent workspaces (plan: Vault SoT + harness contract).
+
+    Opt-in: MAILBUS_SYNC_LAYERS=1 restores legacy patch/sync-team-pack behavior.
+    """
+    if os.environ.get("MAILBUS_SYNC_LAYERS", "0") != "1":
+        if log:
+            log("Skip full skill sync (set MAILBUS_SYNC_LAYERS=1 to enable legacy sync)")
+        return
     paths = mailbus_paths()
     root = paths["root"]
     data = paths["data_dir"]
@@ -587,10 +609,17 @@ def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
                 except Exception as exc:
                     log(f"WARNING: internal LLM setup skipped: {exc}")
 
-        log("Waiting for AgentMemory HTTP (iii-engine:3111)...")
+        log("Waiting for AgentMemory HTTP...")
         am_ready = False
+        try:
+            from .service_registry import service_url
+
+            # Host-side wait: published localhost port (windows/wsl profile)
+            am_health = service_url("agentmemory", runtime="windows").rstrip("/") + "/agentmemory/health"
+        except Exception:
+            am_health = "http://127.0.0.1:3111/agentmemory/health"
         for _ in range(45):
-            if probe_http("http://127.0.0.1:3111/agentmemory/health"):
+            if probe_http(am_health):
                 am_ready = True
                 break
             time.sleep(1)
@@ -600,7 +629,9 @@ def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
         run_legacy_bash("apply-codex-ui.sh", log=log)
 
         log("Fixing OpenClaw gateways (xiaoqi/yige)...")
-        run_legacy_bash("fix-openclaw-gateways.sh", log=log)
+        oc_rc = run_legacy_bash("fix-openclaw-gateways.sh", log=log)
+        if oc_rc != 0:
+            log("WARNING: OpenClaw gateways not healthy after fix")
 
         log("Starting Claude Code agents (lingyun/lingyan ttyd)...")
         run_legacy_bash("ensure-claude-agents.sh", paths["data_dir"], "/tmp/start-team.log", log=log)
@@ -614,17 +645,25 @@ def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
             run_powershell_file(fix_ps1)
 
         fast = os.environ.get("MAILBUS_START_FAST") == "1" or os.environ.get("SKIP_SMOKE") == "1"
+        smoke_rc = 0
         if fast:
             log("FAST mode — skip smoke test")
         else:
             log("Running smoke test...")
-            if run_legacy_bash("smoke-test.sh", log=log) == 0:
+            smoke_rc = run_legacy_bash("smoke-test.sh", log=log)
+            if smoke_rc == 0:
                 log("Smoke test passed")
             else:
                 log("WARNING: smoke test failed — see /tmp/start-team.log")
 
         print()
         run_stream(compose_cmd("ps", "--format", "table {{.Name}}\t{{.Status}}"), cwd=compose_dir)
+        # OpenClaw 挂了仍只返回 mailbus OK 会让桌面脚本误报成功
+        if oc_rc != 0:
+            log("ERROR: OpenClaw :18789/:18790 not ready — desktop chat links will fail")
+            return 1
+        if smoke_rc != 0:
+            return 1
         return 0
 
 
@@ -784,10 +823,17 @@ def start_from_windows(*, open_browser: bool = False, fast: bool = False) -> int
         print("        4) recover: python tools/mailbus.py recover health")
         return 1
 
+    # 桌面常用入口：小七 OpenClaw；mailbus 好但 gateway 挂了时必须明示
+    oc_ok = probe_http("http://127.0.0.1:18789/", timeout=5, ok_codes=frozenset({200, 401, 403, 404}))
+    if not oc_ok:
+        print("[WARN] OpenClaw 小七 :18789 未就绪（聊天页会打不开）")
+        print("       修复: python tools/mailbus.py openclaw fix")
+        print("       日志: wsl -d Ubuntu -e docker exec docker-agents-openclaw-1 tail -40 /tmp/openclaw-gw-18789.log")
+
     print("==========================================")
     print(f"  mailbus:  http://localhost:{port}/")
     print("  Hermes:  9120-9122,9125-9127")
-    print("  OpenClaw: 18789 xiaoqi, 18790 yige")
+    print("  OpenClaw: 18789 xiaoqi", "OK" if oc_ok else "FAIL", ", 18790 yige")
     print("  Codex:   9240 lingxiao, 9241 lingjian")
     print("  Claude:  9260 lingyun, 9261 lingyan")
     print("==========================================")

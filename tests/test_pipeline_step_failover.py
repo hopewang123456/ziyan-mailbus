@@ -5,13 +5,13 @@ import os
 import tempfile
 import unittest
 
-from lib.dispatch.pipeline_step_failover import (
+from lib.application.orchestration.dispatch.pipeline_step_failover import (
     failover_pipeline_step,
     next_failover_agent_for_step,
     role_failover_plan,
 )
 from lib.dispatch.role_resolver import role_type_candidates
-from lib.pipeline_task import (
+from lib.application.orchestration.pipeline.task import (
     is_current_pipeline_assignee,
     pipeline_message_protected_from_auto_close,
 )

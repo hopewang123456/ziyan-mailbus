@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import re
 from datetime import datetime, timezone
 from typing import Dict, Set
@@ -60,7 +61,7 @@ def _msg_age_minutes(msg: dict) -> float:
     if not ref:
         return 0.0
     try:
-        now = datetime.now(timezone.utc)
+        now = now_utc_dt()
         dt = _parse_iso_dt(ref)
         return (now - dt.astimezone(timezone.utc)).total_seconds() / 60.0
     except Exception:

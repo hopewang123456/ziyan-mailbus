@@ -11,7 +11,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.harness import get_harness
-from lib.task_fsm import apply_submit, read_step_result, write_step_result
+from lib.adapters.orchestration.task_fsm import apply_submit, read_step_result, write_step_result
 from lib.transport.a2a_mapper import to_a2a_hub_task, to_a2a_message
 from lib.transport.a2a_standard import A2ATransport
 from lib.transport.agent_card_cache import enrich_agent_channels, load_registry

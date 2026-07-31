@@ -1,4 +1,4 @@
-﻿"""启动时加载 mailbus 环境变量（.env）。
+"""启动时加载 mailbus 环境变量（.env）。
 
 加载链：`migrate/env.template` 或 `config/env.template` → 复制为 `mailbus-core/.env`
 → 本模块读 `.env` + `docker-agents/.env`。

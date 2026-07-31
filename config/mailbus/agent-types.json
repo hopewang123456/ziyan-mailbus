@@ -79,12 +79,17 @@
       "openclaw": "--model ollama/{model}",
       "hermes": "--provider ollama --model {model}",
       "hermes_profile": "--provider ollama --model {model}",
-      "cline": "--provider ollama --model {model}"
+      "cline": "--provider ollama --model {model}",
+      "claude_code": "--model {model}",
+      "codex": "--model {model}"
     }
   },
   "launch_templates": {
     "codex_docker": {
-      "cli": { "kind": "python", "start_wait_seconds": 5 },
+      "cli": {
+        "kind": "python",
+        "start_wait_seconds": 5
+      },
       "browser": {
         "kind": "codex_docker",
         "url": "http://127.0.0.1:{port}/",
@@ -92,21 +97,57 @@
         "ttyd_url": "http://127.0.0.1:9250/",
         "start_wait_seconds": 15
       },
-      "desktop": { "enabled": false, "kind": "codex_desktop" }
+      "desktop": {
+        "enabled": false,
+        "kind": "codex_desktop"
+      }
     },
     "claude_host": {
-      "cli": { "kind": "python", "start_wait_seconds": 0 },
+      "cli": {
+        "kind": "python",
+        "start_wait_seconds": 0
+      },
       "browser": {
         "kind": "claude_ttyd",
         "url": "http://127.0.0.1:{port}/",
         "web_port": "9260",
         "start_wait_seconds": 15
       },
-      "desktop": { "enabled": false, "kind": "claude_interactive" }
+      "desktop": {
+        "enabled": false,
+        "kind": "claude_interactive"
+      }
     },
     "opencode_cli": {
-      "cli": { "kind": "shell", "start_wait_seconds": 5 },
-      "browser": { "kind": "none" }
+      "cli": {
+        "kind": "shell",
+        "start_wait_seconds": 5
+      },
+      "browser": {
+        "kind": "none"
+      }
+    },
+    "hermes_dashboard": {
+      "cli": {
+        "kind": "python",
+        "start_wait_seconds": 0
+      },
+      "browser": {
+        "kind": "hermes_dashboard",
+        "url": "http://127.0.0.1:{port}/chat",
+        "start_wait_seconds": 15
+      }
+    },
+    "openclaw_gateway": {
+      "cli": {
+        "kind": "python",
+        "start_wait_seconds": 0
+      },
+      "browser": {
+        "kind": "openclaw_gateway",
+        "url": "http://127.0.0.1:{port}/chat",
+        "start_wait_seconds": 5
+      }
     }
   }
 }

@@ -1,0 +1,15 @@
+{
+  "templates": [
+    {
+      "id": "default-dev",
+      "default": true,
+      "tags": ["code", "dev"],
+      "steps": [
+        {"agent_role": "dispatcher", "action": "plan"},
+        {"agent_role": "executor", "action": "implement"},
+        {"agent_role": "reviewer", "action": "review"}
+      ]
+    }
+  ],
+  "daily_budget_cny": 30
+}

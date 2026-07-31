@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
 import io
 import os
 import subprocess
@@ -281,7 +282,7 @@ def _recent_patrol_notice(data_dir: str, agent: str = "lingxun", hours: float = 
     if not data:
         return False
     inbox = Inbox.from_dict(data)
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    cutoff = now_utc_dt() - timedelta(hours=hours)
     for m in inbox.messages:
         mid = inbox.msg_field(m, "id", "")
         content = inbox.msg_field(m, "content", "") or ""
@@ -304,7 +305,6 @@ def run_lingxun_patrol(data_dir: str) -> int:
     if _recent_patrol_notice(data_dir, "lingxun", hours=1.0):
         print(f"[patrol] skip — recent patrol notice exists {_now_iso()}")
         return 0
-    import time as _time
     from lib.constants import DEFAULT_API_BASE
 
     content = (
@@ -316,7 +316,7 @@ def run_lingxun_patrol(data_dir: str) -> int:
     try:
         _append_inbox_notice(
             data_dir, "lingxun", content,
-            msg_id=f"patrol-{int(_time.time())}",
+            msg_id=f"patrol-{int(now_ts())}",
             no_llm=True,
         )
         print(f"[patrol] lingxun notice queued (no-llm) {_now_iso()}")
@@ -450,7 +450,7 @@ def run_agent_cli_version_check(data_dir: str) -> int:
     if not shutil.which("docker"):
         print("[agent-cli-version-check] skip: docker not in PATH")
         return 0
-    from .agent_adapters import container_for_service, get_adapter
+    from lib.adapters.frameworks import container_for_service, get_adapter
     from .utils import json_read, json_write, _now_iso
 
     config = json_read(os.path.join(data_dir, "config.json"), {})
@@ -544,7 +544,7 @@ def run_a2a_spec_sync(data_dir: str) -> int:
 def run_daily_report(data_dir: str) -> int:
     from lib.constants import DEFAULT_API_BASE
 
-    today = datetime.now(TZ_CN).strftime("%Y-%m-%d")
+    today = now_dt().strftime("%Y-%m-%d")
     content = (
         f"📊 生成日报提醒（零 LLM）— {today}\n"
         f"Dashboard: {DEFAULT_API_BASE}/\n"

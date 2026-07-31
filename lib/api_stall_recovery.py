@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -14,7 +15,7 @@ from .api_stall_detect import (
 )
 from .mbus_log import info, warn
 from .models import Inbox, MsgStatus
-from .pipeline_task import extract_task_id
+from lib.application.orchestration.pipeline.task import extract_task_id
 from .utils import json_read, json_write, resolve_paths, _now_iso
 
 
@@ -38,7 +39,7 @@ def repush_after_elapsed(msg: dict) -> bool:
     target = _parse_iso(raw)
     if not target:
         return True
-    return datetime.now(timezone.utc) >= target.astimezone(timezone.utc)
+    return now_utc_dt() >= target.astimezone(timezone.utc)
 
 
 def repush_after_remaining_minutes(msg: dict) -> float:
@@ -46,7 +47,7 @@ def repush_after_remaining_minutes(msg: dict) -> float:
     target = _parse_iso(raw)
     if not target:
         return 0.0
-    delta = (target.astimezone(timezone.utc) - datetime.now(timezone.utc)).total_seconds() / 60.0
+    delta = (target.astimezone(timezone.utc) - now_utc_dt()).total_seconds() / 60.0
     return max(0.0, delta)
 
 
@@ -67,7 +68,7 @@ def schedule_api_stall_recovery(
         return False
     config = json_read(os.path.join(data_dir, "config.json"), {})
     wait_min = api_stall_repush_wait_minutes(config, data_dir)
-    now = datetime.now(timezone.utc)
+    now = now_utc_dt()
     repush_after = (now + timedelta(minutes=wait_min)).isoformat()
 
     paths = resolve_paths(data_dir)

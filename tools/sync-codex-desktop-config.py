@@ -140,6 +140,13 @@ def main() -> int:
     gateway_port = args.gateway_port or AGENT_GATEWAY_PORTS.get(args.agent, 9220)
     instructions = load_identity(os.path.abspath(args.data_dir), args.agent, agent_cfg)
     toml_path = os.path.join(codex_home, "config.toml")
+    force = os.environ.get("FORCE_RENDER_CODEX_CONFIG", "0") == "1"
+    if os.path.isfile(toml_path) and not force:
+        print(
+            f"SKIP existing {toml_path} (set FORCE_RENDER_CODEX_CONFIG=1 to overwrite) "
+            f"agent={args.agent} gateway=127.0.0.1:{gateway_port}"
+        )
+        return 0
     with open(toml_path, "w", encoding="utf-8") as f:
         f.write(
             render_config_toml(

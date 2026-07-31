@@ -6,8 +6,8 @@ import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from .constants import MAILBUS_ROOT
-from .pipeline_step import step_role_type
-from .task_fsm import TaskFsmState, _append_history, ensure_fsm
+from lib.application.orchestration.pipeline.step import step_role_type
+from lib.adapters.orchestration.task_fsm import TaskFsmState, _append_history, ensure_fsm
 from .utils import _now_iso, json_read
 
 _DEFAULT_CFG = {

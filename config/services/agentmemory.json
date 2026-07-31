@@ -1,0 +1,20 @@
+{
+  "id": "agentmemory",
+  "kind": "agentmemory",
+  "health_path": "/agentmemory/health",
+  "env_base_url": "AGENTMEMORY_URL",
+  "profiles": {
+    "windows": {
+      "base_url": "http://127.0.0.1:3111"
+    },
+    "wsl": {
+      "base_url": "http://127.0.0.1:3111"
+    },
+    "docker": {
+      "base_url": "http://iii-engine:3111"
+    }
+  },
+  "bridge": {
+    "pending_dir": "store/agentmemory-pending"
+  }
+}

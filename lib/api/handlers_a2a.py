@@ -166,7 +166,7 @@ def handle_a2a_rpc(handler, agent_id: str):
     if method == "CancelTask":
         tid = params.get("id") or ""
         from lib.tracker import TaskTracker
-        from lib.task_fsm import apply_cancel
+        from lib.adapters.orchestration.task_fsm import apply_cancel
 
         tracker = TaskTracker(handler.data_dir)
         for t in tracker.list_all():

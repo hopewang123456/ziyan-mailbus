@@ -23,7 +23,7 @@ _utils.file_lock = _noop_file_lock
 
 from lib.api.handlers_gates import handle_gate_approve
 from lib.api.handlers_tasks import handle_task_create
-from lib.task_fsm import apply_submit, ensure_fsm
+from lib.adapters.orchestration.task_fsm import apply_submit, ensure_fsm
 from lib.utils import json_write
 from lib.workflow.engine import bind_workflow, maybe_block_after_step, on_gate_approve
 
@@ -61,7 +61,7 @@ def _seed(tmp: str) -> None:
 
 def _finance_task(tmp: str) -> dict:
     from lib.dispatch.role_resolver import resolve_agent_for_role_type
-    from lib.pipeline_chain import init_chain_from_planned
+    from lib.application.orchestration.pipeline.chain import init_chain_from_planned
 
     tid = "fin-gate-test-20260618"
     chain = init_chain_from_planned(

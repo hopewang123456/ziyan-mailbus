@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.pipeline_task import (
+from lib.application.orchestration.pipeline.task import (
     extract_task_id,
     is_pipeline_execute_message,
     pipeline_completion_block,
@@ -63,7 +63,7 @@ class TestPipelineTask(unittest.TestCase):
         self.assertIn("game-stellar-20260617", block)
 
     def test_should_not_create_tracker_for_pipeline(self):
-        from lib.pipeline_task import should_create_tracker_for_send
+        from lib.application.orchestration.pipeline.task import should_create_tracker_for_send
 
         task = {
             "task_id": "game-stellar-20260617",
@@ -77,7 +77,7 @@ class TestPipelineTask(unittest.TestCase):
         )
 
     def test_verify_delivery_missing_results(self):
-        from lib.pipeline_task import verify_pipeline_step_delivery
+        from lib.application.orchestration.pipeline.task import verify_pipeline_step_delivery
 
         task = {
             "task_id": "game-stellar-20260617",

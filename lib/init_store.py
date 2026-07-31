@@ -300,7 +300,7 @@ def build_agent_entry(
             "browser": launch_browser,
         }
     if framework == "openclaw" and "launch" not in entry:
-        from .agent_adapters import OpenClawAdapter
+        from lib.adapters.frameworks import OpenClawAdapter
 
         port = OpenClawAdapter.resolve_gateway_port(agent_id, {})
         entry["launch"] = {
@@ -309,7 +309,7 @@ def build_agent_entry(
             "browser": {"gateway_port": port},
         }
     elif framework == "openclaw":
-        from .agent_adapters import OpenClawAdapter
+        from lib.adapters.frameworks import OpenClawAdapter
 
         port = OpenClawAdapter.resolve_gateway_port(
             agent_id,

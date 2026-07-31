@@ -10,7 +10,7 @@ import json
 import sys
 from lib.utils import json_read, json_write, _now_iso
 from lib.tracker import TaskTracker, TaskStatus, SKIP_TIMEOUT_PREFIXES
-from lib.pipeline_chain import normalize_task_chain, is_pipeline_step
+from lib.application.orchestration.pipeline.chain import normalize_task_chain, is_pipeline_step
 
 # Dashboard 默认分页（无 query 时也生效，避免一次返回 400+ 任务拖死浏览器）
 DEFAULT_TASKS_LIMIT = 120
@@ -25,7 +25,7 @@ def _is_noise_task_id(task_id: str) -> bool:
 def _normalize_tasks_for_api(tasks: list) -> list:
     """API 返回前规范化 chain 格式，并补全 audit_reviewer / needs_audit / fsm。"""
     from lib.audit_dispatch import task_requires_audit
-    from lib.task_fsm import ensure_fsm, fsm_summary
+    from lib.adapters.orchestration.task_fsm import ensure_fsm, fsm_summary
 
     for task in tasks:
         normalize_task_chain(task)
@@ -176,9 +176,26 @@ def create_task_from_envelope(data_dir: str, body: dict) -> tuple[dict, int]:
     config = json_read(os.path.join(data_dir, "config.json"), {})
     if needs_plan_approval(body, config):
         set_await_plan_approval(task)
-        from lib.human_queue import enqueue_plan_approval
+        from lib.composition import build_orchestration
 
-        hq_id = enqueue_plan_approval(data_dir, task)
+        chain = task.get("chain") or []
+        head = chain[0] if chain else {}
+        planned = head.get("planned_role_types") or []
+        orch = build_orchestration(data_dir)
+        hq_id = orch.human_gate.enqueue({
+            "type": "plan_approval",
+            "status": "pending",
+            "title": f"批准任务计划 · {task_id[:32]}",
+            "hint": f"planned_role_types: {planned}",
+            "task_id": task_id,
+            "context": {
+                "intent": task.get("intent") or task.get("summary", ""),
+                "tier": task.get("tier"),
+                "task_type": task.get("task_type"),
+                "planned_role_types": planned,
+                "plan_meta": task.get("plan_meta"),
+            },
+        })
         task["fsm"]["human_queue_id"] = hq_id
         json_write(tracker._task_path(task_id), task)
         return ({"status": "ok", "task": task, "human_queue_id": hq_id}, 201)
@@ -573,7 +590,7 @@ def handle_skill_use(handler):
 
 def handle_task_fsm_get(handler, task_id: str):
     """GET /api/tasks/<task_id>/fsm — 状态机摘要（Dashboard 用）。"""
-    from lib.task_fsm import ensure_fsm, fsm_summary
+    from lib.adapters.orchestration.task_fsm import ensure_fsm, fsm_summary
 
     tracker = TaskTracker(handler.data_dir)
     task = tracker.get(task_id)
@@ -622,7 +639,7 @@ def handle_human_queue(handler):
 
 def handle_human_queue_resolve(handler, item_id: str):
     """POST /api/human-queue/<id>/resolve — 审批/驳回人工待办。"""
-    from lib.human_queue_resolve import resolve_human_queue_item
+    from lib.composition import build_orchestration
 
     body = handler._read_post_body()
     decision = (body.get("decision") or "approved").lower()
@@ -638,7 +655,9 @@ def handle_human_queue_resolve(handler, item_id: str):
     for key in ("attachments", "selected_copy_id", "brief", "action"):
         if key in body:
             resolution[key] = body[key]
-    item, side = resolve_human_queue_item(handler.data_dir, item_id, resolution)
+    orch = build_orchestration(handler.data_dir)
+    out = orch.human_gate.resolve(item_id, resolution)
+    item, side = out.get("item"), out.get("side") or {}
     if not item:
         handler._send_json({"error": side.get("error", "not_found")}, 404)
         return
@@ -650,7 +669,7 @@ def handle_human_queue_resolve(handler, item_id: str):
 
 def handle_task_fsm_action(handler, task_id: str, action: str):
     """POST /api/tasks/<id>/fsm/{rollback|skip|cancel|pause|priority}"""
-    from lib.task_fsm import (
+    from lib.adapters.orchestration.task_fsm import (
         apply_cancel,
         apply_pause,
         apply_rollback,
@@ -669,7 +688,7 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
     reason = body.get("reason", "")
 
     if action == "approve-plan":
-        from lib.fsm_actions import apply_approve_plan
+        from lib.application.orchestration.actions import apply_approve_plan
 
         outcome = apply_approve_plan(task, body, data_dir=handler.data_dir)
         if not outcome.get("ok"):
@@ -686,9 +705,9 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
         return
 
     if action == "accept":
-        from lib.fsm_actions import apply_accept
+        from lib.application.orchestration.actions import apply_accept
         from lib.fsm_dispatch import dispatch_fsm_step
-        from lib.task_fsm import mark_step_dispatched
+        from lib.adapters.orchestration.task_fsm import mark_step_dispatched
 
         outcome = apply_accept(task, body, data_dir=handler.data_dir)
         if not outcome.get("ok"):
@@ -767,7 +786,7 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
     dispatch_ok = None
     if action == "rollback" and outcome.get("next_step"):
         from lib.fsm_dispatch import dispatch_fsm_step
-        from lib.task_fsm import mark_step_dispatched
+        from lib.adapters.orchestration.task_fsm import mark_step_dispatched
 
         nxt = outcome["next_step"]
         dispatch_ok = dispatch_fsm_step(

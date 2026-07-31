@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import os
 import time
 
@@ -20,7 +21,7 @@ def check_budget(data_dir: str, task_id: str, cfg: dict) -> str | None:
         return None
 
     state = json_read(_budget_path(data_dir), {"tasks": {}, "hour": {}})
-    now = int(time.time())
+    now = int(now_ts())
     hour_key = time.strftime("%Y%m%d%H", time.localtime(now))
 
     if max_task > 0 and task_id:
@@ -41,7 +42,7 @@ def record_call(data_dir: str, task_id: str, *, failed: bool = False) -> None:
         return
     path = _budget_path(data_dir)
     state = json_read(path, {"tasks": {}, "hour": {}})
-    now = int(time.time())
+    now = int(now_ts())
     hour_key = time.strftime("%Y%m%d%H", time.localtime(now))
     tasks = state.setdefault("tasks", {})
     hour = state.setdefault("hour", {})

@@ -57,6 +57,7 @@ def _get_handlers():
             "attachments": _load_handler_module("handlers_attachments"),
             "step_result": _load_handler_module("handlers_step_result"),
             "settings": _load_handler_module("handlers_settings"),
+            "lifecycle": _load_handler_module("handlers_lifecycle"),
             "drill": _load_handler_module("handlers_drill"),
             "a2a": _load_handler_module("handlers_a2a"),
         }
@@ -79,21 +80,42 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
 
     # ── 认证 ────────────────────────────────────────────────────────────
 
-    def _check_auth(self, *, write: bool = False) -> bool:
-        if write and self.require_api_auth and not self.auth_token:
-            self._send_json({
-                "error": "write_auth_required",
-                "hint": "配置 store/config.json 的 api_token 或环境变量 MAILBUS_API_TOKEN",
-            }, 503)
+    def _client_is_loopback(self) -> bool:
+        try:
+            addr = (self.client_address[0] or "").strip().lower()
+        except Exception:
             return False
-        if not self.auth_token:
+        if addr.startswith("::ffff:"):
+            addr = addr.split("::ffff:", 1)[-1]
+        return addr in ("127.0.0.1", "::1", "localhost")
+
+    def _check_auth(self, *, write: bool = False) -> bool:
+        """Read: legacy token-if-configured. Write: localhost free; remote requires token."""
+        if not write:
+            if not self.auth_token:
+                return True
+            auth = self.headers.get("Authorization", "")
+            if auth.startswith("Bearer ") and auth[7:] == self.auth_token:
+                return True
+            if self.headers.get("X-API-Key") == self.auth_token:
+                return True
+            self._send_json({"error": "unauthorized"}, 401)
+            return False
+
+        from lib.application.mailbus_token import authorize_write, client_context_from_handler
+        from lib.domain.types import AuthDecision
+        from lib.locale.errors_zh import message_zh
+
+        ctx = client_context_from_handler(self)
+        decision = authorize_write(self.data_dir, ctx)
+        if decision == AuthDecision.ALLOW:
             return True
-        auth = self.headers.get("Authorization", "")
-        if auth.startswith("Bearer ") and auth[7:] == self.auth_token:
-            return True
-        if self.headers.get("X-API-Key") == self.auth_token:
-            return True
-        self._send_json({"error": "unauthorized"}, 401)
+        self._send_json({
+            "error": "unauthorized",
+            "error_code": "unauthorized",
+            "message_zh": message_zh("unauthorized"),
+            "hint": "本机可免 token；跨机写操作需 Authorization: Bearer <mailbus_api_token>",
+        }, 401)
         return False
 
 
@@ -146,36 +168,61 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     def _serve_static(self, path: str) -> bool:
         if ".." in path or "~" in path:
             return False
-        from lib.constants import MAILBUS_DOCS_ROOT
+        from lib.constants import MAILBUS_DOCS_ROOT, MAILBUS_ROOT
 
+        legacy = path.lstrip("/").startswith("legacy")
+        filename = "index.html" if path in ("", "/", "/legacy", "/legacy/") else path.lstrip("/")
+        if filename.startswith("legacy/"):
+            filename = filename[len("legacy/") :] or "index.html"
+            legacy = True
+
+        candidates = []
+        web_dist = os.path.join(str(MAILBUS_ROOT), "web", "dist")
         docs_dir = str(MAILBUS_DOCS_ROOT)
-        filename = "index.html" if path in ("", "/") else path.lstrip("/")
-        abs_path = os.path.normpath(os.path.join(docs_dir, filename))
-        if not abs_path.startswith(os.path.normpath(docs_dir)):
-            return False
-        try:
-            with open(abs_path, "rb") as f:
-                content = f.read()
-            self.send_response(200)
-            self.send_header("Content-Type", self._guess_mime(filename))
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Cache-Control", "no-cache")
-            if filename == "index.html":
-                import time
-                buster = str(int(time.time()))
-                content = content.replace(b'loadAll();', b'// cb=' + buster.encode() + b'\nloadAll();')
-            self.end_headers()
-            self.wfile.write(content)
-            return True
-        except (OSError, IOError):
+        if legacy:
+            candidates.append(os.path.join(docs_dir, filename if filename != "index.html" else "index.html"))
+        else:
+            candidates.append(os.path.join(web_dist, filename))
+            candidates.append(os.path.join(docs_dir, "dist", filename))
+            candidates.append(os.path.join(docs_dir, filename))
+
+        for abs_path in candidates:
+            abs_path = os.path.normpath(abs_path)
             try:
-                self.send_response(404)
-                self.send_header("Content-Type", "text/plain; charset=utf-8")
+                with open(abs_path, "rb") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", self._guess_mime(filename))
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
-                self.wfile.write(b"docs not found")
-            except OSError:
+                self.wfile.write(content)
+                return True
+            except (OSError, IOError):
+                continue
+        # SPA fallback: deep links (e.g. /inbox) → web/dist/index.html
+        if not legacy and os.path.isdir(web_dist):
+            spa_index = os.path.join(web_dist, "index.html")
+            try:
+                with open(spa_index, "rb") as f:
+                    content = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(content)
+                return True
+            except (OSError, IOError):
                 pass
-            return False
+        try:
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"static not found")
+        except OSError:
+            pass
+        return False
 
     @staticmethod
     def _guess_mime(filename: str) -> str:
@@ -234,6 +281,12 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/intake": lambda: h["intake"].handle_intake_list(self),
             "/api/settings/sections": lambda: h["settings"].handle_settings_sections(self),
             "/api/settings/env": lambda: h["settings"].handle_settings_env_get(self),
+            "/api/settings/integrations": lambda: h["settings"].handle_integrations(self),
+            "/api/discover": lambda: h["lifecycle"].handle_discover(self),
+            "/api/align": lambda: h["lifecycle"].handle_align(self),
+            "/api/agents/active": lambda: h["lifecycle"].handle_active_agents(self),
+            "/api/chain/budget": lambda: h["lifecycle"].handle_chain_budget(self),
+            "/api/config/mailbus-token": lambda: h["lifecycle"].handle_mailbus_token(self),
         }
 
         if path in routes:
@@ -257,7 +310,9 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "not_found"}, 404)
         elif path.startswith("/api/settings/section/"):
             section = path[len("/api/settings/section/"):].strip("/")
-            if section:
+            if section == "services/probe":
+                self._send_json({"error": "method_not_allowed", "use": "POST"}, 405)
+            elif section:
                 h["settings"].handle_settings_section_get(self, section)
             else:
                 self._send_json({"error": "not_found"}, 404)
@@ -428,9 +483,26 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "not_found"}, 404)
         elif path == "/api/settings/env":
             h["settings"].handle_settings_env_patch(self)
+        elif path == "/api/align":
+            h["lifecycle"].handle_align(self)
+        elif path == "/api/chain/budget":
+            h["lifecycle"].handle_chain_budget(self)
+        elif path in ("/api/config/mailbus-token", "/api/config/mailbus-token/rotate"):
+            h["lifecycle"].handle_mailbus_token(self)
+        elif path.startswith("/api/frameworks/") and path.endswith("/enable"):
+            fid = path[len("/api/frameworks/"): -len("/enable")].strip("/")
+            h["lifecycle"].handle_framework_enable(self, fid)
+        elif path.startswith("/api/frameworks/") and path.endswith("/disable"):
+            fid = path[len("/api/frameworks/"): -len("/disable")].strip("/")
+            h["lifecycle"].handle_framework_disable(self, fid)
+        elif path.startswith("/api/agents/") and path.endswith("/enable"):
+            aid = path[len("/api/agents/"): -len("/enable")].strip("/")
+            h["lifecycle"].handle_role_enable(self, aid)
         elif path.startswith("/api/settings/section/"):
             section = path[len("/api/settings/section/"):].strip("/")
-            if section:
+            if section == "services/probe":
+                h["settings"].handle_settings_services_probe(self)
+            elif section:
                 h["settings"].handle_settings_section_patch(self, section)
             else:
                 self._send_json({"error": "not_found"}, 404)

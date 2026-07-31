@@ -170,6 +170,18 @@ def check_data_integrity(*, mail_root: Path | None = None) -> list[DoctorItem]:
     return items
 
 
+def check_locale_transport_codes() -> list[DoctorItem]:
+    """Wave3: locale 覆盖 MessageTransport 稳定错误码（对齐 clinic 文案）。"""
+    try:
+        from lib.locale.errors_zh import transport_codes_covered
+
+        if transport_codes_covered():
+            return [DoctorItem("ok", "locale", "transport 错误码中文齐全", "Wave3 S3")]
+        return [DoctorItem("fail", "locale", "transport 错误码 locale 缺失", "补全 errors_zh.ERROR_ZH")]
+    except Exception as exc:
+        return [DoctorItem("fail", "locale", "locale 检查失败", str(exc))]
+
+
 def check_layout_hazard(*, repo_parent: Path | None = None) -> list[DoctorItem]:
     from .layout_guard import layout_report
 
@@ -389,11 +401,48 @@ def run_doctor_checks(*, mail_root: Path | None = None, wsl_distro: str = "Ubunt
     else:
         items.append(DoctorItem("fail", "services", f"mailbus API down: {api_url}", ""))
 
-    am_url = os.environ.get("AGENTMEMORY_URL", "http://127.0.0.1:3111")
+    try:
+        from .service_registry import service_url
+
+        am_url = service_url("agentmemory")
+    except Exception:
+        am_url = os.environ.get("AGENTMEMORY_URL", "http://127.0.0.1:3111")
     if probe_http(f"{am_url.rstrip('/')}/agentmemory/health") or probe_http(f"{am_url.rstrip('/')}/health"):
         items.append(DoctorItem("ok", "services", f"AgentMemory {am_url}", ""))
     else:
         items.append(DoctorItem("fail", "services", f"AgentMemory unreachable: {am_url}", ""))
+
+    # Drift guard: smart_routing.use_ollama requires agent_types.models.ollama-local
+    store_cfg_path = Path(paths["data_dir"]) / "config.json"
+    if store_cfg_path.is_file():
+        from .utils import json_read
+
+        store_cfg = json_read(str(store_cfg_path), {})
+        sr = store_cfg.get("smart_routing") or {}
+        use_ollama = sr.get("enabled", True) is not False and sr.get("use_ollama", True) is not False
+        has_alias = bool(((store_cfg.get("agent_types") or {}).get("models") or {}).get("ollama-local"))
+        if use_ollama and not has_alias:
+            from .init_store import ensure_ollama_local_model_alias
+
+            if ensure_ollama_local_model_alias(store_cfg, mail_root=root):
+                from .commands import save_config
+
+                save_config(str(store_cfg_path), store_cfg)
+                items.append(DoctorItem(
+                    "warn",
+                    "routing",
+                    "已自动合并 agent_types.models.ollama-local（防漂移）",
+                    "来自 config/mailbus/agent-types.json",
+                ))
+            else:
+                items.append(DoctorItem(
+                    "fail",
+                    "routing",
+                    "smart_routing.use_ollama 开启但缺少 ollama-local 模型映射",
+                    "运行: mailbus init-store merge 或检查 agent-types.json",
+                ))
+        elif use_ollama and has_alias:
+            items.append(DoctorItem("ok", "routing", "agent_types.models.ollama-local 已配置", ""))
 
     if plat == "win32":
         if probe_http(api_url):
@@ -433,6 +482,7 @@ def run_doctor_checks(*, mail_root: Path | None = None, wsl_distro: str = "Ubunt
         items.append(DoctorItem("warn", "compose", "compose override missing", "mailbus compose sync"))
 
     items.extend(check_data_integrity(mail_root=root))
+    items.extend(check_locale_transport_codes())
     items.extend(check_hermes_readiness(
         mail_root=root,
         docker_ready_flag=bool(dstat["ready"]),

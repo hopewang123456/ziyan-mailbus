@@ -1,6 +1,7 @@
 """Record Harness — 包装 production，录制 spawn/wait 到 JSON。"""
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import json
 import os
 from datetime import datetime, timezone
@@ -11,7 +12,7 @@ from .production import ProductionHarness
 
 
 def _utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return now_utc_dt().replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 class RecordHarness(AgentHarness):

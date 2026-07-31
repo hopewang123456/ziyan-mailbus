@@ -27,14 +27,18 @@ EDITABLE_SECTIONS = frozenset({
     "mailbus_intake_bridge",
     "mailbus_codex",
     "mailbus_claude",
+    "mailbus_chains",
     "scheduler",
     "agents",
+    "frameworks",
     "launch_ports",
     "smart_routing",
+    "services",
 })
 
 AGENT_PATCH_KEYS = frozenset({
     "name", "role", "type", "models", "provider", "max_concurrency", "launch",
+    "enabled", "native_config_path", "native_config", "archetype", "framework",
 })
 
 AGENT_TYPE_META = {
@@ -50,8 +54,19 @@ AGENT_TYPE_META = {
 
 # env 变量元数据（secret 仅显示是否已配置，PATCH 时传新值才更新）
 ENV_SPECS: List[dict] = [
-    {"key": "MAILBUS_OLLAMA_BASE_URL", "label": "Ollama 地址", "group": "llm", "placeholder": "http://127.0.0.1:11434"},
+    {
+        "key": "MAILBUS_OLLAMA_BASE_URL",
+        "label": "Ollama 地址（宿主覆盖；Docker 以 services.docker 为准）",
+        "group": "llm",
+        "placeholder": "http://127.0.0.1:11434",
+    },
     {"key": "MAILBUS_OLLAMA_MODEL", "label": "Ollama 模型", "group": "llm", "placeholder": "qwen2.5:3b-instruct-q4_K_M"},
+    {
+        "key": "AGENTMEMORY_URL",
+        "label": "AgentMemory 地址（宿主覆盖；Docker 以 services.docker 为准）",
+        "group": "llm",
+        "placeholder": "http://127.0.0.1:3111",
+    },
     {"key": "MAILBUS_INTERNAL_LLM_PROVIDER_PRIORITY", "label": "Provider 优先级", "group": "llm", "placeholder": "local,remote"},
     {"key": "MAILBUS_INTERNAL_LLM_API_KEY", "label": "Remote LLM API Key", "group": "llm", "secret": True},
     {"key": "DEEPSEEK_API_KEY", "label": "DeepSeek API Key", "group": "llm", "secret": True},
@@ -74,10 +89,13 @@ SECTION_LABELS = {
     "mailbus_intake_bridge": "Intake Bridge",
     "mailbus_codex": "Codex / Desktop 启动",
     "mailbus_claude": "Claude Code / Desktop 启动",
+    "mailbus_chains": "工单链路模板 / 日预算",
     "scheduler": "Scheduler 定时任务",
     "agents": "Agent 运行时",
+    "frameworks": "Framework enable / 路径",
     "launch_ports": "Launch 端口",
-    "smart_routing": "智能路由 / Ollama",
+    "smart_routing": "智能路由 / L0–L3",
+    "services": "外部服务 / 接线",
 }
 
 
@@ -152,6 +170,8 @@ def get_section(data_dir: str, section: str) -> dict:
                 "provider": ac.get("provider", ""),
                 "max_concurrency": ac.get("max_concurrency", 1),
                 "launch": ac.get("launch") or {},
+                "enabled": ac.get("enabled"),
+                "native_config_path": ac.get("native_config_path") or (ac.get("native_config") or {}).get("path"),
                 "has_browser": (ac.get("launch") or {}).get("has_browser"),
                 "has_desktop": _agent_has_desktop_flag(ac, types),
             })
@@ -215,8 +235,11 @@ def get_section(data_dir: str, section: str) -> dict:
                 "tier2": "推送阶段 Tier-2：L0–L2 常规走本机 Ollama（在线时），L3 可走云端 Pro",
                 "pro_gate": "deepseek-pro 仍须环境变量 MAILBUS_ALLOW_PRO=1",
                 "gpu": "与 ComfyUI 分时见 gpu_sharing（Internal LLM 段）",
+                "services_tab": "URL/模型接线请到「外部服务」段编辑，本段只管 L0–L3→alias",
             },
         }
+    if section == "services":
+        return _get_services_section(cfg, data_dir)
     if section == "scheduler":
         sched = cfg.get("scheduler") or {}
         return {
@@ -246,6 +269,82 @@ def _sanitize_llm_section(data: dict) -> dict:
     return data
 
 
+def _get_services_section(cfg: dict, data_dir: str) -> dict:
+    from .service_registry import (
+        compose_env_for_services,
+        detect_runtime,
+        probe_service,
+        service_settings,
+    )
+
+    runtime = detect_runtime()
+    ollama = service_settings("ollama", config=cfg, data_dir=data_dir)
+    am = service_settings("agentmemory", config=cfg, data_dir=data_dir)
+    ollama_probe = probe_service("ollama", config=cfg, data_dir=data_dir)
+    am_probe = probe_service("agentmemory", config=cfg, data_dir=data_dir)
+    store_svc = copy.deepcopy(cfg.get("services") or {})
+    # Ensure editable profile shells exist for UI
+    for name, settings in (("ollama", ollama), ("agentmemory", am)):
+        block = store_svc.setdefault(name, {})
+        if not isinstance(block.get("profiles"), dict) or not block["profiles"]:
+            block["profiles"] = copy.deepcopy(settings.get("profiles") or {})
+        if name == "ollama" and not block.get("model"):
+            block["model"] = settings.get("model") or ""
+        if name == "agentmemory" and not block.get("health_path"):
+            block["health_path"] = settings.get("health_path") or "/agentmemory/health"
+    return {
+        "section": "services",
+        "runtime": runtime,
+        "data": store_svc,
+        "compose_env": compose_env_for_services(config=cfg, data_dir=data_dir),
+        "ollama": {
+            "ready": bool(ollama_probe.get("ok")),
+            "effective_url": ollama.get("base_url"),
+            "model": ollama.get("model"),
+            "proxy": ollama.get("proxy") or {},
+            "profiles": ollama.get("profiles") or {},
+            "probe": ollama_probe,
+        },
+        "agentmemory": {
+            "ready": bool(am_probe.get("ok")),
+            "effective_url": am.get("base_url"),
+            "health_path": am.get("health_path"),
+            "profiles": am.get("profiles") or {},
+            "probe": am_probe,
+        },
+        "notes": {
+            "profiles": "windows / wsl / docker 三套 base_url；改 docker URL 后需 compose sync + start-team",
+            "smart_routing": "L0–L3→alias 在「智能路由」段；本段只管服务在哪",
+            "env": "宿主 .env 可覆盖本机 URL，不会写入 Docker profile",
+        },
+    }
+
+
+def _persist_services_seed(data_dir: str, services: dict) -> List[str]:
+    """Write ollama/agentmemory blocks back to config/services/*.json seeds."""
+    root = mailbus_root(data_dir)
+    seed_dir = os.path.join(root, "config", "services")
+    os.makedirs(seed_dir, exist_ok=True)
+    written: List[str] = []
+    for name in ("ollama", "agentmemory"):
+        block = services.get(name)
+        if not isinstance(block, dict):
+            continue
+        path = os.path.join(seed_dir, f"{name}.json")
+        existing = json_read(path, {}) if os.path.isfile(path) else {}
+        merged = _deep_merge(existing if isinstance(existing, dict) else {}, block)
+        merged.setdefault("id", name)
+        json_write(path, merged)
+        written.append(path)
+    try:
+        from .service_registry import clear_service_registry_cache
+
+        clear_service_registry_cache()
+    except Exception:
+        pass
+    return written
+
+
 def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[str]]:
     if section not in EDITABLE_SECTIONS:
         raise ValueError(f"unknown section: {section}")
@@ -255,6 +354,7 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
     path = config_path(data_dir)
     cfg = json_read(path, {})
     requires_restart: List[str] = []
+    persist_seed = bool(patch.pop("persist_seed", False)) if section == "services" else False
 
     if section == "agents":
         if "agent_id" not in patch or "fields" not in patch:
@@ -288,6 +388,24 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
                 reset=bool(item.get("reset")),
             )
         requires_restart.append("launch_ports")
+    elif section == "services":
+        # Accept either {ollama:..., agentmemory:...} or {data: {...}} or nested under services
+        body = patch.get("data") if isinstance(patch.get("data"), dict) else patch
+        if isinstance(body.get("services"), dict):
+            body = body["services"]
+        current = cfg.get("services") or {}
+        cfg["services"] = _deep_merge(current, body)
+        requires_restart.append("services")
+        if persist_seed:
+            _persist_services_seed(data_dir, cfg["services"])
+        try:
+            from .service_registry import clear_service_registry_cache
+            from .ollama_routing import invalidate_ollama_probe_cache
+
+            clear_service_registry_cache()
+            invalidate_ollama_probe_cache()
+        except Exception:
+            pass
     else:
         current = cfg.get(section) or {}
         if section == "mailbus_internal_llm":
@@ -306,7 +424,12 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
         raise ValueError("; ".join(blocking[:3]))
 
     save_config(path, cfg)
-    return {"section": section, "requires_restart": requires_restart, "warnings": errors[:5]}, requires_restart
+    result: dict = {"section": section, "requires_restart": requires_restart, "warnings": errors[:5]}
+    if section == "services":
+        result.update(_get_services_section(cfg, data_dir))
+        if persist_seed:
+            result["persist_seed"] = True
+    return result, requires_restart
 
 
 def _strip_llm_secrets_from_patch(patch: dict) -> dict:

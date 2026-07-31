@@ -44,11 +44,12 @@ services:
       - DATA_DIR=/mailbus/store
       - TZ=Asia/Shanghai
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-ziyan-team}
-      - AGENTMEMORY_URL=http://iii-engine:3111
+      # Defaults only — compose sync override injects config/services docker profile
+      - AGENTMEMORY_URL=${AGENTMEMORY_URL:-http://iii-engine:3111}
       - TEAM_MEMORY_DB=/hermes/shared-memory/team-memory.db
       - MEMORY_BRIDGE_SQLITE=1
       - MEMORY_BRIDGE_AGENTMEMORY=1
-      - MAILBUS_OLLAMA_BASE_URL=${MAILBUS_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - MAILBUS_OLLAMA_BASE_URL=${MAILBUS_DOCKER_OLLAMA_URL:-http://host.docker.internal:11435}
       - MAILBUS_OLLAMA_MODEL=${MAILBUS_OLLAMA_MODEL:-qwen2.5:3b-instruct-q4_K_M}
       - MAILBUS_INTERNAL_LLM_API_KEY=${MAILBUS_INTERNAL_LLM_API_KEY:-${DEEPSEEK_API_KEY:-}}
       - MAILBUS_INTERNAL_LLM_PROVIDER_PRIORITY=${MAILBUS_INTERNAL_LLM_PROVIDER_PRIORITY:-local,remote}
@@ -172,7 +173,8 @@ services:
     build:
       context: ./openclaw-agent
       args:
-        OPENCLAW_VERSION: ""
+        # 空=装最新；也可 OPENCLAW_VERSION=2026.7.1-2 docker compose build --no-cache openclaw
+        OPENCLAW_VERSION: ${OPENCLAW_VERSION:-}
     ports:
       - "18789:18789"
       - "18790:18790"
@@ -184,6 +186,9 @@ services:
       - ${OPENCLAW_WORKSPACE:-../openclaw_space}:/workspace
       - ../store:/mailbus/store
       - ../tools:/mailbus/tools:ro
+      - ../lib:/mailbus/lib:ro
+      # 热挂 entrypoint，避免每次改配对逻辑都要 rebuild 镜像
+      - ./openclaw-agent/entrypoint.sh:/entrypoint.sh:ro
       - ../skills:/mailbus/skills:ro
       - ../rules:/mailbus/rules:ro
       # Default: workspace skills/memory. Local Vault overlay: override.yml
@@ -197,6 +202,8 @@ services:
       - TZ=Asia/Shanghai
       - HERMES_SECRETS_DIR=/hermes-secrets
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-ziyan-team}
+      # 默认保留 pairing；仅排障时设 1
+      - RESET_OPENCLAW_PAIRING=${RESET_OPENCLAW_PAIRING:-0}
       - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
       - HTTPS_PROXY=${CONTAINER_HTTPS_PROXY:-}
       - NO_PROXY=localhost,127.0.0.1,::1,iii-engine,agentmemory,mailbus,172.28.0.0/16,host.docker.internal
@@ -222,6 +229,7 @@ services:
     volumes:
       - ../store:/mailbus/store
       - ../tools:/mailbus/tools:ro
+      - ../lib:/mailbus/lib:ro
       - ../skills:/mailbus/skills:ro
       - ../rules:/mailbus/rules:ro
       - ../access:/mailbus/access:ro
@@ -244,6 +252,8 @@ services:
       - CODEX_WEB_PORT=7682
       - CODEX_WEB_CWD=/mailbus/store
       - CODEX_WEB_ENABLED=1
+      # 已有 config.toml 默认跳过渲染；仅 bootstrap/排障时设 1
+      - FORCE_RENDER_CODEX_CONFIG=${FORCE_RENDER_CODEX_CONFIG:-0}
       - AGENTMEMORY_URL=http://iii-engine:3111
       - DEEPSEEK_GATEWAY_PORT=3000
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
@@ -273,6 +283,7 @@ services:
     volumes:
       - ../store:/mailbus/store
       - ../tools:/mailbus/tools:ro
+      - ../lib:/mailbus/lib:ro
       - ../skills:/mailbus/skills:ro
       - ../rules:/mailbus/rules:ro
       - ../access:/mailbus/access:ro
@@ -295,6 +306,7 @@ services:
       - CODEX_WEB_PORT=7682
       - CODEX_WEB_CWD=/mailbus/store
       - CODEX_WEB_ENABLED=1
+      - FORCE_RENDER_CODEX_CONFIG=${FORCE_RENDER_CODEX_CONFIG:-0}
       - AGENTMEMORY_URL=http://iii-engine:3111
       - DEEPSEEK_GATEWAY_PORT=3000
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}

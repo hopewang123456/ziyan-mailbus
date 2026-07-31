@@ -1,6 +1,7 @@
 """mailbus 诊所 — agent / mailbus 总线诊断与修复工具注册表。"""
 from __future__ import annotations
 
+from lib.adapters.clock import now_dt, now_ts, now_utc_dt
 import os
 import subprocess
 import sys
@@ -234,7 +235,7 @@ def run_clinic_tool(
 
     cmd = [sys.executable, script_path, *args]
     timeout = int(tool.get("timeout") or 120)
-    started = time.time()
+    started = now_ts()
     try:
         r = subprocess.run(
             cmd,
@@ -244,7 +245,7 @@ def run_clinic_tool(
             timeout=timeout,
             env=env,
         )
-        elapsed = round(time.time() - started, 2)
+        elapsed = round(now_ts() - started, 2)
         return {
             "ok": r.returncode == 0,
             "tool_id": tool_id,
