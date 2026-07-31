@@ -603,7 +603,7 @@ def handle_task_fsm_get(handler, task_id: str):
 
 def handle_human_queue(handler):
     """GET /api/human-queue — 人工待办列表。"""
-    from lib.human_queue import list_items
+    from lib.composition import build_orchestration
     from urllib.parse import parse_qs, urlparse
 
     parsed = urlparse(handler.path)
@@ -619,8 +619,8 @@ def handle_human_queue(handler):
         handler._send_json({"error": "invalid limit/offset"}, 400)
         return
 
-    items, meta = list_items(
-        handler.data_dir,
+    orch = build_orchestration(handler.data_dir)
+    items, meta = orch.human_gate.list_items(
         status=status,
         qtype=qtype,
         task_id=task_id,

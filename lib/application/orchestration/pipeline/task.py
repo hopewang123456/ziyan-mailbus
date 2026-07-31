@@ -149,7 +149,7 @@ def is_pipeline_execute_message(msg: Any, data_dir: str) -> bool:
 
 def should_auto_ack_message(msg: Any, data_dir: str, agent_type: str) -> bool:
     """Hermes/OpenClaw：仅系统 notice 可 auto_ack；Cline/OpenCode 永不；pipeline 等 msg-results。"""
-    from lib.adapters.frameworks import type_supports_auto_ack
+    from lib.agent_paths import type_supports_auto_ack
     from .model_router import is_no_llm_notice
 
     if not type_supports_auto_ack(agent_type):
@@ -186,7 +186,7 @@ def pipeline_completion_block(
     else:
         rf = f"{data_dir}/msg-results/{tid}.json"
     if agent_cfg:
-        from lib.adapters.frameworks import store_path_for_agent
+        from lib.agent_paths import store_path_for_agent
 
         rf = store_path_for_agent(data_dir, rf, agent_cfg)
     sid_part = f', "step_id":"{sid}"' if sid else ""

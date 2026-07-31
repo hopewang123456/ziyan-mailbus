@@ -339,7 +339,7 @@ def _send_task(
 
         agents = json_read(os.path.join(data_dir, "config.json"), {}).get("agents", {})
         to_cfg = agents.get(to_person) or {}
-        from lib.adapters.frameworks import store_path_for_agent
+        from lib.agent_paths import store_path_for_agent
 
         nf_disp = store_path_for_agent(data_dir, nf, to_cfg)
         rf_disp = store_path_for_agent(data_dir, rf, to_cfg)

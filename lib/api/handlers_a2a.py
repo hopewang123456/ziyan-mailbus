@@ -140,7 +140,7 @@ def handle_a2a_rpc(handler, agent_id: str):
     if method == "GetTask":
         tid = params.get("id") or params.get("taskId") or ""
         from lib.tracker import TaskTracker
-        from lib.human_queue import load_queue
+        from lib.composition import build_orchestration
         from lib.transport.a2a_mapper import to_a2a_hub_task
 
         tracker = TaskTracker(handler.data_dir)
@@ -158,7 +158,7 @@ def handle_a2a_rpc(handler, agent_id: str):
         if not task_doc:
             _rpc_error(-32001, "task_not_found", http_status=404)
             return
-        hq_items = load_queue(handler.data_dir).get("items") or []
+        hq_items = build_orchestration(handler.data_dir).human_gate.load_queue().get("items") or []
         wire = to_a2a_hub_task(task_doc, tid, human_queue=hq_items)
         _rpc_result({"task": wire})
         return

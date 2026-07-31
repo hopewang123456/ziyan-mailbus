@@ -16,6 +16,17 @@ class HumanGatePort(Protocol):
 
     def load_queue(self) -> dict: ...
 
+    def list_items(
+        self,
+        *,
+        status: str = "pending",
+        qtype: str = "",
+        task_id: str = "",
+        intake_id: str = "",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list, dict]: ...
+
 
 @runtime_checkable
 class AuditPort(Protocol):

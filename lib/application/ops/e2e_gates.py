@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-from lib.adapters.frameworks.support import assert_spawn_argv_allowed
+from lib.spawn_guard import assert_spawn_argv_allowed
 from lib.adapters.results.ack import ack_message, list_unacked
 from lib.application.transport_send import send_outbound
 from lib.desktop_launch import merge_launch_desktop

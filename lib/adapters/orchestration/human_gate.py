@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from lib.human_queue import enqueue as hq_enqueue
+from lib.human_queue import list_items as hq_list_items
 from lib.human_queue import load_queue as hq_load
 from lib.human_queue_resolve import resolve_human_queue_item
 from lib.ports.gates import AuditPort
@@ -45,3 +46,23 @@ class HumanGateAdapter:
 
     def load_queue(self) -> dict:
         return hq_load(self._data_dir)
+
+    def list_items(
+        self,
+        *,
+        status: str = "pending",
+        qtype: str = "",
+        task_id: str = "",
+        intake_id: str = "",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list, dict]:
+        return hq_list_items(
+            self._data_dir,
+            status=status,
+            qtype=qtype,
+            task_id=task_id,
+            intake_id=intake_id,
+            limit=limit,
+            offset=offset,
+        )
