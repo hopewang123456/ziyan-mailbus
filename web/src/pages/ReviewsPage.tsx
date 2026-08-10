@@ -86,7 +86,7 @@ export function ReviewsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-sm border border-rail bg-hull/50 p-4">
+        <div className="hud-panel p-4">
           <p className="hud-label">Reports</p>
           {filtered.length === 0 ? (
             <p className="mt-2 text-sm text-mute">无报告</p>
@@ -114,7 +114,7 @@ export function ReviewsPage() {
           )}
         </div>
 
-        <div className="rounded-sm border border-rail bg-hull/50 p-4">
+        <div className="hud-panel p-4">
           <p className="hud-label">Preview</p>
           {!selected ? (
             <p className="mt-2 text-sm text-mute">选择报告预览</p>

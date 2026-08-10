@@ -1,0 +1,87 @@
+{
+  "expected": 13,
+  "count": 13,
+  "complete": true,
+  "source": "comfy_sd15_liveportrait",
+  "pairs": [
+    {
+      "id": "lingzhao",
+      "portrait": true,
+      "animated": true,
+      "ready": true
+    },
+    {
+      "id": "lingjin",
+      "portrait": true,
+      "animated": true,
+      "ready": true
+    },
+    {
+      "id": "lingxi",
+      "portrait": true,
+      "animated": true,
+      "ready": true
+    },
+    {
+      "id": "xiaoqi",
+      "portrait": true,
+      "animated": true,
+      "ready": true
+    },
+    {
+      "id": "yige",
+      "portrait": true,
+      "animated": true,
+      "ready": true
+    },
+    {
+      "id": "lingxiao",
+      "portrait": true,
+      "animated": true,
+      "ready": true
+    },
+    {
+      "id": "dali",
+      "portrait": true,
+      "animated": true,
+      "ready": true
+    },
+    {
+      "id": "lingjian",
+      "portrait": true,
+      "animated": true,
+      "ready": true
+    },
+    {
+      "id": "lingyan",
+      "portrait": true,
+      "animated": true,
+      "ready": true
+    },
+    {
+      "id": "lingxun",
+      "portrait": true,
+      "animated": true,
+      "ready": true
+    },
+    {
+      "id": "lingzhang",
+      "portrait": true,
+      "animated": true,
+      "ready": true
+    },
+    {
+      "id": "lingtuo",
+      "portrait": true,
+      "animated": true,
+      "ready": true
+    },
+    {
+      "id": "lingyun",
+      "portrait": true,
+      "animated": true,
+      "ready": true
+    }
+  ],
+  "comfy_root": "E:\\ai_tools\\ComfyUI-win"
+}

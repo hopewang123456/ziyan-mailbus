@@ -116,7 +116,7 @@ export function TasksPage() {
       {msg && <p className="text-xs text-amber-signal">{msg}</p>}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-sm border border-rail bg-hull/50 p-4">
+        <div className="hud-panel p-4">
           <p className="hud-label">/api/tasks</p>
           <ul className="mt-3 max-h-[60vh] space-y-1 overflow-auto">
             {tasks.length === 0 && <li className="text-sm text-mute">无任务</li>}
@@ -146,7 +146,7 @@ export function TasksPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-sm border border-rail bg-hull/50 p-4">
+          <div className="hud-panel p-4">
             <p className="hud-label">FSM 操作</p>
             {!selected ? (
               <p className="mt-2 text-sm text-mute">点左侧任务加载详情</p>
@@ -188,14 +188,14 @@ export function TasksPage() {
             )}
           </div>
 
-          <div className="rounded-sm border border-rail bg-hull/50 p-4">
+          <div className="hud-panel p-4">
             <p className="hud-label">/fsm</p>
             <pre className="mt-2 max-h-40 overflow-auto text-xs text-mute">
               {fsm ? JSON.stringify(fsm, null, 2) : "—"}
             </pre>
           </div>
 
-          <div className="rounded-sm border border-rail bg-hull/50 p-4">
+          <div className="hud-panel p-4">
             <p className="hud-label">task detail</p>
             <pre className="mt-2 max-h-48 overflow-auto text-xs text-mute">
               {detail ? JSON.stringify(detail, null, 2) : "—"}

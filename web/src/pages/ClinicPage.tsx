@@ -56,6 +56,11 @@ export function ClinicPage() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [locale, setLocale] = useState<LocaleResp | null>(null);
+  const [heartbeat, setHeartbeat] = useState<unknown>(null);
+  const [jobs, setJobs] = useState<unknown>(null);
+  const [llmStatus, setLlmStatus] = useState<unknown>(null);
+  const [llmHealth, setLlmHealth] = useState<unknown>(null);
+  const [llmAction, setLlmAction] = useState<unknown>(null);
 
   async function runDoctor() {
     setBusy(true);
@@ -77,6 +82,40 @@ export function ClinicPage() {
     setErr("");
     const r = await api<LocaleResp>("/api/locale/errors");
     if (r.ok) setLocale(r.data);
+    else setErr(r.error);
+  }
+
+  async function loadHeartbeat() {
+    setErr("");
+    const r = await api("/api/heartbeat");
+    if (r.ok) setHeartbeat(r.data);
+    else setErr(r.error);
+  }
+
+  async function loadJobs() {
+    setErr("");
+    const r = await api("/api/clinic/jobs");
+    if (r.ok) setJobs(r.data);
+    else setErr(r.error);
+  }
+
+  async function loadInternalLlm() {
+    setErr("");
+    const [s, h] = await Promise.all([
+      api("/api/internal-llm/status"),
+      api("/api/internal-llm/health"),
+    ]);
+    if (s.ok) setLlmStatus(s.data);
+    else setErr(s.error);
+    if (h.ok) setLlmHealth(h.data);
+  }
+
+  async function llmPost(path: string) {
+    setBusy(true);
+    setErr("");
+    const r = await api(path, { method: "POST", body: "{}" });
+    setBusy(false);
+    if (r.ok) setLlmAction(r.data);
     else setErr(r.error);
   }
 
@@ -114,8 +153,17 @@ export function ClinicPage() {
         <button type="button" className="hud-btn" onClick={() => void loadTools()}>
           Clinic tools
         </button>
+        <button type="button" className="hud-btn" onClick={() => void loadJobs()}>
+          Clinic jobs
+        </button>
+        <button type="button" className="hud-btn" onClick={() => void loadHeartbeat()}>
+          Heartbeat
+        </button>
         <button type="button" className="hud-btn" onClick={() => void loadLocale()}>
           错误码目录
+        </button>
+        <button type="button" className="hud-btn" onClick={() => void loadInternalLlm()}>
+          Internal LLM
         </button>
       </div>
       <ErrorAlert message={err} />
@@ -134,19 +182,13 @@ export function ClinicPage() {
                 <span className="text-flare">issues {doctor.issues ?? 0}</span>
                 <span className="text-amber-signal">warnings {doctor.warnings ?? 0}</span>
               </div>
-              <div className="mt-3 max-h-[55vh] space-y-3 overflow-auto">
-                {grouped.length === 0 && (
-                  <p className="text-sm text-mute">无诊断项</p>
-                )}
+              <div className="mt-3 max-h-[40vh] space-y-3 overflow-auto">
                 {grouped.map(({ level, items }) => (
                   <div key={level}>
                     <p className={`hud-label mb-1 uppercase ${LEVEL_STYLE[level]}`}>{level}</p>
                     <ul className="space-y-1">
                       {items.map((item, idx) => (
-                        <li
-                          key={`${level}-${idx}`}
-                          className="border-b border-rail/40 px-1 py-1.5 text-xs"
-                        >
+                        <li key={`${level}-${idx}`} className="border-b border-rail/40 px-1 py-1.5 text-xs">
                           <span className="text-mute">[{item.category}]</span>{" "}
                           <span className="text-frost">{item.message}</span>
                           {item.detail && (
@@ -167,7 +209,7 @@ export function ClinicPage() {
           {tools.length === 0 ? (
             <p className="mt-2 text-sm text-mute">点击 Clinic tools 加载</p>
           ) : (
-            <ul className="mt-3 max-h-[55vh] space-y-2 overflow-auto">
+            <ul className="mt-3 max-h-[40vh] space-y-2 overflow-auto">
               {tools.map((t) => {
                 const result = runResults[t.id];
                 return (
@@ -175,10 +217,7 @@ export function ClinicPage() {
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-frost">{t.name || t.id}</p>
-                        {t.description && (
-                          <p className="mt-0.5 text-xs text-mute">{t.description}</p>
-                        )}
-                        <p className="mt-0.5 font-mono text-xs text-mute">{t.id}</p>
+                        {t.description && <p className="mt-0.5 text-xs text-mute">{t.description}</p>}
                       </div>
                       <button
                         type="button"
@@ -190,26 +229,9 @@ export function ClinicPage() {
                       </button>
                     </div>
                     {result && (
-                      <div className="mt-2 border-t border-rail/40 pt-2 text-xs">
-                        <p className={result.ok ? "text-mint" : "text-flare"}>
-                          {result.ok ? "ok" : "failed"}
-                          {result.returncode != null && ` · rc ${result.returncode}`}
-                          {result.elapsed_seconds != null && ` · ${result.elapsed_seconds}s`}
-                        </p>
-                        {result.error && (
-                          <p className="mt-1 text-flare">{result.error}</p>
-                        )}
-                        {result.stdout && (
-                          <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap text-mute">
-                            {result.stdout}
-                          </pre>
-                        )}
-                        {result.stderr && (
-                          <pre className="mt-1 max-h-16 overflow-auto whitespace-pre-wrap text-amber-signal">
-                            {result.stderr}
-                          </pre>
-                        )}
-                      </div>
+                      <p className={`mt-2 text-xs ${result.ok ? "text-mint" : "text-flare"}`}>
+                        {result.ok ? "ok" : result.error || "failed"}
+                      </p>
                     )}
                   </li>
                 );
@@ -219,13 +241,65 @@ export function ClinicPage() {
         </div>
       </div>
 
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-sm border border-rail bg-hull/50 p-4">
+          <p className="hud-label">Heartbeat</p>
+          <pre className="mt-2 max-h-48 overflow-auto text-xs text-mute">
+            {heartbeat == null ? "点击 Heartbeat 加载" : JSON.stringify(heartbeat, null, 2)}
+          </pre>
+        </div>
+        <div className="rounded-sm border border-rail bg-hull/50 p-4">
+          <p className="hud-label">Clinic jobs</p>
+          <pre className="mt-2 max-h-48 overflow-auto text-xs text-mute">
+            {jobs == null ? "点击 Clinic jobs 加载" : JSON.stringify(jobs, null, 2)}
+          </pre>
+        </div>
+      </div>
+
+      <div className="rounded-sm border border-rail bg-hull/50 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="hud-label">Internal LLM</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="hud-btn text-xs"
+              disabled={busy}
+              onClick={() => void llmPost("/api/internal-llm/dry-run")}
+            >
+              Dry-run
+            </button>
+            <button
+              type="button"
+              className="hud-btn-amber text-xs"
+              disabled={busy}
+              onClick={() => void llmPost("/api/internal-llm/rebuild-rag")}
+            >
+              Rebuild RAG
+            </button>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+          <pre className="max-h-40 overflow-auto text-xs text-mute">
+            status: {llmStatus == null ? "—" : JSON.stringify(llmStatus, null, 2)}
+          </pre>
+          <pre className="max-h-40 overflow-auto text-xs text-mute">
+            health: {llmHealth == null ? "—" : JSON.stringify(llmHealth, null, 2)}
+          </pre>
+        </div>
+        {llmAction != null && (
+          <pre className="mt-2 max-h-32 overflow-auto text-xs text-amber-signal">
+            {JSON.stringify(llmAction, null, 2)}
+          </pre>
+        )}
+      </div>
+
       {locale && (
         <div className="rounded-sm border border-rail bg-hull/50 p-4">
           <p className="hud-label">错误码目录 (locale)</p>
           <p className="mt-1 text-xs text-mute">
             covered={String(locale.covered)} · {localeEntries.length} codes
           </p>
-          <ul className="mt-3 max-h-64 space-y-1 overflow-auto font-mono text-xs">
+          <ul className="mt-3 max-h-48 space-y-1 overflow-auto font-mono text-xs">
             {localeEntries.map(([code, zh]) => (
               <li key={code} className="border-b border-rail/30 py-1">
                 <span className="text-cyan-signal">{code}</span>
