@@ -6,17 +6,17 @@ import os
 from typing import Any
 
 from lib.application.orchestration.execution import run_orchestrator
-from lib.iteration_engine import evaluate_round1_gate
-from lib.self_heal import run_self_heal
-from lib.tracker import TaskTracker
-from lib.utils import json_read
+from lib.application.orchestration.iteration_engine import evaluate_round1_gate
+from lib.application.ops.self_heal import run_self_heal
+from lib.application.orchestration.tracker import TaskTracker
+from lib.infra.utils import json_read
 
 
 def scheduler_snapshot() -> dict[str, Any]:
     try:
         import urllib.request
 
-        from lib.constants import DEFAULT_API_BASE
+        from lib.infra.constants import DEFAULT_API_BASE
 
         with urllib.request.urlopen(f"{DEFAULT_API_BASE}/api/status", timeout=5) as r:
             return json.loads(r.read()).get("scheduler") or {}

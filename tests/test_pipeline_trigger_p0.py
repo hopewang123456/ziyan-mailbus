@@ -6,11 +6,11 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.pipeline_results import find_legacy_result_file
+from lib.application.orchestration.pipeline.results import step_result_path
 from lib.application.orchestration.pipeline.trigger import trigger
 from lib.adapters.orchestration.task_fsm import result_applies_to_step, result_mtime_ok
-from lib.tracker import TaskTracker
-from lib.utils import json_write, _now_iso
+from lib.application.orchestration.tracker import TaskTracker
+from lib.infra.utils import json_write, _now_iso
 
 
 def _result_applies_with_file(result, result_file, task_id, current, chain):
@@ -19,14 +19,14 @@ def _result_applies_with_file(result, result_file, task_id, current, chain):
     step_started = current.get("started_at") or ""
     result_ts = result.get("timestamp") or result.get("updated_at") or ""
     if step_started and result_ts:
-        from lib.tracker import _parse_iso_dt
+        from lib.application.orchestration.tracker import _parse_iso_dt
         try:
             mtime_ok = _parse_iso_dt(result_ts) >= _parse_iso_dt(step_started)
         except Exception:
             mtime_ok = True
     elif step_started and result_file and os.path.isfile(result_file):
         from datetime import datetime, timezone
-        from lib.tracker import _parse_iso_dt
+        from lib.application.orchestration.tracker import _parse_iso_dt
         try:
             mtime = datetime.fromtimestamp(os.path.getmtime(result_file), tz=timezone.utc)
             mtime_ok = mtime >= _parse_iso_dt(step_started)
@@ -38,11 +38,12 @@ def _result_applies_with_file(result, result_file, task_id, current, chain):
     return ok
 
 
-def _write_result(data_dir, task_id, payload):
-    d = os.path.join(data_dir, "msg-results")
-    os.makedirs(d, exist_ok=True)
-    path = os.path.join(d, f"{task_id}.json")
-    json_write(path, payload)
+def _write_result(data_dir, task_id, payload, step_id="s1"):
+    path = step_result_path(data_dir, task_id, step_id)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    body = dict(payload)
+    body.setdefault("step_id", step_id)
+    json_write(path, body)
     return path
 
 
@@ -50,6 +51,7 @@ def _make_pipeline_task(data_dir, task_id, to_person="dali", to_role="开发工�
     started = _now_iso()
     chain = [{
         "step": step,
+        "step_id": "s1",
         "from_role": "调度员",
         "from_person": "xiaoqi",
         "to_role": to_role,
@@ -76,15 +78,17 @@ def _make_pipeline_task(data_dir, task_id, to_person="dali", to_role="开发工�
     return task, chain, started
 
 
-def test_find_result_exact_only():
+def test_find_result_step_path_only():
     with tempfile.TemporaryDirectory() as td:
-        other = os.path.join(td, "msg-results", "other-task.json")
+        other = os.path.join(td, "msg-results", "other-task", "step-s1.json")
         os.makedirs(os.path.dirname(other), exist_ok=True)
         json_write(other, {"conclusion": "done"})
-        assert find_legacy_result_file(td, "target-task") is None
+        missing = step_result_path(td, "target-task", "s1")
+        assert not os.path.isfile(missing)
         exact = _write_result(td, "target-task", {"conclusion": "done"})
-        assert find_legacy_result_file(td, "target-task") == exact
-    print("  ok test_find_result_exact_only")
+        assert exact == step_result_path(td, "target-task", "s1")
+        assert os.path.isfile(exact)
+    print("  ok test_find_result_step_path_only")
 
 
 def test_reject_wrong_pipeline_step():
@@ -313,13 +317,16 @@ def test_no_false_success_with_planned():
         })
         json_write(tra._task_path(task_id), task)
         started = chain[-1]["started_at"]
+        sid = chain[-1].get("step_id") or "s2"
+        chain[-1]["step_id"] = sid
+        json_write(tra._task_path(task_id), task)
         _write_result(td, task_id, {
             "conclusion": "done",
             "pipeline_step": 2,
             "timestamp": started,
             "agent": "xiaoqi",
             "task_id": task_id,
-        })
+        }, step_id=sid)
         paths = {"inbox": os.path.join(td, "inbox")}
         for agent in ("lingxi", "xiaoqi", "lingzhao"):
             os.makedirs(os.path.join(paths["inbox"], agent), exist_ok=True)
@@ -423,7 +430,7 @@ def test_need_research_advances_to_planned():
 
 
 def test_planned_skips_duplicate_person():
-    from lib.pipeline_routing import resolve_next_assignee
+    from lib.application.orchestration.pipeline.routing import resolve_next_assignee
 
     chain = [{
         "step": 1, "to_person": "xiaoqi", "status": "completed",
@@ -437,7 +444,7 @@ def test_planned_skips_duplicate_person():
 
 
 if __name__ == "__main__":
-    test_find_result_exact_only()
+    test_find_result_step_path_only()
     test_reject_wrong_pipeline_step()
     test_reject_stale_timestamp()
     test_reject_wrong_agent()

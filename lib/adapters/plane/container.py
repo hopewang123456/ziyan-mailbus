@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 from lib.domain.types import PlaneActionResult, ProbeResult
-from lib.utils import json_read
+from lib.infra.utils import json_read
 
 # framework_id → compose service name(s)
 FRAMEWORK_COMPOSE_SERVICES: dict[str, list[str]] = {
@@ -29,7 +29,7 @@ def _compose_services_for(framework: str, entry: dict) -> list[str]:
 
 
 def _run_compose(*args: str, timeout: int = 180) -> tuple[int, str]:
-    from lib.platform_runner import compose_cmd, run
+    from lib.adapters.plane.platform_runner import compose_cmd, run
 
     argv = compose_cmd(*args)
     try:
@@ -49,7 +49,7 @@ class ContainerPlane:
         return dict((cfg.get("frameworks") or {}).get(framework) or {})
 
     def start_framework(self, framework: str) -> PlaneActionResult:
-        from lib.platform_runner import ensure_docker
+        from lib.adapters.plane.platform_runner import ensure_docker
 
         if not ensure_docker(30):
             return PlaneActionResult(ok=False, framework=framework, detail="docker_not_ready")
@@ -98,7 +98,7 @@ class ContainerPlane:
         # compose ps output formats vary — also try docker inspect via platform
         if not ok:
             from lib.adapters.frameworks.registry import container_for_service
-            from lib.platform_runner import docker_container_running
+            from lib.adapters.plane.platform_runner import docker_container_running
 
             running_any = False
             for svc in services:

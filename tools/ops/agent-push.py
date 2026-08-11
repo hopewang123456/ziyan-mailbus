@@ -14,8 +14,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 
-from lib.agent_push import run_push_direct, try_build_push_direct  # noqa: E402
-from lib.utils import json_read  # noqa: E402
+from lib.adapters.frameworks.direct_push import run_push_direct, try_build_push_direct  # noqa: E402
+from lib.infra.utils import json_read  # noqa: E402
 
 
 def main() -> int:

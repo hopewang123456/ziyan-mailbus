@@ -7,8 +7,8 @@ from lib.adapters.orchestration.fsm import TaskFsmAdapter
 from lib.adapters.orchestration.human_gate import HumanGateAdapter
 from lib.adapters.orchestration.notifier import FileNotifier
 from lib.domain.errors import PAUSE_REASON_BUDGET
-from lib.ports.gates import AuditPort, HumanGatePort
-from lib.ports.orchestration import BudgetMeterPort, NotifierPort, TaskFsmPort
+from lib.interfaces.gates import AuditPort, HumanGatePort
+from lib.interfaces.orchestration import BudgetMeterPort, NotifierPort, TaskFsmPort
 
 
 def build_task_fsm() -> TaskFsmPort:

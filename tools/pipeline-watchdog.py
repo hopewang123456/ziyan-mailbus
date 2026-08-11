@@ -10,7 +10,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.application.ops.pipeline_watchdog import collect_watchdog_context, run_watchdog_pass
-from lib.utils import json_read
+from lib.infra.utils import json_read
 
 DATA = os.environ.get("MAILBUS_DATA", "store")
 SEVERITY_ICON = {"critical": "🔴", "warn": "⚠️", "info": "ℹ️"}

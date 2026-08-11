@@ -8,10 +8,10 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.constants import MAILBUS_ROOT
-from lib.init_store import build_store_config, load_config_fragments
-from lib.transport.config import load_transport_config, resolve_use_streaming
-from lib.utils import json_read, json_write
+from lib.infra.constants import MAILBUS_ROOT
+from lib.adapters.config.init_store import build_store_config, load_config_fragments
+from lib.core.a2a.config import load_transport_config, resolve_use_streaming
+from lib.infra.utils import json_read, json_write
 
 
 class TestLoadTransportConfig(unittest.TestCase):

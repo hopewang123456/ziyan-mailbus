@@ -7,11 +7,11 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.api.security import safe_report_path
-from lib.archiver import _is_old
-from lib.models import Inbox
+from lib.adapters.ops.archiver import _is_old
+from lib.domain.models import Inbox
 from lib.application.orchestration.pipeline.result_check import pipeline_step_result_matches
 from lib.adapters.orchestration.task_fsm import ensure_fsm, revert_failed_advance, write_step_result
-from lib.utils import json_write
+from lib.infra.utils import json_write
 
 
 class TestSafeReportPath(unittest.TestCase):
@@ -72,7 +72,8 @@ class TestPipelineResultCheck(unittest.TestCase):
         })
         ok, reason = pipeline_step_result_matches(self.tmp, task, "lingxiao")
         self.assertFalse(ok)
-        self.assertIn("stale", reason)
+        # legacy flat msg-results/{tid}.json 已移除；无 step 路径时为 missing
+        self.assertIn(reason, ("stale_prior_step", "missing_msg_results", "stale"))
 
 
 class TestArchiverDoneAt(unittest.TestCase):
@@ -106,20 +107,20 @@ class TestRevertFailedAdvance(unittest.TestCase):
 
 class TestReminderCleanup(unittest.TestCase):
     def test_is_remind_message(self):
-        from lib.reminder_cleanup import _is_remind_message
+        from lib.application.ops.reminder_cleanup import _is_remind_message
         self.assertTrue(_is_remind_message("tracker-remind-1", ""))
         self.assertTrue(_is_remind_message("remind-1-x", ""))
         self.assertFalse(_is_remind_message("msg-abc", "普通通知"))
 
     def test_task_is_stale(self):
-        from lib.reminder_cleanup import _task_is_stale_for_remind
+        from lib.application.ops.reminder_cleanup import _task_is_stale_for_remind
         self.assertTrue(_task_is_stale_for_remind(None))
         self.assertTrue(_task_is_stale_for_remind({"status": "success"}))
         self.assertTrue(_task_is_stale_for_remind({"status": "running", "fsm": {"state": "paused"}}))
         self.assertFalse(_task_is_stale_for_remind({"status": "running", "fsm": {"state": "executing"}}))
 
     def test_extract_task_refs(self):
-        from lib.reminder_cleanup import _extract_task_refs
+        from lib.application.ops.reminder_cleanup import _extract_task_refs
         refs = _extract_task_refs(
             {"task_id": "t1", "id": "tracker-remind-1"},
             "任务「摘要」【game-v3】",

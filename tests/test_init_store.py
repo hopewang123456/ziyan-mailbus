@@ -7,8 +7,8 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.config_schema import validate_config
-from lib.init_store import (
+from lib.adapters.config.config_schema import validate_config
+from lib.adapters.config.init_store import (
     build_agents_from_registry,
     build_store_config,
     load_config_fragments,
@@ -16,7 +16,7 @@ from lib.init_store import (
     run_init_store,
     run_merge_store_config,
 )
-from lib.constants import MAILBUS_ROOT
+from lib.infra.constants import MAILBUS_ROOT
 
 
 class TestInitStore(unittest.TestCase):

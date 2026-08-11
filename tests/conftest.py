@@ -9,8 +9,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from lib.constants import MAILBUS_ROOT, MAILBUS_DATA_STR  # noqa: E402
-from lib.utils import configure_stdio_utf8  # noqa: E402
+from lib.infra.constants import MAILBUS_ROOT, MAILBUS_DATA_STR  # noqa: E402
+from lib.infra.utils import configure_stdio_utf8  # noqa: E402
 
 configure_stdio_utf8()
 

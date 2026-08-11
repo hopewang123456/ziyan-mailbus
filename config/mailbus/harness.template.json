@@ -2,6 +2,7 @@
   "harness": {
     "mode": "production",
     "supervisor": "embedded",
+    "rules_path": "",
     "file_bus": {
       "ack_timeout_sec": 300,
       "max_push_retries": 3

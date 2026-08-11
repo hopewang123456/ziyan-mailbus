@@ -2,7 +2,7 @@
 import sys, os, json, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.alerter import push_alert, get_recent_alerts, load_alerts
+from lib.adapters.ops.alerter import push_alert, get_recent_alerts, load_alerts
 
 
 def test_push_and_get():

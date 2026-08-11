@@ -8,7 +8,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.transport.a2a_mapper import from_a2a_task, to_a2a_message
+from lib.core.a2a.a2a_mapper import from_a2a_task, to_a2a_message
 from tests.test_helpers import load_golden_a2a_path
 
 

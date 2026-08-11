@@ -9,15 +9,15 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.api_stall_detect import detect_api_stall, api_stall_repush_wait_minutes
-from lib.api_stall_recovery import (
+from lib.adapters.ops.api_stall_detect import detect_api_stall, api_stall_repush_wait_minutes
+from lib.application.ops.api_stall_recovery import (
     repush_after_elapsed,
     schedule_api_stall_recovery,
     maybe_release_api_stall_for_repush,
 )
-from lib.alerter import load_alerts
-from lib.models import Inbox, MsgStatus
-from lib.utils import json_write
+from lib.adapters.ops.alerter import load_alerts
+from lib.domain.models import Inbox, MsgStatus
+from lib.infra.utils import json_write
 
 
 class ApiStallDetectTests(unittest.TestCase):
@@ -67,7 +67,7 @@ class ApiStallRecoveryTests(unittest.TestCase):
         )
         self.assertTrue(ok)
         ib = Inbox.from_dict(
-            __import__("lib.utils", fromlist=["json_read"]).json_read(
+            __import__("lib.infra.utils", fromlist=["json_read"]).json_read(
                 os.path.join(self.tmp, "inbox", "lingjian", "inbox.json"), {},
             )
         )
@@ -89,17 +89,17 @@ class ApiStallRecoveryTests(unittest.TestCase):
             reason="api_network:timeout", task_id="game-courier",
         )
         ib_path = os.path.join(self.tmp, "inbox", "lingjian", "inbox.json")
-        ib = Inbox.from_dict(__import__("lib.utils", fromlist=["json_read"]).json_read(ib_path, {}))
+        ib = Inbox.from_dict(__import__("lib.infra.utils", fromlist=["json_read"]).json_read(ib_path, {}))
         m = ib.messages[0]
         if isinstance(m, dict):
             m["repush_after"] = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
         json_write(ib_path, ib.to_dict())
-        ib2 = Inbox.from_dict(__import__("lib.utils", fromlist=["json_read"]).json_read(ib_path, {}))
+        ib2 = Inbox.from_dict(__import__("lib.infra.utils", fromlist=["json_read"]).json_read(ib_path, {}))
         changed = maybe_release_api_stall_for_repush(
             self.tmp, "lingjian", ib2.messages[0], ib2, agents={"lingjian": {"type": "codex"}},
         )
         self.assertTrue(changed)
-        ib3 = Inbox.from_dict(__import__("lib.utils", fromlist=["json_read"]).json_read(ib_path, {}))
+        ib3 = Inbox.from_dict(__import__("lib.infra.utils", fromlist=["json_read"]).json_read(ib_path, {}))
         self.assertEqual(ib3.msg_field(ib3.messages[0], "state", ""), MsgStatus.PENDING)
 
 

@@ -3,7 +3,7 @@
 from typing import Callable, List, Optional
 
 from lib.application.orchestration.pipeline.step import is_pipeline_step as _is_pipeline_step
-from lib.utils import _now_iso
+from lib.infra.utils import _now_iso
 
 # agent id → 角色名（Legacy push 展示 · 迁移脚本用）
 AGENT_ROLE = {

@@ -8,11 +8,11 @@ Examples:
   python tools/mailbus.py start
   python tools/mailbus.py start --fast
   python tools/mailbus.py stop
+  python tools/mailbus.py docker restart-mailbus
   python tools/mailbus.py portproxy
   python tools/mailbus.py recover health
 
-Windows .bat files in this folder are optional thin wrappers.
-They cd to the repo root and call python (or py -3 if python is not on PATH).
-Prefer the python command above for scripts, CI, and non-Windows hosts.
+Windows .bat wrappers in this folder:
+  start.bat / stop.bat / restart.bat / fix-port.bat
 
-Desktop shortcuts may point at tools\mailbus\*.bat or scripts\*.bat.
+Desktop shortcuts (e.g. Desktop\子言AI\*.bat) should point here or scripts\*.bat.

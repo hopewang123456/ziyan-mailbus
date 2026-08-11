@@ -12,13 +12,13 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.harness import get_harness
-from lib.pipeline_results import step_result_path
-from lib.transport.dispatch_integration import dispatch_pipeline_step
-from lib.transport.file_bus import FileBusTransport
-from lib.transport.step_result_io import read_step_result_file, write_step_result_file
-from lib.transport.types import DispatchContext
-from lib.utils import json_write, resolve_paths
+from lib.application.harness import get_harness
+from lib.application.orchestration.pipeline.results import step_result_path
+from lib.core.a2a.dispatch_integration import dispatch_pipeline_step
+from lib.core.a2a.file_bus import FileBusTransport
+from lib.core.a2a.step_result_io import read_step_result_file, write_step_result_file
+from lib.core.a2a.types import DispatchContext
+from lib.infra.utils import json_write, resolve_paths
 from tests.test_helpers import seed_a2a_harness
 
 

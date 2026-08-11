@@ -9,7 +9,7 @@ from typing import Any
 
 from lib.adapters.frameworks.support import assert_spawn_argv_allowed
 from lib.domain.types import PlaneActionResult, ProbeResult
-from lib.utils import json_read
+from lib.infra.utils import json_read
 
 
 def _normalize_cmd(cmd: Any) -> list[str] | None:

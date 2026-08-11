@@ -24,8 +24,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from lib.constants import DEFAULT_DATA_DIR  # noqa: E402
-from lib.memory_bridge import (  # noqa: E402
+from lib.infra.constants import DEFAULT_DATA_DIR  # noqa: E402
+from lib.adapters.integrations.memory_bridge import (  # noqa: E402
     AGENTMEMORY_URL,
     bridge_agentmemory_enabled,
     bridge_sqlite_enabled,

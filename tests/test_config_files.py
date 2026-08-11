@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from lib.config_files import (
+from lib.adapters.config.config_files import (
     example_sibling,
     is_example_config_name,
     iter_runtime_json_files,

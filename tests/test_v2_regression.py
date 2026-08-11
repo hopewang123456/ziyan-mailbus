@@ -8,9 +8,9 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.agent_config import validate_agents
-from lib.models import Inbox, MsgStatus
-from lib.pipeline_routing import resolve_next_assignee
+from lib.adapters.config.agent_config import validate_agents
+from lib.domain.models import Inbox, MsgStatus
+from lib.application.orchestration.pipeline.routing import resolve_next_assignee
 from lib.application.orchestration.pipeline.task import (
     should_auto_ack_message,
     should_create_tracker_for_send,
@@ -20,10 +20,10 @@ from lib.application.orchestration.pipeline.task import (
     pipeline_inbox_message_stale,
 )
 from lib.application.orchestration.pipeline.trigger import _close_pipeline_inbox
-from lib.scanner import _cleanup_stale_queue_files, recover_inbox_stale_states
-from lib.self_heal import sync_tracker_and_inbox, normalize_legacy_tracker_audit_flags
-from lib.tracker import TaskTracker, TaskStatus
-from lib.utils import json_write, resolve_paths
+from lib.application.scan import _cleanup_stale_queue_files, recover_inbox_stale_states
+from lib.application.ops.self_heal import sync_tracker_and_inbox, normalize_legacy_tracker_audit_flags
+from lib.application.orchestration.tracker import TaskTracker, TaskStatus
+from lib.infra.utils import json_write, resolve_paths
 
 
 def _write_task(tmp, task_id, chain, status="running", summary=""):
@@ -109,12 +109,15 @@ class TestV2BugRegression(unittest.TestCase):
         self.assertEqual(reason, "missing_msg_results")
 
     def test_verify_delivery_accepts_valid_msg_results(self):
-        chain = [{"step": 1, "to_person": "lingzhao", "status": "running"}]
+        chain = [{"step": 1, "to_person": "lingzhao", "status": "running", "step_id": "s1"}]
         _write_task(self.tmp, "game-stellar-test", chain)
-        json_write(os.path.join(self.tmp, "msg-results", "game-stellar-test.json"), {
+        step_dir = os.path.join(self.tmp, "msg-results", "game-stellar-test")
+        os.makedirs(step_dir, exist_ok=True)
+        json_write(os.path.join(step_dir, "step-s1.json"), {
             "task_id": "game-stellar-test",
             "agent": "lingzhao",
             "pipeline_step": 1,
+            "step_id": "s1",
             "conclusion": "done",
             "summary": "ok",
         })
@@ -122,7 +125,7 @@ class TestV2BugRegression(unittest.TestCase):
             self.tmp, "lingzhao",
             {"content": "【game-stellar-test】", "task_id": "game-stellar-test"},
         )
-        self.assertTrue(ok)
+        self.assertTrue(ok, reason)
         self.assertEqual(reason, "ok")
 
     def test_verify_delivery_stale_prior_step_results(self):
@@ -257,7 +260,7 @@ class TestV2BugRegression(unittest.TestCase):
 
     # --- token burn: Round2 done 不应被 orchestrator 重置为 pending ---
     def test_round2_done_not_reset_by_orchestrator(self):
-        from lib.execution_orchestrator import reconcile_execution_order
+        from lib.application.orchestration.execution import reconcile_execution_order
 
         json_write(os.path.join(self.tmp, "iterations", "iteration-state.json"), {
             "primary_task_id": "game-stellar-v3-20260617",
@@ -283,7 +286,7 @@ class TestV2BugRegression(unittest.TestCase):
         self.assertEqual(inbox.msg_field(inbox.messages[0], "state", ""), MsgStatus.DONE)
 
     def test_push_cooldown_skips_recent_push(self):
-        from lib.scanner import should_skip_push
+        from lib.application.scan import should_skip_push
         from datetime import datetime, timezone, timedelta
 
         ts = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%dT%H:%M:%S%z")

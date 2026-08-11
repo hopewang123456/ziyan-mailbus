@@ -5,8 +5,8 @@ import os
 from typing import Any, Mapping, Sequence
 
 from lib.domain.types import StepRef, StepResult
-from lib.harness.contract import write_d1_step_result
-from lib.transport.step_result_io import read_step_result_file
+from lib.application.harness.contract import write_d1_step_result
+from lib.core.a2a.step_result_io import read_step_result_file
 from lib.adapters.results import ack as ack_mod
 
 

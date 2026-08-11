@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from lib.adapters.clock import now_dt, now_ts, now_utc_dt
+from lib.infra.clock import now_dt, now_ts, now_utc_dt
 import json
 import os
 import time

@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.task_completion import is_task_complete
-from lib.phantom_detect import is_phantom_reply_text, check_phantom_completion
-from lib.pusher import resolve_cli_chain
+from lib.application.orchestration.task_completion import is_task_complete
+from lib.adapters.orchestration.phantom_detect import is_phantom_reply_text, check_phantom_completion
+from lib.application.push.pusher import resolve_cli_chain
 
 
 TYPES = {
@@ -39,7 +39,7 @@ class TestRecruitPushImport(unittest.TestCase):
 
 class TestValidateClineCodexDrift(unittest.TestCase):
     def test_cline_on_lingxiao_service_warns(self):
-        from lib.agent_adapters import validate_agents
+        from lib.adapters.frameworks import validate_agents
 
         agents = {
             "lingxiao": {

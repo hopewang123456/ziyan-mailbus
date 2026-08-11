@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 sys.modules.setdefault("fcntl", MagicMock())
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import lib.utils as _utils
+import lib.infra.utils as _utils
 
 
 @contextlib.contextmanager
@@ -21,7 +21,7 @@ def _noop_file_lock(timeout=10.0, path=""):
 
 _utils.file_lock = _noop_file_lock
 
-from lib.intake.spawn_rules import (
+from lib.application.workflow.intake.spawn_rules import (
     bridge_reconcile,
     evaluate,
     load_bridge_config,
@@ -30,9 +30,9 @@ from lib.intake.spawn_rules import (
     rule_r3_spawn_solution,
     rule_r4_spawn_content,
 )
-from lib.intake.store import upsert
-from lib.tracker import TaskTracker
-from lib.utils import json_write
+from lib.application.workflow.intake.store import upsert
+from lib.application.orchestration.tracker import TaskTracker
+from lib.infra.utils import json_write
 
 
 def _seed(tmp: str) -> None:
@@ -55,7 +55,7 @@ class TestSpawnRules(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _intake(self):
-        from lib.intake.store import get
+        from lib.application.workflow.intake.store import get
         return get(self.tmp, self.intake_id)
 
     def test_r1_eligible_without_analyze_task(self):

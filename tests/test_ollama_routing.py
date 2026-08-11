@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.ollama_routing import (
+from lib.adapters.integrations.ollama_routing import (
     agent_supports_ollama,
     ollama_model_flag,
     resolve_ollama_settings,

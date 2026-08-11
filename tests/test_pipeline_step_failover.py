@@ -10,13 +10,13 @@ from lib.application.orchestration.dispatch.pipeline_step_failover import (
     next_failover_agent_for_step,
     role_failover_plan,
 )
-from lib.dispatch.role_resolver import role_type_candidates
+from lib.application.orchestration.dispatch.role_resolver import role_type_candidates
 from lib.application.orchestration.pipeline.task import (
     is_current_pipeline_assignee,
     pipeline_message_protected_from_auto_close,
 )
-from lib.tracker import TaskTracker
-from lib.utils import json_write
+from lib.application.orchestration.tracker import TaskTracker
+from lib.infra.utils import json_write
 
 
 def _write_role_types(tmp: str) -> None:
@@ -88,12 +88,12 @@ class PipelineStepFailoverTests(unittest.TestCase):
         )
 
     def test_role_failover_plan_reviewer(self):
-        plan = role_failover_plan(5, json_read_config := __import__("lib.utils", fromlist=["json_read"]).json_read(
+        plan = role_failover_plan(5, json_read_config := __import__("lib.infra.utils", fromlist=["json_read"]).json_read(
             os.path.join(self.tmp, "config.json"), {}))
         self.assertEqual(plan, [5, 8, 1])
 
     def test_role_failover_agents_for_reviewer(self):
-        cfg = __import__("lib.utils", fromlist=["json_read"]).json_read(
+        cfg = __import__("lib.infra.utils", fromlist=["json_read"]).json_read(
             os.path.join(self.tmp, "config.json"), {})
         plan = role_failover_plan(5, cfg)
         chain: list[str] = []

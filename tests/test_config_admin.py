@@ -7,8 +7,8 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.config_admin import env_status, get_section, patch_env, patch_section
-from lib.utils import json_write
+from lib.adapters.config.config_admin import env_status, get_section, patch_env, patch_section
+from lib.infra.utils import json_write
 
 
 def _seed(tmp: str) -> None:

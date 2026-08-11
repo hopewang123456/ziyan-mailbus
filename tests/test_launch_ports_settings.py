@@ -7,8 +7,8 @@ import os
 import tempfile
 import unittest
 
-from lib.config_admin import get_section, patch_section
-from lib.utils import json_write
+from lib.adapters.config.config_admin import get_section, patch_section
+from lib.infra.utils import json_write
 
 
 class LaunchPortsSettingsTest(unittest.TestCase):

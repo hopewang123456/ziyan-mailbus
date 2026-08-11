@@ -13,11 +13,11 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.a2a_poll import check_input_required_timeouts, poll_pending_a2a_tasks
-from lib.human_queue import enqueue
-from lib.tracker import TaskTracker
-from lib.transport.step_result_io import read_step_result_file
-from lib.utils import _now_iso, json_write
+from lib.application.orchestration.a2a_poll import check_input_required_timeouts, poll_pending_a2a_tasks
+from lib.adapters.orchestration.human_queue import enqueue
+from lib.application.orchestration.tracker import TaskTracker
+from lib.core.a2a.step_result_io import read_step_result_file
+from lib.infra.utils import _now_iso, json_write
 from tests.test_helpers import seed_a2a_harness
 
 
@@ -154,7 +154,7 @@ class TestPollPendingA2A(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    @patch("lib.pipeline_trigger.trigger")
+    @patch("lib.application.orchestration.pipeline.trigger.trigger")
     def test_poll_pending_get_task_writes_step_result(self, mock_trigger):
         """poll_pending_a2a_tasks：stub GetTask 完成后写入 step-result。"""
         n = poll_pending_a2a_tasks(self.tmp, self.agents, self.paths)

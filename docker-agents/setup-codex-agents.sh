@@ -2,6 +2,7 @@
 # 构建并重启灵霄/灵鉴 Codex 容器，然后跑冒烟
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+MAILBUS_ROOT="${MAILBUS_ROOT:-$(cd "$ROOT/.." && pwd)}"
 cd "$ROOT"
 PROJECT="${COMPOSE_PROJECT_NAME:-docker-agents}"
 # 现有运行栈多为 docker-agents；.env 里 ziyan-team 会与旧网络冲突
@@ -21,7 +22,7 @@ sleep 12
 for svc in lingxiao lingjian; do
   cname="${PROJECT}-${svc}-1"
   echo "=== smoke $cname ==="
-  python3 /mnt/e/ai_tools/mail/tools/smoke-codex-agent.py --container "$cname" || true
+  python3 "${MAILBUS_ROOT}/tools/smoke-codex-agent.py" --container "$cname" || true
 done
 
 echo "=== disk-write probe (lingxiao) ==="

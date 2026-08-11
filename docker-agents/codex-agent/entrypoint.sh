@@ -43,7 +43,11 @@ if command -v codex-deepseek-gateway >/dev/null 2>&1; then
   fi
 fi
 
-render-codex-config.sh
+if [ "${FORCE_RENDER_CODEX_CONFIG:-0}" = "1" ]; then
+  render-codex-config.sh || echo "[codex-agent] render-codex-config failed, continuing without it" >&2
+else
+  render-codex-config.sh 2>/dev/null || echo "[codex-agent] codex config render skipped (already exists or FORCE_RENDER_CODEX_CONFIG=0)" >&2
+fi
 
 if [ -x /usr/local/bin/sync-codex-home-mirror.sh ]; then
   /usr/local/bin/sync-codex-home-mirror.sh

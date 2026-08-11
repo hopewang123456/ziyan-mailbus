@@ -7,6 +7,8 @@ services:
     image: n8nio/n8n:1.76.1
     ports:
       - "5678:5678"
+    networks:
+      - docker-agents_ziyan-net
     environment:
       - N8N_HOST=0.0.0.0
       - N8N_PORT=5678
@@ -16,6 +18,8 @@ services:
       - GENERIC_TIMEZONE=Asia/Shanghai
       - TZ=Asia/Shanghai
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - AGENTMEMORY_URL=http://iii-engine:3111
+      - NO_PROXY=iii-engine,agentmemory,mailbus,172.28.0.0/16,host.docker.internal
     volumes:
       - n8n-data:/home/node/.n8n
     extra_hosts:
@@ -30,3 +34,7 @@ services:
 
 volumes:
   n8n-data:
+
+networks:
+  docker-agents_ziyan-net:
+    external: true

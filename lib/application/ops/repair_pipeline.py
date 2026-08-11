@@ -5,9 +5,9 @@ import json
 import os
 from typing import Any
 
-from lib.models import Inbox
-from lib.tracker import TaskTracker
-from lib.utils import json_read, json_write
+from lib.domain.models import Inbox
+from lib.application.orchestration.tracker import TaskTracker
+from lib.infra.utils import json_read, json_write
 
 
 def report_stuck_pipeline(data_dir: str, task_id: str) -> dict[str, Any]:

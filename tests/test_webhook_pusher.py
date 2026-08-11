@@ -13,9 +13,9 @@ from urllib.parse import urlparse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.webhook_pusher import push_via_webhook
-from lib.models import Message, MsgStatus
-from lib.utils import _now_iso
+from lib.application.push.webhook_pusher import push_via_webhook
+from lib.domain.models import Message, MsgStatus
+from lib.infra.utils import _now_iso
 
 
 # ── 模拟 Webhook 服务 ──────────────────────────────────────────────────

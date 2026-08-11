@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import List, Optional, Set, Tuple
 
 from lib.application.orchestration.pipeline.chain import AGENT_ROLE, agent_to_role
-from lib.role_flow import get_next_role, pick_person_for_role
+from lib.application.orchestration.role_flow import get_next_role, pick_person_for_role
 
 VALID_ROLES = frozenset({
     "方案设计师", "调度员", "开发工程师", "审查官", "测试工程师", "验收员",
@@ -72,16 +72,15 @@ def _resolve_role_type_assignee(
     data_dir: str,
     agents: Optional[dict],
 ) -> Tuple[Optional[str], Optional[str]]:
-    from lib.locale.role_labels import role_type_to_zh
+    from lib.composition import get_locale
 
+    locale = get_locale(data_dir)
     head = chain[0] if chain else {}
-    n_role = role_type_to_zh(int(role_type), data_dir)
+    n_role = locale.role_type_to_zh(int(role_type))
     pin = head.get("pin_agent")
     if pin:
         # 首步 pin 不应劫持后续步骤：仅当 pin 是该 role_type 候选时沿用
-        from lib.locale.role_labels import role_type_candidates
-
-        cands = role_type_candidates(int(role_type), data_dir)
+        cands = locale.role_type_candidates(int(role_type))
         if not cands or pin in cands:
             return n_role, pin
     n_person = pick_person_for_role(n_role, exclude=_persons_served(chain))

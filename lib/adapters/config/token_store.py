@@ -5,7 +5,7 @@ import os
 import secrets
 from typing import Any
 
-from lib.utils import file_lock, json_read, json_write
+from lib.infra.utils import file_lock, json_read, json_write
 
 SECRETS_NAME = "secrets.json"
 TOKEN_KEY = "mailbus_api_token"
@@ -26,17 +26,14 @@ def write_secrets(data_dir: str, data: dict[str, Any]) -> None:
 
 
 def resolve_token(data_dir: str, config: dict | None = None) -> str | None:
-    """Priority: env > secrets.json > legacy config.api_token."""
+    """Priority: env > secrets.json (mailbus_api_token)."""
+    _ = config
     env = (os.environ.get("MAILBUS_API_TOKEN") or "").strip()
     if env:
         return env
     sec = read_secrets(data_dir)
     tok = (sec.get(TOKEN_KEY) or "").strip()
-    if tok:
-        return tok
-    cfg = config if config is not None else json_read(os.path.join(data_dir, "config.json"), {})
-    legacy = (cfg.get("api_token") or "").strip()
-    return legacy or None
+    return tok or None
 
 
 def ensure_token(data_dir: str) -> str:

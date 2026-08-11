@@ -13,23 +13,23 @@ from unittest.mock import MagicMock, patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.api.handlers_a2a import handle_a2a_rpc
-from lib.transport.a2a_standard import A2ATransport
-from lib.transport.a2a_stream import (
+from lib.core.a2a.a2a_standard import A2ATransport
+from lib.core.a2a.a2a_stream import (
     build_status_update_result,
     iter_stream_events,
     iter_stream_status_updates,
     is_stream_terminal,
 )
-from lib.transport.config import resolve_use_streaming
-from lib.transport.dispatch_integration import merge_agent_transport_config
-from lib.transport.errors import NonRetryableTransportError
-from lib.transport.http_a2a import (
+from lib.core.a2a.config import resolve_use_streaming
+from lib.core.a2a.dispatch_integration import merge_agent_transport_config
+from lib.core.a2a.errors import NonRetryableTransportError
+from lib.core.a2a.http_a2a import (
     HttpA2AClient,
     _aggregate_streaming_result,
     _parse_sse_jsonrpc_events,
 )
-from lib.transport.types import DispatchContext
-from lib.utils import json_write
+from lib.core.a2a.types import DispatchContext
+from lib.infra.utils import json_write
 from tests.test_helpers import seed_a2a_harness
 
 
@@ -81,7 +81,7 @@ class TestHttpA2AStreamingClient(unittest.TestCase):
             resp.__exit__ = MagicMock(return_value=False)
             return resp
 
-        with patch("lib.transport.http_a2a.urlrequest.urlopen", fake_urlopen):
+        with patch("lib.core.a2a.http_a2a.urlrequest.urlopen", fake_urlopen):
             out = client.send_streaming_message({
                 "task_id": "t1", "step_id": "s1", "to_agent": "lingzhao",
                 "role_type": 1, "intent": "hello",
@@ -119,7 +119,7 @@ class TestHttpA2AStreamingClient(unittest.TestCase):
             resp.__exit__ = MagicMock(return_value=False)
             return resp
 
-        with patch("lib.transport.http_a2a.urlrequest.urlopen", fake_urlopen):
+        with patch("lib.core.a2a.http_a2a.urlrequest.urlopen", fake_urlopen):
             out = client.send_streaming_message({
                 "task_id": "t1", "step_id": "s1", "to_agent": "lingzhao",
                 "role_type": 1, "intent": "hello",
@@ -138,7 +138,7 @@ class TestHttpA2AStreamingClient(unittest.TestCase):
             resp.__exit__ = MagicMock(return_value=False)
             return resp
 
-        with patch("lib.transport.http_a2a.urlrequest.urlopen", fake_urlopen):
+        with patch("lib.core.a2a.http_a2a.urlrequest.urlopen", fake_urlopen):
             with self.assertRaises(NonRetryableTransportError):
                 client.send_streaming_message({
                     "task_id": "t1", "step_id": "s1", "to_agent": "a",
@@ -351,7 +351,7 @@ class TestInboundSendStreamingMessage(unittest.TestCase):
             "metadata": {"mailbus": {"taskId": "feat-ext-001", "stepId": "s1"}},
         }, 201, None
 
-    @patch("lib.transport.a2a_stream.iter_stream_events", return_value=iter([]))
+    @patch("lib.core.a2a.a2a_stream.iter_stream_events", return_value=iter([]))
     @patch("lib.api.handlers_a2a._create_a2a_wire_task")
     def test_inbound_sse_creates_task(self, mock_create, _mock_iter):
         mock_create.side_effect = self._mock_create_ok
@@ -379,7 +379,7 @@ class TestInboundSendStreamingMessage(unittest.TestCase):
         self.assertEqual(task["status"], "working")
         self.assertEqual(task["id"], "a2a-inbound-1")
 
-    @patch("lib.transport.a2a_stream.time.sleep")
+    @patch("lib.core.a2a.a2a_stream.time.sleep")
     @patch("lib.api.handlers_a2a._create_a2a_wire_task")
     def test_inbound_sse_pushes_status_updates(self, mock_create, _mock_sleep):
         mock_create.side_effect = self._mock_create_ok
@@ -415,7 +415,7 @@ class TestInboundSendStreamingMessage(unittest.TestCase):
             "method": "SendStreamingMessage",
             "params": {"message": {"parts": [{"text": "x"}]}},
         }
-        with patch("lib.transport.a2a_stream.iter_stream_events", side_effect=fake_iter):
+        with patch("lib.core.a2a.a2a_stream.iter_stream_events", side_effect=fake_iter):
             handle_a2a_rpc(handler, "lingzhao")
         events = _parse_sse_jsonrpc_events(handler._wfile.getvalue().decode("utf-8"))
         self.assertEqual(len(events), 2)
@@ -425,7 +425,7 @@ class TestInboundSendStreamingMessage(unittest.TestCase):
         self.assertEqual(upd["status"]["state"], "completed")
         self.assertTrue(upd["final"])
 
-    @patch("lib.transport.a2a_stream.iter_stream_status_updates")
+    @patch("lib.core.a2a.a2a_stream.iter_stream_status_updates")
     @patch("lib.api.handlers_a2a._create_a2a_wire_task")
     def test_inbound_json_accept_aggregates(self, mock_create, mock_iter):
         mock_create.side_effect = self._mock_create_ok
@@ -479,9 +479,9 @@ class TestIterStreamEvents(unittest.TestCase):
             "metadata": {"mailbus": {"taskId": task_id, "stepId": "s1"}},
         }
 
-    @patch("lib.transport.a2a_stream._stream_config")
-    @patch("lib.transport.a2a_stream.time.sleep")
-    @patch("lib.transport.a2a_stream.resolve_hub_wire")
+    @patch("lib.core.a2a.a2a_stream._stream_config")
+    @patch("lib.core.a2a.a2a_stream.time.sleep")
+    @patch("lib.core.a2a.a2a_stream.resolve_hub_wire")
     def test_yields_heartbeat_between_polls(self, mock_resolve, _mock_sleep, mock_cfg):
         mock_cfg.return_value = {
             "tick": 0.1,
@@ -497,7 +497,7 @@ class TestIterStreamEvents(unittest.TestCase):
             clock["t"] += 1.0
             return clock["t"]
 
-        with patch("lib.transport.a2a_stream.time.monotonic", side_effect=mono):
+        with patch("lib.core.a2a.a2a_stream.time.monotonic", side_effect=mono):
             events = []
             for event in iter_stream_events(
                 self.tmp,
@@ -511,9 +511,9 @@ class TestIterStreamEvents(unittest.TestCase):
         self.assertEqual(events[-1]["kind"], "heartbeat")
         self.assertFalse(any(e.get("kind") == "update" for e in events))
 
-    @patch("lib.transport.a2a_stream._stream_config")
-    @patch("lib.transport.a2a_stream.time.sleep")
-    @patch("lib.transport.a2a_stream.resolve_hub_wire")
+    @patch("lib.core.a2a.a2a_stream._stream_config")
+    @patch("lib.core.a2a.a2a_stream.time.sleep")
+    @patch("lib.core.a2a.a2a_stream.resolve_hub_wire")
     def test_missing_task_closes_after_grace(self, mock_resolve, _mock_sleep, mock_cfg):
         mock_cfg.return_value = {
             "tick": 0.05,
@@ -524,7 +524,7 @@ class TestIterStreamEvents(unittest.TestCase):
         }
         mock_resolve.return_value = None
         times = iter([0.0, 0.0, 0.05, 0.05, 0.35, 0.35])
-        with patch("lib.transport.a2a_stream.time.monotonic", side_effect=lambda: next(times, 999.0)):
+        with patch("lib.core.a2a.a2a_stream.time.monotonic", side_effect=lambda: next(times, 999.0)):
             events = list(iter_stream_events(
                 self.tmp,
                 self._wire(),
@@ -533,8 +533,8 @@ class TestIterStreamEvents(unittest.TestCase):
             ))
         self.assertEqual(events, [])
 
-    @patch("lib.transport.a2a_stream.time.sleep")
-    @patch("lib.transport.a2a_stream.resolve_hub_wire")
+    @patch("lib.core.a2a.a2a_stream.time.sleep")
+    @patch("lib.core.a2a.a2a_stream.resolve_hub_wire")
     def test_terminal_without_change_closes_immediately(self, mock_resolve, _mock_sleep):
         mock_resolve.return_value = {"status": "completed", "statusMessage": "done"}
         events = list(iter_stream_events(
@@ -545,8 +545,8 @@ class TestIterStreamEvents(unittest.TestCase):
         ))
         self.assertEqual(events, [])
 
-    @patch("lib.transport.a2a_stream.time.sleep")
-    @patch("lib.transport.a2a_stream.resolve_hub_wire")
+    @patch("lib.core.a2a.a2a_stream.time.sleep")
+    @patch("lib.core.a2a.a2a_stream.resolve_hub_wire")
     def test_status_update_and_terminal(self, mock_resolve, _mock_sleep):
         mock_resolve.return_value = {"status": "completed", "statusMessage": "done"}
         events = list(iter_stream_events(
@@ -559,9 +559,9 @@ class TestIterStreamEvents(unittest.TestCase):
         self.assertEqual(events[0]["kind"], "update")
         self.assertTrue(events[0]["final"])
 
-    @patch("lib.transport.a2a_stream._stream_config")
-    @patch("lib.transport.a2a_stream.time.sleep")
-    @patch("lib.transport.a2a_stream.resolve_hub_wire")
+    @patch("lib.core.a2a.a2a_stream._stream_config")
+    @patch("lib.core.a2a.a2a_stream.time.sleep")
+    @patch("lib.core.a2a.a2a_stream.resolve_hub_wire")
     def test_stream_max_events_emits_timeout_final(self, mock_resolve, _mock_sleep, mock_cfg):
         mock_cfg.return_value = {
             "tick": 0.1,
@@ -583,7 +583,7 @@ class TestIterStreamEvents(unittest.TestCase):
         self.assertTrue(events[1][1])
         self.assertIn("stream timeout", events[1][0]["statusMessage"])
 
-    @patch("lib.transport.a2a_stream.iter_stream_events")
+    @patch("lib.core.a2a.a2a_stream.iter_stream_events")
     @patch("lib.api.handlers_a2a._create_a2a_wire_task")
     def test_inbound_sse_sends_heartbeat_comment(self, mock_create, mock_iter):
         mock_create.side_effect = lambda h, a, p: ({

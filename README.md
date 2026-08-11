@@ -103,22 +103,72 @@ Specs are `module` or `module:callable` (callable should call `register_framewor
 
 Non-sensitive shared seeds under `config/` (pipeline, agent-types, …) stay committed as plain JSON.
 
-## Demo agents (T1)
+## 智能体员工花名册
 
-Published examples use generic ids (`agent-a`, `agent-b`, `agent-c`).  
-See [`examples/demo-roster.json`](examples/demo-roster.json) and [`examples/config.example.json`](examples/config.example.json).
+参见 [`ARCHITECTURE.md` § Agent roster](ARCHITECTURE.md#agent-roster智能体员工花名册) 获取完整版本和访问端口。
 
-Register your own agents in the cockpit **Settings** (enable is off by default after auto-discovery).
+| 代号 | 名称 | 框架 | 浏览器端口 | 认证 |
+|------|------|------|-----------|------|
+| `lingzhao` | 灵昭 | Hermes | `:9120` | admin / ziyan-team |
+| `lingjin` | 灵锦 | Hermes | `:9121` | admin / ziyan-team |
+| `lingxi` | 灵曦 | Hermes | `:9122` | admin / ziyan-team |
+| `lingxun` | 灵巡 | Hermes | `:9125` | admin / ziyan-team |
+| `lingtuo` | 灵拓 | Hermes | `:9126` | admin / ziyan-team |
+| `lingzhang` | 灵彰 | Hermes | `:9127` | admin / ziyan-team |
+| `lingxiao` | 灵霄 | Codex | `:9240` | Web UI |
+| `lingjian` | 灵鉴 | Codex | `:9241` | Web UI |
+| `lingyun` | 灵云 | Claude Code | — | 终端 (WSL) |
+| `lingyan` | 灵验 | Claude Code | — | 终端 (WSL) |
+| `dali` | 大力 | OpenCode | — | 终端 |
+| `xiaoqi` | 小七 | OpenClaw | `:18789` | token=ziyan-team |
+| `yige` | 一哥 | OpenClaw | `:18790` | token=ziyan-team |
+
+### 集成工具
+
+| 工具 | 端口 | 说明 |
+|------|------|------|
+| n8n | `:5678` | 工作流编排 (`docker compose -f docker-compose.n8n.yml up -d`) |
+| Cockpit | `:9814` | 主控制台 |
+
+注册你自己的智能体在 cockpit **设置** 页（自动发现后默认关闭）。
 
 ## Cockpit
 
 Open `http://127.0.0.1:9814/` after `mailbus serve`.  
 Legacy UI: `/legacy` if present.
 
+## Architecture
+
+Ports & Adapters layout (see [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`AGENTS.md`](AGENTS.md)):
+
+```
+tools/ · lib/api/ → lib/application/ → lib/interfaces/ ← lib/adapters/
+                         ↓
+               lib/domain/ · lib/core/
+                         ↓
+                    lib/infra/
+```
+
+| Layer | Role |
+|-------|------|
+| `lib/interfaces/` | Protocol interfaces (ex-`ports`) |
+| `lib/core/a2a/` | A2A core (ex-`lib/transport`) |
+| `lib/application/` | Use cases (workflow, harness, scan, push, orchestration, …) |
+| `lib/adapters/` | frameworks, plane, config (`CompositeConfigRepo`), transport, container (`resolver.py`), … |
+| `lib/infra/` | clock, paths, `mbus_log`, internal LLM bootstrap |
+
+Composition root: `lib/composition.py` only (`build_a2a_transport`, `build_transport_bundle`, `build_config_repo`, …).  
+Each package ships an `Overview.md` map. Path migration: [`docs/migration-guide.md`](docs/migration-guide.md).  
+Harness rules: `config.harness.rules_path`; chain templates: `config/mailbus/chains.template.json`.
+
 ## Docs
 
-- Adapter layer: `docs/agent-adapter-layer.md` (when shipped in-repo)
-- Harness: `docs/harness-runtime-spec.md`
+- Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- Agent entry: [`AGENTS.md`](AGENTS.md)
+- Migration (ports → interfaces, transport → core/a2a): [`docs/migration-guide.md`](docs/migration-guide.md)
+- Legacy bash eval: [`docs/legacy-bash-eval.md`](docs/legacy-bash-eval.md)
+- Adapter layer: [`docs/agent-adapter-layer.md`](docs/agent-adapter-layer.md)
+- Harness: [`docs/harness-runtime-spec.md`](docs/harness-runtime-spec.md)
 - Env template: `migrate/env.template`
 
 ## License

@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from lib.harness.contract import HarnessContract, build_contract
-from lib.harness.production import ProductionHarness
+from lib.application.harness.contract import HarnessContract, build_contract
+from lib.application.harness.production import ProductionHarness
 
 
 def push_with_contract(

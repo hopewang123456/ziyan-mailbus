@@ -10,15 +10,15 @@ from lib.application.orchestration.pipeline.task import (
     is_side_audit_message,
     side_audit_deferred_for_reviewer,
 )
-from lib.agent_adapters import CodexAdapter
+from lib.adapters.frameworks import CodexAdapter
 
 
 class TestSideAuditDefer(unittest.TestCase):
-    @patch("lib.pipeline_task.primary_pipeline_assignee", return_value="lingjian")
+    @patch("lib.application.orchestration.pipeline.task.primary_pipeline_assignee", return_value="lingjian")
     def test_defer_when_primary_on_lingjian(self, *_):
         self.assertTrue(side_audit_deferred_for_reviewer("/tmp", "lingjian"))
 
-    @patch("lib.pipeline_task.primary_pipeline_assignee", return_value="dali")
+    @patch("lib.application.orchestration.pipeline.task.primary_pipeline_assignee", return_value="dali")
     def test_defer_when_any_primary_running(self, *_):
         """主 pipeline running 时 defer 全部 side-audit（Codex 单槽）。"""
         self.assertTrue(side_audit_deferred_for_reviewer("/tmp", "lingjian"))

@@ -4,4 +4,4 @@ set -euo pipefail
 ROOT="${MAILBUS_ROOT:-/mailbus}"
 cd "$ROOT"
 export PYTHONPATH="${ROOT}${PYTHONPATH:+:$PYTHONPATH}"
-exec python3 -m lib.container.openclaw_profiles
+exec python3 -m lib.adapters.container.openclaw_profiles

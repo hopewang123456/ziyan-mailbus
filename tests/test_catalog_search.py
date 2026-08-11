@@ -26,7 +26,19 @@ def test_index_and_search_external_tools():
                     "description": "商机背景 enrichment Coze Dify",
                 }],
             }, f)
+        with open(os.path.join(ext, "registry.json"), "w", encoding="utf-8") as f:
+            json.dump({
+                "version": "0.2.0",
+                "tools": [{
+                    "id": "dify-lead-enrich",
+                    "provider": "dify",
+                    "kind": "workflow",
+                    "description": "商机背景 enrichment Coze Dify",
+                }],
+            }, f)
         with open(os.path.join(ext, "grants.example.json"), "w", encoding="utf-8") as f:
+            json.dump({"agent_grants": {"lingtuo": ["dify-lead-enrich"]}}, f)
+        with open(os.path.join(ext, "grants.json"), "w", encoding="utf-8") as f:
             json.dump({"agent_grants": {"lingtuo": ["dify-lead-enrich"]}}, f)
         with open(os.path.join(ext, "adapters", "lingtuo", "dify-lead-enrich.json"), "w", encoding="utf-8") as f:
             json.dump({
@@ -36,7 +48,7 @@ def test_index_and_search_external_tools():
                 "description": "灵拓专用 Dify 工作流",
             }, f)
 
-        from lib.catalog_search import index_catalog, search_catalog
+        from lib.adapters.ops.catalog_search import index_catalog, search_catalog
 
         n = index_catalog(store, {"lingtuo": {"name": "灵拓", "role": "市场拓展", "type": "hermes_profile"}})
         assert n >= 2

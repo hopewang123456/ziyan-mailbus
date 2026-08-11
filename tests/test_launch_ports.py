@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from lib.launch_ports import (
+from lib.adapters.config.launch_ports import (
     build_browser_url,
     default_port,
     resolve_port,

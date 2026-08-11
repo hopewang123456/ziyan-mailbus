@@ -10,19 +10,19 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.harness import get_harness
+from lib.application.harness import get_harness
 from lib.adapters.orchestration.task_fsm import apply_submit, read_step_result, write_step_result
-from lib.transport.a2a_mapper import to_a2a_hub_task, to_a2a_message
-from lib.transport.a2a_standard import A2ATransport
-from lib.transport.agent_card_cache import enrich_agent_channels, load_registry
-from lib.transport.a2a_mapper import to_agent_card
-from lib.transport.delivery import can_deliver_a2a
-from lib.transport.file_bus import FileBusTransport
-from lib.transport.router import TransportRouter
-from lib.transport.step_result_io import read_step_result_file
-from lib.transport.stub_a2a import StubA2AClient
-from lib.transport.types import DispatchContext
-from lib.utils import json_read, json_write
+from lib.core.a2a.a2a_mapper import to_a2a_hub_task, to_a2a_message
+from lib.core.a2a.a2a_standard import A2ATransport
+from lib.core.a2a.agent_card_cache import enrich_agent_channels, load_registry
+from lib.core.a2a.a2a_mapper import to_agent_card
+from lib.core.a2a.delivery import can_deliver_a2a
+from lib.core.a2a.file_bus import FileBusTransport
+from lib.core.a2a.router import TransportRouter
+from lib.core.a2a.step_result_io import read_step_result_file
+from lib.core.a2a.stub_a2a import StubA2AClient
+from lib.core.a2a.types import DispatchContext
+from lib.infra.utils import json_read, json_write
 from tests.test_helpers import load_golden_a2a_path, seed_a2a_harness
 
 

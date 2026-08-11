@@ -14,7 +14,7 @@ from lib.application.ops.store_cleanup import (  # noqa: E402
     list_store_agents,
     prune_agent_queues,
 )
-from lib.utils import json_read, resolve_paths  # noqa: E402
+from lib.infra.utils import json_read, resolve_paths  # noqa: E402
 
 
 def main() -> int:

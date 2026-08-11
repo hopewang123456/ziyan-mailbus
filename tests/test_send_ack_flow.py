@@ -19,14 +19,14 @@ import http.client
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.utils import configure_stdio_utf8
+from lib.infra.utils import configure_stdio_utf8
 
 configure_stdio_utf8()
 
-from lib.models import Message, Inbox, MsgStatus, Priority, MsgType
-from lib.utils import json_read, json_write, resolve_paths, _now_iso, build_message
-from lib.scanner import build_queues, update_message_status
-from lib.ack_handler import process_ack, scan_ack_files
+from lib.domain.models import Message, Inbox, MsgStatus, Priority, MsgType
+from lib.infra.utils import json_read, json_write, resolve_paths, _now_iso, build_message
+from lib.application.scan import build_queues, update_message_status
+from lib.adapters.results.ack_handler import process_ack, scan_ack_files
 from lib.api.base import MailbusAPIHandler as RealMailbusAPIHandler
 
 
@@ -51,6 +51,12 @@ class MockHandler:
 
     def _send_json(self, data, status=200):
         self._resp = (data, status)
+
+    def _send_api_error(self, code, status=400, *, detail="", **extra):
+        payload = {"error": detail or code, "error_code": code}
+        if extra:
+            payload.update(extra)
+        self._send_json(payload, status)
 
     def _read_post_body(self):
         return {}

@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 sys.modules.setdefault("fcntl", MagicMock())
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import lib.utils as _utils
+import lib.infra.utils as _utils
 
 
 @contextlib.contextmanager
@@ -23,10 +23,10 @@ _utils.file_lock = _noop_file_lock
 
 from lib.api.handlers_intake import handle_intake_gate_approve, handle_intake_get, handle_intake_list, handle_intake_spawn
 from lib.api.handlers_workflows import handle_workflows_list
-from lib.intake.gates import on_intake_gate_approve
-from lib.intake.store import upsert
-from lib.tracker import TaskTracker
-from lib.utils import json_write
+from lib.application.workflow.intake.gates import on_intake_gate_approve
+from lib.application.workflow.intake.store import upsert
+from lib.application.orchestration.tracker import TaskTracker
+from lib.infra.utils import json_write
 
 
 class _FakeHandler:
@@ -94,7 +94,7 @@ class TestP3Intake(unittest.TestCase):
         self.assertEqual(task["extensions"]["ziyan"]["intake"]["intake_id"], "intake-20260615-a3f9c2")
 
     def test_low_level_spawn_content(self):
-        from lib.intake.store import get
+        from lib.application.workflow.intake.store import get
         intake = get(self.tmp, "intake-20260615-a3f9c2")
         for g in intake.get("commercial_gates") or []:
             if g.get("gate_id") == "content_start":

@@ -7,8 +7,8 @@ from typing import Any
 from lib.composition import build_orchestration
 from lib.domain.errors import PAUSE_REASON_BUDGET, BudgetPaused, NeedsHuman
 from lib.domain.fsm import TaskFsmState
-from lib.tracker import TaskTracker
-from lib.utils import json_read, json_write
+from lib.application.orchestration.tracker import TaskTracker
+from lib.infra.utils import json_read, json_write
 
 
 def can_advance(data_dir: str, task: dict) -> tuple[bool, str]:

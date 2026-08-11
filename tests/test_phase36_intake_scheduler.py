@@ -9,13 +9,13 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.init_store import load_config_fragments
-from lib.intake.spawn_rules import DEFAULT_BRIDGE_CONFIG, load_bridge_config
+from lib.adapters.config.init_store import load_config_fragments
+from lib.application.workflow.intake.spawn_rules import DEFAULT_BRIDGE_CONFIG, load_bridge_config
 
 
 class TestIntakeBridgeConfig(unittest.TestCase):
     def test_static_bridge_json_exists(self):
-        from lib.constants import MAILBUS_ROOT
+        from lib.infra.constants import MAILBUS_ROOT
         path = MAILBUS_ROOT / "config" / "intake" / "bridge.json"
         self.assertTrue(path.is_file(), str(path))
 
@@ -37,7 +37,7 @@ class TestIntakeBridgeConfig(unittest.TestCase):
 
 class TestSchedulerJobsSoT(unittest.TestCase):
     def test_jobs_json_has_core_jobs(self):
-        from lib.constants import MAILBUS_ROOT
+        from lib.infra.constants import MAILBUS_ROOT
         path = MAILBUS_ROOT / "config" / "scheduler" / "jobs.json"
         data = json.loads(path.read_text(encoding="utf-8"))
         ids = {j["id"] for j in data.get("jobs") or []}

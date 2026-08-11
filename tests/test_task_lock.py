@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.task_lock import (
+from lib.application.orchestration.task_lock import (
     acquire_task_lock,
     read_task_lock,
     release_task_lock,

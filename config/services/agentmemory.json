@@ -1,4 +1,5 @@
 {
+  "schema": "mailbus-agentmemory-v1",
   "id": "agentmemory",
   "kind": "agentmemory",
   "health_path": "/agentmemory/health",

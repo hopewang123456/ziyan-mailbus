@@ -51,7 +51,7 @@ def has_valid_pipeline_result_for_agent(
     tasks_cache: Optional[list] = None,
 ) -> bool:
     """agent 是否已有对应当前 step 的有效结果（FSM + legacy）。"""
-    from .tracker import TaskTracker
+    from lib.application.orchestration.tracker import TaskTracker
 
     task = None
     if tasks_cache:

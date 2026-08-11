@@ -5,16 +5,19 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from ..locale.role_labels import role_type_candidates, role_type_to_zh
-from ..models import Inbox, MsgStatus
-from ..pipeline_trigger import _send_task
-from lib.composition import get_fsm
+from lib.composition import get_fsm, get_locale
+from lib.domain.models import Inbox, MsgStatus
+from lib.application.orchestration.pipeline.trigger import _send_task
 
 
 def _fsm():
     return get_fsm()
-from ..tracker import TaskTracker
-from ..utils import json_read, json_write, resolve_paths, _now_iso
+
+
+def _locale(data_dir: str = ""):
+    return get_locale(data_dir)
+from lib.application.orchestration.tracker import TaskTracker
+from lib.infra.utils import json_read, json_write, resolve_paths, _now_iso
 from .role_resolver import resolve_agent_for_role_type
 from .tier_filter import dispatch_action_from_envelope
 
@@ -142,7 +145,7 @@ def next_failover_agent_for_step(
 
     for plan_rt in plan:
         candidates = [
-            c for c in role_type_candidates(plan_rt, data_dir)
+            c for c in _locale(data_dir).role_type_candidates(plan_rt)
             if c not in tried and _agent_dispatchable(data_dir, c, agents_cfg)
         ]
         if not candidates:
@@ -164,7 +167,7 @@ def next_failover_agent_for_step(
             "failover_tier": tier,
             "failover_from_role_type": step_rt,
             "failover_to_role_type": plan_rt,
-            "failover_to_role_zh": role_type_to_zh(plan_rt, data_dir),
+            "failover_to_role_zh": _locale(data_dir).role_type_to_zh(plan_rt),
             "failover_plan": plan,
         })
         return agent_id, meta

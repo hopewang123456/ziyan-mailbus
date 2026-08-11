@@ -7,14 +7,12 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-from lib.spawn_guard import assert_spawn_argv_allowed
-from lib.adapters.results.ack import ack_message, list_unacked
+from lib.application.push.spawn_guard import assert_spawn_argv_allowed
+from lib.composition import build_result_store, get_integrations, merge_launch_desktop
 from lib.application.transport_send import send_outbound
-from lib.desktop_launch import merge_launch_desktop
-from lib.harness.contract import write_d1_step_result
-from lib.model_router import is_no_llm_notice
-from lib.scan.inbox import finalize_auto_ack
-from lib.utils import json_read, json_write
+from lib.application.harness.contract import write_d1_step_result
+from lib.application.scan.inbox import finalize_auto_ack
+from lib.infra.utils import json_read, json_write
 
 
 def _ensure_fixture_store(data_dir: str) -> Path:
@@ -80,8 +78,8 @@ def run_l_inbox(data_dir: str) -> dict[str, Any]:
     if not found:
         return {"ok": False, "gate": "L-inbox", "stage": "visible", "detail": "msg missing"}
 
-    ack_message(data_dir, agent, msg_id)
-    unacked = list_unacked(data_dir, agent, [msg_id])
+    build_result_store(data_dir).ack(agent, [msg_id])
+    unacked = list(build_result_store(data_dir).list_unacked(agent, [msg_id]))
     ack_data = json_read(str(Path(data_dir) / "inbox" / agent / "ack.json"), [])
     acked = any(
         isinstance(a, dict) and a.get("msg_id") == msg_id and a.get("action") == "ack"
@@ -177,7 +175,7 @@ def run_l_notice(data_dir: str) -> dict[str, Any]:
     inbox_path = Path(data_dir) / "inbox" / agent / "inbox.json"
     inbox = json.loads(inbox_path.read_text(encoding="utf-8"))
     entry = next(m for m in inbox["messages"] if m.get("id") == msg_id)
-    no_llm = is_no_llm_notice(entry)
+    no_llm = get_integrations().is_no_llm_notice(entry)
     if not no_llm:
         return {"ok": False, "gate": "L-notice", "stage": "route", "detail": "expected no_llm"}
 

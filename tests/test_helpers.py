@@ -5,15 +5,15 @@ import json
 import os
 import shutil
 
-from lib.constants import MAILBUS_ROOT
-from lib.init_store import (
+from lib.infra.constants import MAILBUS_ROOT
+from lib.adapters.config.init_store import (
     build_agents_from_registry,
     mirror_dispatch_seed,
     mirror_org_json,
     mirror_rule_schemas_to_store,
     mirror_workflows_to_store,
 )
-from lib.utils import json_write
+from lib.infra.utils import json_write
 
 
 def seed_runtime_from_sot(tmp: str, *, extra_config: dict | None = None) -> None:

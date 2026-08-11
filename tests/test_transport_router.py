@@ -10,13 +10,13 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.pipeline_results import step_result_path
-from lib.transport.delivery import can_deliver_a2a
-from lib.transport.router import TransportRouter
-from lib.transport.step_result_io import read_step_result_file
-from lib.transport.stub_a2a import StubA2AClient
-from lib.transport.types import DispatchContext
-from lib.utils import json_write
+from lib.application.orchestration.pipeline.results import step_result_path
+from lib.core.a2a.delivery import can_deliver_a2a
+from lib.core.a2a.router import TransportRouter
+from lib.core.a2a.step_result_io import read_step_result_file
+from lib.core.a2a.stub_a2a import StubA2AClient
+from lib.core.a2a.types import DispatchContext
+from lib.infra.utils import json_write
 from tests.test_helpers import load_golden_a2a_path, seed_a2a_harness
 
 
@@ -83,7 +83,7 @@ class TestTransportRouter(unittest.TestCase):
     def test_path_a_a2a_success(self):
         fixture = StubA2AClient.from_name("path-a-lingzhao-s1.json")
         router = self._router()
-        router.a2a = __import__("lib.transport.a2a_standard", fromlist=["A2ATransport"]).A2ATransport(rpc=fixture)
+        router.a2a = __import__("lib.core.a2a.a2a_standard", fromlist=["A2ATransport"]).A2ATransport(rpc=fixture)
         ctx = DispatchContext(
             self.tmp, "feat-auth-001", "s1", "lingzhao", 1,
             intent="设计用户认证模块实施方案",
@@ -101,7 +101,7 @@ class TestTransportRouter(unittest.TestCase):
         fixture = StubA2AClient.from_name("path-b-a2a-fail.json")
         router = self._router()
         router.config["a2a"]["retry_backoff_sec"] = [0, 0, 0]
-        router.a2a = __import__("lib.transport.a2a_standard", fromlist=["A2ATransport"]).A2ATransport(rpc=fixture)
+        router.a2a = __import__("lib.core.a2a.a2a_standard", fromlist=["A2ATransport"]).A2ATransport(rpc=fixture)
         ctx = DispatchContext(
             self.tmp, "feat-auth-001", "s2", "lingzhao", 1,
             stub_fixture="path-b-a2a-fail.json",
@@ -133,7 +133,7 @@ class TestTransportRouter(unittest.TestCase):
     def test_path_c_input_required(self):
         fixture = StubA2AClient.from_name("path-c-input-required.json")
         router = self._router()
-        router.a2a = __import__("lib.transport.a2a_standard", fromlist=["A2ATransport"]).A2ATransport(rpc=fixture)
+        router.a2a = __import__("lib.core.a2a.a2a_standard", fromlist=["A2ATransport"]).A2ATransport(rpc=fixture)
         ctx = DispatchContext(
             self.tmp, "feat-auth-001", "s1", "lingzhao", 1,
             stub_fixture="path-c-input-required.json",
@@ -149,7 +149,7 @@ class TestTransportRouter(unittest.TestCase):
         fixture = StubA2AClient.from_name("path-http-403-fallback.json")
         router = self._router()
         router.config["a2a"]["retry_backoff_sec"] = [2, 5, 10]
-        router.a2a = __import__("lib.transport.a2a_standard", fromlist=["A2ATransport"]).A2ATransport(rpc=fixture)
+        router.a2a = __import__("lib.core.a2a.a2a_standard", fromlist=["A2ATransport"]).A2ATransport(rpc=fixture)
         ctx = DispatchContext(
             self.tmp, "feat-auth-001", "s2", "lingzhao", 1,
             stub_fixture="path-http-403-fallback.json",

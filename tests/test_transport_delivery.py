@@ -9,9 +9,9 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.transport.delivery import persist_step_transport
-from lib.transport.types import DispatchContext
-from lib.utils import json_read, json_write
+from lib.core.a2a.delivery import persist_step_transport
+from lib.core.a2a.types import DispatchContext
+from lib.infra.utils import json_read, json_write
 
 
 def _task_with_chain(tmp: str, *, task_id: str = "feat-auth-001") -> str:

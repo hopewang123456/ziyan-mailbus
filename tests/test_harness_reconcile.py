@@ -9,8 +9,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.harness import AgentHarness, get_harness
-from lib.utils import json_write
+from lib.application.harness import AgentHarness, get_harness
+from lib.infra.utils import json_write
 
 
 class TestHarnessReconcile(unittest.TestCase):
@@ -22,7 +22,7 @@ class TestHarnessReconcile(unittest.TestCase):
         import shutil
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    @patch("lib.execution_orchestrator.run_orchestrator")
+    @patch("lib.application.orchestration.execution.run_orchestrator")
     def test_reconcile_delegates_to_orchestrator(self, mock_run):
         mock_run.return_value = {
             "anomalies": [{"kind": "test-anomaly"}],

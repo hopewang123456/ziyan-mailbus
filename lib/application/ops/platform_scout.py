@@ -11,8 +11,8 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from lib.utils import _now_iso, json_read, json_write
-from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
+from lib.infra.utils import _now_iso, json_read, json_write
+from lib.infra.clock import now_dt, now_iso, now_ts, now_utc_dt
 
 TZ_CN = timezone(timedelta(hours=8))
 V2EX_JOBS_RSS = "https://www.v2ex.com/feed/jobs.xml"
@@ -24,12 +24,12 @@ def today_cn() -> str:
 
 
 def load_leads_sources(data_dir: str) -> dict:
-    from lib.config_files import resolve_config_path, warn_if_missing
+    from lib.composition import resolve_config_path, warn_if_config_missing
 
     path = os.path.join(data_dir, "config", "leads-sources.json")
     res = resolve_config_path(path)
     if res.path is None:
-        warn_if_missing(path)
+        warn_if_config_missing(path)
         return {}
     return json_read(str(res.path), {})
 
@@ -203,9 +203,9 @@ def notify_after_scout(data_dir: str, stats: dict) -> None:
         if n:
             lines.append(f"  · {pid}: +{n} → {p.get('path', '(raw)')}")
     lines.append("参考: store/rules/order-intake.schema.json · 阈值 pursue≥75 / 通知灵昭≥85")
-    from lib.jobs import _append_inbox_task
+    from lib.composition import get_ops
 
-    _append_inbox_task(data_dir, agent, "\n".join(lines), priority="normal")
+    get_ops().append_inbox_task(data_dir, agent, "\n".join(lines), priority="normal")
     stats["notified"] = {"agent": agent, "new_total": new_total}
 
 

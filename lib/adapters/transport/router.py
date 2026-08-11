@@ -9,8 +9,8 @@ from lib.adapters.transport.http_a2a import HttpA2AMessageTransport
 from lib.adapters.transport.webhook import WebhookMessageTransport
 from lib.domain.error_codes import TRANSPORT_CHANNEL_UNKNOWN
 from lib.domain.types import OutboundMessage, TransportReceipt
-from lib.ports.transport import MessageTransportPort
-from lib.utils import json_read
+from lib.interfaces.message_transport import MessageTransportPort
+from lib.infra.utils import json_read
 
 CHANNELS = ("file_bus", "http_a2a", "webhook", "a2a_standard")
 

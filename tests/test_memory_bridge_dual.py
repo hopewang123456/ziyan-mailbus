@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.memory_bridge import (  # noqa: E402
+from lib.adapters.integrations.memory_bridge import (  # noqa: E402
     collect_pending_messages,
     load_sync_marker,
     run_bridge,
@@ -59,7 +59,7 @@ class TestDualWriteBridge(unittest.TestCase):
             os.environ["MEMORY_BRIDGE_AGENTMEMORY"] = "1"
             self._setup_inbox(td, "dali", "test-msg-001")
 
-            with patch("lib.memory_bridge.agentmemory_healthy", return_value=False):
+            with patch("lib.adapters.integrations.memory_bridge.agentmemory_healthy", return_value=False):
                 stats = run_bridge(td, limit=10, url="http://127.0.0.1:9")
 
             self.assertEqual(stats["sqlite_ok"], 1)
@@ -88,8 +88,8 @@ class TestDualWriteBridge(unittest.TestCase):
             def fake_am(*args, **kwargs):
                 return {"success": True}
 
-            with patch("lib.memory_bridge.agentmemory_healthy", return_value=True):
-                with patch("lib.memory_bridge.write_memory_to_agentmemory", side_effect=fake_am):
+            with patch("lib.adapters.integrations.memory_bridge.agentmemory_healthy", return_value=True):
+                with patch("lib.adapters.integrations.memory_bridge.write_memory_to_agentmemory", side_effect=fake_am):
                     stats = run_bridge(td, limit=10)
 
             self.assertEqual(stats["sqlite_ok"], 1)

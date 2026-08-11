@@ -1,7 +1,9 @@
 #!/bin/bash
 # 全 agent 配置 + 挂载 + Hermes profile 启动探针
 set -euo pipefail
-MAIL="/mnt/e/ai_tools/mail"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+MAILBUS_ROOT="${MAILBUS_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+MAIL="$MAILBUS_ROOT"
 TIMEOUT="${HERMES_PROBE_TIMEOUT:-45}"
 
 echo "=== 1. config 校验 ==="

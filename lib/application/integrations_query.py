@@ -1,13 +1,13 @@
 """Integrations query for settings / clinic (Wave4–5)."""
 from __future__ import annotations
 
-from lib.adapters.integrations.plugin_registry import list_integrations
+from lib.composition import get_integrations
 from lib.domain.types import IntegrationItemView, IntegrationsOverviewView
 
 
 def integrations_overview(data_dir: str = "") -> IntegrationsOverviewView:
     """List registered optional integrations (bounded context outside core)."""
-    items: list[IntegrationItemView] = list_integrations()  # type: ignore[assignment]
+    items: list[IntegrationItemView] = list(get_integrations().list_integrations())  # type: ignore[assignment]
     return {
         "ok": True,
         "count": len(items),

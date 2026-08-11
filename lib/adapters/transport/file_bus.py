@@ -7,7 +7,7 @@ from typing import Mapping
 
 from lib.domain.error_codes import TRANSPORT_FILE_BUS
 from lib.domain.types import OutboundMessage, TransportReceipt
-from lib.utils import _now_iso, json_read, json_write
+from lib.infra.utils import _now_iso, json_read, json_write
 
 
 def _truthy(v: str | None) -> bool:
@@ -92,7 +92,7 @@ class FileBusMessageTransport:
         agent: str,
         msg_id: str,
     ) -> TransportReceipt:
-        from lib.harness import get_harness
+        from lib.application.harness import get_harness
 
         cfg = json_read(os.path.join(data_dir, "config.json"), {})
         harness = get_harness(cfg)

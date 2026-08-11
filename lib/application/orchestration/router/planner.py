@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from lib.locale.role_labels import valid_role_types
-from lib.automation import should_auto_approve_plan
+from lib.composition import get_locale, should_auto_approve_plan
 
 # SoT: tier0-planner-spec.md §2
 TIER0_RULES: Dict[str, List[int]] = {
@@ -78,7 +77,7 @@ def plan_tier0(envelope: dict, *, data_dir: str = "") -> dict:
     task_type = (envelope.get("task_type") or "unknown").lower()
     tier = envelope.get("tier") or "M"
     constraints = envelope.get("constraints") or {}
-    valid_rt = valid_role_types(data_dir or None)
+    valid_rt = get_locale(data_dir or "").valid_role_types()
 
     if mode == "explicit":
         planned = envelope.get("planned_chain") or []
@@ -127,7 +126,7 @@ def plan_tier0(envelope: dict, *, data_dir: str = "") -> dict:
 def _llm_cfg(config: Optional[dict], data_dir: str) -> dict:
     if config and "mailbus_internal_llm" in config:
         return config.get("mailbus_internal_llm") or {}
-    from lib.internal_llm.planner_llm import load_llm_config
+    from lib.application.internal_llm.planner import load_llm_config
     return load_llm_config(data_dir)
 
 
@@ -147,7 +146,7 @@ def plan_task(
         triggers = cfg.get("triggers") or {}
         if not cfg.get("enabled") or not triggers.get("plan_task", True):
             raise
-        from lib.internal_llm.planner_llm import plan_with_llm
+        from lib.application.internal_llm.planner import plan_with_llm
         return plan_with_llm(envelope, data_dir=data_dir, config=cfg)
 
 
@@ -164,7 +163,7 @@ def plan_replan(
         raise PlanError("plan_failed", "internal_llm disabled")
     if not triggers.get("replan", True):
         raise PlanError("plan_failed", "triggers.replan disabled")
-    from lib.internal_llm.planner_llm import plan_with_llm
+    from lib.application.internal_llm.planner import plan_with_llm
     return plan_with_llm(envelope, data_dir=data_dir, config=cfg)
 
 

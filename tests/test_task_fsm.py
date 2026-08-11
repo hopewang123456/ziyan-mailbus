@@ -21,7 +21,7 @@ from lib.adapters.orchestration.task_fsm import (
     step_result_path,
     write_step_result,
 )
-from lib.utils import json_write
+from lib.infra.utils import json_write
 
 
 def _task(chain, task_id="test-task", status="running"):

@@ -3,13 +3,12 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from lib.domain.fsm import TaskFsmState
 from lib.adapters.orchestration import task_fsm as fsm
 
 
 class TaskFsmAdapter:
-    def ensure(self, task: dict) -> dict:
-        return fsm.ensure_fsm(task)
+    def ensure(self, task: dict, *, default_priority: int = 50) -> dict:
+        return fsm.ensure_fsm(task, default_priority=default_priority)
 
     def is_executable(self, task: dict) -> bool:
         return fsm.is_task_executable(task)
@@ -18,32 +17,10 @@ class TaskFsmAdapter:
         return fsm.apply_pause(task, reason=reason)
 
     def resume(self, task: dict) -> dict:
-        fsm.ensure_fsm(task)
-        st = task.setdefault("fsm", {})
-        if st.get("state") != TaskFsmState.PAUSED.value:
-            return {"ok": True, "action": "noop", "task": task}
-        st["state"] = TaskFsmState.EXECUTING.value
-        task["status"] = "running"
-        reason = task.pop("pause_reason", None)
-        hist = st.setdefault("history", [])
-        hist.append({"event": "resume", "reason": reason})
-        return {"ok": True, "action": "resume", "task": task}
+        return fsm.apply_resume(task)
 
     def bump_retry(self, task: dict, *, step_id: str = "") -> int:
-        """Q7: retry counters live on task JSON."""
-        fsm.ensure_fsm(task)
-        st = task.setdefault("fsm", {})
-        retries = st.setdefault("retries", {})
-        key = step_id or "_task"
-        n = int(retries.get(key) or 0) + 1
-        retries[key] = n
-        st["retry_total"] = int(st.get("retry_total") or 0) + 1
-        if step_id:
-            for step in task.get("chain") or []:
-                if isinstance(step, dict) and step.get("step_id") == step_id:
-                    step["retry_count"] = n
-                    break
-        return n
+        return fsm.bump_retry(task, step_id=step_id)
 
     def summary(self, task: dict) -> dict:
         return fsm.fsm_summary(task)
@@ -113,9 +90,6 @@ class TaskFsmAdapter:
     def step_result_path(self, data_dir: str, task_id: str, step_id: str) -> str:
         return fsm.step_result_path(data_dir, task_id, step_id)
 
-    def legacy_result_path(self, data_dir: str, task_id: str) -> str:
-        return fsm.legacy_result_path(data_dir, task_id)
-
     def step_result_dir(self, data_dir: str, task_id: str) -> str:
         return fsm.step_result_dir(data_dir, task_id)
 
@@ -144,3 +118,41 @@ class TaskFsmAdapter:
 
     def append_history(self, task: dict, event: str, detail: dict) -> None:
         fsm._append_history(task, event, detail)
+
+    def create_next_step(
+        self,
+        task: dict,
+        *,
+        to_role: str,
+        to_person: str,
+        from_role: str,
+        from_person: str,
+        rollback_from: Optional[str] = None,
+        reason: str = "",
+        role_type: Optional[int] = None,
+    ) -> dict:
+        return fsm.create_next_step(
+            task,
+            to_role=to_role,
+            to_person=to_person,
+            from_role=from_role,
+            from_person=from_person,
+            rollback_from=rollback_from,
+            reason=reason,
+            role_type=role_type,
+        )
+
+    def task_priority(self, task: dict) -> int:
+        return fsm.task_priority(task)
+
+    def apply_cancel(
+        self,
+        task: dict,
+        reason: str = "",
+        *,
+        data_dir: str = "",
+        agents: Optional[dict] = None,
+    ) -> dict:
+        return fsm.apply_cancel(
+            task, reason=reason, data_dir=data_dir, agents=agents,
+        )

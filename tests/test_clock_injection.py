@@ -3,9 +3,9 @@ from __future__ import annotations
 
 import unittest
 
-from lib.adapters.clock import FakeClock, now_iso, now_ts
+from lib.infra.clock import FakeClock, now_iso, now_ts
 from lib.composition import AppContext, reset_context, set_context
-from lib.constants import _now_iso
+from lib.infra.constants import _now_iso
 
 
 class TestClockInjection(unittest.TestCase):

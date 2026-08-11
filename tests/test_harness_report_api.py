@@ -10,13 +10,13 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lib.api.handlers_system import handle_harness_report
-from lib.harness.report_api import (
+from lib.application.harness.report_api import (
     harness_report_path,
     harness_report_summary,
     load_harness_report,
     normalize_commit_sha,
 )
-from lib.utils import json_write
+from lib.infra.utils import json_write
 
 
 class MockHandler:

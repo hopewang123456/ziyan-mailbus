@@ -7,6 +7,7 @@ import tempfile
 import threading
 import unittest
 
+from lib.adapters.config.composite_config import CompositeConfigRepo
 from lib.adapters.config.file_repo import FileConfigRepository
 from lib.composition import AppContext, bind_data_dir, build_config_repo, reset_context
 
@@ -129,15 +130,18 @@ class TestFileConfigRepository(unittest.TestCase):
     def test_build_config_repo_and_bind(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = build_config_repo(tmp)
-            self.assertIsInstance(repo, FileConfigRepository)
+            self.assertIsInstance(repo, CompositeConfigRepo)
             ctx = bind_data_dir(tmp)
             self.assertIsNotNone(ctx.config_repo)
+            json_path = getattr(getattr(ctx.config_repo, "_json", None), "_path", None) or getattr(
+                ctx.config_repo, "_path", None
+            )
             self.assertEqual(
-                os.path.normpath(getattr(ctx.config_repo, "_path")),
+                os.path.normpath(json_path),
                 os.path.normpath(os.path.join(tmp, "config.json")),
             )
             ctx2 = AppContext(data_dir=tmp)
-            self.assertIsInstance(ctx2.ensure_config_repo(), FileConfigRepository)
+            self.assertIsInstance(ctx2.ensure_config_repo(), CompositeConfigRepo)
 
 
 if __name__ == "__main__":

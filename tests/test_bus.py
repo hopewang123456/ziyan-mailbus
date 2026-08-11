@@ -7,7 +7,7 @@ import os, sys, json, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from bus import load_config, save_config
-from lib.constants import DEFAULT_ACK_TIMEOUT
+from lib.infra.constants import DEFAULT_ACK_TIMEOUT
 
 
 def test_load_config_defaults():
@@ -62,7 +62,7 @@ def test_load_config_bad_json():
 
 def test_get_system_message():
     """get_system_message 返回正确的结构"""
-    from lib.commands import get_system_message
+    from lib.application.commands.commands import get_system_message
     msg = get_system_message("test_agent")
     assert msg["to"] == "test_agent"
     assert msg["from"] == "mailbus"
@@ -74,8 +74,8 @@ def test_cmd_init_fresh_thirteen_agents():
     """bus.py init --fresh 应生成 13 agents + workflows registry。"""
     import json
     import tempfile
-    from lib.constants import MAILBUS_ROOT
-    from lib.init_store import run_init_store
+    from lib.infra.constants import MAILBUS_ROOT
+    from lib.adapters.config.init_store import run_init_store
 
     with tempfile.TemporaryDirectory() as tmp:
         rc = run_init_store(tmp, fresh=True, mail_root=MAILBUS_ROOT, quiet=True)

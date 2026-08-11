@@ -8,10 +8,10 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.human_queue import enqueue, load_queue
-from lib.human_queue_resolve import resolve_human_queue_item
-from lib.task_interrupt import detect_interrupted_tasks
-from lib.utils import json_write
+from lib.adapters.orchestration.human_queue import enqueue, load_queue
+from lib.application.orchestration.human_queue_resolve import resolve_human_queue_item
+from lib.application.orchestration.task_interrupt import detect_interrupted_tasks
+from lib.infra.utils import json_write
 
 
 class TestTaskInterrupt(unittest.TestCase):
@@ -35,7 +35,7 @@ class TestTaskInterrupt(unittest.TestCase):
             }
             os.makedirs(os.path.join(tmp, "tasks"), exist_ok=True)
             json_write(os.path.join(tmp, "tasks", "t-interrupt-001.json"), task)
-            with patch("lib.task_interrupt.agent_cli_active_for", return_value=False):
+            with patch("lib.application.orchestration.task_interrupt.agent_cli_active_for", return_value=False):
                 flagged = detect_interrupted_tasks(tmp, agents, min_step_age=0)
             self.assertEqual(len(flagged), 1)
             self.assertEqual(flagged[0]["task_id"], "t-interrupt-001")

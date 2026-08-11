@@ -18,8 +18,8 @@ import urllib.request
 from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
 
-from lib.utils import json_read, _now_iso
-from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
+from lib.infra.utils import json_read, _now_iso
+from lib.infra.clock import now_dt, now_iso, now_ts, now_utc_dt
 
 TZ_CN = timezone(timedelta(hours=8))
 
@@ -46,7 +46,7 @@ def _read_json(path: str) -> dict:
 
 def _resolve_file(base_dir: str, name: str, example_name: str) -> str:
     """Return path to the runtime file only (never bind *.example as production SoT)."""
-    from lib.config_files import resolve_config_path
+    from lib.adapters.config.config_files import resolve_config_path
 
     primary = os.path.join(base_dir, name)
     res = resolve_config_path(primary)
@@ -60,7 +60,7 @@ def load_registry(data_dir: str) -> dict:
     base = external_tools_dir(data_dir)
     if os.path.isdir(base):
         primary = os.path.join(base, "registry.json")
-        from lib.config_files import resolve_config_path, warn_if_missing
+        from lib.adapters.config.config_files import resolve_config_path, warn_if_missing
 
         res = resolve_config_path(primary)
         if res.path is None:
@@ -77,7 +77,7 @@ def load_grants(data_dir: str) -> dict:
     base = external_tools_dir(data_dir)
     if os.path.isdir(base):
         primary = os.path.join(base, "grants.json")
-        from lib.config_files import resolve_config_path, warn_if_missing
+        from lib.adapters.config.config_files import resolve_config_path, warn_if_missing
 
         res = resolve_config_path(primary)
         if res.path is None:

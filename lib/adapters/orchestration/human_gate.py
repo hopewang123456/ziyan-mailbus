@@ -3,11 +3,16 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from lib.human_queue import enqueue as hq_enqueue
-from lib.human_queue import list_items as hq_list_items
-from lib.human_queue import load_queue as hq_load
-from lib.human_queue_resolve import resolve_human_queue_item
-from lib.ports.gates import AuditPort
+from lib.adapters.orchestration.human_queue import close_by_task as hq_close_by_task
+from lib.adapters.orchestration.human_queue import close_item as hq_close_item
+from lib.adapters.orchestration.human_queue import enqueue as hq_enqueue
+from lib.adapters.orchestration.human_queue import enqueue_final_acceptance as hq_enqueue_final
+from lib.adapters.orchestration.human_queue import enqueue_plan_approval as hq_enqueue_plan
+from lib.adapters.orchestration.human_queue import find_by_task_gate as hq_find_gate
+from lib.adapters.orchestration.human_queue import list_items as hq_list_items
+from lib.adapters.orchestration.human_queue import load_queue as hq_load
+from lib.application.orchestration.human_queue_resolve import resolve_human_queue_item
+from lib.interfaces.gates import AuditPort
 
 
 class HumanGateAdapter:
@@ -66,3 +71,20 @@ class HumanGateAdapter:
             limit=limit,
             offset=offset,
         )
+
+    def close_item(self, item_id: str, resolution: Mapping[str, Any]) -> dict | None:
+        return hq_close_item(self._data_dir, item_id, dict(resolution))
+
+    def close_by_task(
+        self, task_id: str, qtype: str, resolution: Mapping[str, Any],
+    ) -> dict | None:
+        return hq_close_by_task(self._data_dir, task_id, qtype, dict(resolution))
+
+    def find_by_task_gate(self, task_id: str, gate_id: str) -> dict | None:
+        return hq_find_gate(self._data_dir, task_id, gate_id)
+
+    def enqueue_plan_approval(self, task: Mapping[str, Any]) -> str:
+        return hq_enqueue_plan(self._data_dir, dict(task))
+
+    def enqueue_final_acceptance(self, task: Mapping[str, Any]) -> str:
+        return hq_enqueue_final(self._data_dir, dict(task))

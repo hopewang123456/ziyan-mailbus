@@ -85,7 +85,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Agent 落盘最短探针")
     ap.add_argument("--agent", default="lingzhao")
     ap.add_argument("--data-dir", default=os.environ.get("DATA_DIR", "store"))
-    from lib.constants import DEFAULT_API_BASE
+    from lib.infra.constants import DEFAULT_API_BASE
     ap.add_argument("--api", default=os.environ.get("MAILBUS_API", DEFAULT_API_BASE))
     ap.add_argument("--timeout", type=int, default=420, help="等待落盘秒数")
     ap.add_argument("--poll", type=int, default=15, help="轮询间隔秒")

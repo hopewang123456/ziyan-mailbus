@@ -16,11 +16,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib.agent_registry import load_all_agents  # noqa: E402
-from lib.compose_registry import agent_compose_services, resolve_compose_service  # noqa: E402
-from lib.constants import MAILBUS_ROOT  # noqa: E402
-from lib.env_bootstrap import load_mailbus_env, mailbus_paths  # noqa: E402
-from lib.sync_layers import normalize_host_path  # noqa: E402
+from lib.adapters.config.agent_registry import load_all_agents  # noqa: E402
+from lib.adapters.config.compose_registry import agent_compose_services, resolve_compose_service  # noqa: E402
+from lib.infra.constants import MAILBUS_ROOT  # noqa: E402
+from lib.infra.env_bootstrap import load_mailbus_env, mailbus_paths  # noqa: E402
+from lib.adapters.config.sync_layers import normalize_host_path  # noqa: E402
 
 COMPOSE_PATH = ROOT / "docker-agents" / "docker-compose.yml"
 OVERRIDE_PATH = ROOT / "docker-agents" / "docker-compose.override.yml"
@@ -205,7 +205,7 @@ def infra_volume_lines(host_prefix: str = "", *, mail_root: Path | None = None) 
 
 def emit_override(host_prefix: str = "", *, mail_root: Path | None = None) -> str:
     load_mailbus_env()
-    from lib.constants import (
+    from lib.infra.constants import (
         AGENT_VAULT_ROOT,
         MAILBUS_RULES_ROOT,
         MAILBUS_SKILLS_ROOT,
@@ -285,7 +285,7 @@ def emit_override(host_prefix: str = "", *, mail_root: Path | None = None) -> st
         # Inject docker-profile service URLs so host .env localhost cannot win
         if svc == "mailbus":
             try:
-                from lib.service_registry import compose_env_for_services
+                from lib.adapters.ops.service_registry import compose_env_for_services
 
                 cenv = compose_env_for_services(data_dir=str(Path(paths["data_dir"])))
             except Exception:

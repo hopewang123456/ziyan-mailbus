@@ -13,11 +13,16 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from lib.role_flow import get_next_role, pick_person_for_role
-from lib.application.orchestration.pipeline.step import step_agent, step_role_type, step_role_zh, is_v3_task
+from lib.application.orchestration.role_flow import get_next_role, pick_person_for_role
+from lib.application.orchestration.pipeline.step import (
+    step_agent,
+    step_role_type,
+    step_role_zh,
+    is_role_pipeline_task,
+)
 from lib.domain.fsm import StepFsmState, TaskFsmState
-from lib.utils import _now_iso, json_read, json_write
-from lib.tracker import _parse_iso_dt
+from lib.infra.utils import _now_iso, json_read, json_write
+from lib.application.orchestration.tracker import _parse_iso_dt
 
 # ── 状态枚举：定义在 lib.domain.fsm（此处再导出供既有 import）─────────────
 
@@ -47,10 +52,6 @@ _LEGACY_TO_FSM = {
 # ── 路径与 ID（re-export 框架层）──────────────────────────────────────────
 
 from lib.application.orchestration.pipeline.results import (
-    find_legacy_result_file,
-    legacy_mirror_enabled,
-    legacy_read_enabled,
-    legacy_result_path,
     load_config as load_pipeline_config,
     result_paths_to_try,
     step_result_dir,
@@ -207,7 +208,7 @@ def result_mtime_ok(
 def write_step_result(
     data_dir: str, task_id: str, step: dict, result: dict, *, immediate_advance: bool = True,
 ) -> str:
-    """写入 per-step 结果（SoT）；legacy mirror 由 config legacy_result_mirror 控制。"""
+    """写入 per-step 结果（SoT）。"""
     sid = step.get("step_id") or _make_step_id(_parse_step_num(step, []))
     path = step_result_path(data_dir, task_id, sid)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -217,9 +218,6 @@ def write_step_result(
     payload.setdefault("pipeline_step", step.get("step"))
     payload["timestamp"] = _normalize_result_timestamp(step, payload.get("timestamp") or "")
     json_write(path, payload)
-    cfg = load_pipeline_config(data_dir)
-    if legacy_mirror_enabled(cfg):
-        json_write(legacy_result_path(data_dir, task_id), payload)
     if immediate_advance:
         _maybe_immediate_pipeline(data_dir, task_id)
     return path
@@ -243,12 +241,6 @@ def archive_step_result_for_retry(
             os.remove(src)
         except OSError:
             pass
-    leg = legacy_result_path(data_dir, task_id)
-    if os.path.isfile(leg):
-        try:
-            os.remove(leg)
-        except OSError:
-            pass
     return dst
 
 
@@ -261,8 +253,8 @@ def revert_failed_retry(
 ) -> None:
     """verify retry 推送失败时：恢复已归档的 step result，保持步骤 awaiting_result。"""
     sid = step.get("step_id") or ""
-    if archived_path and os.path.isfile(archived_path):
-        dst = step_result_path(data_dir, task_id, sid) if sid else legacy_result_path(data_dir, task_id)
+    if archived_path and os.path.isfile(archived_path) and sid:
+        dst = step_result_path(data_dir, task_id, sid)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         json_write(dst, result)
     elif result and sid:
@@ -281,7 +273,7 @@ def _maybe_immediate_pipeline(data_dir: str, task_id: str) -> None:
         if auto.get("immediate_pipeline_dispatch", True) is False:
             return
         from lib.application.orchestration.pipeline.trigger import trigger_task
-        from lib.utils import resolve_paths
+        from lib.infra.utils import resolve_paths
 
         agents = cfg.get("agents") or {}
         trigger_task(data_dir, task_id, agents, resolve_paths(data_dir))
@@ -499,13 +491,13 @@ def apply_submit(
     summary = result.get("summary", "") or ""
 
     from lib.application.orchestration.pipeline.step import step_role_type
-    from lib.utils import json_read as _json_read
+    from lib.infra.utils import json_read as _json_read
 
     cfg = _json_read(os.path.join(data_dir, "config.json"), {}) if data_dir else {}
     crt_rt = step_role_type(step)
-    from lib.verify.runner import run_step_verify
-    from lib.verify.escalation import notify_verify_failure
-    from lib.automation import bump_retry_count, retry_exceeded, verify_fail_auto_retry
+    from lib.application.ops.verify.runner import run_step_verify
+    from lib.application.harness.escalation import notify_verify_failure
+    from lib.adapters.orchestration.automation import bump_retry_count, retry_exceeded, verify_fail_auto_retry
 
     v_ok, v_err, v_meta = run_step_verify(
         crt_rt, conclusion, result, config=cfg, data_dir=data_dir or "",
@@ -569,7 +561,7 @@ def apply_submit(
     if not data_dir:
         data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "store")
 
-    from lib.decomposition import block_for_clarifications, handle_design_step_decomposition
+    from lib.application.orchestration.decomposition import block_for_clarifications, handle_design_step_decomposition
 
     dec_out = handle_design_step_decomposition(task, step, result, data_dir=data_dir)
     if dec_out:
@@ -587,7 +579,7 @@ def apply_submit(
         if action == "subtasks_applied":
             _append_history(task, "decomposition_applied", {"count": dec_out.get("count")})
 
-    from lib.workflow.engine import maybe_block_after_step
+    from lib.application.workflow.engine import maybe_block_after_step
 
     wf_block = maybe_block_after_step(task, step, result, data_dir=data_dir)
     if wf_block:
@@ -599,8 +591,8 @@ def apply_submit(
     )
 
     next_role_type = None
-    if kind == "advance" and is_v3_task(task) and n_role:
-        from lib.locale.role_labels import zh_to_role_type
+    if kind == "advance" and is_role_pipeline_task(task) and n_role:
+        from lib.adapters.locale.role_labels import zh_to_role_type
         next_role_type = result.get("next_role_type")
         if next_role_type is not None:
             try:
@@ -750,7 +742,7 @@ def apply_skip(task: dict, reason: str = "") -> Dict[str, Any]:
 def apply_cancel(task: dict, reason: str = "", *, data_dir: str = "", agents: Optional[dict] = None) -> Dict[str, Any]:
     ensure_fsm(task)
     if data_dir:
-        from lib.transport.a2a_cancel import cancel_inflight_a2a_for_task
+        from lib.core.a2a.a2a_cancel import cancel_inflight_a2a_for_task
 
         cancel_inflight_a2a_for_task(data_dir, task, agents=agents, reason=reason)
     step = get_active_step(task)
@@ -770,6 +762,37 @@ def apply_pause(task: dict, reason: str = "") -> Dict[str, Any]:
     task["pause_reason"] = reason
     _append_history(task, "pause", {"reason": reason})
     return {"ok": True, "action": "pause", "task": task}
+
+
+def apply_resume(task: dict) -> Dict[str, Any]:
+    """Resume a paused task into executing."""
+    ensure_fsm(task)
+    st = task.setdefault("fsm", {})
+    if st.get("state") != TaskFsmState.PAUSED.value:
+        return {"ok": True, "action": "noop", "task": task}
+    st["state"] = TaskFsmState.EXECUTING.value
+    task["status"] = "running"
+    reason = task.pop("pause_reason", None)
+    hist = st.setdefault("history", [])
+    hist.append({"event": "resume", "reason": reason})
+    return {"ok": True, "action": "resume", "task": task}
+
+
+def bump_retry(task: dict, *, step_id: str = "") -> int:
+    """Q7: retry counters live on task JSON."""
+    ensure_fsm(task)
+    st = task.setdefault("fsm", {})
+    retries = st.setdefault("retries", {})
+    key = step_id or "_task"
+    n = int(retries.get(key) or 0) + 1
+    retries[key] = n
+    st["retry_total"] = int(st.get("retry_total") or 0) + 1
+    if step_id:
+        for step in task.get("chain") or []:
+            if isinstance(step, dict) and step.get("step_id") == step_id:
+                step["retry_count"] = n
+                break
+    return n
 
 
 def fsm_summary(task: dict) -> dict:

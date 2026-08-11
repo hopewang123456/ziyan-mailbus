@@ -10,9 +10,9 @@ import shutil
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.models import Message, Inbox, MsgStatus, Priority, MsgType
-from lib.utils import resolve_paths, _now_iso, clear_json_cache
-from lib.scanner import scan_all, build_queues, mark_as_pushed, update_message_status
+from lib.domain.models import Message, Inbox, MsgStatus, Priority, MsgType
+from lib.infra.utils import resolve_paths, _now_iso, clear_json_cache
+from lib.application.scan import scan_all, build_queues, mark_as_pushed, update_message_status
 
 
 class TestScanner:

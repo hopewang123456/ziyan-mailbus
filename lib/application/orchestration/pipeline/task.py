@@ -7,7 +7,6 @@ import re
 from typing import Any, Optional
 
 from lib.application.orchestration.pipeline.step import (
-    is_v3_task,
     planned_agents_remaining,
     planned_role_types_remaining,
     step_agent,
@@ -24,7 +23,7 @@ def extract_task_id(content: str) -> Optional[str]:
 
 
 def get_running_pipeline_task(data_dir: str, task_id: str) -> Optional[dict]:
-    from .tracker import TaskTracker
+    from lib.application.orchestration.tracker import TaskTracker
 
     t = TaskTracker(data_dir).get(task_id)
     if not t or t.get("status") != "running":
@@ -48,7 +47,7 @@ def is_current_pipeline_assignee(data_dir: str, task_id: str, agent_name: str) -
 def primary_pipeline_assignee(data_dir: str) -> Optional[str]:
     """iteration primary 任务当前 chain 步骤 assignee（running 时）。"""
     try:
-        from .iteration_engine import load_primary_task_id
+        from lib.application.orchestration.iteration_engine import load_primary_task_id
     except ImportError:
         return None
     primary = load_primary_task_id(data_dir)
@@ -149,8 +148,7 @@ def is_pipeline_execute_message(msg: Any, data_dir: str) -> bool:
 
 def should_auto_ack_message(msg: Any, data_dir: str, agent_type: str) -> bool:
     """Hermes/OpenClaw：仅系统 notice 可 auto_ack；Cline/OpenCode 永不；pipeline 等 msg-results。"""
-    from lib.agent_paths import type_supports_auto_ack
-    from .model_router import is_no_llm_notice
+    from lib.composition import get_integrations, type_supports_auto_ack
 
     if not type_supports_auto_ack(agent_type):
         return False
@@ -159,7 +157,7 @@ def should_auto_ack_message(msg: Any, data_dir: str, agent_type: str) -> bool:
     mtype = msg.get("type", "notice") if isinstance(msg, dict) else getattr(msg, "type", "notice")
     if mtype in ("task", "task_reply", "question"):
         return False
-    return is_no_llm_notice(msg)
+    return get_integrations().is_no_llm_notice(msg)
 
 
 def pipeline_completion_block(
@@ -186,7 +184,7 @@ def pipeline_completion_block(
     else:
         rf = f"{data_dir}/msg-results/{tid}.json"
     if agent_cfg:
-        from lib.agent_paths import store_path_for_agent
+        from lib.composition import store_path_for_agent
 
         rf = store_path_for_agent(data_dir, rf, agent_cfg)
     sid_part = f', "step_id":"{sid}"' if sid else ""
@@ -220,7 +218,7 @@ def should_create_tracker_for_send(content: str, data_dir: str) -> bool:
 
 
 def _read_ack_msg_ids(data_dir: str, agent_name: str) -> set:
-    from .utils import json_read
+    from lib.infra.utils import json_read
 
     ack_file = f"{data_dir}/inbox/{agent_name}/ack.json"
     ack_data = json_read(ack_file, [])

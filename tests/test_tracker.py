@@ -2,8 +2,8 @@
 import sys, os, json, tempfile
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.tracker import TaskTracker
-from lib.utils import json_read
+from lib.application.orchestration.tracker import TaskTracker
+from lib.infra.utils import json_read
 
 
 def test_create():
@@ -58,7 +58,7 @@ def test_add_hop():
     with tempfile.TemporaryDirectory() as td:
         t = TaskTracker(td)
         # add_hop 仍写 legacy {agent, action} 格式；首跳手动写入避免 pipeline 规范化
-        from lib.utils import json_write, _now_iso
+        from lib.infra.utils import json_write, _now_iso
         ts = _now_iso()
         json_write(t._task_path("task-hop-001"), {
             "task_id": "task-hop-001",
@@ -123,6 +123,11 @@ def test_check_reminders_timeout():
         t = TaskTracker(td)
         t.create("task-to-001", assignee="小七")
         t.update_status("task-to-001", "running")
+        # create() 会挂 pipeline chain；有活跃 running step 时故意跳过 timeout
+        task = t.get("task-to-001")
+        task["chain"] = []
+        from lib.infra.utils import json_write
+        json_write(t._task_path("task-to-001"), task)
         t.increment_reminder("task-to-001")
         t.increment_reminder("task-to-001")
         t.increment_reminder("task-to-001")
@@ -152,7 +157,7 @@ def test_list_all():
 def test_list_all_ordering():
     """验证倒序排序正确性：最新的 updated_at 应排在最前面"""
     import json
-    from lib.utils import json_write
+    from lib.infra.utils import json_write
     with tempfile.TemporaryDirectory() as td:
         t = TaskTracker(td)
         tasks_dir = os.path.join(td, "tasks")
@@ -212,7 +217,7 @@ def test_list_all_ordering_with_timezone():
             "updated_at": "2026-06-03T10:12:58+0000",  # UTC 10:12:58 → 实际更晚
         }
         # 用 json_write 写入
-        from lib.utils import json_write
+        from lib.infra.utils import json_write
         json_write(os.path.join(tasks_dir, "task-tz-001.json"), task_a)
         json_write(os.path.join(tasks_dir, "task-tz-002.json"), task_b)
 
@@ -319,7 +324,7 @@ def test_audit_trend_day():
         t.create("task-trend-day-001", summary="日趋势测试-1")
         t.update_status("task-trend-day-001", "success")
         # 写入模拟的审计记录（不同日期）
-        from lib.utils import json_write
+        from lib.infra.utils import json_write
         tasks_dir = os.path.join(td, "tasks")
         task_path = os.path.join(tasks_dir, "task-trend-day-001.json")
         task_data = json_read(task_path, {})
@@ -356,7 +361,7 @@ def test_audit_trend_week():
         t = TaskTracker(td)
         t.create("task-trend-week-001", summary="周趋势测试")
         t.update_status("task-trend-week-001", "success")
-        from lib.utils import json_write
+        from lib.infra.utils import json_write
         tasks_dir = os.path.join(td, "tasks")
         task_path = os.path.join(tasks_dir, "task-trend-week-001.json")
         task_data = json_read(task_path, {})
@@ -385,7 +390,7 @@ def test_audit_trend_month():
         t = TaskTracker(td)
         t.create("task-trend-month-001", summary="月趋势测试")
         t.update_status("task-trend-month-001", "success")
-        from lib.utils import json_write
+        from lib.infra.utils import json_write
         tasks_dir = os.path.join(td, "tasks")
         task_path = os.path.join(tasks_dir, "task-trend-month-001.json")
         task_data = json_read(task_path, {})

@@ -5,9 +5,9 @@ import json
 import os
 
 from lib.api.handlers_tasks import create_task_from_envelope
-from lib.transport.agent_card_cache import AgentCardCache, load_registry
-from lib.transport.a2a_mapper import from_a2a_task_create
-from lib.utils import json_read
+from lib.core.a2a.agent_card_cache import AgentCardCache, load_registry
+from lib.core.a2a.a2a_mapper import from_a2a_task_create
+from lib.infra.utils import json_read
 
 
 def handle_a2a_agent_card_list(handler):
@@ -63,7 +63,7 @@ def handle_a2a_tasks_create(handler):
 
 def _stream_a2a_task_progress(handler, rpc_id, wire_task: dict) -> None:
     """SSE：首帧后按 FSM 推送 TaskStatusUpdateEvent 直至 terminal / 超时。"""
-    from lib.transport.a2a_stream import build_status_update_result, iter_stream_events
+    from lib.core.a2a.a2a_stream import build_status_update_result, iter_stream_events
 
     paths = {"inbox": os.path.join(handler.data_dir, "inbox")}
     a2a_task_id = wire_task.get("id") or ""
@@ -139,9 +139,9 @@ def handle_a2a_rpc(handler, agent_id: str):
 
     if method == "GetTask":
         tid = params.get("id") or params.get("taskId") or ""
-        from lib.tracker import TaskTracker
+        from lib.application.orchestration.tracker import TaskTracker
         from lib.composition import build_orchestration
-        from lib.transport.a2a_mapper import to_a2a_hub_task
+        from lib.core.a2a.a2a_mapper import to_a2a_hub_task
 
         tracker = TaskTracker(handler.data_dir)
         task_doc = None
@@ -165,7 +165,7 @@ def handle_a2a_rpc(handler, agent_id: str):
 
     if method == "CancelTask":
         tid = params.get("id") or ""
-        from lib.tracker import TaskTracker
+        from lib.application.orchestration.tracker import TaskTracker
         from lib.adapters.orchestration.task_fsm import apply_cancel
 
         tracker = TaskTracker(handler.data_dir)
@@ -181,7 +181,7 @@ def handle_a2a_rpc(handler, agent_id: str):
             apply_cancel(
                 t, reason="a2a_cancel", data_dir=handler.data_dir, agents=handler.agents,
             )
-            json_write = __import__("lib.utils", fromlist=["json_write"]).json_write
+            json_write = __import__("lib.infra.utils", fromlist=["json_write"]).json_write
             json_write(tracker._task_path(t.get("task_id")), t)
             _rpc_result({"id": tid, "cancelled": True})
             return
@@ -199,7 +199,7 @@ def handle_a2a_rpc(handler, agent_id: str):
             handler._send_sse_jsonrpc(rpc_id, wire_task)
             _stream_a2a_task_progress(handler, rpc_id, wire_task)
             return
-        from lib.transport.a2a_stream import aggregate_stream_task
+        from lib.core.a2a.a2a_stream import aggregate_stream_task
 
         paths = {"inbox": os.path.join(handler.data_dir, "inbox")}
         final_task = aggregate_stream_task(

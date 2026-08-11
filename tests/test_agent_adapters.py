@@ -1,5 +1,6 @@
 """agent_adapters 适配层单元测试。"""
 import json
+import re
 import os
 import sys
 import unittest
@@ -7,14 +8,14 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.agent_adapters import (
+from lib.adapters.frameworks import (
     ADAPTERS,
     resolve_push_cli,
     resolve_interactive_cli,
     validate_agents,
     get_adapter,
 )
-from lib.pusher import resolve_cli
+from lib.application.push.pusher import resolve_cli
 
 
 TYPES = {
@@ -41,13 +42,17 @@ class TestAgentAdapters(unittest.TestCase):
             cfg = {"type": "hermes_profile", "profile": p, "models": ["deepseek-flash"]}
             cmd = resolve_push_cli(p, cfg, TYPES, "deepseek-flash")
             cmds.append(cmd)
-            self.assertIn("docker-agents-hermes-1", cmd)
+            from lib.adapters.config.compose_registry import resolve_compose_service
+            from lib.adapters.frameworks.registry import container_for_service
+            expected = container_for_service(resolve_compose_service(p, {"service": "hermes"}) or "hermes")
+            self.assertIn(expected, cmd)
             self.assertIn(f"--profile {p}", cmd)
             self.assertNotIn("--skills", cmd)
             self.assertNotIn("-it", cmd)
         # 除 profile 外结构一致
         normalized = [
-            c.replace(f"--profile {p}", "--profile PROFILE")
+            re.sub(r"docker-agents-[\w-]+-1", "docker-agents-CONTAINER-1",
+                   c.replace(f"--profile {p}", "--profile PROFILE"))
             for c, p in zip(cmds, profiles)
         ]
         self.assertEqual(len(set(normalized)), 1)
@@ -151,7 +156,7 @@ class TestAgentAdapters(unittest.TestCase):
                 "minimax-m2": {"claude_code": "--model MiniMax-M2.7"},
             },
         }
-        with patch("lib.claude_launch.resolve_claude_platform", return_value="windows"):
+        with patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="windows"):
             cmd = resolve_push_cli("lingyun", cfg, types, "minimax-m2")
         self.assertIn("claude", cmd)
         self.assertIn("-p", cmd)

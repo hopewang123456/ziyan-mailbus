@@ -8,8 +8,8 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from lib.adapters.orchestration.task_fsm import TaskFsmState, ensure_fsm
-from lib.task_recover import apply_cancel_task, recover_continue
-from lib.utils import json_read, json_write
+from lib.application.orchestration.task_recover import apply_cancel_task, recover_continue
+from lib.infra.utils import json_read, json_write
 
 
 class TestRecoverContinue(unittest.TestCase):

@@ -13,8 +13,8 @@ from pathlib import Path
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from lib.constants import MAILBUS_ROOT
-from lib.claude_launch import (
+from lib.infra.constants import MAILBUS_ROOT
+from lib.adapters.frameworks.claude_launch import (
     ensure_claude_agent_settings,
     load_mailbus_claude,
     resolve_claude_home,
@@ -22,11 +22,11 @@ from lib.claude_launch import (
     resolve_claude_workspace,
     resolve_project_dir,
 )
-from lib.framework_skills import framework_skill_id, sync_agent_skills_from_index
-from lib.agent_registry import get_agent
-from lib.agentmemory_config import agentmemory_url
-from lib.sync_layers import default_use_symlink, normalize_host_path
-from lib.utils import identity_candidates, json_read
+from lib.adapters.frameworks.framework_skills import framework_skill_id, sync_agent_skills_from_index
+from lib.adapters.config.agent_registry import get_agent
+from lib.adapters.integrations.agentmemory_config import agentmemory_url
+from lib.adapters.config.sync_layers import default_use_symlink, normalize_host_path
+from lib.infra.utils import identity_candidates, json_read
 
 MAIL_ROOT = MAILBUS_ROOT
 

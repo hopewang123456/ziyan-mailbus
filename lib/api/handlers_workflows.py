@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from lib.workflow.registry import get_workflow, load_registry, save_registry
+from lib.application.workflow.registry import get_workflow, load_registry, save_registry
 
 
 def handle_workflows_list(handler):

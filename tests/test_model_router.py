@@ -6,8 +6,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.model_router import is_no_llm_notice, pick_model_alias, TIER_FLASH, TIER_OLLAMA
-from lib.complexity_router import (
+from lib.adapters.integrations.model_router import is_no_llm_notice, pick_model_alias, TIER_FLASH, TIER_OLLAMA
+from lib.adapters.orchestration.complexity_router import (
     attach_mailbus_routing,
     classify_complexity,
     load_smart_routing_config,
@@ -42,7 +42,7 @@ def test_smart_routing_disabled():
     assert alias == TIER_FLASH
 
 
-@patch("lib.ollama_routing.is_ollama_ready", return_value=True)
+@patch("lib.adapters.integrations.ollama_routing.is_ollama_ready", return_value=True)
 def test_ollama_tier_l1(mock_ready):
     cfg = {
         "smart_routing": {"enabled": True, "use_ollama": True, "log_decisions": False},
@@ -59,7 +59,7 @@ def test_ollama_tier_l1(mock_ready):
     mock_ready.assert_called()
 
 
-@patch("lib.ollama_routing.is_ollama_ready", return_value=False)
+@patch("lib.adapters.integrations.ollama_routing.is_ollama_ready", return_value=False)
 def test_ollama_offline_fallback_flash(mock_ready):
     cfg = {
         "smart_routing": {"enabled": True, "use_ollama": True},
@@ -72,7 +72,7 @@ def test_ollama_offline_fallback_flash(mock_ready):
     assert tier_map["L1"] == TIER_FLASH
 
 
-@patch("lib.ollama_routing.is_ollama_ready", return_value=True)
+@patch("lib.adapters.integrations.ollama_routing.is_ollama_ready", return_value=True)
 def test_l3_without_pro_uses_ollama(mock_ready):
     cfg = {"smart_routing": {"enabled": True, "use_ollama": True}, "agent_types": AGENT_TYPES}
     alias = map_tier_to_alias(
@@ -94,7 +94,7 @@ def test_attach_mailbus_routing():
 
 
 def test_log_routing_jsonl():
-    from lib.complexity_router import log_routing_decision
+    from lib.adapters.orchestration.complexity_router import log_routing_decision
 
     with tempfile.TemporaryDirectory() as tmp:
         log_routing_decision(

@@ -10,8 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib.agent_registry import load_all_agents  # noqa: E402
-from lib.sync_layers import build_skills_index_from_registry  # noqa: E402
+from lib.adapters.config.agent_registry import load_all_agents  # noqa: E402
+from lib.adapters.config.sync_layers import build_skills_index_from_registry  # noqa: E402
 
 INDEX = ROOT / "store" / "agents" / "json" / "skills-index.json"
 

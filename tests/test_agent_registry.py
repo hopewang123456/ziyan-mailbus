@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.agent_registry import (
+from lib.adapters.config.agent_registry import (
     load_all_agents,
     get_agent,
     list_agent_ids,
@@ -15,7 +15,7 @@ from lib.agent_registry import (
     clear_agent_registry_cache,
     agent_archetypes,
 )
-from lib.constants import MAILBUS_ROOT
+from lib.infra.constants import MAILBUS_ROOT
 
 
 class TestAgentRegistry(unittest.TestCase):
@@ -57,7 +57,7 @@ class TestAgentRegistry(unittest.TestCase):
 
     def test_resolve_skill_src_v3_path(self):
         src = resolve_skill_src("team-pack/skills/common/agent-universal")
-        from lib.constants import TEAM_PACK_ROOT
+        from lib.infra.constants import TEAM_PACK_ROOT
         expected = TEAM_PACK_ROOT / "skills" / "common" / "agent-universal" / "SKILL.md"
         self.assertEqual(src.resolve(), expected.resolve())
         self.assertTrue(src.is_file(), msg=str(src))

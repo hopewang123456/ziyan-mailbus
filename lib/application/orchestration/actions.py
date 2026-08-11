@@ -5,15 +5,18 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, Optional
 
-from .human_queue import close_by_task, enqueue_final_acceptance, enqueue_plan_approval
 from lib.application.orchestration.pipeline.step import step_role_type
-from lib.composition import get_fsm
+from lib.composition import get_fsm, get_human_gate
 from lib.domain.fsm import TaskFsmState
-from .utils import _now_iso, json_write
+from lib.infra.utils import _now_iso, json_write
 
 
 def _fsm():
     return get_fsm()
+
+
+def _gate(data_dir: str):
+    return get_human_gate(data_dir)
 
 
 def _task_envelope(task: dict) -> dict:
@@ -55,7 +58,7 @@ def enter_accepting_or_succeed(task: dict, result: dict, *, data_dir: str) -> st
     task["fsm"]["state"] = TaskFsmState.ACCEPTING.value
     task["fsm"].pop("substate", None)
     task["status"] = "pending"
-    hq_id = enqueue_final_acceptance(data_dir, task)
+    hq_id = _gate(data_dir).enqueue_final_acceptance(task)
     task["fsm"]["human_queue_id"] = hq_id
     _fsm().append_history(task, "accepting", {"human_queue_id": hq_id})
     return "accepting"
@@ -111,12 +114,12 @@ def apply_approve_plan(task: dict, body: dict, *, data_dir: str) -> Dict[str, An
     }
 
     if decision == "approved":
-        from .router.dispatch import dispatch_first_step, start_executing
+        from lib.application.orchestration.router.dispatch import dispatch_first_step, start_executing
 
         fsm.pop("substate", None)
         start_executing(task)
         dispatch_ok = dispatch_first_step(data_dir, task)
-        close_by_task(data_dir, tid, "plan_approval", resolution)
+        _gate(data_dir).close_by_task(tid, "plan_approval", resolution)
         fsm.pop("human_queue_id", None)
         _fsm().append_history(task, "approve_plan", {"reviewer": reviewer, "dispatch_ok": dispatch_ok})
         return {"ok": True, "action": "approve_plan", "dispatch_ok": dispatch_ok, "task": task}
@@ -125,13 +128,13 @@ def apply_approve_plan(task: dict, body: dict, *, data_dir: str) -> Dict[str, An
         reason = (body.get("reason") or "").strip()
         if not reason:
             return {"ok": False, "error": "missing_reason"}
-        close_by_task(data_dir, tid, "plan_approval", resolution)
+        _gate(data_dir).close_by_task(tid, "plan_approval", resolution)
         action = body.get("action") or "replan"
         if action == "replan":
             from lib.application.orchestration.dispatch.role_resolver import resolve_agent_for_role_type
             from lib.application.orchestration.pipeline.chain import init_chain_from_planned
-            from .router.dispatch import set_await_plan_approval
-            from .router.planner import plan_replan
+            from lib.application.orchestration.router.dispatch import set_await_plan_approval
+            from lib.application.orchestration.router.planner import plan_replan
 
             envelope = _task_envelope(task)
             constraints = dict(envelope.get("constraints") or {})
@@ -148,7 +151,7 @@ def apply_approve_plan(task: dict, body: dict, *, data_dir: str) -> Dict[str, An
             task["chain"] = pipeline_chain
             task["plan_meta"] = out["plan_meta"]
             set_await_plan_approval(task)
-            hq_id = enqueue_plan_approval(data_dir, task)
+            hq_id = _gate(data_dir).enqueue_plan_approval(task)
             task["fsm"]["human_queue_id"] = hq_id
             _fsm().append_history(task, "deny_replan", {"reason": reason, "human_queue_id": hq_id})
             return {"ok": True, "action": "deny_replan", "task": task}
@@ -186,7 +189,7 @@ def apply_accept(task: dict, body: dict, *, data_dir: str) -> Dict[str, Any]:
         )
         fsm["state"] = TaskFsmState.SUCCEEDED.value
         task["status"] = "success"
-        close_by_task(data_dir, tid, "final_acceptance", {
+        _gate(data_dir).close_by_task(tid, "final_acceptance", {
             "decision": "approved",
             "reviewer": reviewer,
             "comment": body.get("comment", ""),
@@ -208,7 +211,7 @@ def apply_accept(task: dict, body: dict, *, data_dir: str) -> Dict[str, Any]:
             reason=reason,
             attachments=attachments,
         )
-        close_by_task(data_dir, tid, "final_acceptance", {
+        _gate(data_dir).close_by_task(tid, "final_acceptance", {
             "decision": "denied",
             "reviewer": reviewer,
             "reason": reason,

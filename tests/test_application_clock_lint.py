@@ -1,4 +1,4 @@
-"""W7e: application must not call datetime.now / time.time directly — use lib.adapters.clock."""
+"""W7e: application must not call datetime.now / time.time directly — use lib.infra.clock."""
 from __future__ import annotations
 
 import ast
@@ -37,7 +37,7 @@ class TestApplicationClockLint(unittest.TestCase):
         bad: list[str] = []
         for path in ROOT.rglob("*.py"):
             bad.extend(_offenders(path))
-        self.assertEqual(bad, [], msg="use lib.adapters.clock; offenders:\n" + "\n".join(bad))
+        self.assertEqual(bad, [], msg="use lib.infra.clock; offenders:\n" + "\n".join(bad))
 
 
 if __name__ == "__main__":

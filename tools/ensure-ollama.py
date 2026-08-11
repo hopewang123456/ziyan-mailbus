@@ -22,7 +22,7 @@ except ImportError:
     sys.modules["fcntl"] = MagicMock()
 
 import contextlib
-import lib.utils as _utils
+import lib.infra.utils as _utils
 
 
 @contextlib.contextmanager
@@ -32,7 +32,7 @@ def _noop_file_lock(timeout=10.0, path=""):
 
 _utils.file_lock = _noop_file_lock
 
-from lib.internal_llm.ollama_ensure import ensure_from_config
+from lib.infra.internal_llm.ollama_ensure import ensure_from_config
 
 
 def main() -> int:

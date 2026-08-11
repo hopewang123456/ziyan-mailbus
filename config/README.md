@@ -38,6 +38,8 @@ p=Path('config/mailbus/launch-ports.json'); materialize_from_example(p); print(p
 ## Non-sensitive (committed as-is, no example required)
 
 - `config/mailbus/base.json`, `agent-types.json`, `agent-channels.json`, `mailbus.json`
+- `config/mailbus/chains.template.json` — minimal pipeline chain template (`default-dev`)
+- `config/mailbus/harness.template.json` — includes `harness.rules_path`
 - `config/pipeline/*`, `scheduler/jobs.json`, `intake/bridge.json`, `dispatch/*`
 - `config/frameworks/**`, `config/llm/ollama.json`, `config/services/*` (no live keys)
 - `config/workflows/*`, `*.template.json`, `*.schema.json`

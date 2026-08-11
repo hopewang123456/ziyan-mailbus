@@ -7,12 +7,12 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.delivery_normalizer import normalize_opencode_deliveries, normalize_from_reply_record
-from lib.phantom_detect import is_phantom_reply_text
+from lib.application.transport.delivery_normalizer import normalize_opencode_deliveries, normalize_from_reply_record
+from lib.adapters.orchestration.phantom_detect import is_phantom_reply_text
 from lib.application.orchestration.pipeline.task import pipeline_inbox_may_mark_done
-from lib.file_task_push import verify_file_task_delivery
+from lib.application.orchestration.file_task_push import verify_file_task_delivery
 from lib.adapters.orchestration.task_fsm import apply_submit, ensure_fsm, read_step_result
-from lib.utils import json_write
+from lib.infra.utils import json_write
 
 
 class TestPhase38OpencodeE2E(unittest.TestCase):
@@ -109,7 +109,7 @@ class TestPhase38OpencodeE2E(unittest.TestCase):
         self.assertIsNotNone(result)
 
     def test_pipeline_inbox_not_done_without_step_result(self):
-        from lib.models import Inbox, MsgStatus
+        from lib.domain.models import Inbox, MsgStatus
         inbox = Inbox(agent="dali")
         inbox.messages.append({
             "id": self.msg_id,

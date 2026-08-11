@@ -10,8 +10,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, ROOT)
 
-from lib.internal_llm.probe import probe_all  # noqa: E402
-from lib.internal_llm.startup import maybe_rebuild_rag_on_start  # noqa: E402
+from lib.adapters.internal_llm.probe import probe_all  # noqa: E402
+from lib.infra.internal_llm.startup import maybe_rebuild_rag_on_start  # noqa: E402
 
 
 def main() -> int:

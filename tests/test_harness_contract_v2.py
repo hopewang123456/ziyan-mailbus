@@ -9,7 +9,7 @@ from pathlib import Path
 
 from lib.application.chain_route import ensure_llm_or_prompt, instantiate_chain
 from lib.application.lifecycle import list_active_agents, set_role_enabled
-from lib.harness.contract import build_contract, write_d1_step_result
+from lib.application.harness.contract import build_contract, write_d1_step_result
 
 
 class TestHarnessContract(unittest.TestCase):

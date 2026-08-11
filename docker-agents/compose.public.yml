@@ -1,4 +1,4 @@
-# Public / GitHub Docker stack — minimal mailbus + AgentMemory + Ollama-friendly host.
+# Public / GitHub Docker stack — minimal mailbus + AgentMemory + Hermes + OpenClaw.
 # Does NOT replace local docker-compose.yml (keep using that + gitignored override.yml).
 #
 # Usage:
@@ -14,6 +14,8 @@ networks:
 volumes:
   mailbus-store:
   iii-data:
+  hermes-data:
+  openclaw-workspace:
 
 services:
   mailbus:
@@ -34,6 +36,12 @@ services:
       - TZ=UTC
       - AGENTMEMORY_URL=${AGENTMEMORY_URL:-http://iii-engine:3111}
       - MAILBUS_OLLAMA_BASE_URL=${MAILBUS_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - MAILBUS_IDENTITIES_ROOT=${MAILBUS_IDENTITIES_ROOT:-/mailbus/access}
+      # Align with full stack defaults used by resolver / audit / logging
+      - MAILBUS_CONTAINER_PREFIX=${MAILBUS_CONTAINER_PREFIX:-docker-agents}
+      - MAILBUS_FILE_AUDIT=${MAILBUS_FILE_AUDIT:-1}
+      - MAILBUS_LOG_LEVEL=${MAILBUS_LOG_LEVEL:-info}
+      - MAILBUS_API_PORT=${MAILBUS_API_PORT:-9814}
     command: ["python3", "-m", "bus", "serve", "--host", "0.0.0.0", "--port", "9814", "--data-dir", "/mailbus/store"]
     depends_on:
       - iii-engine
@@ -60,3 +68,52 @@ services:
     environment:
       - III_ENGINE_URL=http://iii-engine:3111
     restart: unless-stopped
+
+  hermes:
+    build:
+      context: ./hermes-base
+      args:
+        HERMES_VERSION: ""
+    networks:
+      - mailbus-public
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - hermes-data:/home/hermes/.hermes
+      - mailbus-store:/mailbus/store
+      - ../tools:/mailbus/tools:ro
+    environment:
+      - HERMES_HOME=/home/hermes/.hermes
+      - AGENTMEMORY_URL=http://iii-engine:3111
+      - TZ=UTC
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+    depends_on:
+      - mailbus
+      - iii-engine
+    restart: unless-stopped
+    command: ["tail", "-f", "/dev/null"]
+
+  openclaw:
+    build:
+      context: ./openclaw-agent
+      args:
+        OPENCLAW_VERSION: ${OPENCLAW_VERSION:-}
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+    networks:
+      - mailbus-public
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - openclaw-workspace:/workspace
+      - mailbus-store:/mailbus/store
+      - ../tools:/mailbus/tools:ro
+      - ../lib:/mailbus/lib:ro
+    environment:
+      - TZ=UTC
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-ziyan-team}
+    depends_on:
+      - mailbus
+      - iii-engine
+    restart: unless-stopped
+    command: ["tail", "-f", "/dev/null"]

@@ -5,8 +5,8 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from lib.locale.role_labels import role_type_candidates
-from lib.utils import json_read, json_write, resolve_paths
+from lib.composition import get_locale
+from lib.infra.utils import json_read, json_write, resolve_paths
 
 
 def _agent_dispatchable(data_dir: str, agent: str, agents_cfg: dict) -> bool:
@@ -40,6 +40,11 @@ def _pick_round_robin(data_dir: str, role_type: int, candidates: List[str]) -> T
     }
 
 
+
+def role_type_candidates(role_type: int, data_dir: str = "") -> List[str]:
+    """Compat wrapper — prefer LocalePort via composition."""
+    return list(get_locale(data_dir).role_type_candidates(int(role_type)))
+
 def resolve_agent_for_role_type(
     data_dir: str,
     role_type: int,
@@ -59,7 +64,7 @@ def resolve_agent_for_role_type(
         if pin and pin not in excluded and _agent_dispatchable(data_dir, pin, agents_cfg):
             return pin, {"source": "pin", "role_type": int(role_type), "agent": pin}
 
-    cands = role_type_candidates(int(role_type), data_dir)
+    cands = get_locale(data_dir).role_type_candidates(int(role_type))
     available = [
         c for c in cands
         if c not in excluded and _agent_dispatchable(data_dir, c, agents_cfg)

@@ -6,7 +6,7 @@ import os
 
 from lib.domain.error_codes import TRANSPORT_HTTP, TRANSPORT_WEBHOOK
 from lib.domain.types import OutboundMessage, TransportReceipt
-from lib.utils import _now_iso, json_read
+from lib.infra.utils import _now_iso, json_read
 
 
 class WebhookMessageTransport:
@@ -60,7 +60,7 @@ class WebhookMessageTransport:
         }
         secret = h.get("webhook_secret") or agent_cfg.get("webhook_secret") or ""
         try:
-            from lib.webhook_pusher import _post_webhook
+            from lib.application.push.webhook_pusher import _post_webhook
 
             status = _post_webhook(
                 url,

@@ -26,8 +26,8 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from lib.env_bootstrap import load_mailbus_env, mailbus_paths  # noqa: E402
-from lib.platform_runner import (  # noqa: E402
+from lib.infra.env_bootstrap import load_mailbus_env, mailbus_paths  # noqa: E402
+from lib.adapters.plane.platform_runner import (  # noqa: E402
     detect_platform,
     docker_ready,
     init_stdio,
@@ -36,7 +36,7 @@ from lib.platform_runner import (  # noqa: E402
     run_wsl,
     wake_wsl,
 )
-from lib.team_lifecycle import (  # noqa: E402
+from lib.adapters.plane.lifecycle import (  # noqa: E402
     ensure_ollama_wsl_proxy,
     restart_watchdog,
     run_watchdog_foreground,
@@ -47,7 +47,7 @@ from lib.team_lifecycle import (  # noqa: E402
     stop_team,
     wsl_recover,
 )
-from lib.team_post_start import (  # noqa: E402
+from lib.adapters.plane.post_start import (  # noqa: E402
     apply_codex_ui,
     ensure_claude_agents,
     fix_openclaw_gateways,
@@ -132,7 +132,7 @@ def cmd_watchdog(args: argparse.Namespace) -> int:
 
 def cmd_doctor(_args: argparse.Namespace) -> int:
     """检测 Docker（含 WSL）、路径、AgentMemory、恢复完整性。"""
-    from lib.doctor_checks import doctor_exit_code, format_doctor_text, run_doctor_checks
+    from lib.adapters.ops.doctor_checks import doctor_exit_code, format_doctor_text, run_doctor_checks
 
     report = run_doctor_checks()
     print(format_doctor_text(report))
@@ -181,7 +181,7 @@ def cmd_compose(args: argparse.Namespace) -> int:
 
 
 def cmd_migrate(args: argparse.Namespace) -> int:
-    from lib.migrate_ops import cmd_migrate_export, cmd_migrate_import, cmd_migrate_plan
+    from lib.adapters.ops.migrate_ops import cmd_migrate_export, cmd_migrate_import, cmd_migrate_plan
 
     if args.action == "plan":
         return cmd_migrate_plan(args)

@@ -167,7 +167,7 @@ def _validate_google_a2a_inbound(data: dict, name: str) -> list[str]:
         return errors
     try:
         sys.path.insert(0, str(ROOT))
-        from lib.transport.a2a_mapper import from_a2a_task_create
+        from lib.core.a2a.a2a_mapper import from_a2a_task_create
 
         env = from_a2a_task_create(req)
     except Exception as exc:

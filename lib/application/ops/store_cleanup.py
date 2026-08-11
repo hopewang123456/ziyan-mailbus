@@ -1,14 +1,14 @@
 """Ops: store housekeeping — inbox archive + queue prune (tools 业务下沉)."""
 from __future__ import annotations
 
-from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
+from lib.infra.clock import now_dt, now_iso, now_ts, now_utc_dt
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from lib.models import Inbox, MsgStatus
-from lib.scan import _cleanup_stale_queue_files, get_msg_state
-from lib.utils import _now_iso, json_read, json_write, resolve_paths
+from lib.domain.models import Inbox, MsgStatus
+from lib.application.scan import _cleanup_stale_queue_files, get_msg_state
+from lib.infra.utils import _now_iso, json_read, json_write, resolve_paths
 
 DEFAULT_ARCHIVE_STATUSES: tuple[str, ...] = (
     "done",

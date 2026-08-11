@@ -8,9 +8,9 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.models import MsgStatus
-from lib.scanner import _cleanup_stale_queue_files
-from lib.utils import json_write
+from lib.domain.models import MsgStatus
+from lib.application.scan import _cleanup_stale_queue_files
+from lib.infra.utils import json_write
 
 
 class TestStaleQueueCleanup(unittest.TestCase):

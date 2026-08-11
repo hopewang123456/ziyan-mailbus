@@ -9,7 +9,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from lib.claude_browser_launch import ensure_claude_web, launch_claude_browser
+from lib.adapters.frameworks.claude_browser_launch import ensure_claude_web, launch_claude_browser
 
 
 def main() -> int:

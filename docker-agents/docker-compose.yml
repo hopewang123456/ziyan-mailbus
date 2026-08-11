@@ -1,4 +1,4 @@
-﻿networks:
+networks:
   ziyan-net:
     # Fixed network name so COMPOSE_PROJECT_NAME changes do not recreate the subnet
     name: docker-agents_ziyan-net
@@ -39,6 +39,8 @@ services:
       - ../access:/mailbus/access:ro
       - ${HERMES_DATA:-../.local/hermes}/.env:/run/hermes/.env:ro
       - ${HERMES_DATA:-../.local/hermes}/shared-memory:/hermes/shared-memory
+      # hermes-data 从宿主挂载到容器，供 doctor 等诊断工具访问
+      - ${HERMES_DATA:-../../hermes-data/.hermes}:/hermes-data/.hermes:ro
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - DATA_DIR=/mailbus/store
@@ -56,6 +58,12 @@ services:
       - IMAGE_GENERATE_WEBHOOK_URL=${IMAGE_GENERATE_WEBHOOK_URL:-}
       - MAILBUS_API_PORT=${MAILBUS_API_PORT:-9814}
       - MAILBUS_LAUNCH_QUEUE=/mailbus/run/launch-queue
+      # Container name prefix for self_heal / doctor / resolver (compose project)
+      - MAILBUS_CONTAINER_PREFIX=${MAILBUS_CONTAINER_PREFIX:-docker-agents}
+      # File audit trail (orchestration); set 0 to disable
+      - MAILBUS_FILE_AUDIT=${MAILBUS_FILE_AUDIT:-1}
+      - MAILBUS_LOG_LEVEL=${MAILBUS_LOG_LEVEL:-info}
+      - MAILBUS_IDENTITIES_ROOT=${MAILBUS_IDENTITIES_ROOT:-/mailbus/access}
       # In-container knowledge roots = mount points (never host Vault abs paths)
       - MAILBUS_SKILLS_ROOT=/mailbus/skills
       - MAILBUS_RULES_ROOT=/mailbus/rules
@@ -145,6 +153,7 @@ services:
     volumes:
       - ${HERMES_DATA:-../.local/hermes}:/home/hermes/.hermes
       - ../store:/mailbus/store
+      - ../lib:/mailbus/lib:ro
       - ../tools:/mailbus/tools:ro
       - ../skills:/mailbus/skills:ro
       - ../rules:/mailbus/rules:ro
@@ -156,6 +165,7 @@ services:
       - ../store/inbox:/home/hermes/inbox:ro
     environment:
       - HERMES_HOME=/home/hermes/.hermes
+      - PYTHONPATH=/mailbus
       - AGENTMEMORY_URL=http://iii-engine:3111
       - TZ=Asia/Shanghai
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}

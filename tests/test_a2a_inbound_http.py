@@ -9,10 +9,10 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.transport.a2a_mapper import from_a2a_task_create, to_a2a_hub_task
-from lib.transport.http_a2a import HttpA2AClient
-from lib.transport.errors import RetryableTransportError
-from lib.router.planner import plan_tier0
+from lib.core.a2a.a2a_mapper import from_a2a_task_create, to_a2a_hub_task
+from lib.core.a2a.http_a2a import HttpA2AClient
+from lib.core.a2a.errors import RetryableTransportError
+from lib.application.orchestration.router.planner import plan_tier0
 
 
 class TestFromA2ATaskCreate(unittest.TestCase):
@@ -121,7 +121,7 @@ class TestHttpA2AClient(unittest.TestCase):
             resp.__exit__ = MagicMock(return_value=False)
             return resp
 
-        with patch("lib.transport.http_a2a.urlrequest.urlopen", fake_urlopen):
+        with patch("lib.core.a2a.http_a2a.urlrequest.urlopen", fake_urlopen):
             out = client.send_message({
                 "task_id": "t1", "step_id": "s1", "to_agent": "lingzhao",
                 "role_type": 1, "intent": "hello",
@@ -136,7 +136,7 @@ class TestHttpA2AClient(unittest.TestCase):
         def fake_urlopen(req, timeout=0):
             raise urllib.error.HTTPError(req.full_url, 503, "unavailable", {}, None)
 
-        with patch("lib.transport.http_a2a.urlrequest.urlopen", fake_urlopen):
+        with patch("lib.core.a2a.http_a2a.urlrequest.urlopen", fake_urlopen):
             with self.assertRaises(RetryableTransportError):
                 client.send_message({"intent": "x", "task_id": "t", "step_id": "s1", "to_agent": "a", "role_type": 1})
 

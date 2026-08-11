@@ -1,9 +1,12 @@
 #!/bin/bash
 # 重启 mailbus CLI watchdog — 只保留一个实例（优先 systemd，失败则 nohup，不阻塞 start-team）
 
-WATCHDOG="/mnt/e/ai_tools/mail/docker-agents/mailbus-launch-watchdog.sh"
-PATTERN="/mnt/e/ai_tools/mail/docker-agents/mailbus-launch-watchdog.sh"
-SERVICE_UNIT="/mnt/e/ai_tools/mail/docker-agents/mailbus-watchdog.service"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+MAILBUS_ROOT="${MAILBUS_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+
+WATCHDOG="${MAILBUS_ROOT}/docker-agents/mailbus-launch-watchdog.sh"
+PATTERN="${MAILBUS_ROOT}/docker-agents/mailbus-launch-watchdog.sh"
+SERVICE_UNIT="${MAILBUS_ROOT}/docker-agents/mailbus-watchdog.service"
 
 run_in_wsl() {
   if [ -f /proc/version ] && grep -qi microsoft /proc/version 2>/dev/null; then
@@ -23,7 +26,7 @@ try_systemd_watchdog() {
   run_in_wsl systemctl is-enabled mailbus-watchdog >/dev/null 2>&1 || return 1
   if ! systemd_exec_ok; then
     echo "WARN: mailbus-watchdog.service ExecStart 路径过期（缺 docker-agents/）" >&2
-    echo "      修复: sudo bash /mnt/e/ai_tools/mail/docker-agents/install-mailbus-watchdog-service.sh" >&2
+    echo "      修复: sudo bash ${MAILBUS_ROOT}/docker-agents/install-mailbus-watchdog-service.sh" >&2
     return 1
   fi
   if run_in_wsl systemctl is-active mailbus-watchdog >/dev/null 2>&1; then
@@ -46,12 +49,12 @@ try_systemd_watchdog() {
 }
 
 start_nohup_watchdog() {
-  run_in_wsl bash /mnt/e/ai_tools/mail/docker-agents/restart-watchdog-root.sh 2>/dev/null || true
+  run_in_wsl bash "${MAILBUS_ROOT}/docker-agents/restart-watchdog-root.sh" 2>/dev/null || true
   for pid in $(pgrep -f "$PATTERN" 2>/dev/null); do
     kill "$pid" 2>/dev/null || true
   done
   sleep 1
-  QDIR="/mnt/e/ai_tools/mail/run/launch-queue"
+  QDIR="${MAILBUS_LAUNCH_QUEUE:-${MAILBUS_ROOT}/run/launch-queue}"
   mkdir -p "$QDIR"
   chmod 777 "$QDIR" 2>/dev/null || true
   nohup bash "$WATCHDOG" >>/tmp/mailbus-watchdog.log 2>&1 &

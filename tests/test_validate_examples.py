@@ -36,6 +36,8 @@ class TestValidateExamples(unittest.TestCase):
         known_roles = {int(k) for k in roles.get("roles", {})}
         path = os.path.join(ROOT, "store", "examples", "golden-a2a-path-a.json")
         if not os.path.isfile(path):
+            path = os.path.join(ROOT, "examples", "golden-a2a-path-a.json")
+        if not os.path.isfile(path):
             self.skipTest("golden-a2a-path-a.json missing")
         errs = validate_file(_ve.Path(path), reg, known_roles)
         self.assertEqual(errs, [], msg=errs)

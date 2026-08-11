@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, patch
 sys.modules.setdefault("fcntl", MagicMock())
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import lib.utils as _utils
+import lib.infra.utils as _utils
 
 
 @contextlib.contextmanager
@@ -20,8 +20,8 @@ def _noop_file_lock(timeout=10.0, path=""):
 
 _utils.file_lock = _noop_file_lock
 
-from lib.utils import json_write
-from lib.workflow.tool_exec import mark_tool_live_after_gate, run_tool_step, tool_live_enabled
+from lib.infra.utils import json_write
+from lib.application.workflow.tool_exec import mark_tool_live_after_gate, run_tool_step, tool_live_enabled
 
 
 def _seed(tmp: str) -> None:
@@ -56,18 +56,22 @@ class TestToolLive(unittest.TestCase):
         mark_tool_live_after_gate(self.task, {}, gate_def)
         self.assertTrue(self.task["extensions"]["ziyan"]["workflow"]["tool_live"])
 
-    @patch("lib.workflow.tool_exec.invoke_tool")
-    def test_run_tool_step_respects_dry_run(self, mock_invoke):
-        mock_invoke.return_value = {"ok": True, "dry_run": True}
+    @patch("lib.application.workflow.tool_exec.get_integrations")
+    def test_run_tool_step_respects_dry_run(self, mock_get):
+        mock_port = MagicMock()
+        mock_port.invoke_tool.return_value = {"ok": True, "dry_run": True}
+        mock_get.return_value = mock_port
         run_tool_step(self.tmp, self.task, "webhook-multi-publish", dry_run=True)
-        self.assertTrue(mock_invoke.call_args.kwargs.get("dry_run"))
+        self.assertTrue(mock_port.invoke_tool.call_args.kwargs.get("dry_run"))
 
-    @patch("lib.workflow.tool_exec.invoke_tool")
-    def test_run_tool_step_live(self, mock_invoke):
-        mock_invoke.return_value = {"ok": True}
+    @patch("lib.application.workflow.tool_exec.get_integrations")
+    def test_run_tool_step_live(self, mock_get):
+        mock_port = MagicMock()
+        mock_port.invoke_tool.return_value = {"ok": True}
+        mock_get.return_value = mock_port
         self.task["extensions"]["ziyan"]["workflow"]["tool_live"] = True
         run_tool_step(self.tmp, self.task, "webhook-multi-publish", dry_run=False)
-        self.assertFalse(mock_invoke.call_args.kwargs.get("dry_run"))
+        self.assertFalse(mock_port.invoke_tool.call_args.kwargs.get("dry_run"))
 
 
 if __name__ == "__main__":

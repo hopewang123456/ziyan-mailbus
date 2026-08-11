@@ -1,4 +1,4 @@
-﻿# EXAMPLE — local-only override for Vault / machine absolute paths
+# EXAMPLE — local-only override for Vault / machine absolute paths
 # Copy to docker-compose.override.yml (gitignored).
 #
 # Replace /path/to/... with your host paths (WSL Docker: use /mnt/<drive>/...).

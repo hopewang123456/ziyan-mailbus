@@ -6,7 +6,7 @@ import os
 from typing import Any, Callable, Mapping, Sequence
 
 from lib.domain.types import AgentRef
-from lib.utils import file_lock
+from lib.infra.utils import file_lock
 
 
 class FileConfigRepository:

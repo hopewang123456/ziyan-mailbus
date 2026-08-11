@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import cast
 
-from lib.config_admin import (
+from lib.adapters.config.config_admin import (
     env_status,
     get_section,
     list_sections,
@@ -13,12 +13,25 @@ from lib.config_admin import (
     patch_section,
 )
 from lib.domain.types import IntegrationsOverviewView, SettingsSectionsView
-from lib.utils import json_read
+from lib.infra.utils import json_read
 
 
 def handle_settings_sections(handler):
     body: SettingsSectionsView = {"status": "ok", "sections": list_sections()}
     handler._send_json(body)
+
+
+def handle_settings_paths(handler):
+    """GET /api/settings/paths — vault/team-pack roots + compose_override (read-only)."""
+    from lib.infra.env_bootstrap import mailbus_paths
+
+    paths = mailbus_paths()
+    handler._send_json({
+        "status": "ok",
+        "paths": paths,
+        "compose_override": paths.get("compose_override", ""),
+        "note": "MAILBUS_*_ROOT / TEAM_PACK_* / MAILBUS_COMPOSE_DIR|OVERRIDE configure these",
+    })
 
 
 def handle_settings_section_get(handler, section: str):
@@ -46,7 +59,7 @@ def handle_settings_section_patch(handler, section: str):
 
 def handle_settings_services_probe(handler):
     """POST /api/settings/section/services/probe — lightweight connectivity check."""
-    from lib.service_registry import probe_service
+    from lib.adapters.ops.service_registry import probe_service
 
     cfg = json_read(os.path.join(handler.data_dir, "config.json"), {})
     body = handler._read_post_body() or {}

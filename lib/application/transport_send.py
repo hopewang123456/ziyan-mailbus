@@ -3,9 +3,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from lib.composition import build_transport
+from lib.composition import build_transport, get_locale
 from lib.domain.types import OutboundMessage, TransportReceipt
-from lib.locale.errors_zh import message_zh
 
 
 def send_outbound(
@@ -64,5 +63,5 @@ def send_outbound(
         "error_code": receipt.error_code,
     }
     if not receipt.accepted and receipt.error_code:
-        out["message_zh"] = message_zh(receipt.error_code, receipt.detail)
+        out["message_zh"] = get_locale(data_dir).message_zh(receipt.error_code, receipt.detail)
     return out

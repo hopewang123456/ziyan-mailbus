@@ -2,7 +2,9 @@
 # 验证各 agent 容器能否读写 mailbus 共享 store（不改 agent 源码）
 set -euo pipefail
 
-MAIL="/mnt/e/ai_tools/mail"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+MAILBUS_ROOT="${MAILBUS_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+MAIL="$MAILBUS_ROOT"
 PROBE="mailbus-mount-probe-$$.txt"
 STORE="/mailbus/store"
 PASS=0

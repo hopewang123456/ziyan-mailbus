@@ -1,7 +1,7 @@
-"""§16.3 V1–V12 acceptance checks (automatable subset).
+"""§16.3 post-cleanup acceptance checks (automatable subset).
 
-V8 / V9 / V12 may skip with an explicit reason when full runtime
-fixtures are unavailable. V6 uses mocked plane fixture (see test_v6_enable_rollback).
+Legacy package paths (`lib/ports`, `lib/transport`, `lib/agent_adapters`) are gone;
+this suite asserts the replacement layout (interfaces / core / adapters).
 """
 from __future__ import annotations
 
@@ -43,8 +43,8 @@ def _read(p: Path) -> str:
 
 
 class TestAcceptanceVSuite(unittest.TestCase):
-    def test_v1_no_legacy_imports_in_lib_tools(self):
-        """V1: lib/ + tools/ 无 from lib.agent_adapters / lib.scanner."""
+    def test_no_deleted_module_imports_in_lib_tools(self):
+        """No imports of deleted modules (agent_adapters, scanner) under lib/ + tools/."""
         hits = []
         for base in (LIB, TOOLS):
             for p in _iter_py(base):
@@ -54,17 +54,17 @@ class TestAcceptanceVSuite(unittest.TestCase):
                 # relative leftovers from move
                 if re.search(r"from\s+\.agent_adapters\s+import", text):
                     hits.append(f"{p.relative_to(ROOT)}:.agent_adapters")
-        self.assertEqual(hits, [], msg=f"legacy imports: {hits}")
+        self.assertEqual(hits, [], msg=f"deleted module imports: {hits}")
 
-    def test_v2_production_harness_no_pusher_private(self):
-        """V2: ProductionHarness 无 pusher._*."""
-        path = LIB / "harness" / "production.py"
+    def test_production_harness_no_pusher_private(self):
+        """ProductionHarness must not call pusher._* privates."""
+        path = APP / "harness" / "production.py"
         self.assertTrue(path.is_file())
         text = _read(path)
         self.assertIsNone(_PUSHER_PRIVATE_RE.search(text), "pusher._* still referenced")
 
-    def test_v3_application_no_concrete_framework_adapters(self):
-        """V3: application 不 import 具体 Adapter 类。"""
+    def test_application_no_concrete_framework_adapters(self):
+        """application must not import concrete *Adapter classes."""
         hits = []
         for p in _iter_py(APP):
             text = _read(p)
@@ -94,8 +94,8 @@ class TestAcceptanceVSuite(unittest.TestCase):
                             hits.append(f"{p.relative_to(ROOT)}:{concrete}")
         self.assertEqual(hits, [], msg=f"concrete framework imports: {hits}")
 
-    def test_v4_loopback_write_without_token(self):
-        """V4: 本机无 token 可写；伪造非 loopback 无 token 被拒。"""
+    def test_loopback_write_without_token(self):
+        """Loopback may write without token; forged non-loopback without token is denied."""
         from lib.application.mailbus_token import authorize_write, ensure_token
         from lib.domain.types import AuthDecision, ClientContext
 
@@ -110,8 +110,8 @@ class TestAcceptanceVSuite(unittest.TestCase):
                 AuthDecision.DENY,
             )
 
-    def test_v5_rotate_invalidates_old_token(self):
-        """V5: rotate 跨机无旧 token 被拒；成功后旧 token 失效。"""
+    def test_rotate_invalidates_old_token(self):
+        """rotate: remote without token denied; after rotate old Bearer fails."""
         from lib.application.mailbus_token import authorize_write, ensure_token, rotate_token
         from lib.domain.types import AuthDecision, ClientContext
 
@@ -138,8 +138,8 @@ class TestAcceptanceVSuite(unittest.TestCase):
                 AuthDecision.ALLOW,
             )
 
-    def test_v6_enable_rollback_contract(self):
-        """V6: enable 中途失败后无半成品 — mocked plane fixture（无 Docker）。"""
+    def test_enable_rollback_contract(self):
+        """enable mid-failure leaves no half-finished plane — mocked fixture (no Docker)."""
         from tests.test_v6_enable_rollback import run_enable_probe_fail_no_half_finished
 
         with tempfile.TemporaryDirectory() as td:
@@ -149,9 +149,9 @@ class TestAcceptanceVSuite(unittest.TestCase):
             )
             run_enable_probe_fail_no_half_finished(td)
 
-    def test_v7_json_write_uses_file_lock(self):
-        """V7: json_write / config RMW 带 file_lock。"""
-        utils = _read(LIB / "utils.py")
+    def test_json_write_uses_file_lock(self):
+        """json_write / config RMW use file_lock."""
+        utils = _read(LIB / "infra" / "utils.py")
         # locate json_write body roughly
         self.assertIn("def json_write", utils)
         idx = utils.index("def json_write")
@@ -161,8 +161,8 @@ class TestAcceptanceVSuite(unittest.TestCase):
         self.assertTrue(repo.is_file())
         self.assertIn("file_lock", _read(repo))
 
-    def test_v8_align_smoke(self):
-        """V8: align 冒烟（temp store，expect_min=0）。"""
+    def test_align_smoke(self):
+        """align_store_from_registry smoke (temp store, expect_min=0)."""
         from lib.application.align_store import align_store_from_registry
 
         with tempfile.TemporaryDirectory() as td:
@@ -170,24 +170,24 @@ class TestAcceptanceVSuite(unittest.TestCase):
             out = align_store_from_registry(td, expect_min=0)
             self.assertIn("ok", out)
 
-    def test_v9_harness_import_smoke(self):
-        """V9: harness 改 import 后可导入（全量 harness 单测不在本文件跑）。"""
-        from lib.harness.production import ProductionHarness
-        from lib.scan import scan_all
+    def test_harness_import_smoke(self):
+        """Harness + scan imports remain wired after package moves."""
+        from lib.application.harness.production import ProductionHarness
+        from lib.application.scan import scan_all
 
         self.assertTrue(callable(ProductionHarness))
         self.assertTrue(callable(scan_all))
 
-    def test_v10_gitignore_secrets(self):
-        """V10: .gitignore 含 store/secrets.json。"""
+    def test_gitignore_secrets(self):
+        """.gitignore must ignore store/secrets.json."""
         gi = _read(ROOT / ".gitignore")
         self.assertIn("store/secrets.json", gi)
 
-    def test_v11_skill_ids_contract_not_tree_scan(self):
-        """V11: 技能 ids 进契约；Adapter 不扫整棵技能树。"""
+    def test_skill_ids_contract_not_tree_scan(self):
+        """Skill ids enter the contract; adapters must not rglob a skills tree."""
         push = _read(LIB / "application" / "push_with_contract.py")
         self.assertIn("domain_skill_ids", push)
-        contract = _read(LIB / "harness" / "contract.py")
+        contract = _read(LIB / "application" / "harness" / "contract.py")
         self.assertIn("domain_skill_ids", contract)
         # adapters/frameworks must not rglob a skills tree
         bad = []
@@ -197,8 +197,8 @@ class TestAcceptanceVSuite(unittest.TestCase):
                 bad.append(str(p.relative_to(ROOT)))
         self.assertEqual(bad, [], msg=f"skill tree scan: {bad}")
 
-    def test_v12_desktop_launchers_no_lib_import(self):
-        """V12: 桌面/tools/mailbus 启动脚本不直 import lib 内部。"""
+    def test_desktop_launchers_no_lib_import(self):
+        """Desktop / tools/mailbus launchers must not import lib internals."""
         launchers = list((TOOLS / "mailbus").glob("*.bat")) if (TOOLS / "mailbus").is_dir() else []
         desk = Path.home() / "Desktop"
         if desk.is_dir():
@@ -212,13 +212,13 @@ class TestAcceptanceVSuite(unittest.TestCase):
             text = _read(bat)
             if re.search(r"from\s+lib\.|import\s+lib\.|python\s+-c\s+[\"'].*lib\.", text):
                 bad.append(str(bat))
-            if "agent_adapters" in text or "lib.scanner" in text:
+            if "agent_adapters" in text or "lib.application.scan" in text:
                 bad.append(str(bat))
         self.assertEqual(bad, [], msg=f"legacy launcher imports: {bad}")
 
 
 class TestFrameworkRegisterHook(unittest.TestCase):
-    """F6 / S4: register_framework entry-point."""
+    """register_framework entry-point smoke."""
 
     def test_register_fake_framework(self):
         from lib.adapters.frameworks import (
@@ -243,7 +243,7 @@ class TestFrameworkRegisterHook(unittest.TestCase):
 
 
 class TestSettingsApiSurface(unittest.TestCase):
-    """F5: cockpit settings/frameworks/integrations/token handlers exist."""
+    """Cockpit settings / frameworks / integrations / token handlers exist."""
 
     def test_handlers_importable(self):
         from lib.api import handlers_lifecycle, handlers_settings, handlers_system

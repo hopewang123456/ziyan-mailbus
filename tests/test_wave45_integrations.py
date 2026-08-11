@@ -16,7 +16,7 @@ from lib.application.ops.store_cleanup import (
 from lib.application.ops.pipeline_watchdog import running_pipeline_summary
 from lib.application.ops.platform_scout import load_leads_sources, run_scout
 from lib.composition import build_orchestration, get_context
-from lib.ports import AuditPort, HumanGatePort
+from lib.interfaces import AuditPort, HumanGatePort
 
 
 

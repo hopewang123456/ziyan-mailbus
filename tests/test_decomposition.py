@@ -7,17 +7,17 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.decomposition import (
+from lib.application.orchestration.decomposition import (
     handle_design_step_decomposition,
     task_requires_decomposition,
     topological_subtask_order,
     validate_subtasks,
 )
-from lib.human_queue import load_queue
-from lib.human_queue_resolve import resolve_human_queue_item
+from lib.adapters.orchestration.human_queue import load_queue
+from lib.application.orchestration.human_queue_resolve import resolve_human_queue_item
 from lib.adapters.orchestration.task_fsm import TaskFsmState, apply_submit
-from lib.tracker import TaskTracker
-from lib.utils import json_write
+from lib.application.orchestration.tracker import TaskTracker
+from lib.infra.utils import json_write
 
 
 def _design_task(**overrides):

@@ -9,7 +9,7 @@ TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(TESTS_DIR)
 sys.path.insert(0, PROJECT_DIR)
 
-from lib.utils import configure_stdio_utf8
+from lib.infra.utils import configure_stdio_utf8
 
 configure_stdio_utf8()
 
@@ -27,7 +27,7 @@ def run_test_file(name: str) -> bool:
     launcher = (
         "import runpy, sys; "
         f"sys.path.insert(0, {PROJECT_DIR!r}); "
-        "from lib.utils import configure_stdio_utf8; "
+        "from lib.infra.utils import configure_stdio_utf8; "
         "configure_stdio_utf8(); "
         f"runpy.run_path({path!r}, run_name='__main__')"
     )

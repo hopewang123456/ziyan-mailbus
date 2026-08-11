@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from lib.service_registry import (
+from lib.adapters.ops.service_registry import (
     compose_env_for_services,
     detect_runtime,
     service_settings,
@@ -49,7 +49,7 @@ class TestServiceRegistry(unittest.TestCase):
 
     def test_detect_runtime_windows(self):
         if os.name == "nt":
-            with mock.patch("lib.service_registry.detect_runtime", wraps=detect_runtime):
+            with mock.patch("lib.adapters.ops.service_registry.detect_runtime", wraps=detect_runtime):
                 # Just ensure callable; on Windows host expect windows unless docker
                 rt = detect_runtime()
                 self.assertIn(rt, ("windows", "wsl", "docker"))
@@ -57,7 +57,7 @@ class TestServiceRegistry(unittest.TestCase):
 
 class TestOllamaLocalDrift(unittest.TestCase):
     def test_ensure_ollama_local_alias(self):
-        from lib.init_store import ensure_ollama_local_model_alias
+        from lib.adapters.config.init_store import ensure_ollama_local_model_alias
 
         cfg = {"smart_routing": {"enabled": True, "use_ollama": True}, "agent_types": {"models": {}}}
         changed = ensure_ollama_local_model_alias(cfg)

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from lib.adapters.plugin_discovery import PluginDiscovery
+from lib.adapters.integrations.plugin_discovery import PluginDiscovery
 
 ENTRY_POINT_GROUP = "mailbus.frameworks"
 

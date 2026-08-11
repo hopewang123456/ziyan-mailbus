@@ -5,14 +5,14 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.rules_registry import (
+from lib.adapters.config.rules_registry import (
     rule_paths_for_agent,
     resolved_rule_paths,
     default_rule_paths,
     rules_by_layer,
     resolve_rule_path,
 )
-from lib.constants import MAILBUS_ROOT
+from lib.infra.constants import MAILBUS_ROOT
 
 
 class TestRulesRegistry(unittest.TestCase):

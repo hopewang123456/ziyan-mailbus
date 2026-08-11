@@ -134,7 +134,7 @@
       },
       "browser": {
         "kind": "hermes_dashboard",
-        "url": "http://127.0.0.1:{port}/chat",
+        "url": "http://127.0.0.1:{port}/?profile={agent}",
         "start_wait_seconds": 15
       }
     },

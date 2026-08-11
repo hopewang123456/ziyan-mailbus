@@ -82,14 +82,14 @@ fi
 START_INNER=$(python3 -c "
 import sys
 sys.path.insert(0, '${ROOT}')
-from lib.claude_launch import build_interactive_shell_inner
+from lib.adapters.frameworks.claude_launch import build_interactive_shell_inner
 print(build_interactive_shell_inner('${AGENT}', '${DATA_DIR}'))
 ")
 
 AGENT_TITLE=$(python3 -c "
 import json,sys
 sys.path.insert(0, '${ROOT}')
-from lib.utils import json_read
+from lib.infra.utils import json_read
 cfg=json_read('${DATA_DIR}/config.json',{})
 a=cfg.get('agents',{}).get('${AGENT}',{})
 print((a.get('name') or '${AGENT}') + ' (${AGENT})')

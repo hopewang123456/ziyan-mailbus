@@ -9,9 +9,9 @@ import os
 import re
 from typing import Optional, Tuple
 
-from lib.constants import MAILBUS_ROOT
+from lib.infra.constants import MAILBUS_ROOT
 from lib.application.orchestration.pipeline.chain import agent_to_role
-from lib.utils import generate_msg_id
+from lib.infra.utils import generate_msg_id
 
 _STATUS_RE = re.compile(r"<!--\s*status:\s*([^\s|>-]+)", re.I)
 
@@ -104,10 +104,12 @@ def write_pipeline_work_order(
         n_person = planned_agents[0]
         n_role = agent_to_role(n_person)
     elif planned_role_types:
-        from lib.locale.role_labels import role_type_to_zh, role_type_candidates
+        from lib.composition import get_locale
+
+        locale = get_locale(data_dir)
         rt = int(planned_role_types[0])
-        n_role = role_type_to_zh(rt, data_dir)
-        cands = role_type_candidates(rt, data_dir)
+        n_role = locale.role_type_to_zh(rt)
+        cands = locale.role_type_candidates(rt)
         n_person = cands[0] if cands else ""
 
     tpl = _load_template()

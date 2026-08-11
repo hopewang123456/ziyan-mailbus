@@ -10,8 +10,8 @@ from lib.application.lifecycle import (
     set_role_enabled,
 )
 from lib.application.queries import active_agents
-from lib.locale.errors_zh import message_zh
-from lib.utils import json_read
+from lib.adapters.locale.errors_zh import message_zh
+from lib.infra.utils import json_read
 
 
 def handle_discover(handler):
@@ -108,7 +108,7 @@ def handle_mailbus_token(handler):
         resolve_token,
         rotate_token,
     )
-    from lib.locale.errors_zh import message_zh
+    from lib.adapters.locale.errors_zh import message_zh
 
     ctx = client_context_from_handler(handler)
     if handler.command == "POST":

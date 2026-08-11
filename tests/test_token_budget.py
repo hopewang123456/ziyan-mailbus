@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.token_budget import (
+from lib.application.integrations.token_budget import (
     effective_scan_interval_seconds,
     load_token_budget,
     measure_mailbus_activity,

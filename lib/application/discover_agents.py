@@ -4,8 +4,8 @@ from __future__ import annotations
 import os
 from typing import Any, Sequence
 
-from lib.ports.discovery import DiscoverySource
-from lib.utils import json_read, json_write
+from lib.interfaces.discovery import DiscoverySource
+from lib.infra.utils import json_read, json_write
 
 EXPECTED_LOCAL_MIN = 13
 
@@ -38,7 +38,7 @@ def discover_agents(sources: Sequence[DiscoverySource] | None = None) -> dict[st
 
 
 def align_store(data_dir: str, *, expect_min: int = EXPECTED_LOCAL_MIN) -> dict[str, Any]:
-    from lib.init_store import run_merge_store_config
+    from lib.composition import run_merge_store_config
 
     config_path = os.path.join(data_dir, "config.json")
     try:

@@ -5,7 +5,7 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.desktop_launch import (
+from lib.adapters.frameworks.desktop_launch import (
     agent_has_desktop,
     merge_launch_desktop,
     resolve_platform,
@@ -14,7 +14,7 @@ from lib.desktop_launch import (
 
 class TestDesktopLaunch(unittest.TestCase):
     def test_lingxiao_desktop_disabled_in_config(self):
-        from lib.utils import json_read
+        from lib.infra.utils import json_read
 
         cfg = json_read(os.path.join(os.path.dirname(__file__), "..", "store", "config.json"), {})
         agents = cfg.get("agents") or {}
@@ -25,7 +25,7 @@ class TestDesktopLaunch(unittest.TestCase):
         self.assertFalse(agent_has_desktop(agents.get("dali", {}), types))
 
     def test_lingyun_lingyan_desktop_disabled(self):
-        from lib.utils import json_read
+        from lib.infra.utils import json_read
 
         cfg = json_read(os.path.join(os.path.dirname(__file__), "..", "store", "config.json"), {})
         agents = cfg.get("agents") or {}
@@ -35,8 +35,8 @@ class TestDesktopLaunch(unittest.TestCase):
             self.assertFalse(agent_has_desktop(agents[name], types))
 
     def test_lingyun_has_browser_config(self):
-        from lib.utils import json_read
-        from lib.claude_browser_launch import agent_has_claude_browser
+        from lib.infra.utils import json_read
+        from lib.adapters.frameworks.claude_browser_launch import agent_has_claude_browser
 
         cfg = json_read(os.path.join(os.path.dirname(__file__), "..", "store", "config.json"), {})
         agents = cfg.get("agents") or {}

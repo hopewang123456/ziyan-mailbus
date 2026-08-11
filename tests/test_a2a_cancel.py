@@ -12,10 +12,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from lib.api.handlers_a2a import handle_a2a_rpc
 from lib.adapters.orchestration.task_fsm import TaskFsmState, apply_cancel, ensure_fsm
-from lib.transport.a2a_cancel import cancel_inflight_a2a_for_task
-from lib.transport.a2a_standard import A2ATransport
-from lib.transport.types import DispatchContext
-from lib.utils import json_read, json_write
+from lib.core.a2a.a2a_cancel import cancel_inflight_a2a_for_task
+from lib.core.a2a.a2a_standard import A2ATransport
+from lib.core.a2a.types import DispatchContext
+from lib.infra.utils import json_read, json_write
 from tests.test_helpers import seed_a2a_harness
 
 
@@ -84,7 +84,7 @@ class TestCancelInflight(unittest.TestCase):
         stub = _CancelStubClient()
         transport = A2ATransport(rpc=stub)
 
-        with patch("lib.transport.a2a_cancel.A2ATransport", return_value=transport):
+        with patch("lib.core.a2a.a2a_cancel.A2ATransport", return_value=transport):
             outcomes = cancel_inflight_a2a_for_task(self.tmp, task, reason="user_cancel")
 
         self.assertEqual(len(outcomes), 1)
@@ -94,7 +94,7 @@ class TestCancelInflight(unittest.TestCase):
 
     def test_apply_cancel_invokes_cancel_inflight_and_sets_fsm(self):
         task = self._task_with_inflight()
-        with patch("lib.transport.a2a_cancel.cancel_inflight_a2a_for_task") as mock_cancel:
+        with patch("lib.core.a2a.a2a_cancel.cancel_inflight_a2a_for_task") as mock_cancel:
             mock_cancel.return_value = [{"ok": True}]
             out = apply_cancel(task, reason="a2a_cancel", data_dir=self.tmp, agents={})
         mock_cancel.assert_called_once()
@@ -127,7 +127,7 @@ class TestCancelTaskRpcHandler(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    @patch("lib.transport.a2a_cancel.cancel_inflight_a2a_for_task", return_value=[{"ok": True}])
+    @patch("lib.core.a2a.a2a_cancel.cancel_inflight_a2a_for_task", return_value=[{"ok": True}])
     def test_rpc_cancel_task_by_mailbus_task_id(self, _mock_cancel):
         handler = MockRpcHandler(self.tmp)
         handler._body = {
@@ -144,7 +144,7 @@ class TestCancelTaskRpcHandler(unittest.TestCase):
         saved = json_read(os.path.join(self.tmp, "tasks", f"{self.tid}.json"), {})
         self.assertEqual(saved["fsm"]["state"], TaskFsmState.CANCELLED.value)
 
-    @patch("lib.transport.a2a_cancel.cancel_inflight_a2a_for_task", return_value=[{"ok": True}])
+    @patch("lib.core.a2a.a2a_cancel.cancel_inflight_a2a_for_task", return_value=[{"ok": True}])
     def test_rpc_cancel_task_by_a2a_task_id(self, _mock_cancel):
         handler = MockRpcHandler(self.tmp)
         handler._body = {

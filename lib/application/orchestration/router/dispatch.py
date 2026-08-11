@@ -5,7 +5,7 @@ from __future__ import annotations
 from lib.application.orchestration.step_dispatch import dispatch_fsm_step
 from lib.composition import get_fsm
 from lib.domain.fsm import TaskFsmState
-from lib.utils import json_write
+from lib.infra.utils import json_write
 
 
 def _fsm():
@@ -58,7 +58,7 @@ def dispatch_first_step(data_dir: str, task: dict) -> bool:
         task["fsm"]["active_step_id"] = step.get("step_id")
         task["assignee"] = step.get("to_agent") or step.get("to_person") or ""
         try:
-            from lib.tracker import TaskTracker
+            from lib.application.orchestration.tracker import TaskTracker
 
             tr = TaskTracker(data_dir)
             json_write(tr._task_path(tid), task)

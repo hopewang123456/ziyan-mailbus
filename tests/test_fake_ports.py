@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import unittest
 
-from lib.adapters.clock import FakeClock
+from lib.infra.clock import FakeClock
 from lib.adapters.fakes import FakeResultStore, FakeRuntime
 from lib.domain.types import AgentRef, StepRef, StepResult
-from lib.harness.contract import HarnessContract
+from lib.application.harness.contract import HarnessContract
 
 
 class TestFakePorts(unittest.TestCase):

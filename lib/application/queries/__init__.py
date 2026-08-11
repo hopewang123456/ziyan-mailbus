@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from lib.application.lifecycle import list_active_agents
-from lib.utils import json_read
+from lib.infra.utils import json_read
 
 
 def active_agents(data_dir: str) -> dict[str, dict]:

@@ -10,13 +10,13 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.agent_adapters import get_adapter
-from lib.transport.a2a_standard import A2ATransport
-from lib.transport.dispatch_integration import build_router, transport_router_enabled
-from lib.transport.router import TransportRouter
-from lib.transport.stub_a2a import StubA2AClient
-from lib.transport.types import DispatchContext
-from lib.utils import json_write
+from lib.adapters.frameworks import get_adapter
+from lib.core.a2a.a2a_standard import A2ATransport
+from lib.core.a2a.dispatch_integration import build_router, transport_router_enabled
+from lib.core.a2a.router import TransportRouter
+from lib.core.a2a.stub_a2a import StubA2AClient
+from lib.core.a2a.types import DispatchContext
+from lib.infra.utils import json_write
 from tests.test_helpers import seed_a2a_harness
 
 

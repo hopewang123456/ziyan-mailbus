@@ -8,8 +8,8 @@ ziyan-mailbus HTTP API — 任务/公告板/Skill 相关路由处理器
 import os
 import json
 import sys
-from lib.utils import json_read, json_write, _now_iso
-from lib.tracker import TaskTracker, TaskStatus, SKIP_TIMEOUT_PREFIXES
+from lib.infra.utils import json_read, json_write, _now_iso
+from lib.application.orchestration.tracker import TaskTracker, TaskStatus, SKIP_TIMEOUT_PREFIXES
 from lib.application.orchestration.pipeline.chain import normalize_task_chain, is_pipeline_step
 
 # Dashboard 默认分页（无 query 时也生效，避免一次返回 400+ 任务拖死浏览器）
@@ -24,7 +24,7 @@ def _is_noise_task_id(task_id: str) -> bool:
 
 def _normalize_tasks_for_api(tasks: list) -> list:
     """API 返回前规范化 chain 格式，并补全 audit_reviewer / needs_audit / fsm。"""
-    from lib.audit_dispatch import task_requires_audit
+    from lib.application.orchestration.audit_dispatch import task_requires_audit
     from lib.adapters.orchestration.task_fsm import ensure_fsm, fsm_summary
 
     for task in tasks:
@@ -108,9 +108,9 @@ def handle_tasks(handler):
 
 def create_task_from_envelope(data_dir: str, body: dict) -> tuple[dict, int]:
     """从 A2A Envelope 创建任务。返回 (response_body, http_status)。"""
-    from lib.router.envelope_validate import is_legacy_create_body, validate_envelope
-    from lib.router.planner import PlanError, needs_plan_approval, plan_task
-    from lib.router.dispatch import (
+    from lib.application.orchestration.router.envelope_validate import is_legacy_create_body, validate_envelope
+    from lib.application.orchestration.router.planner import PlanError, needs_plan_approval, plan_task
+    from lib.application.orchestration.router.dispatch import (
         dispatch_first_step,
         set_await_plan_approval,
         start_executing,
@@ -149,14 +149,14 @@ def create_task_from_envelope(data_dir: str, body: dict) -> tuple[dict, int]:
                 "confidence": 1.0,
                 "provider_used": "rules",
             }
-            from lib.dispatch.collab_plan import expand_planned_chain_for_collab
+            from lib.application.orchestration.dispatch.collab_plan import expand_planned_chain_for_collab
             planned = expand_planned_chain_for_collab(planned, body)
         else:
             config = json_read(os.path.join(data_dir, "config.json"), {})
             out = plan_task(body, data_dir=data_dir, config=config)
             planned = out["planned_chain"]
             plan_meta = out["plan_meta"]
-            from lib.dispatch.collab_plan import expand_planned_chain_for_collab
+            from lib.application.orchestration.dispatch.collab_plan import expand_planned_chain_for_collab
             planned = expand_planned_chain_for_collab(planned, body)
     except PlanError as e:
         return ({
@@ -169,7 +169,7 @@ def create_task_from_envelope(data_dir: str, body: dict) -> tuple[dict, int]:
         body, planned_chain=planned, plan_meta=plan_meta,
     )
 
-    from lib.workflow.engine import bind_workflow
+    from lib.application.workflow.engine import bind_workflow
     bind_workflow(task, body, data_dir=data_dir)
     json_write(tracker._task_path(task_id), task)
 
@@ -706,7 +706,7 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
 
     if action == "accept":
         from lib.application.orchestration.actions import apply_accept
-        from lib.fsm_dispatch import dispatch_fsm_step
+        from lib.application.orchestration.step_dispatch import dispatch_fsm_step
         from lib.adapters.orchestration.task_fsm import mark_step_dispatched
 
         outcome = apply_accept(task, body, data_dir=handler.data_dir)
@@ -746,7 +746,7 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
             task, reason=reason, data_dir=handler.data_dir, agents=handler.agents,
         )
     elif action == "continue":
-        from lib.task_recover import recover_continue
+        from lib.application.orchestration.task_recover import recover_continue
 
         outcome = recover_continue(
             handler.data_dir, task_id, reason=reason or "dashboard_continue",
@@ -785,7 +785,7 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
 
     dispatch_ok = None
     if action == "rollback" and outcome.get("next_step"):
-        from lib.fsm_dispatch import dispatch_fsm_step
+        from lib.application.orchestration.step_dispatch import dispatch_fsm_step
         from lib.adapters.orchestration.task_fsm import mark_step_dispatched
 
         nxt = outcome["next_step"]
@@ -799,7 +799,7 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
             mark_step_dispatched(nxt)
             json_write(task_path, task)
         else:
-            from lib.mbus_log import warn
+            from lib.infra.mbus_log import warn
             warn(f"[api] rollback dispatch failed task={task_id[:24]}")
 
     handler._send_json({

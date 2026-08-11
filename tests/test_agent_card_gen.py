@@ -7,8 +7,8 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.transport.a2a_mapper import to_agent_card
-from lib.transport.agent_card_cache import enrich_agent_channels, load_registry
+from lib.core.a2a.a2a_mapper import to_agent_card
+from lib.core.a2a.agent_card_cache import enrich_agent_channels, load_registry
 
 
 class TestAgentCardGen(unittest.TestCase):

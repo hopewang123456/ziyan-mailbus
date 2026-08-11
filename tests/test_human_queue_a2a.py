@@ -10,14 +10,14 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.human_queue import enqueue, load_queue
-from lib.human_queue_resolve import resolve_human_queue_item
-from lib.transport.step_result_io import read_step_result_file
-from lib.transport.stub_a2a import StubA2AClient
-from lib.transport.a2a_standard import A2ATransport
-from lib.transport.router import TransportRouter
-from lib.transport.types import DispatchContext
-from lib.utils import json_write
+from lib.adapters.orchestration.human_queue import enqueue, load_queue
+from lib.application.orchestration.human_queue_resolve import resolve_human_queue_item
+from lib.core.a2a.step_result_io import read_step_result_file
+from lib.core.a2a.stub_a2a import StubA2AClient
+from lib.core.a2a.a2a_standard import A2ATransport
+from lib.core.a2a.router import TransportRouter
+from lib.core.a2a.types import DispatchContext
+from lib.infra.utils import json_write
 from tests.test_helpers import load_golden_a2a_path, seed_a2a_harness
 
 

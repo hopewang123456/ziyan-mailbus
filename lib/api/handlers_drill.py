@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from lib.drill.video_publish import run_video_publish_drill
+from lib.application.workflow.drill.video_publish import run_video_publish_drill
 
 
 def handle_drill_video_publish(handler):

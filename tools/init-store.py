@@ -10,8 +10,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from lib.constants import DEFAULT_DATA_DIR  # noqa: E402
-from lib.init_store import run_init_store  # noqa: E402
+from lib.infra.constants import DEFAULT_DATA_DIR  # noqa: E402
+from lib.adapters.config.init_store import run_init_store  # noqa: E402
 
 
 def main() -> int:
@@ -21,7 +21,7 @@ def main() -> int:
     parser.add_argument("--merge", action="store_true", help="Merge SoT overrides into existing store/config.json")
     args = parser.parse_args()
     if args.merge:
-        from lib.init_store import run_merge_store_config
+        from lib.adapters.config.init_store import run_merge_store_config
         return run_merge_store_config(args.data_dir)
     return run_init_store(args.data_dir, fresh=args.fresh)
 

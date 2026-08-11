@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from lib.domain.types import DiscoveredAgent
-from lib.ports.discovery import DiscoverySource
+from lib.interfaces.discovery import DiscoverySource
 
 
 def _which(name: str) -> str | None:

@@ -12,7 +12,7 @@ from lib.domain.errors import Fatal, MailbusError, Retryable
 
 
 def transport_exc_to_domain(exc: BaseException, *, channel: str = "") -> MailbusError:
-    from lib.transport.errors import NonRetryableTransportError, RetryableTransportError, TransportError
+    from lib.core.a2a.errors import NonRetryableTransportError, RetryableTransportError, TransportError
 
     msg = str(exc)
     code = getattr(exc, "code", "") or ""

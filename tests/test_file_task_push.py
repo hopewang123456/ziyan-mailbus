@@ -6,7 +6,7 @@ import os
 import tempfile
 import unittest
 
-from lib.file_task_push import (
+from lib.application.orchestration.file_task_push import (
     agent_uses_file_task_push,
     build_file_task_push_body,
     ensure_file_task_work_order,
@@ -14,7 +14,7 @@ from lib.file_task_push import (
     should_file_task_push,
     verify_file_task_delivery,
 )
-from lib.phantom_detect import check_phantom_completion, is_phantom_reply_text
+from lib.adapters.orchestration.phantom_detect import check_phantom_completion, is_phantom_reply_text
 
 
 class TestFileTaskPush(unittest.TestCase):
@@ -35,7 +35,7 @@ class TestFileTaskPush(unittest.TestCase):
         self.assertFalse(should_file_task_push("hermes_profile", cfg, {"type": "notice"}, "x" * 900))
 
     def test_codex_push_cli(self):
-        from lib.agent_adapters import resolve_push_cli
+        from lib.adapters.frameworks import resolve_push_cli
         agent_cfg = {
             "type": "codex",
             "model": "deepseek-chat",
@@ -83,7 +83,7 @@ class TestFileTaskPush(unittest.TestCase):
         self.assertFalse(is_executable_task({"type": "notice", "action": {"execute": False}}))
 
     def test_role_flow_pursue_to_planner(self):
-        from lib.role_flow import get_next_role, get_next_role_type
+        from lib.application.orchestration.role_flow import get_next_role, get_next_role_type
         data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "store")
         self.assertEqual(get_next_role("市场拓展官", "pursue"), "方案设计师")
         self.assertEqual(get_next_role_type(4, "pursue", data_dir), 1)

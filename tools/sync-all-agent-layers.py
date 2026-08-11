@@ -11,9 +11,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib.agent_registry import load_all_agents  # noqa: E402
-from lib.init_store import mirror_dispatch_seed, mirror_workflows_to_store  # noqa: E402
-from lib.sync_layers import (  # noqa: E402
+from lib.adapters.config.agent_registry import load_all_agents  # noqa: E402
+from lib.adapters.config.init_store import mirror_dispatch_seed, mirror_workflows_to_store  # noqa: E402
+from lib.adapters.config.sync_layers import (  # noqa: E402
     default_use_symlink,
     iter_syncable_agents,
     mirror_rules_to_store,

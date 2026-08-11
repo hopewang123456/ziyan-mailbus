@@ -13,8 +13,12 @@ RUN if [ -n "$PROXY" ]; then export HTTP_PROXY="$PROXY" HTTPS_PROXY="$PROXY"; fi
 
 ENV HTTP_PROXY= HTTPS_PROXY=
 
-COPY bin/ttyd.x86_64 /usr/local/bin/ttyd
-RUN chmod +x /usr/local/bin/ttyd
+# ttyd: 从预编译 release 安装（可选；失败则备用 Web 终端不可用）
+RUN curl -fsSL --connect-timeout 30 --max-time 120 \
+      -o /usr/local/bin/ttyd \
+      https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 \
+    && chmod +x /usr/local/bin/ttyd \
+    || { echo "[WARN] ttyd download failed; fallback web terminal unavailable"; touch /usr/local/bin/ttyd-none; }
 
 COPY entrypoint.sh /entrypoint.sh
 COPY render-codex-config.sh /usr/local/bin/render-codex-config.sh

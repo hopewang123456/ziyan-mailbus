@@ -7,13 +7,13 @@ import os, sys, json, tempfile, time, glob
 from unittest import mock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.utils import configure_stdio_utf8
+from lib.infra.utils import configure_stdio_utf8
 
 configure_stdio_utf8()
 
-from lib.commands import _cleanup_stale_locks
-from lib.constants import DEFAULT_DATA_DIR
-from lib.utils import get_lock_root
+from lib.application.commands.commands import _cleanup_stale_locks
+from lib.infra.constants import DEFAULT_DATA_DIR
+from lib.infra.utils import get_lock_root
 
 
 # ════════════════════════════════════════════════════════════════

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from lib.intake.gates import on_intake_gate_approve, on_intake_gate_deny
-from lib.intake.spawn_rules import load_bridge_config
-from lib.intake.store import get, load_all
-from lib.intake.task_bridge import spawn_analyze, spawn_by_kinds
-from lib.tracker import TaskTracker
+from lib.application.workflow.intake.gates import on_intake_gate_approve, on_intake_gate_deny
+from lib.application.workflow.intake.spawn_rules import load_bridge_config
+from lib.application.workflow.intake.store import get, load_all
+from lib.application.workflow.intake.task_bridge import spawn_analyze, spawn_by_kinds
+from lib.application.orchestration.tracker import TaskTracker
 
 
 def handle_intake_list(handler):

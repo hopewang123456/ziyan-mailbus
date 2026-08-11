@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from lib.utils import json_read, json_write
+from lib.infra.utils import json_read, json_write
 
 
 def default_native_paths(framework: str, agent_id: str = "") -> dict[str, str]:

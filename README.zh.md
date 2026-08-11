@@ -100,6 +100,40 @@ Windows 专用端口转发脚本统一放在 [`windows/`](windows/)。
 
 `mailbus serve` 后打开 `http://127.0.0.1:9814/`。旧版 UI：`/legacy`。
 
+## 架构
+
+Ports & Adapters 分层（详见 [`ARCHITECTURE.md`](ARCHITECTURE.md) 与 [`AGENTS.md`](AGENTS.md)）：
+
+```
+tools/ · lib/api/ → lib/application/ → lib/interfaces/ ← lib/adapters/
+                         ↓
+               lib/domain/ · lib/core/
+                         ↓
+                    lib/infra/
+```
+
+| 层 | 职责 |
+|----|------|
+| `lib/interfaces/` | Protocol 接口（原 `ports`） |
+| `lib/core/a2a/` | A2A 核心协议（原 `lib/transport`） |
+| `lib/application/` | 用例（workflow、harness、scan、push、orchestration 等） |
+| `lib/adapters/` | frameworks、plane、config（`CompositeConfigRepo`）、transport、container（`resolver.py`）等 |
+| `lib/infra/` | clock、路径、`mbus_log`、internal LLM 启动 |
+
+唯一 Composition Root：`lib/composition.py`（`build_a2a_transport`、`build_transport_bundle`、`build_config_repo` 等）。  
+各包有 `Overview.md` 目录地图。路径迁移：[`docs/migration-guide.md`](docs/migration-guide.md)。  
+Harness 规则：`config.harness.rules_path`；链路模板：`config/mailbus/chains.template.json`。
+
+## 文档
+
+- 架构：[`ARCHITECTURE.md`](ARCHITECTURE.md)
+- Agent 入口：[`AGENTS.md`](AGENTS.md)
+- 迁移指南：[`docs/migration-guide.md`](docs/migration-guide.md)
+- 遗留 bash 评估：[`docs/legacy-bash-eval.md`](docs/legacy-bash-eval.md)
+- Adapter：[`docs/agent-adapter-layer.md`](docs/agent-adapter-layer.md)
+- Harness：[`docs/harness-runtime-spec.md`](docs/harness-runtime-spec.md)
+- 环境变量模板：`migrate/env.template`
+
 ## 许可证
 
 MIT

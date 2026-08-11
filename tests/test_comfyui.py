@@ -2,7 +2,7 @@
 
 import unittest
 
-from lib.comfyui.client import _build_sd15_workflow, health_check
+from lib.adapters.integrations.comfyui.client import _build_sd15_workflow, health_check
 
 
 class TestComfyuiClient(unittest.TestCase):
@@ -19,11 +19,12 @@ class TestComfyuiClient(unittest.TestCase):
         self.assertFalse(ok)
 
     def test_url_resolve_candidates(self):
-        from lib.comfyui.url_resolve import _candidate_urls
+        from lib.adapters.integrations.comfyui.url_resolve import _candidate_urls
 
         urls = _candidate_urls("http://custom:8188")
-        self.assertEqual(urls[0], "http://custom:8188")
-        self.assertIn("http://127.0.0.1:8188", urls)
+        # localhost 优先；显式 URL 仍在候选列表中
+        self.assertEqual(urls[0], "http://127.0.0.1:8188")
+        self.assertIn("http://custom:8188", urls)
 
 
 if __name__ == "__main__":

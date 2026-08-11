@@ -10,7 +10,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from lib.commands import (  # noqa: E402
+from lib.application.commands.commands import (  # noqa: E402
     _add_data_dir_arg,
     cmd_ack,
     cmd_agent_add,
@@ -173,8 +173,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from lib.env_bootstrap import load_mailbus_env
-    from lib.utils import configure_stdio_utf8
+    from lib.infra.env_bootstrap import load_mailbus_env
+    from lib.infra.utils import configure_stdio_utf8
 
     configure_stdio_utf8()
     load_mailbus_env()

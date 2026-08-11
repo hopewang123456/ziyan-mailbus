@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-from lib.adapters.clock import now_dt, now_ts, now_utc_dt
+from lib.infra.clock import now_dt, now_ts, now_utc_dt
 import os
 import re
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
-from lib.models import Inbox, MsgStatus
-from lib.tracker import TaskTracker, TaskStatus, _parse_iso_dt
-from lib.utils import json_read, json_write, resolve_paths, _now_iso
-from lib.self_heal import agent_cli_active
+from lib.domain.models import Inbox, MsgStatus
+from lib.application.orchestration.tracker import TaskTracker, TaskStatus, _parse_iso_dt
+from lib.infra.utils import json_read, json_write, resolve_paths, _now_iso
+from lib.application.ops.self_heal import agent_cli_active
 
 _TASK_ID_RE = re.compile(r"【([a-zA-Z0-9_-]+)】")
 _ROUND2_MARKERS = ("Round2", "round-2-backlog", "iteration-r2", "R2-0")

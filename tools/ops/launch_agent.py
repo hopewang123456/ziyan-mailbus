@@ -12,12 +12,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 sys.path.insert(0, ROOT)
 
 from lib.adapters.frameworks import OpenClawAdapter, resolve_container  # noqa: E402
-from lib.launch_ports import resolve_port  # noqa: E402
-from lib.claude_browser_launch import launch_claude_browser  # noqa: E402
-from lib.claude_launch import enqueue_launch_queue, launch_claude_cli  # noqa: E402
-from lib.desktop_launch import agent_has_desktop, launch_desktop  # noqa: E402
-from lib.env_bootstrap import load_mailbus_env, mailbus_paths  # noqa: E402
-from lib.platform_runner import (  # noqa: E402
+from lib.adapters.config.launch_ports import resolve_port  # noqa: E402
+from lib.adapters.frameworks.claude_browser_launch import launch_claude_browser  # noqa: E402
+from lib.adapters.frameworks.claude_launch import enqueue_launch_queue, launch_claude_cli  # noqa: E402
+from lib.adapters.frameworks.desktop_launch import agent_has_desktop, launch_desktop  # noqa: E402
+from lib.infra.env_bootstrap import load_mailbus_env, mailbus_paths  # noqa: E402
+from lib.adapters.plane.platform_runner import (  # noqa: E402
     docker_argv,
     docker_cli_bridge_available,
     init_stdio,
@@ -25,7 +25,7 @@ from lib.platform_runner import (  # noqa: E402
     run,
     running_in_mailbus_docker,
 )
-from lib.utils import json_read  # noqa: E402
+from lib.infra.utils import json_read  # noqa: E402
 
 
 def _config_path(data_dir: str) -> str:
@@ -123,8 +123,8 @@ def _start_wsl_interactive(cmd: str, title: str) -> bool:
     )
     # 写入 WSL 可访问路径
     if sys.platform == "win32":
-        from lib.platform_runner import wsl_exe
-        from lib.utils import to_wsl_path
+        from lib.adapters.plane.platform_runner import wsl_exe
+        from lib.infra.utils import to_wsl_path
         import tempfile
 
         win_tmp = os.path.join(tempfile.gettempdir(), f"launch-window-{ts}.sh")
@@ -212,12 +212,13 @@ def _launch_browser(agent_key: str, data_dir: str, merged: dict, cfg: dict) -> i
 
     if kind == "openclaw_gateway":
         port = OpenClawAdapter.resolve_gateway_port(agent_key, merged)
-        url = f"http://localhost:{port}/chat?token={token}"
-        if not probe_http(f"http://localhost:{port}/", ok_codes=frozenset({200, 401, 403, 404})):
+        url = f"http://127.0.0.1:{port}/chat?token={token}"
+        if not probe_http(f"http://127.0.0.1:{port}/", ok_codes=frozenset({200, 401, 403, 404})):
             start_cmd = merged.get("start_command", "")
             if start_cmd:
                 os.system(_subst(start_cmd, port=str(port), agent=agent_key))
-        _start_browser(url)
+        if not _running_in_mailbus_docker():
+            _start_browser(url)
         print(f"Launched {agent_key} (browser) {url}")
         return 0
 
@@ -225,7 +226,7 @@ def _launch_browser(agent_key: str, data_dir: str, merged: dict, cfg: dict) -> i
         wait_sec = int(merged.get("start_wait_seconds", 15))
         agent_cfg = (cfg.get("agents") or {}).get(agent_key) or {}
         port = str(resolve_port(agent_key, agent_cfg, merged) or 9119)
-        url = _subst(merged.get("url", "http://localhost:{port}/chat"), port=port, agent=agent_key)
+        url = _subst(merged.get("url", "http://127.0.0.1:{port}/?profile={agent}"), port=port, agent=agent_key)
         service = (agent_cfg.get("docker") or {}).get("service") or "hermes"
         container = resolve_container(agent_cfg, agent_key, service)
         ok_codes = frozenset({200, 301, 302, 401, 403})

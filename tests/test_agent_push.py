@@ -6,11 +6,11 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.agent_push import try_build_push_direct
+from lib.adapters.frameworks.direct_push import try_build_push_direct
 
 
 class TestAgentPush(unittest.TestCase):
-    @patch("lib.agent_push._docker_bin", return_value="docker")
+    @patch("lib.adapters.frameworks.direct_push._docker_bin", return_value="docker")
     def test_codex_direct_argv(self, *_m):
         spec = try_build_push_direct(
             "lingxiao",
@@ -37,9 +37,9 @@ class TestAgentPush(unittest.TestCase):
         mid = argv[argv.index("-m") + 1]
         self.assertEqual(mid, "deepseek-v4-flash")
 
-    @patch("lib.claude_launch.resolve_claude_executable", return_value=r"C:\claude.exe")
-    @patch("lib.claude_launch._platform_enabled", return_value=True)
-    @patch("lib.claude_launch.resolve_claude_platform", return_value="windows")
+    @patch("lib.adapters.frameworks.claude_launch.resolve_claude_executable", return_value=r"C:\claude.exe")
+    @patch("lib.adapters.frameworks.claude_launch._platform_enabled", return_value=True)
+    @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="windows")
     def test_claude_delegates_to_direct(self, *_m):
         if sys.platform != "win32":
             self.skipTest("windows claude path")

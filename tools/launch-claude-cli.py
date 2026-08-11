@@ -10,7 +10,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from lib.claude_launch import launch_claude_cli
+from lib.adapters.frameworks.claude_launch import launch_claude_cli
 
 
 def main() -> int:

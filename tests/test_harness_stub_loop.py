@@ -10,19 +10,19 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.harness import get_harness
-from lib.pipeline_results import step_result_path
+from lib.application.harness import get_harness
+from lib.application.orchestration.pipeline.results import step_result_path
 from lib.application.orchestration.pipeline.trigger import trigger
 from lib.adapters.orchestration.task_fsm import StepFsmState
-from lib.tracker import TaskTracker
-from lib.transport.a2a_standard import A2ATransport
-from lib.transport.dispatch_integration import build_router
-from lib.transport.file_bus import FileBusTransport
-from lib.transport.router import TransportRouter
-from lib.transport.stub_a2a import StubA2AClient
-from lib.transport.types import DispatchContext
-from lib.transport.step_result_io import read_step_result_file
-from lib.utils import _now_iso, json_read, json_write
+from lib.application.orchestration.tracker import TaskTracker
+from lib.core.a2a.a2a_standard import A2ATransport
+from lib.core.a2a.dispatch_integration import build_router
+from lib.core.a2a.file_bus import FileBusTransport
+from lib.core.a2a.router import TransportRouter
+from lib.core.a2a.stub_a2a import StubA2AClient
+from lib.core.a2a.types import DispatchContext
+from lib.core.a2a.step_result_io import read_step_result_file
+from lib.infra.utils import _now_iso, json_read, json_write
 from tests.test_helpers import seed_a2a_harness
 from unittest.mock import patch
 
@@ -112,7 +112,7 @@ class TestHarnessStubLoop(unittest.TestCase):
 
     def _advance_without_redispatch(self, agents: dict) -> None:
         with patch(
-            "lib.transport.dispatch_integration.dispatch_pipeline_step",
+            "lib.core.a2a.dispatch_integration.dispatch_pipeline_step",
             return_value={"ok": True, "transport_used": "file_bus"},
         ):
             trigger(self.tmp, agents, self.paths)
@@ -160,7 +160,7 @@ class TestHarnessStubLoop(unittest.TestCase):
         )
         self.assertTrue(router.dispatch_step(s2, agents).ok)
         self._refresh_result_timestamp("s2")
-        with patch("lib.pipeline_routing.pick_person_for_role", return_value="dali"):
+        with patch("lib.application.orchestration.pipeline.routing.pick_person_for_role", return_value="dali"):
             self._advance_without_redispatch(agents)
 
         s3 = DispatchContext(
@@ -169,8 +169,8 @@ class TestHarnessStubLoop(unittest.TestCase):
         )
         self.assertTrue(FileBusTransport(mode="stub").dispatch(s3, agents).ok)
         self._refresh_result_timestamp("s3")
-        with patch("lib.pipeline_routing.resolve_next_assignee", return_value=(None, None)):
-            with patch("lib.pipeline_routing.is_pipeline_terminal", return_value=True):
+        with patch("lib.application.orchestration.pipeline.routing.resolve_next_assignee", return_value=(None, None)):
+            with patch("lib.application.orchestration.pipeline.routing.is_pipeline_terminal", return_value=True):
                 trigger(self.tmp, agents, self.paths)
 
         task = TaskTracker(self.tmp).get("feat-auth-001")

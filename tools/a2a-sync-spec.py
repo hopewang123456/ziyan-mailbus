@@ -11,8 +11,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib.constants import MAILBUS_ROOT
-from lib.utils import json_read, json_write
+from lib.infra.constants import MAILBUS_ROOT
+from lib.infra.utils import json_read, json_write
 
 
 def main() -> int:

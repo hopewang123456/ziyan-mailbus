@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from lib.utils import json_read, resolve_paths
+from lib.infra.utils import json_read, resolve_paths
 
 
 def list_unacked(data_dir: str, agent_id: str, msg_ids: Sequence[str]) -> list[str]:
@@ -23,7 +23,7 @@ def list_unacked(data_dir: str, agent_id: str, msg_ids: Sequence[str]) -> list[s
 
 def ack_message(data_dir: str, agent_id: str, msg_id: str) -> None:
     """Append an ack entry (idempotent-ish: callers may re-append)."""
-    from lib.utils import json_write
+    from lib.infra.utils import json_write
 
     paths = resolve_paths(data_dir)
     ack_file = f"{paths['inbox']}/{agent_id}/ack.json"

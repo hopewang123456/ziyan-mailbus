@@ -8,8 +8,8 @@ from typing import Any, Callable
 from lib.composition import build_planes
 from lib.domain.errors import Fatal
 from lib.domain.health import probe_http
-from lib.ports.plane import ContainerPlanePort, HostPlanePort
-from lib.utils import json_read, json_write, named_lock
+from lib.interfaces.plane import ContainerPlanePort, HostPlanePort
+from lib.infra.utils import json_read, json_write, named_lock
 
 LogFn = Callable[[str], None]
 
@@ -303,13 +303,13 @@ def _set_role_enabled_locked(data_dir: str, agent_id: str, enabled: bool) -> dic
     snap = dict(agents[agent_id]) if isinstance(agents[agent_id], dict) else {}
     agents[agent_id]["enabled"] = bool(enabled)
     try:
-        from lib.agentmemory_mount import archive_agentmemory, clear_mcp_mount_hint, write_mcp_mount_hint
+        from lib.composition import get_integrations
 
         if enabled:
-            write_mcp_mount_hint(data_dir, agent_id)
+            get_integrations().write_mcp_mount_hint(data_dir, agent_id)
         else:
-            clear_mcp_mount_hint(data_dir, agent_id)
-            archive_agentmemory(data_dir, agent_id)
+            get_integrations().clear_mcp_mount_hint(data_dir, agent_id)
+            get_integrations().archive_agentmemory(data_dir, agent_id)
     except Exception:
         agents[agent_id] = snap
         json_write(cfg_path, cfg)

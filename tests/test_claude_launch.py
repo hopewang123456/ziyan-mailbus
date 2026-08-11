@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.claude_launch import (
+from lib.adapters.frameworks.claude_launch import (
     build_push_command,
     build_interactive_command,
     host_cli_active,
@@ -54,8 +54,8 @@ class TestClaudeLaunch(unittest.TestCase):
             r"E:\ai_tools",
         )
 
-    @patch("lib.claude_launch.resolve_claude_platform", return_value="windows")
-    @patch("lib.claude_launch._runtime_os", return_value="linux")
+    @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="windows")
+    @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="linux")
     def test_push_windows_from_wsl_uses_powershell(self, *_mocks):
         data_dir = os.path.join(os.path.dirname(__file__), "..", "store")
         cmd = build_push_command(
@@ -69,9 +69,9 @@ class TestClaudeLaunch(unittest.TestCase):
         self.assertIn("deepseek-v4-flash", cmd)
         self.assertNotIn("-it", cmd)
 
-    @patch("lib.claude_launch._platform_enabled", return_value=True)
-    @patch("lib.claude_launch.resolve_claude_platform", return_value="linux")
-    @patch("lib.claude_launch._runtime_os", return_value="linux")
+    @patch("lib.adapters.frameworks.claude_launch._platform_enabled", return_value=True)
+    @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="linux")
+    @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="linux")
     def test_push_linux_native_bash(self, *_mocks):
         cfg = dict(AGENT_CFG)
         cfg["push"] = {"cwd": "/mnt/e/ai_tools"}
@@ -81,8 +81,8 @@ class TestClaudeLaunch(unittest.TestCase):
         self.assertIn("claude", cmd)
         self.assertIn("-p", cmd)
 
-    @patch("lib.claude_launch.resolve_claude_platform", return_value="windows")
-    @patch("lib.claude_launch._runtime_os", return_value="windows")
+    @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="windows")
+    @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="windows")
     def test_interactive_windows_no_exit(self, *_mocks):
         data_dir = os.path.join(os.path.dirname(__file__), "..", "store")
         cmd = build_interactive_command("lingyun", AGENT_CFG, TYPES, data_dir=data_dir)
@@ -99,7 +99,7 @@ class TestClaudeLaunch(unittest.TestCase):
             },
             "push": {"cwd": r"E:\ai_tools"},
         }
-        from lib.claude_launch import _claude_push_flags
+        from lib.adapters.frameworks.claude_launch import _claude_push_flags
 
         flags = _claude_push_flags("lingyan", cfg, TYPES, "minimax-m2")
         self.assertIn("dontAsk", flags)
@@ -112,7 +112,7 @@ class TestClaudeLaunch(unittest.TestCase):
             "claude": {"permission_mode": "dontAsk"},
             "push": {"cwd": r"E:\ai_tools"},
         }
-        from lib.claude_launch import _claude_push_flags, _claude_push_argv_parts
+        from lib.adapters.frameworks.claude_launch import _claude_push_flags, _claude_push_argv_parts
 
         flags = _claude_push_flags("lingyun", cfg, TYPES, None)
         self.assertIn("dontAsk", flags)
@@ -139,7 +139,7 @@ class TestClaudeLaunch(unittest.TestCase):
             "type": "claude_code",
             "claude": {"permission_mode": "acceptEdits"},
         }
-        from lib.claude_launch import _claude_push_flags
+        from lib.adapters.frameworks.claude_launch import _claude_push_flags
 
         flags = _claude_push_flags("lingyun", cfg, TYPES, None)
         self.assertIn("acceptEdits", flags)
@@ -149,8 +149,8 @@ class TestClaudeLaunch(unittest.TestCase):
         self.assertTrue(host_cli_active(ps))
         self.assertFalse(host_cli_active("hopew 1 tail -f /dev/null\n"))
 
-    @patch("lib.claude_launch.resolve_claude_platform", return_value="windows")
-    @patch("lib.claude_launch._runtime_os", return_value="windows")
+    @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="windows")
+    @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="windows")
     def test_try_build_push_direct_on_windows_native(self, *_mocks):
         if sys.platform != "win32":
             self.skipTest("Windows-only direct push")
@@ -170,10 +170,10 @@ class TestClaudeLaunch(unittest.TestCase):
         self.assertTrue(spec["cwd"])
         self.assertTrue(spec["argv"][0].lower().endswith("claude.exe"))
 
-    @patch("lib.claude_launch.resolve_claude_executable", return_value="/usr/bin/claude")
-    @patch("lib.claude_launch._platform_enabled", return_value=True)
-    @patch("lib.claude_launch.resolve_claude_platform", return_value="linux")
-    @patch("lib.claude_launch._runtime_os", return_value="linux")
+    @patch("lib.adapters.frameworks.claude_launch.resolve_claude_executable", return_value="/usr/bin/claude")
+    @patch("lib.adapters.frameworks.claude_launch._platform_enabled", return_value=True)
+    @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="linux")
+    @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="linux")
     def test_try_build_push_direct_on_linux(self, *_mocks):
         data_dir = os.path.join(os.path.dirname(__file__), "..", "store")
         spec = try_build_push_direct(

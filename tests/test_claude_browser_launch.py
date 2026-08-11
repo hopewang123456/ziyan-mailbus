@@ -7,13 +7,13 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.claude_browser_launch import (
+from lib.adapters.frameworks.claude_browser_launch import (
     merge_browser_cfg,
     resolve_browser_port,
     resolve_browser_url,
     agent_has_claude_browser,
 )
-from lib.claude_launch import build_interactive_shell_inner
+from lib.adapters.frameworks.claude_launch import build_interactive_shell_inner
 
 
 class TestClaudeBrowserLaunch(unittest.TestCase):
@@ -43,7 +43,7 @@ class TestClaudeBrowserLaunch(unittest.TestCase):
         self.assertIn("9260", url)
 
     def test_agent_has_claude_browser(self):
-        from lib.utils import json_read
+        from lib.infra.utils import json_read
 
         cfg = json_read(os.path.join(self.data_dir, "config.json"), {})
         agent = cfg["agents"]["lingyun"]
@@ -53,7 +53,7 @@ class TestClaudeBrowserLaunch(unittest.TestCase):
     def test_ensure_claude_agent_settings_inherits_base_url(self):
         import tempfile
         import shutil
-        from lib.claude_launch import ensure_claude_agent_settings
+        from lib.adapters.frameworks.claude_launch import ensure_claude_agent_settings
 
         with tempfile.TemporaryDirectory() as td:
             store = os.path.join(td, "store")
@@ -93,12 +93,16 @@ class TestClaudeBrowserLaunch(unittest.TestCase):
         self.assertIn("dontAsk", inner_yan)
         self.assertIn("--name '", inner_yun)
         self.assertIn("--name '", inner_yan)
-        self.assertIn("claude.ps1", inner_yun.lower())
+        # linux/wsl 路径直接 exec claude；windows bridge 才走 claude.ps1
+        self.assertTrue(
+            "claude" in inner_yun.lower(),
+            msg=f"expected claude binary in: {inner_yun}",
+        )
 
-    @patch("lib.claude_browser_launch._http_ready", return_value=True)
-    @patch("lib.claude_browser_launch._launch_url")
+    @patch("lib.adapters.frameworks.claude_browser_launch._http_ready", return_value=True)
+    @patch("lib.adapters.frameworks.claude_browser_launch._launch_url")
     def test_launch_claude_browser_ready(self, mock_open, _mock_ready):
-        from lib.claude_browser_launch import launch_claude_browser
+        from lib.adapters.frameworks.claude_browser_launch import launch_claude_browser
 
         info = launch_claude_browser("lingyun", self.data_dir)
         self.assertEqual(info["agent"], "lingyun")

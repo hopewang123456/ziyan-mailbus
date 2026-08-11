@@ -4,12 +4,27 @@ from __future__ import annotations
 
 class MailbusError(Exception):
     code: str = "mailbus_error"
+    zh: str = ""
 
-    def __init__(self, message: str = "", *, code: str | None = None):
-        super().__init__(message or self.code)
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        code: str | None = None,
+        zh: str | None = None,
+    ):
         if code:
             self.code = code
         self.message = message or self.code
+        self.zh = zh if zh is not None else ""
+        super().__init__(self.message)
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "error": self.message,
+            "error_code": self.code,
+            "message_zh": self.zh or self.message,
+        }
 
 
 class Retryable(MailbusError):

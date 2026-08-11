@@ -4,7 +4,7 @@ import json
 import unittest
 from unittest.mock import MagicMock, patch
 
-from lib.gpu_coordinator import (
+from lib.adapters.integrations.gpu import (
     acquire_gpu,
     load_gpu_sharing_config,
     release_comfyui_vram,
@@ -39,7 +39,7 @@ class TestGpuCoordinatorActions(unittest.TestCase):
     def tearDown(self):
         reset_gpu_lock_for_tests()
 
-    @patch("lib.gpu_coordinator._http_json")
+    @patch("lib.adapters.integrations.gpu._http_json")
     def test_release_ollama_vram(self, mock_http):
         mock_http.side_effect = [
             (True, {"models": [{"name": "qwen2.5:3b"}]}),
@@ -49,7 +49,7 @@ class TestGpuCoordinatorActions(unittest.TestCase):
         self.assertTrue(out["ok"])
         self.assertEqual(out["released"], ["qwen2.5:3b"])
 
-    @patch("lib.gpu_coordinator._http_json")
+    @patch("lib.adapters.integrations.gpu._http_json")
     def test_release_comfyui_vram(self, mock_http):
         mock_http.return_value = (True, {"system": {}})
         out = release_comfyui_vram("http://127.0.0.1:8188")
@@ -58,8 +58,8 @@ class TestGpuCoordinatorActions(unittest.TestCase):
         args = mock_http.call_args
         self.assertIn("/free", args[0][0])
 
-    @patch("lib.gpu_coordinator.release_ollama_vram")
-    @patch("lib.gpu_coordinator.time.sleep")
+    @patch("lib.adapters.integrations.gpu.release_ollama_vram")
+    @patch("lib.adapters.integrations.gpu.time.sleep")
     def test_acquire_comfyui_unloads_ollama(self, _sleep, mock_release):
         mock_release.return_value = {"ok": True, "released": ["m1"]}
         cfg = {"gpu_sharing": {"enabled": True, "settle_seconds": 0}}
@@ -70,7 +70,7 @@ class TestGpuCoordinatorActions(unittest.TestCase):
 
     def test_gpu_busy_second_owner(self):
         cfg = {"gpu_sharing": {"enabled": True, "settle_seconds": 0, "release_ollama_before_image": False}}
-        with patch("lib.gpu_coordinator.release_comfyui_vram"):
+        with patch("lib.adapters.integrations.gpu.release_comfyui_vram"):
             acquire_gpu("comfyui", cfg)
             busy = acquire_gpu("ollama", cfg)
             self.assertFalse(busy["ok"])

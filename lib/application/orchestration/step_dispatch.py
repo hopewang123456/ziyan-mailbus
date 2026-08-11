@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from lib.utils import json_read, resolve_paths
+from lib.infra.utils import json_read, resolve_paths
 
 
 def dispatch_fsm_step(
@@ -16,7 +16,7 @@ def dispatch_fsm_step(
 ) -> bool:
     """将 FSM 步骤推送到 assignee inbox。成功返回 True。"""
     from lib.application.orchestration.pipeline.trigger import _send_task
-    from lib.transport.dispatch_integration import dispatch_pipeline_step, transport_router_enabled
+    from lib.core.a2a.dispatch_integration import dispatch_pipeline_step, transport_router_enabled
 
     to_person = step.get("to_person") or step.get("to_agent") or ""
     if not to_person:

@@ -26,7 +26,7 @@ def _default_listen_and_target() -> tuple[str, int, str]:
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         if root not in sys.path:
             sys.path.insert(0, root)
-        from lib.service_registry import ollama_proxy_listen
+        from lib.adapters.ops.service_registry import ollama_proxy_listen
 
         return ollama_proxy_listen()
     except Exception:

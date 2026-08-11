@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.models import Inbox, MsgStatus
+from lib.domain.models import Inbox, MsgStatus
 from lib.application.orchestration.pipeline.task import (
     pipeline_inbox_may_mark_done,
     pipeline_repush_cooldown_minutes,
@@ -24,10 +24,10 @@ from lib.adapters.orchestration.task_fsm import (
     write_step_result,
     _normalize_result_timestamp,
 )
-from lib.utils import json_write
-from lib.workflow.engine import maybe_block_after_step
-from lib.verify.deliverable_check import check_windows_launch_files, run_scripted_interactive
-from lib.verify.runner import run_step_verify
+from lib.infra.utils import json_write
+from lib.application.workflow.engine import maybe_block_after_step
+from lib.application.ops.verify.deliverable_check import check_windows_launch_files, run_scripted_interactive
+from lib.application.ops.verify.runner import run_step_verify
 
 
 def _seed_workflow(tmp: str) -> None:
@@ -73,7 +73,7 @@ class TestExplicitChainTerminal(unittest.TestCase):
             "extensions": {"ziyan": {"workflow": {"workflow_id": "llm_adaptive"}}},
         }
         ensure_fsm(task)
-        with patch("lib.workflow.llm_route.route_next_step") as mock_route:
+        with patch("lib.application.workflow.llm_route.route_next_step") as mock_route:
             block = maybe_block_after_step(
                 task, task["chain"][-1], {"conclusion": "done"}, data_dir=self.tmp,
             )
@@ -191,7 +191,7 @@ class TestCooldownAndAuditDefer(unittest.TestCase):
 
 class TestContainerPushBody(unittest.TestCase):
     def test_rewrite_removes_windows_drive(self):
-        from lib.utils import rewrite_host_store_refs
+        from lib.infra.utils import rewrite_host_store_refs
 
         data = r"E:\ai_tools\mail\store"
         text = f"path: {data}\\msg-files\\a.md"

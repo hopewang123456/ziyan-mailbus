@@ -1,4 +1,4 @@
-"""Pipeline step 字段访问与 planned 队列 — v3 chain 辅助。"""
+"""Pipeline step 字段访问与 planned 队列 — role-pipeline chain 辅助。"""
 from __future__ import annotations
 
 from typing import Any, List
@@ -39,12 +39,14 @@ def is_pipeline_step(item: Any) -> bool:
     return isinstance(item, dict) and bool(item.get("step_id") or item.get("to_agent") or item.get("to_person"))
 
 
-def is_v3_task(task: dict) -> bool:
+def is_role_pipeline_task(task: dict) -> bool:
+    """True when chain head carries role_type / planned_role_types (current pipeline schema)."""
     chain = task.get("chain") or []
     if not chain or not isinstance(chain[0], dict):
         return False
     head = chain[0]
     return bool(head.get("planned_role_types") is not None or head.get("role_type") is not None)
+
 
 
 def step_agent(step: dict) -> str:
@@ -89,7 +91,7 @@ def planned_role_types_remaining(chain: List[dict]) -> List[int]:
 
 __all__ = [
     "is_pipeline_step",
-    "is_v3_task",
+    "is_role_pipeline_task",
     "step_agent",
     "step_role_type",
     "step_role_zh",

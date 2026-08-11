@@ -10,7 +10,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from lib.desktop_launch import launch_desktop
+from lib.adapters.frameworks.desktop_launch import launch_desktop
 
 
 def main() -> int:

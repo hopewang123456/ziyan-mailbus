@@ -11,8 +11,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib.constants import MAILBUS_SKILLS_ROOT, TEAM_PACK_SKILLS_ROOT  # noqa: E402
-from lib.agent_registry import layer_skills_for_agent, load_all_agents  # noqa: E402
+from lib.infra.constants import MAILBUS_SKILLS_ROOT, TEAM_PACK_SKILLS_ROOT  # noqa: E402
+from lib.adapters.config.agent_registry import layer_skills_for_agent, load_all_agents  # noqa: E402
 
 
 def _agent_archetypes() -> dict[str, str]:

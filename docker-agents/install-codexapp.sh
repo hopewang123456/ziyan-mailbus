@@ -1,10 +1,12 @@
 #!/bin/bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+MAILBUS_ROOT="${MAILBUS_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 for ctr in docker-agents-lingxiao-1 docker-agents-lingjian-1; do
   echo "=== install codexapp in $ctr ==="
   docker exec "$ctr" npm install -g codexapp 2>&1 | tail -5
-  docker cp /mnt/e/ai_tools/mail/docker-agents/codex-agent/start-codex-ui.sh "$ctr:/usr/local/bin/start-codex-ui.sh"
-  docker cp /mnt/e/ai_tools/mail/docker-agents/codex-agent/deepseek-model-aliases.json "$ctr:/tmp/model-aliases.json"
+  docker cp "${MAILBUS_ROOT}/docker-agents/codex-agent/start-codex-ui.sh" "$ctr:/usr/local/bin/start-codex-ui.sh"
+  docker cp "${MAILBUS_ROOT}/docker-agents/codex-agent/deepseek-model-aliases.json" "$ctr:/tmp/model-aliases.json"
   docker exec "$ctr" chmod +x /usr/local/bin/start-codex-ui.sh
   docker exec "$ctr" bash -lc 'mkdir -p /home/node/.codex/deepseek-gateway/config && cp /tmp/model-aliases.json /home/node/.codex/deepseek-gateway/config/model-aliases.json; rm -f /home/node/.codex/auth.json'
   docker exec "$ctr" pkill -f codexapp 2>/dev/null || true

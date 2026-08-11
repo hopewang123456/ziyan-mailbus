@@ -7,7 +7,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.pipeline_work_order import (
+from lib.application.orchestration.pipeline.work_order import (
     legacy_msg_file_path,
     parse_work_order_status,
     resolve_work_order_path,

@@ -5,13 +5,17 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+MAILBUS_ROOT="${MAILBUS_ROOT:-$SCRIPT_DIR}"
+
 AGENT_KEY="${1:-}"
 LAUNCH_MODE="${2:-browser}"
 # 检测容器环境，自适应 config 路径
 if [ -f "/mailbus/store/config.json" ]; then
   CONFIG_FILE="/mailbus/store/config.json"
+  MAILBUS_ROOT="/mailbus"
 else
-  CONFIG_FILE="/mnt/e/ai_tools/mail/store/config.json"
+  CONFIG_FILE="${MAILBUS_CONFIG:-${MAILBUS_ROOT}/store/config.json}"
 fi
 
 if [ -z "$AGENT_KEY" ]; then
@@ -31,7 +35,7 @@ start_wsl() {
     local ts=$(date +%s)
     local mailbus_root="/mailbus"
     if [ ! -d "$mailbus_root" ]; then
-      mailbus_root="/mnt/e/ai_tools/mail"
+      mailbus_root="${MAILBUS_ROOT}"
     fi
     local queue_dir="${MAILBUS_LAUNCH_QUEUE:-${mailbus_root}/run/launch-queue}"
     mkdir -p "$queue_dir" 2>/dev/null || true
@@ -93,12 +97,12 @@ ensure_codex_container() {
   if [ -f "/mailbus/lib/agent_adapters.py" ]; then
     MB_ROOT="/mailbus"
   else
-    MB_ROOT="$(dirname "$0")"
+    MB_ROOT="${MAILBUS_ROOT:-$(dirname "$0")}"
   fi
   CONTAINER=$(python3 -c "
 import json, sys
 sys.path.insert(0, '${MB_ROOT}')
-from lib.agent_adapters import resolve_container
+from lib.adapters.frameworks import resolve_container
 with open('${CONFIG_FILE}') as f:
     cfg = json.load(f)
 agent = cfg['agents']['${AGENT_KEY}']

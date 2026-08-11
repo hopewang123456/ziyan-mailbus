@@ -14,13 +14,13 @@ import time
 import shutil
 import subprocess
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-from lib.constants import MAILBUS_ROOT
-from lib.models import Inbox
-from lib.utils import json_read, json_write, resolve_paths, resolve_mailbus_path, identity_candidates, to_wsl_path, _now_iso
-from lib.heartbeat import load_status as load_heartbeat
-from lib.alerter import get_recent_alerts
-from lib.scheduler import get_scheduler_status
-from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
+from lib.infra.constants import MAILBUS_ROOT
+from lib.domain.models import Inbox
+from lib.infra.utils import json_read, json_write, resolve_paths, resolve_mailbus_path, identity_candidates, to_wsl_path, _now_iso
+from lib.adapters.ops.heartbeat import load_status as load_heartbeat
+from lib.adapters.ops.alerter import get_recent_alerts
+from lib.adapters.ops.scheduler import get_scheduler_status
+from lib.infra.clock import now_dt, now_iso, now_ts, now_utc_dt
 
 
 def _reload_store_config(handler) -> tuple[dict, dict]:
@@ -44,7 +44,7 @@ def _launch_script_timeout(mode: str) -> int:
 
 
 def _running_in_mailbus_container() -> bool:
-    from lib.platform_runner import running_in_mailbus_docker
+    from lib.adapters.plane.platform_runner import running_in_mailbus_docker
 
     return running_in_mailbus_docker()
 
@@ -117,8 +117,12 @@ def handle_status(handler):
             "type": handler.agents[name].get("type", "?"),
         }
     handler._send_json({
-        "project": "ziyan-mailbus", "agents": len(handler.agents),
-        "total_messages": total, "unread_messages": unread,
+        "status": "ok",
+        "version": "v2.0.0",
+        "project": "ziyan-mailbus",
+        "agents": len(handler.agents),
+        "total_messages": total,
+        "unread_messages": unread,
         "agent_statuses": agent_statuses,
         "scheduler": get_scheduler_status(),
         "round1_gate": json_read(
@@ -145,7 +149,7 @@ def _resolve_agent_browser_url(handler, agent_name: str) -> str:
     atype = cfg.get("type", "")
     if atype == "claude_code":
         try:
-            from lib.claude_browser_launch import resolve_browser_url
+            from lib.adapters.frameworks.claude_browser_launch import resolve_browser_url
 
             return resolve_browser_url(agent_name, handler.data_dir)
         except Exception:
@@ -154,7 +158,7 @@ def _resolve_agent_browser_url(handler, agent_name: str) -> str:
 
 
 def _agent_launch_meta(handler, name: str, cfg: dict) -> dict:
-    from lib.desktop_launch import agent_has_desktop
+    from lib.adapters.frameworks.desktop_launch import agent_has_desktop
 
     launch = cfg.get("launch") or {}
     atype = cfg.get("type", "?")
@@ -190,7 +194,7 @@ def _agent_launch_meta(handler, name: str, cfg: dict) -> dict:
 
 def handle_agents(handler):
     """GET /api/agents — 获取 agent 列表和配置（含 access/agent.json registry）。"""
-    from lib.agent_registry import get_agent, mailbus_root
+    from lib.adapters.config.agent_registry import get_agent, mailbus_root
 
     agents, _ = _reload_store_config(handler)
     canonical = str(mailbus_root()).replace("\\", "/")
@@ -228,7 +232,7 @@ def handle_frameworks(handler):
 
 def handle_workload(handler):
     """GET /api/workload — Agent 负载摘要（P2）。"""
-    from lib.tracker import TaskTracker
+    from lib.application.orchestration.tracker import TaskTracker
 
     paths = resolve_paths(handler.data_dir)
     tracker = TaskTracker(handler.data_dir)
@@ -278,7 +282,7 @@ def handle_alerts(handler):
 
 def handle_config(handler):
     """GET /api/config — 查看总线配置（脱敏）"""
-    from lib.config_admin import _redact_api_token
+    from lib.adapters.config.config_admin import _redact_api_token
 
     config_path = f"{handler.data_dir}/config.json"
     config = json_read(config_path, {})
@@ -404,7 +408,7 @@ def handle_reports(handler):
 
 def handle_harness_report(handler, sha: str):
     """GET /api/harness-reports/<sha> — 读取 code-review-report-v1 JSON（只读）"""
-    from lib.harness.report_api import (
+    from lib.application.harness.report_api import (
         harness_report_summary,
         load_harness_report,
         normalize_commit_sha,
@@ -478,9 +482,9 @@ def handle_stats(handler):
 
     聚合：消息总量、任务状态分布、Agent 排行、响应时间、趋势。
     """
-    from lib.utils import resolve_paths, _now_iso
-    from lib.models import Inbox
-    from lib.tracker import TaskTracker
+    from lib.infra.utils import resolve_paths, _now_iso
+    from lib.domain.models import Inbox
+    from lib.application.orchestration.tracker import TaskTracker
     from datetime import datetime, timezone, timedelta
 
     paths = resolve_paths(handler.data_dir)
@@ -603,8 +607,8 @@ def handle_stats(handler):
 def handle_search(handler):
     """GET /api/search — 消息 + 目录（外部工具）检索"""
     from urllib.parse import urlparse, parse_qs
-    from lib.search import search
-    from lib.catalog_search import search_catalog, search_all, index_catalog
+    from lib.adapters.ops.search import search
+    from lib.adapters.ops.catalog_search import search_catalog, search_all, index_catalog
 
     qs = parse_qs(urlparse(handler.path).query)
     query = qs.get("q", qs.get("query", [""]))[0]
@@ -668,7 +672,7 @@ def handle_search(handler):
 
 def handle_external_tools(handler):
     """GET /api/external-tools — 外部工具注册表与 agent 配对"""
-    from lib.catalog_search import list_external_tools_summary
+    from lib.adapters.ops.catalog_search import list_external_tools_summary
     handler._send_json(list_external_tools_summary(handler.data_dir))
 
 
@@ -692,20 +696,22 @@ def handle_agent_profile(handler, agent: str):
         "skills": [],
     }
 
+    identity_used = None
     # 从 profile_paths 读取身份/人设/技能（解析 Docker /mailbus/ 路径）
-    paths_cfg = cfg.get("profile_paths", {})
+    paths_cfg = cfg.get("profile_paths", {}) or {}
     for identity_path in identity_candidates(handler.data_dir, agent, paths_cfg.get("identity", "")):
         if identity_path and os.path.isfile(identity_path):
             try:
                 with open(identity_path, "r", encoding="utf-8", errors="replace") as f:
                     profile["identity"] = f.read(12000)
+                identity_used = identity_path
                 break
             except Exception:
                 pass
 
     soul_path = resolve_mailbus_path(handler.data_dir, paths_cfg.get("soul", ""))
     if not soul_path or not os.path.isfile(soul_path):
-        from lib.constants import MAILBUS_IDENTITIES_ROOT_STR
+        from lib.infra.constants import MAILBUS_IDENTITIES_ROOT_STR
 
         for alt in (
             os.path.join(MAILBUS_IDENTITIES_ROOT_STR, agent, "SOUL.md"),
@@ -715,17 +721,18 @@ def handle_agent_profile(handler, agent: str):
             if os.path.isfile(alt):
                 soul_path = alt
                 break
-    if soul_path and os.path.isfile(soul_path):
+    soul_ok = bool(soul_path and os.path.isfile(soul_path))
+    if soul_ok:
         try:
             with open(soul_path, "r", encoding="utf-8", errors="replace") as f:
                 profile["soul"] = f.read(4000)
         except Exception:
-            pass
+            soul_ok = False
 
-    skill_dirs = paths_cfg.get("skills_dirs", [])
+    skill_dirs = paths_cfg.get("skills_dirs", []) or []
     all_skills = set()
     for sd in skill_dirs:
-        sd_resolved = resolve_mailbus_path(handler.data_dir, sd) if sd.startswith("/") else sd
+        sd_resolved = resolve_mailbus_path(handler.data_dir, sd) if str(sd).startswith("/") else sd
         if os.path.isdir(sd_resolved):
             try:
                 for fname in sorted(os.listdir(sd_resolved)):
@@ -761,28 +768,180 @@ def handle_agent_profile(handler, agent: str):
     hb_data = load_heartbeat(handler.data_dir)
     profile["heartbeat"] = (hb_data.get("agents", {}) or {}).get(agent, {}) if hb_data else {}
 
-    # 头像：优先 ComfyUI 肖像，fallback SVG
-    from lib.constants import MAILBUS_DOCS_ROOT_STR
+    # 头像：web/public 与 docs/avatars 双根
+    from lib.infra.constants import MAILBUS_DOCS_ROOT_STR, MAILBUS_ROOT
 
-    docs_avatars = os.path.join(MAILBUS_DOCS_ROOT_STR, "avatars")
-    portrait_png = os.path.join(docs_avatars, f"{agent}_portrait.png")
-    portrait_svg = os.path.join(docs_avatars, f"{agent}_portrait.svg")
-    animated_webp = os.path.join(docs_avatars, f"{agent}_animated.webp")
-    animated_svg = os.path.join(docs_avatars, f"{agent}_animated.svg")
-    if os.path.isfile(portrait_png):
-        profile["avatar_url"] = f"avatars/{agent}_portrait.png"
-    elif os.path.isfile(portrait_svg):
-        profile["avatar_url"] = f"avatars/{agent}_portrait.svg"
-    else:
-        profile["avatar_url"] = f"avatars/{agent}_portrait.svg"
-    if os.path.isfile(animated_webp):
-        profile["avatar_animated"] = f"avatars/{agent}_animated.webp"
-    elif os.path.isfile(animated_svg):
-        profile["avatar_animated"] = f"avatars/{agent}_animated.svg"
-    else:
+    avatar_roots = [
+        os.path.join(str(MAILBUS_ROOT), "web", "public", "avatars"),
+        os.path.join(MAILBUS_DOCS_ROOT_STR, "avatars"),
+    ]
+
+    def _first(*names: str) -> str:
+        for root in avatar_roots:
+            for name in names:
+                if os.path.isfile(os.path.join(root, name)):
+                    return f"avatars/{name}"
+        return f"avatars/{names[0]}"
+
+    profile["avatar_url"] = _first(f"{agent}_portrait.png", f"{agent}_portrait.svg")
+    profile["avatar_animated"] = _first(f"{agent}_animated.webp", f"{agent}_animated.svg")
+    if not profile.get("avatar_animated"):
         profile["avatar_animated"] = profile["avatar_url"]
 
+    profile["paths"] = {
+        "identity": identity_used,
+        "identity_ok": bool(identity_used),
+        "soul": soul_path if soul_ok else None,
+        "soul_ok": soul_ok,
+        "cards_ok": bool(card),
+        "cards_file": cards_path if os.path.isfile(cards_path) else None,
+        "configured_identity": paths_cfg.get("identity") or None,
+    }
+
     handler._send_json(profile)
+
+
+def _probe_http_url(url: str, timeout: float = 2.0) -> dict:
+    """短探测浏览器入口可达性（不跟随到外站登录页失败也算可达）。"""
+    import urllib.error
+    import urllib.request
+
+    out = {"ok": False, "status": None, "error": None, "probed_url": url}
+    if not url:
+        out["error"] = "empty_url"
+        return out
+    # 容器内 127.0.0.1 指容器自身；宿主 UI 需走 host.docker.internal
+    probed = url
+    try:
+        in_docker = os.path.exists("/.dockerenv") or os.environ.get("MAILBUS_IN_DOCKER") == "1"
+        if in_docker and "127.0.0.1" in url:
+            probed = url.replace("127.0.0.1", "host.docker.internal")
+            out["probed_url"] = probed
+    except Exception:
+        probed = url
+    try:
+        req = urllib.request.Request(probed, method="GET", headers={"User-Agent": "mailbus-access-probe"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            out["status"] = int(getattr(resp, "status", 200) or 200)
+            out["ok"] = 200 <= out["status"] < 500
+            return out
+    except urllib.error.HTTPError as exc:
+        out["status"] = int(exc.code)
+        # 401/403 说明服务活着，只是鉴权
+        out["ok"] = 400 <= exc.code < 500
+        out["error"] = f"HTTP {exc.code}"
+        return out
+    except Exception as exc:
+        out["error"] = str(exc)[:200]
+        return out
+
+
+def handle_ping(handler, agent: str):
+    """GET /api/ping/<agent> — 在线状态 + 浏览器/终端访问校验。"""
+    from lib.adapters.ops.heartbeat import is_online
+
+    if agent not in handler.agents:
+        handler._send_json({"error": "not found", "agent": agent}, 404)
+        return
+
+    cfg = handler.agents.get(agent) or {}
+    meta = _agent_launch_meta(handler, agent, cfg)
+    online = is_online(handler.data_dir, agent)
+
+    browser = {
+        "configured": bool(meta.get("has_browser")),
+        "url": meta.get("launch_url") or "",
+        "ok": False,
+        "status": None,
+        "error": None,
+    }
+    if browser["configured"] and browser["url"]:
+        probe = _probe_http_url(browser["url"])
+        browser.update(probe)
+    elif browser["configured"]:
+        browser["error"] = "missing_launch_url"
+    else:
+        browser["error"] = "browser_not_configured"
+
+    script_path = _resolve_launch_script_path()
+    via_api = bool(meta.get("launch_via_api"))
+    cli_ok = via_api or bool(script_path and os.path.isfile(script_path))
+    cli = {
+        "configured": True,
+        "ok": cli_ok,
+        "via_api": via_api,
+        "script": script_path if script_path and os.path.isfile(script_path) else "",
+        "error": None if cli_ok else "launch_script_missing",
+    }
+
+    paths_cfg = cfg.get("profile_paths", {}) or {}
+    identity_used = None
+    for identity_path in identity_candidates(handler.data_dir, agent, paths_cfg.get("identity", "")):
+        if identity_path and os.path.isfile(identity_path):
+            identity_used = identity_path
+            break
+    cards_path = os.path.join(handler.data_dir, "agents", "json", "profile-cards.json")
+    cards_data = json_read(cards_path, {})
+    has_card = bool((cards_data.get("cards") or {}).get(agent))
+
+    handler._send_json({
+        "agent": agent,
+        "online": online,
+        "browser": browser,
+        "cli": cli,
+        "launch": meta,
+        "paths": {
+            "identity": identity_used,
+            "identity_ok": bool(identity_used),
+            "soul": None,
+            "soul_ok": False,
+            "cards_ok": has_card,
+            "configured_identity": paths_cfg.get("identity") or None,
+        },
+    })
+
+
+def handle_avatars_manifest(handler):
+    """GET /api/avatars/manifest — 13 人静+动齐套门禁状态。"""
+    from lib.infra.constants import MAILBUS_DOCS_ROOT_STR, MAILBUS_ROOT
+
+    roster = [
+        "ziyan",
+        "lingzhao",
+        "lingjin",
+        "lingxi",
+        "xiaoqi",
+        "yige",
+        "lingxiao",
+        "dali",
+        "lingjian",
+        "lingyan",
+        "lingxun",
+        "lingzhang",
+        "lingtuo",
+    ]
+    roots = [
+        os.path.join(MAILBUS_DOCS_ROOT_STR, "avatars"),
+        os.path.join(str(MAILBUS_ROOT), "web", "public", "avatars"),
+    ]
+    pairs = []
+    ok_n = 0
+    for aid in roster:
+        still = any(os.path.isfile(os.path.join(r, f"{aid}_portrait.png")) for r in roots)
+        motion = any(os.path.isfile(os.path.join(r, f"{aid}_animated.webp")) for r in roots)
+        ready = still and motion
+        if ready:
+            ok_n += 1
+        pairs.append({"id": aid, "portrait": still, "animated": motion, "ready": ready})
+    handler._send_json(
+        {
+            "expected": len(roster),
+            "count": ok_n,
+            "complete": ok_n >= len(roster),
+            "pairs": pairs,
+            "gate": "all_13_static_plus_animated_same_identity",
+        }
+    )
 
 
 def handle_agent_recruit(handler):
@@ -835,7 +994,7 @@ def handle_agent_recruit(handler):
     if to not in handler.agents:
         handler._send_json({"error": "lingzhao 未注册"}, 503)
         return
-    from lib.utils import build_message
+    from lib.infra.utils import build_message
     msg_dict = build_message("dashboard", to, content, "task", "high").to_dict()
     msg_dict["subject"] = f"招募新员工: {display_name}"
     paths = resolve_paths(handler.data_dir)
@@ -843,13 +1002,13 @@ def handle_agent_recruit(handler):
     inbox_data = json_read(inbox_file, {"agent": to, "has_unread": False, "messages": [], "since": _now_iso()})
     if isinstance(inbox_data, list):
         inbox_data = {"agent": to, "has_unread": True, "messages": inbox_data, "since": _now_iso()}
-    from lib.models import Inbox
+    from lib.domain.models import Inbox
     inbox = Inbox.from_dict(inbox_data)
     inbox.has_unread = True
     inbox.messages.append(msg_dict)
     json_write(inbox_file, inbox.to_dict())
     try:
-        from lib.pusher import push_messages, resolve_cli_chain
+        from lib.application.push.pusher import push_messages, resolve_cli_chain
 
         agent_cfg = handler.agents.get(to, {})
         cli_chain = resolve_cli_chain(agent_cfg, handler.agent_types)
@@ -871,13 +1030,6 @@ def handle_agent_recruit(handler):
         })
         return
     handler._send_json({"status": "ok", "msg_id": msg_dict["id"], "to": to})
-
-
-def handle_ping(handler, agent: str):
-    """GET /api/ping/<agent> — ping agent 检查在线状态"""
-    from lib.heartbeat import is_online
-    online = is_online(handler.data_dir, agent)
-    handler._send_json({"agent": agent, "online": online})
 
 
 def _get_gateway_token() -> str:
@@ -936,7 +1088,7 @@ def _get_launch_url(handler, agent_name: str) -> str:
 
         port = OpenClawAdapter.resolve_gateway_port(agent_name, browser_cfg)
     else:
-        from lib.launch_ports import resolve_port
+        from lib.adapters.config.launch_ports import resolve_port
 
         port = resolve_port(agent_name, cfg, browser_cfg)
     if url and port is not None:
@@ -983,10 +1135,97 @@ def handle_launch(handler):
         return
 
     in_container = _running_in_mailbus_container()
+    agent_type = agents[agent].get("type", "")
+    meta = _agent_launch_meta(handler, agent, agents[agent])
+    launch_via_api = bool(meta.get("launch_via_api"))
+
+    # ── 容器内：Claude Code / Codex 浏览器直返 URL（不走脚本，避免 WSL/ttyd 超时）──
+    if in_container and mode == "browser" and launch_via_api:
+        url = _resolve_agent_browser_url(handler, agent)
+        if url:
+            # 快速探测一次确认可达
+            probe = _probe_http_url(url)
+            if probe.get("ok"):
+                handler._send_json({
+                    "status": "ok",
+                    "agent": agent,
+                    "message": f"Launched {agent} (browser)",
+                    "url": url,
+                })
+                return
+        # probe 失败也返回 URL，前端可尝试打开
+        handler._send_json({
+            "status": "ok",
+            "agent": agent,
+            "message": f"Launched {agent} (browser · unchecked)",
+            "url": url or "",
+        })
+        return
+
+    # ── 容器内：Docker 类 agent CLI 直接 docker exec（docker.sock 已挂载，不用走 WSL）──
+    if in_container and mode == "cli":
+        atype = agents[agent].get("type", "")
+        if atype in ("opencode", "codex", "openclaw", "hermes", "hermes_profile"):
+            from lib.adapters.frameworks.registry import resolve_container, get_adapter
+
+            adapter = get_adapter(atype)
+            container = resolve_container(agents[agent], agent,
+                                          adapter.container_service if adapter else "") if adapter else ""
+            if container:
+                # 构建交互 CLI 命令，入队给 watchdog 在 WSL 弹出终端
+                profile = agents[agent].get("profile", agent)
+                if atype == "hermes_profile":
+                    cmd = f'docker exec -it {container} hermes -p {profile} chat --yolo'
+                elif atype == "hermes":
+                    cmd = f'docker exec -it {container} hermes -p {profile} chat'
+                elif atype == "openclaw":
+                    cmd = f'docker exec -it {container} openclaw tui'
+                elif atype == "codex":
+                    cmd = f'docker exec -it {container} codex'
+                elif atype in ("opencode",):
+                    cmd = f'docker exec -it {container} bash -c "cd /workspace/opencode && opencode"'
+                else:
+                    # opencode / codex: 仅验证容器可达
+                    check = subprocess.run(
+                        ["docker", "exec", container, "echo", "ok"],
+                        capture_output=True, text=True, timeout=10,
+                    )
+                    if check.returncode == 0:
+                        handler._send_json({
+                            "status": "ok",
+                            "agent": agent,
+                            "message": f"Launched {agent} (cli · container ready)",
+                        })
+                        return
+                    err_detail = (check.stderr or check.stdout or f"exit {check.returncode}").strip()
+                    handler._send_json({
+                        "status": "error",
+                        "agent": agent,
+                        "error": err_detail,
+                    }, 500)
+                    return
+
+                # hermes_profile / hermes / openclaw：入队到 watchdog
+                from lib.adapters.frameworks.claude_launch import enqueue_launch_queue
+                if enqueue_launch_queue(cmd, agent, mode="interactive"):
+                    handler._send_json({
+                        "status": "ok",
+                        "agent": agent,
+                        "message": f"Launched {agent} (cli · queued)",
+                    })
+                    return
+                handler._send_json({
+                    "status": "error",
+                    "agent": agent,
+                    "error": "launch queue write failed",
+                }, 500)
+                return
+            # 无 container 则落到脚本兜底
+
     script_path = _resolve_launch_script_path()
 
     if mode == "desktop" and not in_container:
-        from lib.desktop_launch import agent_has_desktop, launch_desktop
+        from lib.adapters.frameworks.desktop_launch import agent_has_desktop, launch_desktop
 
         if not agent_has_desktop(agents[agent], handler.agent_types):
             handler._send_json({"error": f"agent '{agent}' has no desktop launch configured"}, 400)
@@ -1005,9 +1244,9 @@ def handle_launch(handler):
                 handler._send_json({"status": "error", "agent": agent, "error": str(e)}, 500)
                 return
 
-    if not in_container and agents[agent].get("type") == "claude_code":
+    if not in_container and agent_type == "claude_code":
         if mode == "browser":
-            from lib.claude_browser_launch import launch_claude_browser
+            from lib.adapters.frameworks.claude_browser_launch import launch_claude_browser
 
             try:
                 info = launch_claude_browser(agent, handler.data_dir)
@@ -1023,7 +1262,7 @@ def handle_launch(handler):
                 return
 
         if mode == "cli":
-            from lib.claude_launch import launch_claude_cli
+            from lib.adapters.frameworks.claude_launch import launch_claude_cli
 
             try:
                 info = launch_claude_cli(agent, handler.data_dir)
@@ -1128,13 +1367,20 @@ def _check_agentmemory():
 
 def handle_clinic_tools(handler):
     """GET /api/clinic/tools — mailbus 诊所工具列表"""
-    from lib.clinic_tools import list_clinic_tools
+    from lib.adapters.ops.clinic_tools import list_clinic_tools
     handler._send_json({"tools": list_clinic_tools()})
+
+
+def handle_clinic_jobs(handler):
+    """GET /api/clinic/jobs — 调度任务状态（Dashboard 诊所）。"""
+    from lib.adapters.ops.scheduler import get_scheduler_status
+
+    handler._send_json(get_scheduler_status())
 
 
 def handle_doctor(handler):
     """GET /api/doctor — 结构化诊断（Dashboard 诊所健康区）。"""
-    from lib.doctor_checks import run_doctor_checks
+    from lib.adapters.ops.doctor_checks import run_doctor_checks
 
     try:
         handler._send_json(run_doctor_checks())
@@ -1145,7 +1391,7 @@ def handle_doctor(handler):
 def handle_locale_errors(handler):
     """GET /api/locale/errors — W7e D21 驾驶舱错误码中文目录。"""
     from lib.domain.error_codes import ALL_STABLE_CODES
-    from lib.locale.errors_zh import locale_catalog, stable_codes_covered
+    from lib.adapters.locale.errors_zh import locale_catalog, stable_codes_covered
 
     catalog = locale_catalog()
     handler._send_json({
@@ -1158,7 +1404,7 @@ def handle_locale_errors(handler):
 
 def handle_clinic_run(handler):
     """POST /api/clinic/run — 执行诊所工具"""
-    from lib.clinic_tools import run_clinic_tool
+    from lib.adapters.ops.clinic_tools import run_clinic_tool
     body = handler._read_post_body()
     tool_id = (body.get("tool_id") or "").strip()
     if not tool_id:
@@ -1176,4 +1422,55 @@ def handle_clinic_run(handler):
     if result.get("error") in ("unknown_tool",):
         status = 404
     handler._send_json(result, status)
+
+
+def handle_dev_reload(handler):
+    """POST /api/dev/reload — soft plugin reload + optional module reload."""
+    body = handler._read_post_body() if handler.command == "POST" else {}
+    want_modules = bool(body.get("modules")) or os.environ.get("MAILBUS_DEV_MODULE_RELOAD", "0") == "1"
+    out: dict = {"status": "ok"}
+    try:
+        from lib.adapters.frameworks.entry_point_discovery import reload_framework_plugins
+        from lib.adapters.integrations.entry_point_discovery import reload_integration_plugins
+        from lib.infra.utils import json_read
+
+        cfg = json_read(os.path.join(handler.data_dir, "config.json"), {})
+        out["frameworks"] = reload_framework_plugins(data_dir=handler.data_dir, config=cfg)
+        out["integrations"] = reload_integration_plugins(data_dir=handler.data_dir, config=cfg)
+    except Exception as exc:
+        out["plugins_error"] = str(exc)
+    if want_modules:
+        try:
+            from lib.application.ops.module_reload import reload_mailbus_modules
+
+            out["modules"] = reload_mailbus_modules()
+        except Exception as exc:
+            out["modules_error"] = str(exc)
+    handler._send_json(out)
+
+
+def handle_test_agents(handler):
+    """GET /api/test-agents — 运行 test_agents.py 返回 JSON 报告。"""
+    try:
+        import subprocess
+        import sys
+        from lib.infra.constants import MAILBUS_ROOT
+
+        script = str(MAILBUS_ROOT / "tools" / "test_agents.py")
+        r = subprocess.run(
+            [sys.executable, script, "--json", "--data-dir", handler.data_dir],
+            capture_output=True, text=True, timeout=120,
+            cwd=str(MAILBUS_ROOT),
+        )
+        if r.returncode == 0:
+            import json as j
+            handler._send_json(j.loads(r.stdout))
+        else:
+            handler._send_json({
+                "ok": False,
+                "error": r.stderr.strip()[:500] or r.stdout.strip()[:500],
+                "returncode": r.returncode,
+            })
+    except Exception as exc:
+        handler._send_json({"ok": False, "error": str(exc)})
 

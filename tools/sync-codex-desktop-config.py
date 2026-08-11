@@ -11,7 +11,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from lib.utils import identity_candidates
+from lib.infra.utils import identity_candidates
 
 CATALOG_SRC = os.path.join(ROOT, "docker-agents", "codex-agent", "deepseek-model-catalog.json")
 CATALOG_NAME = "deepseek-model-catalog.json"

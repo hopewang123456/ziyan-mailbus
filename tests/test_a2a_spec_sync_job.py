@@ -9,9 +9,9 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.constants import MAILBUS_ROOT
-from lib.jobs import run_a2a_spec_sync
-from lib.scheduler import DEFAULT_JOBS, _register_runners, _JOB_RUNNERS
+from lib.infra.constants import MAILBUS_ROOT
+from lib.adapters.ops.jobs import run_a2a_spec_sync
+from lib.adapters.ops.scheduler import DEFAULT_JOBS, _register_runners, _JOB_RUNNERS
 
 
 class TestA2aSpecSyncJob(unittest.TestCase):

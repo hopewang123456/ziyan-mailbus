@@ -6,11 +6,11 @@ ziyan-mailbus HTTP API — Inbox 相关路由处理器
 
 import os
 import json
-from lib.models import Inbox, Message, MsgStatus, Priority, MsgType
-from lib.utils import json_read, json_write, resolve_paths, _now_iso, build_message
-from lib.scan import build_queues, update_message_status
-from lib.pusher import push_messages, resolve_cli_chain
-from lib.adapters.clock import now_dt, now_iso, now_ts, now_utc_dt
+from lib.domain.models import Inbox, Message, MsgStatus, Priority, MsgType
+from lib.infra.utils import json_read, json_write, resolve_paths, _now_iso, build_message
+from lib.application.scan import build_queues, update_message_status
+from lib.application.push.pusher import push_messages, resolve_cli_chain
+from lib.infra.clock import now_dt, now_iso, now_ts, now_utc_dt
 
 
 def handle_inbox(handler, agent: str):
@@ -22,7 +22,7 @@ def handle_inbox(handler, agent: str):
     """
     from lib.api.security import validate_agent_name
     if not validate_agent_name(agent, handler.agents):
-        handler._send_json({"error": f"未知 agent: {agent}"}, 404)
+        handler._send_api_error("not_found", 404, detail=f"未知 agent: {agent}")
         return
     from urllib.parse import urlparse, parse_qs
     qs = parse_qs(urlparse(handler.path).query)
@@ -83,13 +83,13 @@ def handle_mark_read(handler, agent: str):
     body = handler._read_post_body()
     msg_ids = body.get("msg_ids", [])
     if not msg_ids:
-        handler._send_json({"error": "缺少 msg_ids"}, 400)
+        handler._send_api_error("fatal", 400, detail="缺少 msg_ids")
         return
     paths = resolve_paths(handler.data_dir)
     inbox_file = f"{paths['inbox']}/{agent}/inbox.json"
     data = json_read(inbox_file, {})
     if not data:
-        handler._send_json({"error": "inbox not found"}, 404)
+        handler._send_api_error("not_found", 404, detail="inbox not found")
         return
     # v4.0: 兼容 inbox.json dict→list 格式迁移
     if isinstance(data, list):
@@ -118,13 +118,13 @@ def handle_send_msg(handler):
     to = body.get("to", "")
     content = body.get("content", "")
     if not to or not content:
-        handler._send_json({"error": "缺少 to 或 content"}, 400)
+        handler._send_api_error("fatal", 400, detail="缺少 to 或 content")
         return
     from_ = body.get("from", "api")
     priority = body.get("priority", "normal")
     msg_type = body.get("type", "notice")
     if to not in handler.agents:
-        handler._send_json({"error": f"agent '{to}' 未注册"}, 404)
+        handler._send_api_error("not_found", 404, detail=f"agent '{to}' 未注册")
         return
     msg_dict = build_message(from_, to, content, msg_type, priority).to_dict()
     task_id = body.get("task_id", "").strip()
@@ -144,7 +144,7 @@ def handle_send_msg(handler):
     # 即时推送：写完后立即扫描并推送，不等下次 cron
     try:
         from ..model_router import is_no_llm_notice
-        from lib.scan import finalize_auto_ack
+        from lib.application.scan import finalize_auto_ack
 
         if is_no_llm_notice(msg_dict):
             finalize_auto_ack(handler.data_dir, to, msg_dict["id"], msg_dict)
@@ -204,13 +204,13 @@ def handle_actions_update(handler, agent: str, msg_id: str):
     body = handler._read_post_body()
     action = body.get("action", {})
     if not action:
-        handler._send_json({"error": "缺少 action"}, 400)
+        handler._send_api_error("fatal", 400, detail="缺少 action")
         return
     paths = resolve_paths(handler.data_dir)
     inbox_file = f"{paths['inbox']}/{agent}/inbox.json"
     data = json_read(inbox_file, {})
     if not data:
-        handler._send_json({"error": "inbox not found"}, 404)
+        handler._send_api_error("not_found", 404, detail="inbox not found")
         return
     # v4.0: 兼容 inbox.json dict→list 格式迁移
     if isinstance(data, list):
@@ -223,4 +223,4 @@ def handle_actions_update(handler, agent: str, msg_id: str):
             json_write(inbox_file, inbox.to_dict())
             handler._send_json({"status": "ok"})
             return
-    handler._send_json({"error": "msg not found"}, 404)
+    handler._send_api_error("not_found", 404, detail="msg not found")

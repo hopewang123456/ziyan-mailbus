@@ -50,14 +50,28 @@ class TestBudgetMeterFsm(unittest.TestCase):
 
 class TestTaskFsmRetry(unittest.TestCase):
     def test_bump_retry_on_task_json(self):
+        from lib.adapters.orchestration.task_fsm import apply_resume, bump_retry
+
         fsm = TaskFsmAdapter()
         task = {"task_id": "t1", "status": "running", "chain": [{"step": 1, "step_id": "s1", "status": "running"}]}
         n1 = fsm.bump_retry(task, step_id="s1")
-        n2 = fsm.bump_retry(task, step_id="s1")
+        n2 = bump_retry(task, step_id="s1")
         self.assertEqual(n1, 1)
         self.assertEqual(n2, 2)
         self.assertEqual(task["fsm"]["retries"]["s1"], 2)
         self.assertEqual(task["chain"][0]["retry_count"], 2)
+
+    def test_apply_resume_from_paused(self):
+        from lib.adapters.orchestration.task_fsm import apply_pause, apply_resume
+        from lib.domain.fsm import TaskFsmState
+
+        task = {"task_id": "t2", "status": "running", "chain": []}
+        apply_pause(task, reason="budget")
+        out = apply_resume(task)
+        self.assertEqual(out["action"], "resume")
+        self.assertEqual(task["fsm"]["state"], TaskFsmState.EXECUTING.value)
+        self.assertEqual(task["status"], "running")
+        self.assertNotIn("pause_reason", task)
 
 
 class TestMediatorBudgetPause(unittest.TestCase):
@@ -100,7 +114,7 @@ class TestMediatorBudgetPause(unittest.TestCase):
 
 class TestLayerOrchImports(unittest.TestCase):
     def test_ports_export(self):
-        from lib.ports import BudgetMeterPort, NotifierPort, TaskFsmPort
+        from lib.interfaces import BudgetMeterPort, NotifierPort, TaskFsmPort
 
         self.assertTrue(TaskFsmPort)
         self.assertTrue(BudgetMeterPort)

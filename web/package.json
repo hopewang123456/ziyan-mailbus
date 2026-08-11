@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@react-three/fiber": "^9.6.1",
+    "@rollup/rollup-linux-x64-gnu": "^4.62.4",
     "@types/three": "^0.185.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

@@ -10,10 +10,10 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.verify.harness_report import verify_harness_report
-from lib.verify.runner import run_step_verify
-from lib.verify.step_verify import verify_review_done
-from lib.router.planner import plan_tier0
+from lib.application.ops.verify.harness_report import verify_harness_report
+from lib.application.ops.verify.runner import run_step_verify
+from lib.application.ops.verify.step_verify import verify_review_done
+from lib.application.orchestration.router.planner import plan_tier0
 
 
 class TestHarnessReportVerify(unittest.TestCase):

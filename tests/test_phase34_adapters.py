@@ -6,22 +6,22 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.access_adapters import (
+from lib.adapters.config.access_adapters import (
     adapter_spec_path,
     load_adapter_spec,
     validate_access_adapters,
 )
-from lib.agent_adapters import framework_adapter_spec
-from lib.agentmemory_config import (
+from lib.adapters.frameworks import framework_adapter_spec
+from lib.adapters.integrations.agentmemory_config import (
     agentmemory_url,
     load_integration_config,
     pending_dir,
     team_memory_db_path,
 )
-from lib.constants import MAILBUS_ROOT
-from lib.init_store import build_agent_entry, run_init_store
-from lib.privilege import _host_path_under_mailbus, _to_container_mailbus_path
-from lib.sync_layers import dashboard_skills_dirs
+from lib.infra.constants import MAILBUS_ROOT
+from lib.adapters.config.init_store import build_agent_entry, run_init_store
+from lib.adapters.container.privilege import _host_path_under_mailbus, _to_container_mailbus_path
+from lib.adapters.config.sync_layers import dashboard_skills_dirs
 
 
 class TestAccessAdapters(unittest.TestCase):
@@ -70,12 +70,12 @@ class TestPrivilegePaths(unittest.TestCase):
 
 class TestInitStoreLaunch(unittest.TestCase):
     def test_lingyun_has_launch_and_profile_paths(self):
-        from lib.agent_registry import get_agent, clear_agent_registry_cache
+        from lib.adapters.config.agent_registry import get_agent, clear_agent_registry_cache
 
         clear_agent_registry_cache()
         rec = get_agent("lingyun")
         self.assertIsNotNone(rec)
-        from lib.init_store import load_config_fragments, load_roster
+        from lib.adapters.config.init_store import load_config_fragments, load_roster
 
         fragments = load_config_fragments(mail_root=MAILBUS_ROOT)
         overrides = fragments.get("_agent_overrides") or {}

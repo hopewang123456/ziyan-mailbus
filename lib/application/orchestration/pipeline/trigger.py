@@ -9,13 +9,13 @@ scan housekeeping 调用 trigger()：
 import os
 from datetime import datetime, timezone
 
-from .mbus_log import debug, info, warn
-from .tracker import TaskTracker, _parse_iso_dt
+from lib.infra.mbus_log import debug, info, warn
+from lib.application.orchestration.tracker import TaskTracker, _parse_iso_dt
 from lib.application.orchestration.pipeline.chain import normalize_task_chain, is_pipeline_step
 from lib.application.orchestration.pipeline.step import planned_agents_remaining, planned_role_types_remaining
-from .transport.dispatch_integration import transport_router_enabled
-from .models import Inbox
-from .utils import json_read, json_write, _now_iso
+from lib.core.a2a.dispatch_integration import transport_router_enabled
+from lib.domain.models import Inbox
+from lib.infra.utils import json_read, json_write, _now_iso
 from lib.composition import get_fsm
 from lib.domain.fsm import TaskFsmState
 
@@ -105,7 +105,7 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
     result = f.read_step_result(data_dir, task_id, current)
     if not result:
         try:
-            from .delivery_normalizer import normalize_opencode_deliveries
+            from lib.application.transport.delivery_normalizer import normalize_opencode_deliveries
             cfg = json_read(os.path.join(data_dir, "config.json"), {})
             agents = cfg.get("agents") or {}
             normalize_opencode_deliveries(data_dir, agents, config=cfg)
@@ -123,7 +123,7 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
         return {"ok": True, "skipped": reason or "result_not_applicable"}
 
     if current.get("to_role") == "审查官":
-        from .audit_dispatch import sync_audit_from_result
+        from lib.application.orchestration.audit_dispatch import sync_audit_from_result
         sync_audit_from_result(
             tra, t, result,
             reviewer=to_person,
@@ -161,7 +161,7 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
     if action == "terminal":
         t["audit_reviewer"] = t.get("audit_reviewer") or "lingjian"
         json_write(task_file, t)
-        from .audit_dispatch import backfill_audit_from_chain
+        from lib.application.orchestration.audit_dispatch import backfill_audit_from_chain
         backfill_audit_from_chain(data_dir)
         _close_pipeline_inbox(data_dir, paths, task_id, agents)
         info(f"[fsm] succeeded {task_id[:30]}")
@@ -214,7 +214,7 @@ def _result_mtime_ok(data_dir: str, task_id: str, current: dict, result: dict) -
 
 def _close_pipeline_inbox(data_dir: str, paths: dict, task_id: str, agents: dict) -> int:
     """任务 success 后关闭各 agent inbox 中该 task 的 pending/pushed/processing 消息。"""
-    from .models import MsgStatus
+    from lib.domain.models import MsgStatus
 
     closed = 0
     ts = _now_iso()
@@ -254,8 +254,8 @@ def _send_task(
     summary, task_id="", step_num=1, step_id=None, result_ref=None,
 ):
     """写任务文件和推送消息给下一步的 agent。成功返回 True。"""
-    from .pipeline_work_order import write_pipeline_work_order
-    from .task_lock import acquire_task_lock, release_task_lock, task_lock_holder
+    from .work_order import write_pipeline_work_order
+    from lib.application.orchestration.task_lock import acquire_task_lock, release_task_lock, task_lock_holder
 
     lock_holder = None
     lock_acquired_here = False
@@ -276,7 +276,7 @@ def _send_task(
         task_path = os.path.join(data_dir, "tasks", f"{task_id}.json")
         config = json_read(os.path.join(data_dir, "config.json"), {})
         if transport_router_enabled(config) and task_id and step_id:
-            from .transport.dispatch_integration import dispatch_pipeline_step
+            from lib.core.a2a.dispatch_integration import dispatch_pipeline_step
 
             role_type = 0
             if os.path.isfile(task_path):
@@ -326,11 +326,11 @@ def _send_task(
         elif step_id:
             rf = _fsm().step_result_path(data_dir, task_id, step_id)
         else:
-            rf = _fsm().legacy_result_path(data_dir, task_id)
+            rf = _fsm().step_result_dir(data_dir, task_id)
 
         agents = json_read(os.path.join(data_dir, "config.json"), {}).get("agents", {})
         to_cfg = agents.get(to_person) or {}
-        from lib.agent_paths import store_path_for_agent
+        from lib.composition import store_path_for_agent
 
         nf_disp = store_path_for_agent(data_dir, nf, to_cfg)
         rf_disp = store_path_for_agent(data_dir, rf, to_cfg)

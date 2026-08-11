@@ -4,7 +4,7 @@ from __future__ import annotations
 from lib.adapters.plane.container import ContainerPlane
 from lib.adapters.plane.host import HostPlane
 from lib.adapters.plane.mutex import FileMountMutex
-from lib.ports.plane import ContainerPlanePort, HostPlanePort, MountMutex
+from lib.interfaces.plane import ContainerPlanePort, HostPlanePort, MountMutex
 
 
 def build_host_plane(data_dir: str) -> HostPlanePort:

@@ -13,7 +13,7 @@ from lib.adapters.orchestration.audit import FileAuditAdapter
 from lib.adapters.orchestration.human_gate import HumanGateAdapter
 from lib.adapters.orchestration.notifier import FileNotifier
 from lib.composition import build_orchestration
-from lib.verify.escalation import notify_verify_failure
+from lib.application.harness.escalation import notify_verify_failure
 
 
 class FakeNotifier:

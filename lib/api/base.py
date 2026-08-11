@@ -8,7 +8,7 @@ ziyan-mailbus HTTP API — 基础请求处理器
 import os
 import json
 from http.server import BaseHTTPRequestHandler
-from typing import Optional
+from typing import Any, Optional
 
 # ── 处理器模块（延迟导入） ──
 _handlers = None
@@ -81,17 +81,19 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     # ── 认证 ────────────────────────────────────────────────────────────
 
     def _client_is_loopback(self) -> bool:
+        """本机（含 Docker/WSL 网桥）视为本地请求。"""
+        from lib.application.mailbus_token import _is_local
         try:
             addr = (self.client_address[0] or "").strip().lower()
         except Exception:
             return False
-        if addr.startswith("::ffff:"):
-            addr = addr.split("::ffff:", 1)[-1]
-        return addr in ("127.0.0.1", "::1", "localhost")
+        return _is_local(addr)
 
     def _check_auth(self, *, write: bool = False) -> bool:
-        """Read: legacy token-if-configured. Write: localhost free; remote requires token."""
-        from lib.locale.errors_zh import message_zh
+        """Read: token optional unless require_api_auth; presented token must match.
+        Write: localhost free; remote requires token.
+        """
+        from lib.adapters.locale.errors_zh import message_zh
 
         if not write:
             if not self.auth_token:
@@ -100,6 +102,9 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             if auth.startswith("Bearer ") and auth[7:] == self.auth_token:
                 return True
             if self.headers.get("X-API-Key") == self.auth_token:
+                return True
+            # Default cockpit UX: reads work without Bearer unless require_api_auth
+            if not auth and not getattr(self, "require_api_auth", False):
                 return True
             self._send_json({
                 "error": "unauthorized",
@@ -128,11 +133,44 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     # ── 公共工具 ────────────────────────────────────────────────────────
 
     def _send_json(self, data: dict, status: int = 200):
+        # Wave4: error responses always carry error_code + message_zh
+        if status >= 400 and isinstance(data, dict):
+            payload = dict(data)
+            if "error_code" not in payload:
+                raw = payload.get("error") or payload.get("status") or "fatal"
+                payload["error_code"] = str(raw)
+            if "message_zh" not in payload:
+                from lib.adapters.locale.errors_zh import message_zh
+
+                code = str(payload.get("error_code") or "fatal")
+                detail = str(payload.get("error") or payload.get("detail") or code)
+                payload["message_zh"] = message_zh(code, detail)
+            data = payload
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
+
+    def _send_api_error(
+        self,
+        code: str,
+        status: int = 400,
+        *,
+        detail: str = "",
+        **extra: Any,
+    ) -> None:
+        """Prefer structured error_code + message_zh (Wave4)."""
+        from lib.adapters.locale.errors_zh import message_zh
+
+        payload = {
+            "error": detail or code,
+            "error_code": code,
+            "message_zh": message_zh(code, detail or code),
+        }
+        if extra:
+            payload.update(extra)
+        self._send_json(payload, status)
 
     def _send_sse_start(self, status: int = 200):
         self.send_response(status)
@@ -173,7 +211,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     def _serve_static(self, path: str) -> bool:
         if ".." in path or "~" in path:
             return False
-        from lib.constants import MAILBUS_DOCS_ROOT, MAILBUS_ROOT
+        from lib.infra.constants import MAILBUS_DOCS_ROOT, MAILBUS_ROOT
 
         legacy = path.lstrip("/").startswith("legacy")
         filename = "index.html" if path in ("", "/", "/legacy", "/legacy/") else path.lstrip("/")
@@ -183,13 +221,16 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
 
         candidates = []
         web_dist = os.path.join(str(MAILBUS_ROOT), "web", "dist")
+        web_public = os.path.join(str(MAILBUS_ROOT), "web", "public")
         docs_dir = str(MAILBUS_DOCS_ROOT)
         if legacy:
+            # Escape hatch: docs/ 侧栏舰队 HUD
             candidates.append(os.path.join(docs_dir, filename if filename != "index.html" else "index.html"))
         else:
+            # Product SoT: React 舷窗舰桥 (玻璃 + 星体穿越)
             candidates.append(os.path.join(web_dist, filename))
+            candidates.append(os.path.join(web_public, filename))
             candidates.append(os.path.join(docs_dir, "dist", filename))
-            candidates.append(os.path.join(docs_dir, filename))
 
         for abs_path in candidates:
             abs_path = os.path.normpath(abs_path)
@@ -246,9 +287,11 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     # ── HTTP GET 路由 ──────────────────────────────────────────────────
 
     def do_GET(self):
-        if not self._check_auth():
-            return
         path = self._read_path()
+        # SPA/static boot without token; API still authenticated when token configured
+        needs_api_auth = path.startswith("/api/") or path.startswith("/a2a/")
+        if needs_api_auth and not self._check_auth():
+            return
         h = _get_handlers()
 
         routes = {
@@ -277,16 +320,20 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/templates": lambda: h["system"].handle_templates(self),
             "/api/external-tools": lambda: h["system"].handle_external_tools(self),
             "/api/clinic/tools": lambda: h["system"].handle_clinic_tools(self),
+            "/api/clinic/jobs": lambda: h["system"].handle_clinic_jobs(self),
+            "/api/test-agents": lambda: h["system"].handle_test_agents(self),
             "/api/doctor": lambda: h["system"].handle_doctor(self),
             "/api/locale/errors": lambda: h["system"].handle_locale_errors(self),
             "/api/workload": lambda: h["system"].handle_workload(self),
             "/api/send-msg": lambda: h["inbox"].handle_send_msg(self),
+            "/api/avatars/manifest": lambda: h["system"].handle_avatars_manifest(self),
             "/api/internal-llm/status": lambda: h["internal_llm"].handle_internal_llm_status(self),
             "/api/internal-llm/health": lambda: h["internal_llm"].handle_internal_llm_health(self),
             "/api/workflows": lambda: h["workflows"].handle_workflows_list(self),
             "/api/intake": lambda: h["intake"].handle_intake_list(self),
             "/api/settings/sections": lambda: h["settings"].handle_settings_sections(self),
             "/api/settings/env": lambda: h["settings"].handle_settings_env_get(self),
+            "/api/settings/paths": lambda: h["settings"].handle_settings_paths(self),
             "/api/settings/integrations": lambda: h["settings"].handle_integrations(self),
             "/api/discover": lambda: h["lifecycle"].handle_discover(self),
             "/api/align": lambda: h["lifecycle"].handle_align(self),
@@ -474,6 +521,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": "not_found"}, 404)
         elif path == "/api/clinic/run":
             h["system"].handle_clinic_run(self)
+        elif path == "/api/dev/reload":
+            h["system"].handle_dev_reload(self)
         elif path == "/api/drill/video-publish":
             h["drill"].handle_drill_video_publish(self)
         elif path == "/api/agents/recruit":

@@ -8,46 +8,16 @@ mailbus Core 只认 agent_id + role_type；新增框架 = 新 Adapter 类 + ADAP
 """
 from __future__ import annotations
 
-import os
 import re
 import subprocess
 from typing import Optional
 
-from lib.access_adapters import load_adapter_spec
-
-# ── 容器解析 ──────────────────────────────────────────────────────
-
-
-def container_prefix() -> str:
-    return os.environ.get("MAILBUS_CONTAINER_PREFIX", "docker-agents")
-
-
-def container_for_service(service: str) -> str:
-    env_key = f"MAILBUS_CONTAINER_{service.upper().replace('-', '_')}"
-    if os.environ.get(env_key):
-        return os.environ[env_key]
-    return f"{container_prefix()}-{service}-1"
-
-
-def resolve_container(agent_cfg: dict, agent_name: str, default_service: str) -> str:
-    docker_cfg = agent_cfg.get("docker") or {}
-    if docker_cfg.get("container"):
-        return docker_cfg["container"]
-    env_key = f"MAILBUS_CONTAINER_{agent_name.upper()}"
-    if os.environ.get(env_key):
-        return os.environ[env_key]
-    from lib.compose_registry import resolve_compose_service
-
-    # 逻辑名 codex-agent/opencode-agent → 实际 compose service（lingxiao/dali）
-    resolved = resolve_compose_service(agent_name, docker_cfg)
-    if not resolved or resolved == agent_name:
-        fallback = (docker_cfg.get("service") or default_service or agent_name or "").strip()
-        if fallback and fallback != agent_name:
-            resolved = resolve_compose_service(agent_name, {"service": fallback}) or fallback
-        else:
-            resolved = resolved or fallback or agent_name
-    return container_for_service(resolved)
-
+from lib.adapters.config.access_adapters import load_adapter_spec
+from lib.adapters.container.resolver import (  # noqa: F401 — re-export for callers
+    container_for_service,
+    container_prefix,
+    resolve_container,
+)
 
 # ── 模型参数 ──────────────────────────────────────────────────────
 
@@ -64,8 +34,8 @@ def model_flag(
     models_map = agent_types.get("models", {})
     agent_models = agent_cfg.get("models", [])
     if model_alias == "ollama-local":
-        from lib.ollama_routing import ollama_model_flag
-        from lib.push_context import get_push_context
+        from lib.adapters.integrations.ollama_routing import ollama_model_flag
+        from lib.application.push.push_context import get_push_context
 
         ctx = get_push_context()
         flag = ollama_model_flag(
@@ -117,7 +87,11 @@ def _flag_value(raw: str, *prefixes: str) -> str:
 
 def _push_cwd(agent_cfg: dict, default: str = "/mailbus/store") -> str:
     push = agent_cfg.get("push") or {}
-    return (push.get("cwd") or agent_cfg.get("cwd") or default).strip()
+    raw = (push.get("cwd") or agent_cfg.get("cwd") or default).strip()
+    # 净化模板占位路径（/path/to/xxx 等），防止 docker exec 内 cd 失败
+    if raw.startswith("/path/"):
+        return default
+    return raw
 
 
 # Cline / OpenCode 与 Hermes / OpenClaw 推送语义不同：
@@ -248,7 +222,7 @@ class OpenClawAdapter(BaseAdapter):
     @classmethod
     def resolve_gateway_port(cls, agent_name: str, browser_cfg: dict | None = None) -> int:
         browser_cfg = browser_cfg or {}
-        from lib.launch_ports import resolve_port
+        from lib.adapters.config.launch_ports import resolve_port
 
         port = resolve_port(
             agent_name,
@@ -418,7 +392,9 @@ class OpenCodeAdapter(BaseAdapter):
     def build_interactive_cli(self, agent_name, agent_cfg, agent_types) -> str:
         container = resolve_container(agent_cfg, agent_name, self.container_service)
         mflag = self._model_flag(agent_cfg, agent_types, None)
-        cwd = _push_cwd(agent_cfg)
+        cwd = _push_cwd(agent_cfg, default="/workspace/opencode")
+        if cwd == "/mailbus/store":
+            cwd = "/workspace/opencode"
         if mflag.startswith("--model "):
             model = mflag.split(" ", 1)[1]
             return f"docker exec -it {container} bash -lc 'cd {cwd} && opencode -m {model.split('/')[-1]}'"
@@ -563,19 +539,19 @@ class ClaudeCodeAdapter(BaseAdapter):
         return 900 if pipeline else 300
 
     def build_push_cli(self, agent_name, agent_cfg, agent_types, model_alias=None, *, data_dir=None) -> str:
-        from lib.claude_launch import build_push_command
+        from lib.adapters.frameworks.claude_launch import build_push_command
 
         return build_push_command(
             agent_name, agent_cfg, agent_types, model_alias, data_dir=data_dir,
         )
 
     def build_interactive_cli(self, agent_name, agent_cfg, agent_types) -> str:
-        from lib.claude_launch import build_interactive_command
+        from lib.adapters.frameworks.claude_launch import build_interactive_command
 
         return build_interactive_command(agent_name, agent_cfg, agent_types)
 
     def cli_active_in_ps(self, agent_name, agent_cfg, ps_output) -> bool:
-        from lib.claude_launch import host_cli_active
+        from lib.adapters.frameworks.claude_launch import host_cli_active
 
         return host_cli_active(ps_output)
 
@@ -608,7 +584,7 @@ class A2ARemoteAdapter(BaseAdapter):
     mark_processing_on_task_push = False
 
     def can_deliver_a2a(self, agent_cfg: dict) -> bool:
-        from lib.transport.delivery import can_deliver_a2a
+        from lib.core.a2a.delivery import can_deliver_a2a
 
         return can_deliver_a2a(agent_cfg)
 
@@ -704,35 +680,6 @@ def framework_adapter_spec(framework: str) -> str:
     return load_adapter_spec(framework)
 
 
-def _legacy_launch_command(agent_cfg: dict) -> str:
-    return ((agent_cfg.get("launch") or {}).get("cli") or {}).get("command", "").strip()
-
-
-def _normalize_push_override(cmd: str, agent_type: str = "") -> str:
-    """legacy launch.cli.command → push 形态（按 agent 类型区分）。"""
-    cmd = cmd.replace("-it ", " ").replace(" -it", "").strip()
-    at = (agent_type or "").strip()
-    if at in ("cline", "opencode", "codex", "claude_code"):
-        if "'MSG'" not in cmd and "MSG" not in cmd:
-            if at == "codex" and "codex exec" not in cmd:
-                cmd = f"codex exec 'MSG' {cmd}"
-            elif at == "claude_code" and "claude" not in cmd:
-                cmd = f"claude -p 'MSG' {cmd}"
-            elif at == "claude_code" and "-p" not in cmd and "--print" not in cmd:
-                cmd = cmd.replace("claude", "claude -p 'MSG'", 1)
-            elif "opencode run" in cmd:
-                cmd = cmd.replace("opencode run", "opencode run 'MSG'", 1)
-            else:
-                cmd = f"{cmd} 'MSG'"
-        return cmd.strip()
-    if "'MSG'" not in cmd and "MSG" not in cmd:
-        if re.search(r"\s--yolo\s*$", cmd):
-            cmd = re.sub(r"\s--yolo\s*$", " -q 'MSG' -Q --yolo", cmd)
-        else:
-            cmd = f"{cmd} -q 'MSG' -Q"
-    return cmd.strip()
-
-
 def resolve_push_cli(
     agent_name: str,
     agent_cfg: dict,
@@ -744,9 +691,6 @@ def resolve_push_cli(
 ) -> str:
     """mailbus 推送用 CLI（非 TTY）。"""
     atype = agent_cfg.get("type", "none")
-    override = _legacy_launch_command(agent_cfg)
-    if override:
-        return _normalize_push_override(override, atype)
 
     adapter = get_adapter(atype)
     if adapter:
@@ -760,7 +704,7 @@ def resolve_push_cli(
             )
         return adapter.build_push_cli(agent_name, agent_cfg, agent_types, model_alias)
 
-    # 极旧配置：agent_types.push 模板 fallback
+    # agent_types.push 模板 fallback
     atype = agent_cfg.get("type", "none")
     tmpl = agent_types.get(atype, {}).get("push", "")
     if not tmpl:
@@ -791,11 +735,8 @@ def resolve_interactive_cli(
     data_dir: str | None = None,
 ) -> str:
     """人工 launch / TTY 窗口用 CLI。"""
-    override = _legacy_launch_command(agent_cfg)
-    if override:
-        return override
     if agent_cfg.get("type") == "claude_code":
-        from lib.claude_launch import build_interactive_command, _default_data_dir
+        from lib.adapters.frameworks.claude_launch import build_interactive_command, _default_data_dir
 
         dd = data_dir or _default_data_dir()
         return build_interactive_command(agent_name, agent_cfg, agent_types, data_dir=dd)
@@ -824,7 +765,7 @@ def agent_cli_active_for(
         return False
     use_precise = bool(msg_id or task_id) and hasattr(adapter, "cli_active_in_ps_for")
     if not adapter.container_service:
-        from lib.claude_launch import host_ps_output
+        from lib.adapters.frameworks.claude_launch import host_ps_output
 
         ps = host_ps_output()
         if use_precise:
@@ -837,7 +778,7 @@ def agent_cli_active_for(
     container = resolve_container(agent_cfg, agent_name, default_svc)
     if not container:
         return False
-    from lib.docker_probe import docker_exec_ps
+    from lib.adapters.ops.docker_probe import docker_exec_ps
 
     ps = docker_exec_ps(container)
     if not ps:
@@ -863,13 +804,6 @@ def validate_agents(agents: dict, agent_types: dict | None = None) -> list[str]:
         if not adapter:
             errors.append(f"{name} ({display}): 未知 type={atype}")
             continue
-
-        override = _legacy_launch_command(cfg)
-        if override:
-            if " -it" in override or override.startswith("docker exec -it"):
-                errors.append(f"{name} ({display}): legacy launch.cli.command 含 -it")
-            if "--skills" in override:
-                errors.append(f"{name} ({display}): legacy launch.cli.command 含 --skills")
 
         errors.extend(adapter.validate(name, cfg))
 
@@ -915,7 +849,7 @@ def store_path_for_agent(data_dir: str, path: str, agent_cfg: dict) -> str:
     """容器内 agent 推送/工单使用 /mailbus/store 路径。"""
     adapter = get_adapter((agent_cfg or {}).get("type", ""))
     if adapter and adapter.container_service:
-        from lib.utils import to_container_store_path
+        from lib.infra.utils import to_container_store_path
 
         return to_container_store_path(data_dir, path)
     return path

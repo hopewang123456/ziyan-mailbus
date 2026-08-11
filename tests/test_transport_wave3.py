@@ -11,7 +11,7 @@ from lib.adapters.transport.file_bus import FileBusMessageTransport
 from lib.adapters.transport.router import SelectingMessageTransport, resolve_channel
 from lib.domain.error_codes import ALL_STABLE_CODES, ALL_TRANSPORT_CODES
 from lib.domain.types import OutboundMessage
-from lib.locale.errors_zh import ERROR_ZH, message_zh, stable_codes_covered, transport_codes_covered
+from lib.adapters.locale.errors_zh import ERROR_ZH, message_zh, stable_codes_covered, transport_codes_covered
 
 
 class TestLocaleTransport(unittest.TestCase):
@@ -95,7 +95,7 @@ class TestFileBusWaitPort(unittest.TestCase):
 
     def test_wait_with_prewritten_step_result(self):
         from lib.adapters.transport.file_bus import FileBusMessageTransport
-        from lib.transport.step_result_io import write_step_result_file
+        from lib.core.a2a.step_result_io import write_step_result_file
 
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "config.json").write_text(
@@ -128,8 +128,8 @@ class TestFileBusWaitPort(unittest.TestCase):
             self.assertEqual(inbox["messages"][0]["id"], "msg-t-w7c-s1")
 
     def test_dispatch_via_message_port_flag(self):
-        from lib.transport.dispatch_integration import dispatch_pipeline_step
-        from lib.transport.step_result_io import write_step_result_file
+        from lib.core.a2a.dispatch_integration import dispatch_pipeline_step
+        from lib.core.a2a.step_result_io import write_step_result_file
 
         with tempfile.TemporaryDirectory() as tmp:
             cfg = {
@@ -158,7 +158,7 @@ class TestFileBusWaitPort(unittest.TestCase):
 
 class TestTransportErrorDomain(unittest.TestCase):
     def test_retryable_to_domain(self):
-        from lib.transport.errors import RetryableTransportError
+        from lib.core.a2a.errors import RetryableTransportError
 
         e = RetryableTransportError("timeout", code="504")
         d = e.to_domain()

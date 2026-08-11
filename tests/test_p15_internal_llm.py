@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 sys.modules.setdefault("fcntl", MagicMock())
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import lib.utils as _utils
+import lib.infra.utils as _utils
 
 
 @contextlib.contextmanager
@@ -23,11 +23,11 @@ _utils.file_lock = _noop_file_lock
 
 from lib.api.handlers_internal_llm import handle_internal_llm_dry_run, handle_internal_llm_status
 from lib.api.handlers_tasks import handle_task_create
-from lib.internal_llm.planner_llm import plan_with_llm
-from lib.internal_llm.status import llm_status
-from lib.internal_llm.probe import probe_all
-from lib.router.planner import PlanError, plan_replan, plan_task
-from lib.utils import json_write
+from lib.application.internal_llm.planner import plan_with_llm
+from lib.api.internal_llm_status import llm_status
+from lib.adapters.internal_llm.probe import probe_all
+from lib.application.orchestration.router.planner import PlanError, plan_replan, plan_task
+from lib.infra.utils import json_write
 
 
 class _FakeHandler:
@@ -182,7 +182,7 @@ class TestP15InternalLLM(unittest.TestCase):
         cfg = json.load(open(os.path.join(self.tmp, "config.json"), encoding="utf-8"))["mailbus_internal_llm"]
         cfg = {**cfg, "provider_priority": ["stub"]}
         with unittest.mock.patch(
-            "lib.internal_llm.client._stub_complete",
+            "lib.adapters.internal_llm.client._stub_complete",
             return_value=json.dumps({
                 "planned_chain": [{"role_type": 8, "reason": "dev", "agent_id": "not-a-real-agent"}],
                 "plan_meta": {"method": "internal_llm", "task_type_guess": "custom", "confidence": 0.8},

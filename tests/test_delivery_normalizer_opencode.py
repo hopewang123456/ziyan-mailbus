@@ -7,13 +7,13 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.delivery_normalizer import (
+from lib.application.transport.delivery_normalizer import (
     load_delivery_config,
     normalize_from_reply_record,
     normalize_opencode_deliveries,
 )
 from lib.adapters.orchestration.task_fsm import read_step_result, step_result_path
-from lib.utils import json_write
+from lib.infra.utils import json_write
 
 
 class TestDeliveryNormalizerOpencode(unittest.TestCase):

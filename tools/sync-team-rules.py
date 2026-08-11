@@ -17,11 +17,11 @@ import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.utils import json_read, json_write, _now_iso
-from lib.team_memory_store import store_memory
-from lib.agentmemory_config import agentmemory_url, pending_dir as am_pending_dir
-from lib.sync_layers import mirror_rules_to_store
-from lib.constants import MAILBUS_ROOT
+from lib.infra.utils import json_read, json_write, _now_iso
+from lib.adapters.integrations.team_memory_store import store_memory
+from lib.adapters.integrations.agentmemory_config import agentmemory_url, pending_dir as am_pending_dir
+from lib.adapters.config.sync_layers import mirror_rules_to_store
+from lib.infra.constants import MAILBUS_ROOT
 
 AGENTMEMORY_URL = os.environ.get(
     "AGENTMEMORY_URL",
@@ -187,7 +187,7 @@ def queue_agentmemory_pending(data_dir: str, agent: str, payload: dict, rule_id:
 
 
 def send_notices(data_dir: str, agents: list[str]) -> int:
-    from lib.commands import cmd_send
+    from lib.application.commands.commands import cmd_send
 
     n = 0
     for name in agents:

@@ -71,15 +71,15 @@ function OtherCards() {
   return (
     <CardLauncher
       cards={[
-        { id: "intake", titleKey: "intake" },
-        { id: "workflows", titleKey: "workflows" },
-        { id: "content", titleKey: "content" },
-        { id: "pipeline", titleKey: "pipeline" },
-        { id: "inbox", titleKey: "inbox" },
-        { id: "bulletin", titleKey: "bulletin" },
-        { id: "stats", titleKey: "stats" },
-        { id: "patrol", titleKey: "patrol" },
-        { id: "alerts", titleKey: "alerts" },
+        { id: "intake", titleKey: "intake", blurb: "商前 · 需求入口" },
+        { id: "workflows", titleKey: "workflows", blurb: "工作流定义" },
+        { id: "content", titleKey: "content", blurb: "任务内容 · 最近40条" },
+        { id: "pipeline", titleKey: "pipeline", blurb: "人机队列" },
+        { id: "inbox", titleKey: "inbox", blurb: "Agent 信箱" },
+        { id: "bulletin", titleKey: "bulletin", blurb: "公告板" },
+        { id: "stats", titleKey: "stats", blurb: "审核统计" },
+        { id: "patrol", titleKey: "patrol", blurb: "巡检报告" },
+        { id: "alerts", titleKey: "alerts", blurb: "告警日志" },
       ]}
       render={(id) => {
         switch (id) {

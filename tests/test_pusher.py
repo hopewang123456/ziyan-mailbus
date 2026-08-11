@@ -2,7 +2,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.pusher import resolve_cli, resolve_cli_chain, _replace_msg_placeholder
+from lib.application.push.pusher import resolve_cli, resolve_cli_chain, _replace_msg_placeholder
 
 TYPES = {
     "hermes": {"push": "legacy"},
