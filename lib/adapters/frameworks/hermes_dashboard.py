@@ -20,9 +20,11 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
+from lib.infra.agent_demo import hermes_demo_dashboards
+
 # ── 编制内全部 dashboard（与 entrypoint.sh / ORGANIZATION.md 一致）──
 # 从 store/config.json 的 hermes_profile 类型 agents 读取，demo 名作为 fallback
-_DEMO_DASHBOARDS: list[tuple[str, int]] = [
+_DEMO_DASHBOARDS: list[tuple[str, int]] = hermes_demo_dashboards() or [
     ("agent-a", 9120),
     ("agent-b", 9121),
     ("agent-c", 9122),

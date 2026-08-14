@@ -7,10 +7,9 @@ GATEWAY_PORT="${DEEPSEEK_GATEWAY_PORT:-3000}"
 
 render-codex-config.sh
 
-if [ -x /usr/local/bin/tools/ops/sync-codex-agent-skills.sh ]; then
-  tools/ops/sync-codex-agent-skills.sh "${CODEX_AGENT:-agent-g}" "${CODEX_HOME}" "/mailbus/store" || true
-elif [ -f "/mailbus/tools/ops/tools/ops/sync-codex-agent-skills.sh" ]; then
-  bash /mailbus/tools/ops/tools/ops/sync-codex-agent-skills.sh "${CODEX_AGENT:-agent-g}" "${CODEX_HOME}" "/mailbus/store" || true
+if [ -f "/mailbus/tools/sync_codex_agent_skills.py" ]; then
+  CODEX_AGENT="${CODEX_AGENT:-agent-g}" CODEX_HOME="${CODEX_HOME:-/home/node/.codex}" DATA_DIR="/mailbus/store" \
+    python3 /mailbus/tools/sync_codex_agent_skills.py || true
 fi
 
 rm -f "${CODEX_HOME}/auth.json"

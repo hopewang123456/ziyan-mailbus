@@ -77,18 +77,37 @@ def write_via_mailbus_container(host_path: str, content: str) -> bool:
 
 
 def chown_store_path(host_path: str, user: str = "mailbus-user") -> bool:
-    wsl_sudo = os.path.join(_repo_root(), "docker-agents", "wsl-sudo.sh")
-    if not os.path.isfile(wsl_sudo):
-        return False
+    """chown store 路径（Linux/WSL 本机直接 chown；Windows 经 WSL）。
+
+    原实现委托 docker-agents/wsl-sudo.sh（已删除），这里纯 Python 实现。
+    """
+    import sys
+
+    if sys.platform == "win32":
+        # 仅当 WSL 可用时尝试
+        from lib.adapters.plane.platform_runner import wsl_exe
+
+        wsl = wsl_exe()
+        if not wsl:
+            return False
+        pw = load_sudo_password()
+        cmd = ["bash", "-lc", f"echo '$SUDO_PASSWORD' | sudo -S chown {user}:{user} {host_path!r}"]
+        env = os.environ.copy()
+        env["SUDO_PASSWORD"] = pw or ""
+        try:
+            r = subprocess.run([wsl, "-e", *cmd], env=env, capture_output=True, text=True, timeout=30)
+            return r.returncode == 0
+        except Exception:
+            return False
+
     pw = load_sudo_password()
     if not pw:
         return False
-    env = os.environ.copy()
-    env["SUDO_PASSWORD"] = pw
     try:
         r = subprocess.run(
-            ["bash", wsl_sudo, "chown", f"{user}:{user}", host_path],
-            env=env, capture_output=True, text=True, timeout=30,
+            ["bash", "-lc", f"echo '$SUDO_PASSWORD' | sudo -S chown {user}:{user} {host_path!r}"],
+            env={**os.environ, "SUDO_PASSWORD": pw},
+            capture_output=True, text=True, timeout=30,
         )
         return r.returncode == 0
     except Exception:

@@ -18,7 +18,7 @@ No Redis / RabbitMQ required — messages are JSON files, CLI push, agent ack.
 ## Quick start
 
 ```bash
-git clone https://github.com/hopewang123456/mailbus.git
+git clone https://github.com/hopewang123456/ziyan-mailbus.git
 cd mailbus
 pip install -e .
 
@@ -121,11 +121,32 @@ python tools/mailbus.py docker up-comfyui
 python tools/mailbus.py docker ensure-ollama
 ```
 
+#### Thin launch scripts
+
+Two thin wrappers are provided (Windows / Linux) — they only locate the repo and call `python tools/mailbus.py start`:
+
+| Platform | Script | Prerequisites |
+|----------|--------|---------------|
+| Windows | `scripts/start-mailbus.bat` | Python 3.11+ in `PATH` (`python` or `py -3`); Docker Desktop + WSL for the team stack |
+| Linux / macOS | `scripts/start-mailbus.sh` | `python3` ≥ 3.11 in `PATH`; Docker for the team stack |
+
+```bash
+# Linux / macOS
+bash scripts/start-mailbus.sh
+```
+
+```bat
+:: Windows (double-click or from a terminal)
+scripts\start-mailbus.bat
+```
+
+All other operations use `python tools/mailbus.py <cmd>` (start / stop / doctor / smoke / portproxy / docker …).
+
 #### Deployment differences
 
 | | **Linux / macOS (native)** | **Windows + WSL team stack** |
 |--|----------------------------|------------------------------|
-| Day-to-day start | `python tools/mailbus.py start` or `mailbus serve` | Same Python entry; optional thin `.bat` under `scripts/` / `tools/mailbus/` |
+| Day-to-day start | `python tools/mailbus.py start` or `mailbus serve` | Same Python entry; optional thin `scripts/start-mailbus.bat` |
 | Browser → API | Open `http://127.0.0.1:9814/` directly | If serve runs **inside WSL** and the browser is on Windows, localhost may break when WSL IP / `wslrelay` goes stale |
 | Port forwarding | **Not needed** (`portproxy` is a no-op) | Run `python tools/mailbus.py portproxy` or `windows/fix-wsl-localhost.ps1` (UAC). See [`windows/README.md`](windows/README.md) |
 | Ollama glue | Host Ollama / `MAILBUS_OLLAMA_URL` | Windows host Ollama + optional WSL proxy (start path on `win32`/`wsl` only) |

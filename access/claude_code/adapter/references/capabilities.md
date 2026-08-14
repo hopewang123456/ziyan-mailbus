@@ -21,4 +21,4 @@
 ## 会话
 
 - 每次 `-p` 独立 headless run
-- 交互：`launch-agent.sh {agent} browser`
+- 交互：`launch_agent.py {agent} browser`

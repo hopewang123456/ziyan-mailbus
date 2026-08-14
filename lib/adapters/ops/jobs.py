@@ -13,6 +13,7 @@ from typing import Optional
 
 from lib.domain.models import MsgType, Priority
 from lib.infra import mbus_log
+from lib.infra.agent_demo import first_demo_agent
 from lib.infra.utils import build_message, json_read, json_write, resolve_paths, _now_iso
 
 TZ_CN = timezone(timedelta(hours=8))
@@ -275,9 +276,9 @@ def _patrol_target(data_dir: str) -> str:
     """巡检通知目标 agent：org_defaults.notify_agent，回落到 demo。"""
     try:
         from lib.infra.org_defaults import org_default
-        return org_default(data_dir, "notify_agent") or "agent-a"
+        return org_default(data_dir, "notify_agent") or first_demo_agent()
     except Exception:
-        return "agent-a"
+        return first_demo_agent()
 
 
 def _recent_patrol_notice(data_dir: str, agent: str = "", hours: float = 1.0) -> bool:

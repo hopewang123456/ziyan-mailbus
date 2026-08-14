@@ -11,12 +11,14 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-AGENT_DISPLAY = {
+from lib.infra.agent_demo import codex_agent_display, codex_default_models
+
+AGENT_DISPLAY = codex_agent_display() or {
     "agent-g": "Agent G",
     "agent-e": "Agent E",
 }
 
-DEFAULT_MODELS = {
+DEFAULT_MODELS = codex_default_models() or {
     "agent-e": ("deepseek-reasoner", "low", "true", "auto"),
     "agent-g": ("deepseek-v4-flash", "low", "false", "none"),
 }

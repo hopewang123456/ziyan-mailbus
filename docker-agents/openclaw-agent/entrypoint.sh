@@ -5,10 +5,6 @@ set -euo pipefail
 export OPENCLAW_STATE_DIR=/workspace/data/.openclaw
 export OPENCLAW_CONFIG_PATH="$OPENCLAW_STATE_DIR/openclaw.json"
 
-# 配置里使用 WSL 路径，容器内做兼容
-mkdir -p /mnt/<LOCAL_ROOT>
-ln -sfn /workspace /mnt/<LOCAL_ROOT>/openclaw_space
-
 # 从 Hermes 挂载目录注入 API Key
 # shellcheck disable=SC1091
 source /load-hermes-env.sh
@@ -25,11 +21,8 @@ bash /init-openclaw-profiles.sh || {
   bash /init-openclaw-profiles.sh || echo "[entrypoint] WARN: profile init still failed — gateways may be degraded"
 }
 
-if [ -x /mailbus/tools/sync-openclaw-framework-skill.sh ]; then
-  for agent in $(python3 -c "import json; print(' '.join(a for a, c in json.load(open('/mailbus/store/config.json', encoding='utf-8')).get('agents', {}).items() if (c.get('type') or '') == 'openclaw'))" 2>/dev/null); do
-    OPENCLAW_AGENT="$agent" OPENCLAW_SKILLS_DIR="/workspace/skills" \
-      bash /mailbus/tools/sync-openclaw-framework-skill.sh || true
-  done
+if [ -f /mailbus/tools/sync-all-agent-layers.py ]; then
+  python3 /mailbus/tools/sync-all-agent-layers.py --data-dir /mailbus/store --skip-hermes --skip-codex --skip-claude || true
 fi
 
 echo "[entrypoint] Starting OpenClaw gateways..."

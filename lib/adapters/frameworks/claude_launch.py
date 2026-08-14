@@ -609,7 +609,7 @@ def _running_in_mailbus_docker() -> bool:
 
 
 def enqueue_launch_queue(cmd: str, title: str, *, mode: str = "") -> bool:
-    """Docker 内经 launch-queue 让 WSL 宿主机执行命令（与 launch-agent.sh 同路径）。"""
+    """Docker 内经 launch-queue 让 WSL 宿主机执行命令（与 launch_agent.py 同路径）。"""
     candidates = [
         os.environ.get("MAILBUS_LAUNCH_QUEUE", "").strip(),
         "/mailbus/run/launch-queue",

@@ -6,4 +6,4 @@
 - [ ] `mailbus compose sync` — override 已生成
 - [ ] `mailbus start` — 容器 up
 - [ ] `mailbus smoke` — 冒烟通过
-- [ ] （WSL systemd）`sudo bash docker-agents/install-mailbus-watchdog-service.sh`
+- [ ] （WSL systemd）`sudo bash docker-agents/install-mailbus-watchdog-service.sh`（或 `mailbus watchdog` 手工启动）

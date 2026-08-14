@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""解析 agent CLI — 供 launch-agent.sh 等 shell 脚本调用。"""
+"""解析 agent CLI — 供 launch_agent.py 等调用。"""
 from __future__ import annotations
 
 import argparse

@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 from lib.infra.env_bootstrap import load_mailbus_env, mailbus_paths
+from lib.infra.agent_demo import hermes_demo_dashboards, openclaw_gateway_ports
 from .platform_runner import (
     LogFn,
     RunResult,
@@ -230,13 +231,11 @@ def ensure_ollama_wsl_proxy(action: str = "start", log: LogFn | None = None) -> 
 def _prepare_watchdog_queue(log: LogFn | None = None) -> str:
     """清理 stale watchdog 进程并确保 launch-queue 目录可写。"""
     paths = mailbus_paths()
-    compose = paths["compose_dir"]
-    watchdog = os.path.join(compose, "mailbus-launch-watchdog.sh")
     qdir = os.path.join(paths["run_dir"], "launch-queue")
     os.makedirs(qdir, exist_ok=True)
     with contextlib.suppress(OSError):
         os.chmod(qdir, 0o777)
-    kill_process_pattern(watchdog)
+    kill_process_pattern(WATCHDOG_PGREP)
     if log:
         log(f"[watchdog] queue ready at {qdir}, stale watchdogs cleared")
     return qdir
@@ -244,21 +243,14 @@ def _prepare_watchdog_queue(log: LogFn | None = None) -> str:
 
 def run_watchdog_foreground() -> int:
     """前台运行 launch watchdog（供 systemd ExecStart 使用）。"""
-    paths = mailbus_paths()
-    compose = paths["compose_dir"]
-    watchdog = os.path.join(compose, "mailbus-launch-watchdog.sh")
-    if not os.path.isfile(watchdog):
-        print(f"[watchdog] missing {watchdog}", file=sys.stderr)
-        return 1
+    from lib.adapters.plane.watchdog_runner import run_watchdog_forever
+
     qdir = _prepare_watchdog_queue()
-    env = os.environ.copy()
-    env["MAILBUS_LAUNCH_QUEUE"] = qdir
-    os.execvpe("bash", ["bash", watchdog], env)
-    return 1  # unreachable
+    return run_watchdog_forever(qdir)
 
 
 WATCHDOG_PID_FILE = "/tmp/mailbus-watchdog.pid"
-WATCHDOG_PGREP = "mailbus-launch-watchdog\\.sh"
+WATCHDOG_PGREP = "mailbus.py watchdog run"
 
 
 def _watchdog_running() -> bool:
@@ -283,8 +275,6 @@ def restart_watchdog(log: LogFn | None = None) -> int:
         return run_wsl(mailbus_py_in_wsl(["watchdog", "restart"]), timeout=120)
 
     paths = mailbus_paths()
-    compose = paths["compose_dir"]
-    watchdog = os.path.join(compose, "mailbus-launch-watchdog.sh")
     qdir = _prepare_watchdog_queue(log)
     os.environ["MAILBUS_LAUNCH_QUEUE"] = qdir
 
@@ -299,7 +289,7 @@ def restart_watchdog(log: LogFn | None = None) -> int:
     def _systemd_ok() -> bool:
         r = _run_in_wsl(["systemctl", "show", "mailbus-watchdog", "-p", "ExecStart", "--value"])
         out = r.stdout or ""
-        return "mailbus.py watchdog run" in out or "mailbus-launch-watchdog.sh" in out
+        return "mailbus.py watchdog run" in out
 
     def _try_systemd() -> bool:
         if _run_in_wsl(["systemctl", "is-enabled", "mailbus-watchdog"]).returncode != 0:
@@ -341,12 +331,11 @@ def restart_watchdog(log: LogFn | None = None) -> int:
     log_path = "/tmp/mailbus-watchdog.log"
     with open(log_path, "a", encoding="utf-8") as logfh:
         proc = subprocess.Popen(
-            ["bash", watchdog],
+            [sys.executable, "-m", "lib.adapters.plane.watchdog_runner"],
             stdout=logfh,
             stderr=subprocess.STDOUT,
             env=env,
             start_new_session=True,
-            cwd=compose,
         )
     with open(WATCHDOG_PID_FILE, "w", encoding="utf-8") as fh:
         fh.write(str(proc.pid))
@@ -386,6 +375,27 @@ def _ensure_windows_ollama(log: LogFn | None = None) -> None:
         log("WARNING: ensure-ollama failed — internal LLM may fall back to remote")
 
 
+def ensure_hermes_dashboards(log: LogFn | None = None) -> int:
+    """确保 Hermes 容器内全部 dashboard 就绪（原 ensure-hermes-dashboards.sh）。"""
+    paths = mailbus_paths()
+    container = f"{paths['compose_project']}-hermes-1"
+    if not docker_container_running(container):
+        if log:
+            log(f"[hermes-dashboards] container {container} not running — skip")
+        return 0
+    r = docker_exec(
+        container,
+        "python3.12",
+        "-m",
+        "lib.adapters.frameworks.hermes_dashboard",
+        "ensure-all",
+        timeout=120,
+    )
+    if r.returncode != 0 and log:
+        log(f"WARNING: ensure-hermes-dashboards rc={r.returncode}")
+    return r.returncode
+
+
 def _sync_layers(log: LogFn | None = None) -> None:
     """Default: do NOT mass-sync skills into agent workspaces (plan: Vault SoT + harness contract).
 
@@ -411,7 +421,7 @@ def _sync_layers(log: LogFn | None = None) -> None:
 
 
 START_TEAM_LOCK = "/tmp/start-team.lock"
-_START_TEAM_PGREP = r"python3.*mailbus\.py start|start-team\.sh"
+_START_TEAM_PGREP = r"python3.*mailbus\.py start|python.*mailbus\.py start"
 
 
 def _start_team_process_running() -> bool:
@@ -610,7 +620,7 @@ def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
         ).stdout.strip()
         if hermes_code != "200":
             log("Hermes :9126 not responding — ensure dashboards...")
-            run_legacy_bash("ensure-hermes-dashboards.sh", log=log)
+            ensure_hermes_dashboards(log)
             if run(
                 ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "3", "http://127.0.0.1:9126/"],
                 timeout=10,
@@ -619,9 +629,9 @@ def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
                 run_stream(compose_cmd("build", "hermes"), cwd=compose_dir, timeout=600)
                 run_stream(compose_cmd("up", "-d", "--force-recreate", "hermes"), cwd=compose_dir, timeout=300)
                 time.sleep(8)
-                run_legacy_bash("ensure-hermes-dashboards.sh", log=log)
+                ensure_hermes_dashboards(log)
         else:
-            run_legacy_bash("ensure-hermes-dashboards.sh", log=log)
+            ensure_hermes_dashboards(log)
 
         if new_proxy != old_proxy:
             log(f"Proxy changed [{old_proxy}] -> [{new_proxy}], recreating proxy-sensitive containers...")
@@ -694,15 +704,15 @@ def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
         log("AgentMemory ready" if am_ready else "WARNING: AgentMemory not ready after 45s")
 
         log("Bootstrapping Codex Web UI (codex agents)...")
-        run_legacy_bash("apply-codex-ui.sh", log=log)
+        apply_codex_ui(paths["data_dir"], log=log)
 
         log("Fixing OpenClaw gateways...")
-        oc_rc = run_legacy_bash("fix-openclaw-gateways.sh", log=log)
+        oc_rc = fix_openclaw_gateways(paths["data_dir"], log=log)
         if oc_rc != 0:
             log("WARNING: OpenClaw gateways not healthy after fix")
 
         log("Starting Claude Code agents (ttyd)...")
-        run_legacy_bash("ensure-claude-agents.sh", paths["data_dir"], "/tmp/start-team.log", log=log)
+        ensure_claude_agents(paths["data_dir"], log=log)
 
         log("Starting mailbus CLI watchdog...")
         restart_watchdog(log)
@@ -716,7 +726,7 @@ def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
             log("FAST mode — skip smoke test")
         else:
             log("Running smoke test...")
-            smoke_rc = run_legacy_bash("smoke-test.sh", log=log)
+            smoke_rc = smoke_test()
             if smoke_rc == 0:
                 log("Smoke test passed")
             else:
@@ -741,7 +751,7 @@ def stop_team() -> int:
     if run(["systemctl", "is-enabled", "mailbus-watchdog"], timeout=10).returncode == 0:
         run(["sudo", "systemctl", "stop", "mailbus-watchdog"], timeout=30)
     else:
-        kill_process_pattern(os.path.join(paths["compose_dir"], "mailbus-launch-watchdog.sh"))
+        kill_process_pattern(WATCHDOG_PGREP)
     time.sleep(1)
 
     stop_claude_agents(log)
@@ -898,10 +908,13 @@ def start_from_windows(*, open_browser: bool = False, fast: bool = False) -> int
 
     print("==========================================")
     print(f"  mailbus:  http://localhost:{port}/")
-    print("  Hermes:  9120-9122,9125-9127")
-    print("  OpenClaw: 18789 agent-m", "OK" if oc_ok else "FAIL", ", 18790 agent-l")
-    print("  Codex:   9240 agent-g, 9241 agent-e")
-    print("  Claude:  9260 agent-h, 9261 agent-f")
+    hermes_ports = ", ".join(str(p) for _, p in hermes_demo_dashboards() or [])
+    oc_ports = openclaw_gateway_ports()
+    oc_summary = " · ".join(f"{k}: {v}" for k, v in oc_ports.items()) or "18789"
+    print(f"  Hermes:  {hermes_ports or '9120-9122'}")
+    print(f"  OpenClaw: {oc_summary}", "OK" if oc_ok else "FAIL")
+    print("  Codex:   9240 / 9241")
+    print("  Claude:  9260 / 9261")
     print("==========================================")
 
     if open_browser and win_ok:

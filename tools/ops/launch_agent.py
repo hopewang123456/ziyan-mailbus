@@ -93,9 +93,12 @@ def _probe_first(urls: list[str], *, ok_codes: frozenset[int]) -> str | None:
 
 
 def _ensure_hermes_dashboards() -> None:
-    script = os.path.join(ROOT, "docker-agents", "ensure-hermes-dashboards.sh")
-    if os.path.isfile(script):
-        run(["bash", script], timeout=120)
+    try:
+        from lib.adapters.plane.lifecycle import ensure_hermes_dashboards
+
+        ensure_hermes_dashboards()
+    except Exception:
+        pass
 
 
 def _start_browser(url: str) -> int:

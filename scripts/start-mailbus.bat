@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul 2>&1
-title ziyan-mailbus - Start
+title mailbus - Start
 
 rem Resolve mail root = parent of scripts\
 cd /d "%~dp0.."
@@ -14,7 +14,7 @@ if not exist "%CD%\tools\mailbus.py" (
 
 echo.
 echo ==========================================
-echo   ziyan-mailbus
+echo   mailbus
 echo   API: http://localhost:9814/
 echo ==========================================
 echo.

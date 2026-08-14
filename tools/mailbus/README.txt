@@ -12,7 +12,8 @@ Examples:
   python tools/mailbus.py portproxy
   python tools/mailbus.py recover health
 
-Windows .bat wrappers in this folder:
-  start.bat / stop.bat / restart.bat / fix-port.bat
+Thin launch wrappers (Windows / Linux) live in scripts/:
+  scripts/start-mailbus.bat   (Windows)
+  scripts/start-mailbus.sh    (Linux / macOS)
 
-Desktop shortcuts (e.g. Desktop\Mailbus\*.bat) should point here or scripts\*.bat.
+Desktop shortcuts should point to scripts\start-mailbus.bat or the CLI above.

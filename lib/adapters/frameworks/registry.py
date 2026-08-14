@@ -18,6 +18,7 @@ from lib.adapters.container.resolver import (  # noqa: F401 — re-export for ca
     container_prefix,
     resolve_container,
 )
+from lib.infra.agent_demo import openclaw_gateway_ports, openclaw_state_dirs
 
 # ── 模型参数 ──────────────────────────────────────────────────────
 
@@ -212,11 +213,11 @@ class OpenClawAdapter(BaseAdapter):
     container_service = "openclaw"
     supports_auto_ack = True
     # mailbus agent key → OpenClaw 独立 state 目录（同容器多 profile）
-    STATE_DIRS = {
+    STATE_DIRS = openclaw_state_dirs() or {
         "agent-m": "/workspace/data/.openclaw-agent-m",
         "agent-l": "/workspace/data/.openclaw-agent-l",
     }
-    GATEWAY_PORTS = {
+    GATEWAY_PORTS = openclaw_gateway_ports() or {
         "agent-m": 18789,
         "agent-l": 18790,
     }

@@ -10,6 +10,7 @@ from typing import Any, Literal
 
 from lib.infra.constants import MAILBUS_ROOT
 from lib.infra.env_bootstrap import load_mailbus_env, mailbus_paths
+from lib.infra.agent_demo import hermes_demo_agents
 from lib.adapters.plane.platform_runner import detect_platform, docker_ready, probe_http, run, wsl_exe
 
 Level = Literal["ok", "warn", "fail"]
@@ -46,9 +47,7 @@ _THIN_DIRS_WARN_BELOW = {
 }
 
 
-_DEMO_HERMES_AGENTS = (
-    "agent-a", "agent-b", "agent-c", "agent-d",
-)
+_DEMO_HERMES_AGENTS = tuple(hermes_demo_agents()) or ("agent-a", "agent-b", "agent-c", "agent-d")
 
 
 def expected_hermes_agents(data_dir: str) -> list[str]:
@@ -345,7 +344,7 @@ def check_hermes_readiness(
                     "检查 docker-agents/.env 与 compose env",
                 ))
             if chat_probe:
-                probe_agent = (expected_hermes_agents(paths["data_dir"]) or ["agent-a"])[0]
+                probe_agent = (expected_hermes_agents(paths["data_dir"]) or list(_DEMO_HERMES_AGENTS))[0]
                 chat_r = run(
                     [
                         wsl, "-d", wsl_distro, "-e", "bash", "-lc",
@@ -531,6 +530,35 @@ def run_doctor_checks(*, mail_root: Path | None = None, wsl_distro: str = "Ubunt
             items.append(DoctorItem("ok", "frameworks", text[3:].strip(), ""))
         else:
             items.append(DoctorItem("warn", "frameworks", text[5:].strip() if text.startswith("SKIP") else text, ""))
+
+    # 平台适配器实例探测：按当前启动平台（win32/wsl/linux/docker）校验各框架实例
+    from lib.adapters.ops.platform_probe import get_platform_probe
+
+    try:
+        store_cfg = json_read(str(Path(paths["data_dir"]) / "config.json"), {}) if (Path(paths["data_dir"]) / "config.json").is_file() else {}
+    except Exception:
+        store_cfg = {}
+    probe_adapter = get_platform_probe()
+    probes = probe_adapter.probe_all(store_cfg)
+    if probes:
+        ok_probes = [p for p in probes if p.ok]
+        fail_probes = [p for p in probes if not p.ok]
+        found_detail = ", ".join(f"{p.instance}:{p.platform}" for p in ok_probes[:8]) or "无"
+        if fail_probes:
+            missing_detail = ", ".join(p.instance for p in fail_probes[:8]) + ("…" if len(fail_probes) > 8 else "")
+            items.append(DoctorItem(
+                "warn",
+                "frameworks",
+                f"平台适配器探测: {len(ok_probes)}/{len(probes)} 实例可用 ({probe_adapter.platform_name})",
+                f"可用 {found_detail}；缺失 {missing_detail}",
+            ))
+        else:
+            items.append(DoctorItem(
+                "ok",
+                "frameworks",
+                f"平台适配器探测: {len(probes)} 实例均可用 ({probe_adapter.platform_name})",
+                found_detail,
+            ))
 
     override = paths.get("compose_override", "")
     if override and os.path.isfile(override):

@@ -498,7 +498,7 @@ def run_round2(data_dir: str, agents: dict, diagnosis: Optional[dict] = None, fo
                 title="修复 cron.log 异常",
                 actions=[
                     "tail -50 store/cron.log 定位 traceback",
-                    "修复对应脚本并跑 monitor-regression.sh",
+                    "python tools/mailbus.py doctor 验证链路后修复对应脚本",
                 ],
                 acceptance=["cron.log 5 分钟内无新 traceback"],
                 priority="P1",
@@ -553,10 +553,10 @@ def run_round2(data_dir: str, agents: dict, diagnosis: Optional[dict] = None, fo
         role="测试工程师",
         title="Round2 回归验证",
         actions=[
-            "bash docker-agents/monitor-regression.sh",
-            f"bash docker-agents/task-flow-snapshot.sh {load_primary_task_id(data_dir)}",
+            "python tools/mailbus.py doctor 跑全量诊断",
+            "python tools/mailbus.py smoke 验证最小闭环",
         ],
-        acceptance=["monitor 9/9", "pipeline step >= 2 或 msg-results 存在"],
+        acceptance=["doctor 关键项 ok", "pipeline step >= 2 或 msg-results 存在"],
         priority="P0",
     )
 
@@ -624,7 +624,7 @@ def run_round3(data_dir: str, agents: dict, backlog: Optional[dict] = None, forc
                     "step": 4,
                     "actor": _first_for_role("测试工程师", data_dir),
                     "trigger": "所有 P0 acceptance 可验证",
-                    "action": "跑 monitor-regression + 更新 backlog item status=done",
+                    "action": "python tools/mailbus.py doctor 验证 + 更新 backlog item status=done",
                     "output": "msg-results/iteration-r3-verify.json",
                 },
                 {
@@ -689,15 +689,13 @@ def run_all(data_dir: str, agents: dict, force: bool = False) -> dict:
 def _iteration_agent_commands() -> dict:
     """Round 命令 — 使用 MAILBUS_ROOT，避免硬编码本机路径。"""
     root = str(MAILBUS_ROOT).replace("\\", "/")
-    snap = f"{root}/docker-agents/task-flow-snapshot.sh"
-    snap_cmd = f"bash {snap}" if os.path.isfile(snap) else f"bash docker-agents/task-flow-snapshot.sh"
     base = f"cd {root} && python bus.py iteration"
     return {
         "assess": f"{base} --round 1 --data-dir store",
         "plan": f"{base} --round 2 --data-dir store",
         "protocol": f"{base} --round 3 --data-dir store",
         "full_cycle": f"{base} --round all --data-dir store",
-        "snapshot": snap_cmd,
+        "snapshot": f"cd {root} && python tools/mailbus.py doctor",
     }
 
 
@@ -715,8 +713,9 @@ def _role_for_agent(agent_id: str, data_dir: str = "") -> str:
 def _first_for_role(role_zh: str, data_dir: str = "") -> str:
     """取某角色的第一个候选 agent（demo seed / store roster 均可）。"""
     from lib.application.orchestration.role_flow import pick_person_for_role
+    from lib.infra.agent_demo import first_demo_agent
 
-    return pick_person_for_role(role_zh, exclude=None, data_dir=data_dir) or "agent-a"
+    return pick_person_for_role(role_zh, exclude=None, data_dir=data_dir) or first_demo_agent()
 
 
 def _dispatch_order(data_dir: str = "") -> list:

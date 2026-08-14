@@ -13,7 +13,7 @@
 ## 快速开始
 
 ```bash
-git clone https://github.com/hopewang123456/mailbus.git
+git clone https://github.com/hopewang123456/ziyan-mailbus.git
 cd mailbus
 pip install -e .
 
@@ -50,11 +50,32 @@ python tools/mailbus.py start
 python tools/mailbus.py docker restart-mailbus
 ```
 
+#### 薄启动脚本
+
+提供两个薄包装（Windows / Linux），仅定位仓库并调用 `python tools/mailbus.py start`：
+
+| 平台 | 脚本 | 前提 |
+|------|------|------|
+| Windows | `scripts/start-mailbus.bat` | `PATH` 中有 Python 3.11+（`python` 或 `py -3`）；团队栈需要 Docker Desktop + WSL |
+| Linux / macOS | `scripts/start-mailbus.sh` | `PATH` 中有 `python3` ≥ 3.11；团队栈需要 Docker |
+
+```bash
+# Linux / macOS
+bash scripts/start-mailbus.sh
+```
+
+```bat
+:: Windows（双击或终端运行）
+scripts\start-mailbus.bat
+```
+
+其它操作统一用 `python tools/mailbus.py <cmd>`（start / stop / doctor / smoke / portproxy / docker …）。
+
 #### 部署差异
 
 | | **Linux / macOS 原生** | **Windows + WSL 团队栈** |
 |--|------------------------|--------------------------|
-| 日启 | `python tools/mailbus.py start` 或 `mailbus serve` | 同一 Python 入口；可用 `scripts/`、`tools/mailbus/` 下薄 `.bat` |
+| 日启 | `python tools/mailbus.py start` 或 `mailbus serve` | 同一 Python 入口；可用薄 `scripts/start-mailbus.bat` |
 | 浏览器访问 API | 直接打开 `http://127.0.0.1:9814/` | 服务在 **WSL 内**、浏览器在 **Windows** 时，WSL IP / `wslrelay` 过期会导致 localhost 不通 |
 | 端口转发 | **不需要**（`portproxy` 为空操作） | `python tools/mailbus.py portproxy` 或 `windows/fix-wsl-localhost.ps1`（可能 UAC）。见 [`windows/README.md`](windows/README.md) |
 | Ollama | 本机 Ollama / `MAILBUS_OLLAMA_URL` | Windows 宿主机 Ollama + 可选 WSL 代理（仅 win32/wsl 启动路径） |

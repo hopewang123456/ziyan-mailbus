@@ -165,7 +165,7 @@ Notable adapter modules:
 
 | 模式 | 实现 | 代码路径 |
 |------|------|---------|
-| 浏览器 (hermes/opencode) | `launch-agent.sh` → `launch_agent.py` | `tools/ops/launch_agent.py` |
+| 浏览器 (hermes/opencode) | `launch_agent.py` | `tools/ops/launch_agent.py` |
 | 浏览器 (codex) | API 直返 URL | `lib/api/handlers_system.py::_get_launch_url` |
 | 终端 CLI (Docker 类) | 入队 WSL watchdog → `docker exec -it` | `lib/api/handlers_system.py:1165-1221` |
 | 终端 CLI (Claude Code) | `claude_launch.py` → 原生 CLI | `lib/adapters/frameworks/claude_launch.py` |

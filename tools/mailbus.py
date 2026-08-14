@@ -59,7 +59,7 @@ from lib.adapters.plane.post_start import (  # noqa: E402
 
 def _scan_shell_scripts() -> list[str]:
     exts = {".sh", ".bat", ".ps1", ".cmd"}
-    skip_dirs = {".git", ".test-venv", "node_modules", "__pycache__", "vendor"}
+    skip_dirs = {".git", ".local", ".test-venv", "node_modules", "__pycache__", "vendor"}
     found: list[str] = []
     for dirpath, dirnames, filenames in os.walk(ROOT):
         dirnames[:] = [d for d in dirnames if d not in skip_dirs]

@@ -19,4 +19,4 @@ OpenClaw workspace 内涉及编码时 → [references/coding-discipline.md](refe
 
 ## Sync
 
-`mail/tools/sync-openclaw-framework-skill.sh` → `openclaw_space/skills/`
+`mail/tools/sync-all-agent-layers.py`（L0–L2 层 skill 同步）→ `openclaw_space/skills/`

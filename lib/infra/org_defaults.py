@@ -4,7 +4,7 @@
 运行时优先级：
   1. ``store/config.json → org_defaults``（由 ``init-store`` 从 ``config/mailbus/base.json`` 聚合，
      本地可通过 store 覆盖成自己的名册）
-  2. 内置通用 demo 名（``agent-a`` / ``agent-b`` …），保证开源克隆后开箱可跑。
+  2. ``config/mailbus/agent-demo.json → org_defaults``（开源公开 demo 名单），保证克隆后开箱可跑。
 
 key 约定（均为可选）：
   - ``reviewer``          默认审查人（原 audit_dispatch.AUDIT_REVIEWER）
@@ -21,11 +21,12 @@ import os
 from functools import lru_cache
 from typing import Any, List
 
+from lib.infra.agent_demo import org_demo_defaults
 from lib.infra.utils import json_read
 
 
-# 通用 demo fallback：不含任何个人名册
-_DEFAULT_ORG: dict[str, Any] = {
+# 通用 demo fallback：不含任何个人名册（读自 config/mailbus/agent-demo.json）
+_DEFAULT_ORG: dict[str, Any] = org_demo_defaults() or {
     "reviewer": "agent-a",
     "escalate_agent": "agent-a",
     "notify_agent": "agent-a",

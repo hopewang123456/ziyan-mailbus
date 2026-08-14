@@ -23,7 +23,7 @@ from lib.infra.utils import json_read, to_wsl_path
 
 # lib/adapters/frameworks/ → repo root
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-START_SCRIPT = os.path.join(ROOT, "tools", "start-claude-web.sh")
+START_SCRIPT = os.path.join(ROOT, "tools", "start-claude-web.py")
 
 
 def _config_path(data_dir: str) -> str:
@@ -210,12 +210,12 @@ def _tmux_session_ok(agent_key: str) -> bool:
 def _format_start_error(result: subprocess.CompletedProcess) -> str:
     err = (result.stderr or result.stdout or "").strip()
     if not err:
-        return "start-claude-web.sh failed"
+        return "start-claude-web.py failed"
     lines = [ln.strip() for ln in err.splitlines() if ln.strip()]
     for ln in reversed(lines):
         if ln.startswith("[claude-web]") or ln.startswith("[ERROR]") or "ttyd" in ln.lower():
             return ln
-    return lines[-1] if lines else "start-claude-web.sh failed"
+    return lines[-1] if lines else "start-claude-web.py failed"
 
 
 def ensure_claude_web(agent_key: str, data_dir: str, *, wait_seconds: int = 15) -> dict:
@@ -241,7 +241,7 @@ def ensure_claude_web(agent_key: str, data_dir: str, *, wait_seconds: int = 15) 
 
     inner = (
         f"export LANG=C.UTF-8 LC_ALL=C.UTF-8 TTYD_BIN={shlex.quote(ttyd_wsl)}; "
-        f"bash {shlex.quote(wsl_script)} {shlex.quote(agent_key)} {port} {shlex.quote(wsl_data)}"
+        f"python3 {shlex.quote(wsl_script)} {shlex.quote(agent_key)} {port} {shlex.quote(wsl_data)}"
     )
 
     if _http_ready_on_port(port) and _tmux_session_ok(agent_key):

@@ -18,4 +18,4 @@ agent-a, agent-b, agent-c, agent-d, agent-e, agent-f
 
 ## Sync
 
-`mail/tools/sync-hermes-framework-skill.sh`
+`mail/tools/sync-all-agent-layers.py`（L0–L2 层 skill 同步，Vault SoT + 运行时 junction）

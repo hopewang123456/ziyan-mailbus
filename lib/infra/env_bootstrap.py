@@ -60,7 +60,7 @@ def load_mailbus_env() -> None:
         if fallback:
             os.environ["MAILBUS_INTERNAL_LLM_API_KEY"] = fallback
 
-    # 与 docker-agents/lib/mailbus-env.sh 对齐；WSL compose 必须用 docker-agents（与现有容器/网络一致）
+    # WSL compose 必须用 docker-agents（与现有容器/网络一致）
     if os.name != "nt":
         os.environ["COMPOSE_PROJECT_NAME"] = "docker-agents"
     else:
@@ -147,7 +147,7 @@ def mailbus_paths() -> dict[str, str]:
             else (scripts / "fix-wsl-localhost.ps1")
         ),
         "windows_dir": str(root / "windows"),
-        "ensure_ollama_ps1": str(compose / "ensure-ollama.ps1"),
+        "ensure_ollama_ps1": str(root / "tools" / "ensure-ollama.py"),
         "run_dir": str(root / "run"),
         "compose_override": str(compose / "docker-compose.override.yml"),
     }

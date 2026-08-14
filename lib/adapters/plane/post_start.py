@@ -73,8 +73,12 @@ def _smoke_agent_checks(data_dir: str) -> list:
             continue
         fw = rec.get("type") or rec.get("framework") or ""
         if fw == "hermes_profile":
-            docker = rec.get("docker") or {}
-            port = docker.get("port")
+            launch = rec.get("launch") or {}
+            browser = launch.get("browser") or {}
+            port = browser.get("dashboard_port")
+            if not port:
+                docker = rec.get("docker") or {}
+                port = docker.get("port")
             if port:
                 checks.append((f"hermes-{aid}", f"http://127.0.0.1:{port}/"))
         elif fw == "openclaw":
@@ -95,6 +99,9 @@ def _smoke_agent_checks(data_dir: str) -> list:
             browser = launch.get("browser") or {}
             url = browser.get("url")
             if url:
+                port = browser.get("web_port") or browser.get("port")
+                if port and "{port}" in url:
+                    url = url.replace("{port}", str(port))
                 checks.append((f"claude-{aid}", url))
     return checks
 MAILBUS_CRON_RE = re.compile(

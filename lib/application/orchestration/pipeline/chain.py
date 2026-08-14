@@ -3,10 +3,11 @@
 from typing import Callable, List, Optional
 
 from lib.application.orchestration.pipeline.step import is_pipeline_step as _is_pipeline_step
+from lib.infra.agent_demo import pipeline_full_agents, pipeline_legacy_agent_role
 from lib.infra.utils import _now_iso
 
 # Legacy fallback：agent id → 角色名（仅当 role-types.json SoT 缺失时用 demo 名）
-_LEGACY_AGENT_ROLE = {
+_LEGACY_AGENT_ROLE = pipeline_legacy_agent_role() or {
     "agent-a": "方案设计师",
     "agent-b": "调度员",
     "agent-c": "审查官",
@@ -14,7 +15,7 @@ _LEGACY_AGENT_ROLE = {
 }
 
 # Legacy fallback 全流程顺序（demo 名）
-FULL_PIPELINE_AGENTS = [
+FULL_PIPELINE_AGENTS = pipeline_full_agents() or [
     "agent-a", "agent-b", "agent-d", "agent-c", "agent-b",
 ]
 
@@ -35,7 +36,18 @@ def _agent_role_map(data_dir: str = "") -> dict:
 
 
 def agent_to_role(agent_id: str, data_dir: str = "") -> str:
-    return _agent_role_map(data_dir).get(agent_id, "方案设计师")
+    return _agent_role_map(data_dir).get(agent_id, _default_role_zh(data_dir))
+
+
+def _default_role_zh(data_dir: str = "") -> str:
+    """默认角色中文名：role-types.json 第一个角色，缺失时退回 demo。"""
+    from lib.infra.role_types import role_type_to_zh, valid_role_types
+
+    rts = valid_role_types(data_dir)
+    if rts:
+        return role_type_to_zh(rts[0], data_dir)
+    zh = _LEGACY_AGENT_ROLE or {}
+    return next(iter(zh.values()), "方案设计师")
 
 
 def is_pipeline_step(item) -> bool:

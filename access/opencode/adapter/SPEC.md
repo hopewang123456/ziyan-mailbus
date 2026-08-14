@@ -19,4 +19,4 @@ msg-results **不是** opencode pipeline 主 SoT。
 
 ## Sync
 
-`mail/tools/sync-opencode-framework-skill.sh` → `opencode/skills/`
+`mail/tools/sync-all-agent-layers.py`（L0–L2 层 skill 同步）→ `opencode/skills/`

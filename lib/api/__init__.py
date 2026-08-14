@@ -65,14 +65,18 @@ def serve(data_dir: str, agents: dict, agent_types: dict = None,
     MailbusAPIHandler.permission_file = os.path.join(data_dir, "permission.json")
     if not os.path.isfile(MailbusAPIHandler.permission_file):
         from lib.infra.utils import json_write, _now_iso
+        from lib.infra.agent_demo import bulletin_default_list, bulletin_default_posters
+
+        default_posters = bulletin_default_posters() or ["agent-a", "agent-m", "agent-g"]
+        default_bulletin = bulletin_default_list() or ["agent-a", "agent-m"]
         default_perms = {
             name: {"browser": True, "desktop": True, "cli": True, "mailbox": True,
-                   "bulletin": name in ("agent-a", "agent-m", "agent-g")}
+                   "bulletin": name in default_posters}
             for name in agents
         }
         json_write(MailbusAPIHandler.permission_file, {
             "permissions": default_perms,
-            "bulletin": ["agent-a", "agent-m"],
+            "bulletin": default_bulletin,
             "updated_at": _now_iso(),
         })
 

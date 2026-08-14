@@ -1,0 +1,85 @@
+{
+  "version": "1.0.0",
+  "_note": "Open-source demo roster seed (generic agent ids). Runtime prefers store/config.json / team-pack; these are fallbacks so a clean clone is runnable out of the box. Do not put personal names or local paths here.",
+  "hermes": {
+    "demo_agents": ["agent-a", "agent-b", "agent-c", "agent-d"],
+    "demo_dashboards": [
+      { "agent": "agent-a", "port": 9120 },
+      { "agent": "agent-b", "port": 9121 },
+      { "agent": "agent-c", "port": 9122 }
+    ]
+  },
+  "openclaw": {
+    "state_dirs": {
+      "agent-m": "/workspace/data/.openclaw-agent-m",
+      "agent-l": "/workspace/data/.openclaw-agent-l"
+    },
+    "gateway_ports": {
+      "agent-m": 18789,
+      "agent-l": 18790
+    }
+  },
+  "codex": {
+    "agent_display": {
+      "agent-g": "Agent G",
+      "agent-e": "Agent E"
+    },
+    "default_models": {
+      "agent-e": ["deepseek-reasoner", "low", "true", "auto"],
+      "agent-g": ["deepseek-v4-flash", "low", "false", "none"]
+    }
+  },
+  "pipeline": {
+    "legacy_agent_role": {
+      "agent-a": "方案设计师",
+      "agent-b": "调度员",
+      "agent-c": "审查官",
+      "agent-d": "开发工程师"
+    },
+    "full_pipeline_agents": ["agent-a", "agent-b", "agent-d", "agent-c", "agent-b"],
+    "role_flow": {
+      "开发工程师|done": "审查官",
+      "开发工程师|blocked": "方案设计师",
+      "审查官|pass": "测试工程师",
+      "审查官|fail": "开发工程师",
+      "测试工程师|pass": "验收员",
+      "测试工程师|fail": "开发工程师",
+      "验收员|approved": "",
+      "验收员|rejected": "开发工程师",
+      "调度员|dispatched": "开发工程师",
+      "调度员|approved": "",
+      "方案设计师|approved": "调度员",
+      "方案设计师|done": "调度员",
+      "方案设计师|need_research": "技术研究员",
+      "安全审计师|pass": "审查官",
+      "安全审计师|fail": "开发工程师",
+      "技术研究员|done": "方案设计师",
+      "巡检官|done": "",
+      "巡检官|warning": "方案设计师",
+      "运营|done": "",
+      "市场拓展官|pursue": "方案设计师",
+      "市场拓展官|handed_to_solution": "方案设计师",
+      "市场拓展官|watch": "",
+      "市场拓展官|reject": ""
+    }
+  },
+  "bulletin": {
+    "default_posters": ["agent-a", "agent-m", "agent-g"],
+    "default_bulletin": ["agent-a", "agent-m"]
+  },
+  "clinic": {
+    "demo_agents": [
+      "agent-a", "agent-c", "agent-m", "agent-g", "agent-i", "agent-b",
+      "agent-e", "agent-h", "agent-d", "agent-l", "hermes", "openclaw"
+    ]
+  },
+  "org_defaults": {
+    "reviewer": "agent-a",
+    "escalate_agent": "agent-a",
+    "notify_agent": "agent-a",
+    "notify_agents": ["agent-a", "agent-m"],
+    "scheduler": "agent-b",
+    "finance_followup": "agent-c",
+    "audit_reviewers": ["agent-a", "agent-f"]
+  }
+}

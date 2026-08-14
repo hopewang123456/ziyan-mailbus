@@ -6,34 +6,15 @@ import os
 from functools import lru_cache
 from typing import Optional, Set
 
+from lib.infra.agent_demo import pipeline_role_flow
 from lib.infra.utils import json_read
 
 # Legacy 硬编码（fallback，仅当 JSON SoT 缺失时使用通用 demo 名）
 _FLOW_RULES = {
-    ("开发工程师", "done"): "审查官",
-    ("开发工程师", "blocked"): "方案设计师",
-    ("审查官", "pass"): "测试工程师",
-    ("审查官", "fail"): "开发工程师",
-    ("测试工程师", "pass"): "验收员",
-    ("测试工程师", "fail"): "开发工程师",
-    ("验收员", "approved"): None,
-    ("验收员", "rejected"): "开发工程师",
-    ("调度员", "dispatched"): "开发工程师",
-    ("调度员", "approved"): None,
-    ("方案设计师", "approved"): "调度员",
-    ("方案设计师", "done"): "调度员",
-    ("方案设计师", "need_research"): "技术研究员",
-    ("安全审计师", "pass"): "审查官",
-    ("安全审计师", "fail"): "开发工程师",
-    ("技术研究员", "done"): "方案设计师",
-    ("巡检官", "done"): None,
-    ("巡检官", "warning"): "方案设计师",
-    ("运营", "done"): None,
-    ("市场拓展官", "pursue"): "方案设计师",
-    ("市场拓展官", "handed_to_solution"): "方案设计师",
-    ("市场拓展官", "watch"): None,
-    ("市场拓展官", "reject"): None,
+    tuple(k.split("|", 1)): v for k, v in (pipeline_role_flow() or {}).items()
 }
+# 兼容空串表示终止
+_FLOW_RULES = {k: (v or None) for k, v in _FLOW_RULES.items()}
 
 
 @lru_cache(maxsize=4)
@@ -67,13 +48,18 @@ def is_terminal_role_type(role_type: int, conclusion: str, data_dir: str) -> boo
 
 def _role_map(data_dir: str = "") -> dict:
     """角色中文名 → agent 列表。SoT: role-types.json（store → team-pack → 公开 seed）。"""
-    from lib.infra.role_types import role_type_candidates, zh_to_role_type
+    from lib.infra.role_types import role_type_candidates, role_types_sot
 
     out: dict[str, list[str]] = {}
-    for zh in ("方案设计师", "调度员", "开发工程师", "审查官", "测试工程师",
-               "安全审计师", "技术研究员", "巡检官", "市场拓展官",
-               "财务跟进官", "运营", "验收员"):
-        rt = zh_to_role_type(zh, data_dir)
+    for key, entry in (role_types_sot(data_dir) or {}).items():
+        disp = (entry or {}).get("display") or {}
+        zh = disp.get("zh")
+        if not zh:
+            continue
+        try:
+            rt = int(key)
+        except (TypeError, ValueError):
+            continue
         cands = list(role_type_candidates(rt, data_dir)) if rt else []
         if cands:
             out[zh] = cands

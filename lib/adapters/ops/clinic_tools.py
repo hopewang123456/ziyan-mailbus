@@ -8,14 +8,12 @@ import sys
 import time
 from typing import Any, Optional
 
+from lib.infra.agent_demo import clinic_demo_agents
 from lib.infra.constants import DEFAULT_API_BASE
 
 MAIL_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-_DEMO_AGENTS = [
-    "agent-a", "agent-c", "agent-m", "agent-g", "agent-i", "agent-b",
-    "agent-e", "agent-h", "agent-d", "agent-l", "hermes", "openclaw",
-]
+_DEMO_AGENTS = clinic_demo_agents() or ["agent-a", "agent-c", "agent-m"]
 
 
 def _agent_options() -> list[str]:
@@ -133,6 +131,22 @@ CLINIC_TOOLS: list[dict[str, Any]] = [
         "readonly": True,
         "timeout": 90,
         "presets": [{"label": "运行诊断", "args": []}],
+    },
+    {
+        "id": "platform-probe",
+        "name": "平台 Agent 实例探测",
+        "description": "按当前启动平台（win32/wsl/linux/docker）校验各 Agent 框架实例是否就绪。",
+        "category": "Agent 配置",
+        "readonly": True,
+        "timeout": 60,
+        "presets": [
+            {"label": "探测全部", "args": ["--json"]},
+            {"label": "指定 agent", "args": ["--framework", "{agent}", "--json"]},
+        ],
+        "params": [
+            {"name": "agent", "label": "Agent", "type": "select",
+             "options": _AGENT_OPTIONS, "default": _AGENT_OPTIONS[0] if _AGENT_OPTIONS else ""},
+        ],
     },
     {
         "id": "check-mailbus-integrity",

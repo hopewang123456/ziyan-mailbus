@@ -24,9 +24,8 @@ if [ "${MEMORY_BRIDGE_AGENTMEMORY:-0}" = "1" ] && [ -f /mailbus/store/config.jso
   fi
 fi
 
-if [ -x /mailbus/tools/sync-opencode-framework-skill.sh ]; then
-  OPENCODE_AGENT=agent-i OPENCODE_SKILLS_DIR=/workspace/opencode/skills \
-    bash /mailbus/tools/sync-opencode-framework-skill.sh || true
+if [ -f /mailbus/tools/sync-all-agent-layers.py ]; then
+  python3 /mailbus/tools/sync-all-agent-layers.py --data-dir /mailbus/store --skip-hermes --skip-codex --skip-claude || true
 fi
 
 exec "$@"

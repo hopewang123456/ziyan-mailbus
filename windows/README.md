@@ -18,7 +18,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\windows\fix-wsl-localhost.
 python tools/mailbus.py portproxy
 ```
 
-Thin wrappers: `scripts/fix-mailbus-port.bat`, `tools/mailbus/fix-port.bat`.
+All other wrappers were removed — use `python tools/mailbus.py <cmd>` directly.
 
 ## Not needed on Linux / macOS
 

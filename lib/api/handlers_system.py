@@ -11,12 +11,11 @@ import os
 import json
 import sys
 import time
-import shutil
 import subprocess
 from lib.infra.constants import MAILBUS_ROOT
 from lib.infra.runtime_net import rewrite_browser_host
 from lib.domain.models import Inbox
-from lib.infra.utils import json_read, json_write, resolve_paths, resolve_mailbus_path, identity_candidates, to_wsl_path, _now_iso
+from lib.infra.utils import json_read, json_write, resolve_paths, resolve_mailbus_path, identity_candidates, _now_iso
 from lib.adapters.ops.heartbeat import load_status as load_heartbeat
 from lib.adapters.ops.alerter import get_recent_alerts
 from lib.adapters.ops.scheduler import get_scheduler_status
@@ -50,40 +49,25 @@ def _running_in_mailbus_container() -> bool:
 
 
 def _resolve_launch_script_path() -> str:
-    """定位 tools/ops/launch-agent.sh（容器 /mailbus 或源码树）。"""
+    """定位 tools/ops/launch_agent.py（容器 /mailbus 或源码树）。"""
     lib_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
     for cand in (
-        os.path.join(str(MAILBUS_ROOT), "tools", "ops", "launch-agent.sh"),
-        os.path.join(lib_root, "tools", "ops", "launch-agent.sh"),
-        "/mailbus/tools/ops/launch-agent.sh",
+        os.path.join(str(MAILBUS_ROOT), "tools", "ops", "launch_agent.py"),
+        os.path.join(lib_root, "tools", "ops", "launch_agent.py"),
+        "/mailbus/tools/ops/launch_agent.py",
     ):
         if os.path.isfile(cand):
             return cand
     return ""
 
 
-def _run_launch_script(script_path: str, agent: str, mode: str) -> subprocess.CompletedProcess:
-    """在 WSL/bash 中执行 launch-agent.sh（Windows 原生 serve 走 wsl）。"""
+def _run_launch_script(script_path: str, agent: str, mode: str, data_dir: str = "") -> subprocess.CompletedProcess:
+    """执行 tools/ops/launch_agent.py（纯 Python，Windows 原生/容器均直接跑）。"""
     timeout = _launch_script_timeout(mode)
-    run_kw: dict = {"capture_output": True, "timeout": timeout}
-    if sys.platform == "win32":
-        run_kw["encoding"] = "utf-8"
-        run_kw["errors"] = "replace"
-    else:
-        run_kw["text"] = True
-    if sys.platform == "win32":
-        wsl = shutil.which("wsl.exe") or shutil.which("wsl")
-        if wsl:
-            wsl_script = to_wsl_path(script_path)
-            return subprocess.run(
-                [wsl, "-e", "bash", wsl_script, agent, mode],
-                **run_kw,
-            )
-    bash = shutil.which("bash") or "bash"
-    return subprocess.run(
-        [bash, script_path, agent, mode],
-        **run_kw,
-    )
+    cmd = [sys.executable, script_path, agent, mode]
+    if data_dir:
+        cmd += ["--data-dir", data_dir]
+    return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
 def handle_health(handler):
@@ -144,7 +128,7 @@ def handle_status(handler):
 
 
 def _parse_launch_stdout_url(stdout: str) -> str:
-    """从 launch-agent.sh  stdout 末行提取 URL（Launched agent codex-ui http://...）。"""
+    """从 launch_agent.py stdout 末行提取 URL（Launched agent codex-ui http://...）。"""
     for line in reversed((stdout or "").splitlines()):
         line = line.strip()
         if not line.startswith("Launched "):
@@ -1032,8 +1016,9 @@ def handle_agent_recruit(handler):
     ])
     content = "\n".join(lines)
 
+    from lib.infra.agent_demo import first_demo_agent
     from lib.infra.org_defaults import org_default
-    to = org_default(handler.data_dir, "reviewer") or "agent-a"
+    to = org_default(handler.data_dir, "reviewer") or first_demo_agent()
     if to not in handler.agents:
         handler._send_json({"error": f"{to} 未注册"}, 503)
         return
@@ -1097,7 +1082,7 @@ def _get_launch_url(handler, agent_name: str) -> str:
     launch = cfg.get("launch", {})
     if not launch:
         return ""
-    # 合并模板 + agent 覆盖（与 launch-agent.sh 逻辑一致）
+    # 合并模板 + agent 覆盖（与 launch_agent.py 逻辑一致）
     tmpl_name = launch.get("template", "")
     tmpl = handler.agent_types.get("launch_templates", {}).get(tmpl_name, {})
     browser_cfg = dict(tmpl.get("browser", {}))
@@ -1144,7 +1129,7 @@ def handle_list_launchable(handler):
 
 
 def handle_launch(handler):
-    """POST /api/launch — 通过 launch-agent.sh 启动 agent"""
+    """POST /api/launch — 通过 launch_agent.py 启动 agent"""
     body = handler._read_post_body()
     agent = body.get("agent", "")
     mode = body.get("mode", "browser")
@@ -1305,7 +1290,7 @@ def handle_launch(handler):
         return
 
     try:
-        result = _run_launch_script(script_path, agent, mode)
+        result = _run_launch_script(script_path, agent, mode, handler.data_dir)
         if result.returncode == 0:
             payload = {
                 "status": "ok",
