@@ -65,7 +65,7 @@ class TestCancelInflight(unittest.TestCase):
                     "step_id": "s1",
                     "fsm_state": "working",
                     "a2a_task_id": "a2a-remote-1",
-                    "to_agent": "lingzhao",
+                    "to_agent": "agent-a",
                     "role_type": 1,
                 },
                 {
@@ -73,7 +73,7 @@ class TestCancelInflight(unittest.TestCase):
                     "fsm_state": "completed",
                     "status": "completed",
                     "a2a_task_id": "a2a-remote-2",
-                    "to_agent": "lingzhao",
+                    "to_agent": "agent-a",
                     "role_type": 1,
                 },
             ],
@@ -118,7 +118,7 @@ class TestCancelTaskRpcHandler(unittest.TestCase):
                 "step_id": "s1",
                 "fsm_state": "working",
                 "a2a_task_id": "a2a-hub-task-99",
-                "to_agent": "lingzhao",
+                "to_agent": "agent-a",
                 "role_type": 1,
             }],
         }
@@ -136,7 +136,7 @@ class TestCancelTaskRpcHandler(unittest.TestCase):
             "method": "CancelTask",
             "params": {"id": self.tid},
         }
-        handle_a2a_rpc(handler, "lingzhao")
+        handle_a2a_rpc(handler, "agent-a")
         self.assertIsNotNone(handler._resp_json)
         data, status = handler._resp_json
         self.assertEqual(status, 200)
@@ -153,7 +153,7 @@ class TestCancelTaskRpcHandler(unittest.TestCase):
             "method": "CancelTask",
             "params": {"id": "a2a-hub-task-99"},
         }
-        handle_a2a_rpc(handler, "lingzhao")
+        handle_a2a_rpc(handler, "agent-a")
         data, status = handler._resp_json
         self.assertEqual(status, 200)
         self.assertTrue(data["result"]["cancelled"])
@@ -166,7 +166,7 @@ class TestCancelTaskRpcHandler(unittest.TestCase):
             "method": "CancelTask",
             "params": {"id": "missing-task"},
         }
-        handle_a2a_rpc(handler, "lingzhao")
+        handle_a2a_rpc(handler, "agent-a")
         data, status = handler._resp_json
         self.assertEqual(status, 404)
         self.assertIn("error", data)

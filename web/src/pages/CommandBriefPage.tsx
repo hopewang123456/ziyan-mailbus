@@ -93,7 +93,7 @@ export function CommandBriefPage() {
       </header>
 
       {/* 总线状态 */}
-      <div className="rounded-sm border border-rail bg-hull/50 px-3 py-2 text-xs">
+      <div className="soft-inset px-3 py-2 text-xs">
         <span className="text-mute">总线: </span>
         <span className={status?.status === "ok" || status?.version ? "text-mint" : "text-mute"}>
           {status?.version || status?.status || "…"}
@@ -141,7 +141,7 @@ export function CommandBriefPage() {
 
       {/* Agent 工作负载 */}
       {busyAgents.length > 0 && (
-        <div className="rounded-sm border border-rail bg-hull/50 p-3">
+        <div className="soft-inset">
           <p className="hud-label mb-2">Agent 工作负载</p>
           <div className="space-y-1">
             {busyAgents.map(([id, a]) => (
@@ -206,7 +206,7 @@ function IndicatorCard({
 }) {
   const statusDot = ok === true ? "bg-mint" : ok === false ? "bg-flare" : "bg-mute";
   return (
-    <div className="rounded-sm border border-rail bg-hull/50 p-3 text-center">
+    <div className="soft-inset text-center">
       <p className="hud-label text-[10px]">{label}</p>
       <p className={`mt-1 text-lg font-display ${color}`}>
         <span className={`inline-block h-1.5 w-1.5 rounded-full mr-1.5 align-middle ${statusDot}`} />
@@ -220,7 +220,7 @@ function NavCard({ title, desc, href, sub }: { title: string; desc: string; href
   return (
     <a
       href={href || "#"}
-      className="rounded-sm border border-rail bg-hull/50 p-3 transition hover:border-cyan-signal/40 hover:shadow-glow no-underline"
+      className="soft-inset transition hover:border-cyan-signal/40 hover:shadow-glow no-underline"
       onClick={(e) => {
         if (!href) e.preventDefault();
       }}

@@ -38,6 +38,7 @@ export type AgentProfile = {
     motto?: string;
     traits?: string[];
     personality?: string;
+    bond?: string;
     ziyan_bond?: string;
     animated?: string;
   };
@@ -186,7 +187,7 @@ export function AgentDetailPanel({
 
   if (!agent) {
     return (
-      <div className="hud-panel flex min-h-48 items-center justify-center p-6 text-sm text-mute">
+      <div className="soft-panel flex min-h-48 items-center justify-center p-6 text-sm text-mute">
         点击左侧卡片查看角色档案
       </div>
     );
@@ -212,7 +213,7 @@ export function AgentDetailPanel({
   const animated = avatarUrl(agent.id, "animated");
 
   return (
-    <div className="hud-panel space-y-4 p-4">
+    <div className="soft-panel space-y-4">
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="hud-label">角色档案</p>
@@ -279,10 +280,10 @@ export function AgentDetailPanel({
 
           <InfoCell label="角色">{role}</InfoCell>
 
-          {(card.personality || card.ziyan_bond) && (
+          {(card.personality || card.bond || card.ziyan_bond) && (
             <InfoCell label="工作 / 性格">
               <span className="whitespace-pre-wrap text-mute">
-                {String(card.personality || card.ziyan_bond).slice(0, 400)}
+                {String(card.personality || card.bond || card.ziyan_bond).slice(0, 400)}
               </span>
             </InfoCell>
           )}
@@ -419,7 +420,7 @@ export function FleetGrid({ selectedId, onSelect, withDetail }: FleetProps) {
             return (
               <li key={ag.id}>
                 <div
-                  className={`hud-panel p-3 transition hover:border-cyan-signal/35 ${
+                  className={`soft-inset transition hover:border-white/15 ${
                     active ? "border-cyan-signal/50 bg-cyan-signal/5" : ""
                   }`}
                 >

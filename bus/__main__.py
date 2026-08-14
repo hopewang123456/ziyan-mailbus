@@ -36,7 +36,7 @@ from lib.application.commands.commands import (  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="bus", description="ziyan-mailbus CLI")
+    ap = argparse.ArgumentParser(prog="bus", description="mailbus CLI")
     sub = ap.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("init", help="初始化 store")

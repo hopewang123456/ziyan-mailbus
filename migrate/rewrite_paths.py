@@ -92,7 +92,7 @@ def rewrite_tree(
 
 def _rewrite_transport_workspaces(transport_dir: Path, install_prefix: Path) -> None:
     mapping = {
-        "lingxiao": install_prefix / "lingxiao",
+        "agent-f": install_prefix / "agent-f",
         "opencode": install_prefix / "opencode",
         "openclaw_space": install_prefix / "openclaw_space",
     }
@@ -109,15 +109,15 @@ def _rewrite_transport_workspaces(transport_dir: Path, install_prefix: Path) -> 
         ws = data.get("workspace") or ""
         push = data.get("push") or {}
         agent_id = data.get("agent_id") or agent_dir.name
-        if agent_id == "lingxiao" and mapping["lingxiao"].exists():
-            data["workspace"] = to_wsl_path(mapping["lingxiao"])
+        if agent_id == "agent-f" and mapping["agent-f"].exists():
+            data["workspace"] = to_wsl_path(mapping["agent-f"])
         if data.get("framework") == "opencode" and mapping["opencode"].exists():
             data["workspace"] = to_wsl_path(mapping["opencode"])
             push["cwd"] = to_wsl_path(mapping["opencode"])
             data["push"] = push
         if data.get("framework") == "openclaw":
-            sub = mapping["openclaw_space"] / ("a-yige" if agent_id == "yige" else "")
-            if agent_id == "yige" and sub.exists():
+            sub = mapping["openclaw_space"] / ("a-agent-g" if agent_id == "agent-g" else "")
+            if agent_id == "agent-g" and sub.exists():
                 data["workspace"] = to_wsl_path(sub)
             elif mapping["openclaw_space"].exists():
                 data["workspace"] = to_wsl_path(mapping["openclaw_space"])

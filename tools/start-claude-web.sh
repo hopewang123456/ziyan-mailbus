@@ -51,6 +51,17 @@ _session_ok() {
   tmux has-session -t "${TMUX_SESSION}" 2>/dev/null
 }
 
+_http_ok() {
+  # Basic Auth 开启时无凭证会返回 401 —— 仍视为监听就绪
+  local code
+  code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 3 \
+    "http://127.0.0.1:${WEB_PORT}/" 2>/dev/null || echo 000)
+  case "$code" in
+    200|401|403) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 _stop_ttyd() {
   if [ -f "$PID_FILE" ]; then
     local old_pid
@@ -65,12 +76,12 @@ _stop_ttyd() {
   sleep 0.5
 }
 
-if curl -sf "http://127.0.0.1:${WEB_PORT}/" >/dev/null 2>&1 && _session_ok; then
+if _http_ok && _session_ok; then
   echo "[claude-web] already listening on :${WEB_PORT} agent=${AGENT} session=${TMUX_SESSION}" >&2
   exit 0
 fi
 
-if curl -sf "http://127.0.0.1:${WEB_PORT}/" >/dev/null 2>&1 && ! _session_ok; then
+if _http_ok && ! _session_ok; then
   echo "[claude-web] ttyd up but tmux session missing — restarting :${WEB_PORT}" >&2
   _stop_ttyd
 fi
@@ -119,13 +130,35 @@ tmux new-session -d -s "${TMUX_SESSION}" "$START_SCRIPT"
 
 _stop_ttyd
 
-nohup "$TTYD_BIN" -p "${WEB_PORT}" -i 0.0.0.0 -W -t disableReuse=true -t "titleFixed=${AGENT_TITLE}" \
+# 浏览器入口鉴权：ttyd 裸奔 → 加 Basic Auth（-c）。凭据来源：env > secrets.browser_auth.<agent>
+AUTH_USER="${TTYD_AUTH_USER:-}"
+AUTH_PASS="${TTYD_AUTH_PASS:-}"
+if [ -z "$AUTH_USER" ] || [ -z "$AUTH_PASS" ]; then
+  CRED=$(python3 -c "
+import json,os
+p=os.path.join('${DATA_DIR}','secrets.json')
+try:
+    d=json.load(open(p))
+    c=(d.get('browser_auth') or {}).get('${AGENT}',{})
+    print(c.get('user',''), c.get('password',''))
+except Exception:
+    print('','')
+" 2>/dev/null || true)
+  AUTH_USER="${AUTH_USER:-$(echo "$CRED" | awk '{print $1}')}"
+  AUTH_PASS="${AUTH_PASS:-$(echo "$CRED" | awk '{print $2}')}"
+fi
+AUTH_ARGS=()
+if [ -n "$AUTH_USER" ] && [ -n "$AUTH_PASS" ]; then
+  AUTH_ARGS=(-c "${AUTH_USER}:${AUTH_PASS}")
+fi
+
+nohup "$TTYD_BIN" -p "${WEB_PORT}" -i 0.0.0.0 "${AUTH_ARGS[@]}" -W -t disableReuse=true -t "titleFixed=${AGENT_TITLE}" \
   tmux attach -t "${TMUX_SESSION}" \
   >"${LOG_DIR}/ttyd-${AGENT}.log" 2>&1 &
 echo $! > "$PID_FILE"
 
 for _ in $(seq 1 25); do
-  if curl -sf "http://127.0.0.1:${WEB_PORT}/" >/dev/null 2>&1 && _session_ok; then
+  if _http_ok && _session_ok; then
     echo "[claude-web] ready http://127.0.0.1:${WEB_PORT} agent=${AGENT} session=${TMUX_SESSION}" >&2
     exit 0
   fi

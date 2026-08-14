@@ -11,6 +11,7 @@ import { ClinicPage } from "../pages/ClinicPage";
 import { InboxPage } from "../pages/InboxPage";
 import { CommandBriefPage } from "../pages/CommandBriefPage";
 import { ApiListPage } from "../pages/thin/ApiListPage";
+import { WorkflowBoardPage } from "../pages/thin/WorkflowBoardPage";
 import { t, type I18nKey } from "../lib/i18n";
 
 export type HudPanelId =
@@ -86,7 +87,7 @@ function OtherCards() {
           case "intake":
             return <ApiListPage title={t("intake")} path="/api/intake" listKey="intakes" />;
           case "workflows":
-            return <ApiListPage title={t("workflows")} path="/api/workflows" listKey="workflows" />;
+            return <WorkflowBoardPage />;
           case "content":
             return <ApiListPage title={t("content")} path="/api/tasks?limit=40" listKey="tasks" />;
           case "pipeline":
@@ -94,13 +95,13 @@ function OtherCards() {
           case "inbox":
             return <InboxPage />;
           case "bulletin":
-            return <ApiListPage title={t("bulletin")} path="/api/bulletin" listKey="bulletins" />;
+            return <ApiListPage title={t("bulletin")} path="/api/bulletin" listKey="bulletins" variant="mail" />;
           case "stats":
-            return <ApiListPage title={t("stats")} path="/api/tasks/audit/stats" />;
+            return <ApiListPage title={t("stats")} path="/api/tasks/audit/stats" variant="stats" />;
           case "patrol":
-            return <ApiListPage title={t("patrol")} path="/api/patrol-reports" />;
+            return <ApiListPage title={t("patrol")} path="/api/patrol-reports" variant="mail" />;
           case "alerts":
-            return <ApiListPage title={t("alerts")} path="/api/alerts" listKey="alerts" />;
+            return <ApiListPage title={t("alerts")} path="/api/alerts" listKey="alerts" variant="mail" />;
           default:
             return null;
         }

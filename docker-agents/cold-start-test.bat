@@ -6,11 +6,11 @@ if not defined MAILBUS_ROOT set "MAILBUS_ROOT=%SCRIPT_DIR%.."
 for %%I in ("%MAILBUS_ROOT%") do set "MAILBUS_ROOT=%%~fI"
 set "LOG=%SCRIPT_DIR%cold-start.log"
 if not defined MAILBUS_WSL_ROOT (
-  set "MAILBUS_WSL_ROOT=/mnt/e/ai_tools/mail"
+  set "MAILBUS_WSL_ROOT=/mnt/<MAILBUS_ROOT>/mail"
 )
 title Cold Start Regression Test
 echo ========================================== > "%LOG%"
-echo   Cold Start Test - ziyan AI team >> "%LOG%"
+echo   Cold Start Test - Mailbus >> "%LOG%"
 echo   MAILBUS_ROOT=%MAILBUS_ROOT% >> "%LOG%"
 echo   Started: %DATE% %TIME% >> "%LOG%"
 echo ========================================== >> "%LOG%"

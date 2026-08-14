@@ -1,0 +1,48 @@
+{
+  "schema": "mailbus-harness-stub-v1",
+  "path": "a",
+  "agent_id": "agent-a",
+  "transport_channel": "a2a_standard",
+  "a2a": {
+    "errors": [],
+    "get_task_sequence": [
+      {
+        "status": "working"
+      },
+      {
+        "id": "a2a-7f3c-9e2a-4b1d-8c6f-2a1e9d4f0b3c",
+        "status": "completed",
+        "artifacts": [
+          {
+            "artifactId": "art-001",
+            "name": "auth-design",
+            "parts": [
+              {
+                "text": "方案要点：JWT + refresh token；Redis 会话；见 msg-files 附录。"
+              }
+            ]
+          }
+        ],
+        "lastModified": "2026-06-30T10:15:00Z"
+      }
+    ]
+  },
+  "on_complete_step_result": {
+    "task_id": "feat-auth-001",
+    "step_id": "s1",
+    "agent": "agent-a",
+    "role_type": 1,
+    "conclusion": "done",
+    "summary": "方案要点：JWT + refresh token；Redis 会话；见 msg-files 附录。",
+    "timestamp": "2026-06-30T10:15:00Z",
+    "source": "a2a_standard",
+    "transport_used": "a2a_standard",
+    "a2a_task_id": "a2a-7f3c-9e2a-4b1d-8c6f-2a1e9d4f0b3c",
+    "attachments": [
+      {
+        "a2a_artifact_id": "art-001",
+        "name": "auth-design"
+      }
+    ]
+  }
+}

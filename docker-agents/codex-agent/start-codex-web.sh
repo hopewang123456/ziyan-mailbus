@@ -40,7 +40,29 @@ if ! tmux has-session -t "${TMUX_SESSION}" 2>/dev/null; then
   tmux new-session -d -s "${TMUX_SESSION}" "$START_SCRIPT"
 fi
 
-nohup ttyd -p "${WEB_PORT}" -i 0.0.0.0 -W -t disableReuse=true \
+# 浏览器入口鉴权：ttyd 裸奔 → 加 Basic Auth（-c）。凭据来源：env > secrets.browser_auth.<agent>
+AUTH_USER="${CODEX_TTYD_USER:-}"
+AUTH_PASS="${CODEX_TTYD_PASS:-}"
+if [ -z "$AUTH_USER" ] || [ -z "$AUTH_PASS" ]; then
+  CRED=$(python3 -c "
+import json,os
+p=os.path.join(os.environ.get('MAILBUS_DATA_DIR') or '/mailbus/store','secrets.json')
+try:
+    d=json.load(open(p))
+    c=(d.get('browser_auth') or {}).get(os.environ.get('CODEX_AGENT','codex'),{})
+    print(c.get('user',''), c.get('password',''))
+except Exception:
+    print('','')
+" 2>/dev/null || true)
+  AUTH_USER="${AUTH_USER:-$(echo "$CRED" | awk '{print $1}')}"
+  AUTH_PASS="${AUTH_PASS:-$(echo "$CRED" | awk '{print $2}')}"
+fi
+AUTH_ARGS=()
+if [ -n "$AUTH_USER" ] && [ -n "$AUTH_PASS" ]; then
+  AUTH_ARGS=(-c "${AUTH_USER}:${AUTH_PASS}")
+fi
+
+nohup ttyd -p "${WEB_PORT}" -i 0.0.0.0 "${AUTH_ARGS[@]}" -W -t disableReuse=true \
   tmux attach -t "${TMUX_SESSION}" \
   >/tmp/codex-web/ttyd-${AGENT}.log 2>&1 &
 

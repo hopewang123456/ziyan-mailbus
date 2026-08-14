@@ -1,4 +1,4 @@
-"""为 xiaoqi / yige 生成独立 OpenClaw 状态目录 — 从 init-openclaw-profiles.sh 迁出。"""
+"""为 demo openclaw profiles 生成独立 OpenClaw 状态目录 — 从 init-openclaw-profiles.sh 迁出。"""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 
 PROFILE_PORTS = {
-    "xiaoqi": 18789,
-    "yige": 18790,
+    "agent-m": 18789,
+    "agent-l": 18790,
 }
 
 
@@ -23,8 +23,8 @@ def _openclaw_workspace_base() -> str:
 def _workspaces() -> dict[str, str]:
     base = _openclaw_workspace_base()
     return {
-        "xiaoqi": base,
-        "yige": os.path.join(base, "a-yige"),
+        "agent-m": base,
+        "agent-l": os.path.join(base, "a-agent-l"),
     }
 
 
@@ -40,7 +40,7 @@ def _init_profile(profile: str, port: int, statedir: Path, src: Path) -> None:
     cfg.setdefault("gateway", {})
     cfg["gateway"]["port"] = port
     cfg["gateway"]["bind"] = "auto"
-    token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "ziyan-team")
+    token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "change-me")
     cfg["gateway"]["auth"] = {"mode": "token", "token": token}
 
     agents = (cfg.get("agents") or {}).get("list") or []

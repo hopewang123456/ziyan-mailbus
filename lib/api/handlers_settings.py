@@ -34,6 +34,16 @@ def handle_settings_paths(handler):
     })
 
 
+def handle_skills_index(handler):
+    """GET /api/skills/index — skills-index (agents/reverse/orphans) from person-index frontmatter."""
+    from lib.adapters.config.sync_layers import build_skills_index_from_registry
+    from lib.adapters.config.agent_registry import mailbus_root
+
+    root = mailbus_root(handler.data_dir)
+    index = build_skills_index_from_registry(mail_root=root)
+    handler._send_json({"status": "ok", "index": index})
+
+
 def handle_settings_section_get(handler, section: str):
     try:
         handler._send_json({"status": "ok", **get_section(handler.data_dir, section)})
@@ -87,8 +97,48 @@ def handle_settings_env_patch(handler):
 
 
 def handle_integrations(handler):
-    """GET /api/settings/integrations — optional adapters registry (Wave4/5)."""
+    """GET/POST /api/settings/integrations — list adapters; POST add/remove plugin specs."""
     from lib.application.integrations_query import integrations_overview
+    from lib.adapters.config.config_admin import config_path
+    from lib.infra.utils import json_read, json_write
+
+    if handler.command == "POST":
+        body = handler._read_post_body() or {}
+        action = str(body.get("action") or "add_plugin").strip()
+        spec = str(body.get("spec") or "").strip()
+        if action in ("add_plugin", "remove_plugin") and not spec:
+            handler._send_json({"status": "error", "error": "spec required (module or module:attr)"}, 400)
+            return
+        cfg_path = config_path(handler.data_dir)
+        cfg = json_read(cfg_path, {})
+        integ = dict(cfg.get("integrations") or {})
+        plugins = list(integ.get("plugins") or [])
+        if action == "add_plugin":
+            if spec not in plugins:
+                plugins.append(spec)
+            integ["plugins"] = plugins
+            cfg["integrations"] = integ
+            json_write(cfg_path, cfg)
+            try:
+                from lib.adapters.integrations.entry_point_discovery import reload_integration_plugins
+
+                loaded = reload_integration_plugins(data_dir=handler.data_dir, config=cfg)
+            except Exception as exc:
+                handler._send_json({"status": "error", "error": f"saved but reload failed: {exc}"}, 500)
+                return
+            handler._send_json({"status": "ok", "plugins": plugins, "loaded": loaded})
+            return
+        if action == "remove_plugin":
+            plugins = [p for p in plugins if p != spec]
+            integ["plugins"] = plugins
+            cfg["integrations"] = integ
+            json_write(cfg_path, cfg)
+            handler._send_json({"status": "ok", "plugins": plugins})
+            return
+        handler._send_json({"status": "error", "error": f"unknown action: {action}"}, 400)
+        return
 
     overview = cast(IntegrationsOverviewView, integrations_overview(handler.data_dir))
-    handler._send_json({"status": "ok", **overview})
+    cfg = json_read(config_path(handler.data_dir), {})
+    plugins = list(((cfg.get("integrations") or {}).get("plugins")) or [])
+    handler._send_json({"status": "ok", **overview, "plugins": plugins})

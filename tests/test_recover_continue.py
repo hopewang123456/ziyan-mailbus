@@ -15,27 +15,27 @@ from lib.infra.utils import json_read, json_write
 class TestRecoverContinue(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        for sub in ("tasks", "inbox/dali", "msg-files", "work-orders", "locks"):
+        for sub in ("tasks", "inbox/agent-i", "msg-files", "work-orders", "locks"):
             os.makedirs(os.path.join(self.tmp, *sub.split("/")), exist_ok=True)
         json_write(os.path.join(self.tmp, "config.json"), {
-            "agents": {"dali": {"type": "opencode"}},
+            "agents": {"agent-i": {"type": "opencode"}},
         })
-        json_write(os.path.join(self.tmp, "inbox", "dali", "inbox.json"), {
-            "agent": "dali", "messages": [],
+        json_write(os.path.join(self.tmp, "inbox", "agent-i", "inbox.json"), {
+            "agent": "agent-i", "messages": [],
         })
         self.tid = "recover-test"
         task = {
             "task_id": self.tid,
             "status": "paused",
-            "assignee": "dali",
+            "assignee": "agent-i",
             "fsm": {"state": TaskFsmState.PAUSED.value, "history": []},
             "chain": [{
                 "step": 1,
                 "step_id": "s1",
                 "status": "running",
                 "fsm_state": "awaiting_result",
-                "to_agent": "dali",
-                "to_person": "dali",
+                "to_agent": "agent-i",
+                "to_person": "agent-i",
                 "to_role": "编码",
                 "summary": "继续实现",
             }],

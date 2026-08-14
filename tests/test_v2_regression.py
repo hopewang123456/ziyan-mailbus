@@ -32,7 +32,7 @@ def _write_task(tmp, task_id, chain, status="running", summary=""):
     json_write(path, {
         "task_id": task_id,
         "summary": summary or f"【{task_id}】test",
-        "assignee": chain[-1].get("to_person", "lingzhao"),
+        "assignee": chain[-1].get("to_person", "agent-a"),
         "status": status,
         "chain": chain,
     })
@@ -44,7 +44,7 @@ class TestV2BugRegression(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         for sub in (
-            "tasks", "msg-results", "inbox/lingzhao", "inbox/lingxi",
+            "tasks", "msg-results", "inbox/agent-a", "inbox/agent-d",
             "queue/urgent", "queue/normal", "iterations",
         ):
             os.makedirs(os.path.join(self.tmp, sub), exist_ok=True)
@@ -59,70 +59,70 @@ class TestV2BugRegression(unittest.TestCase):
 
     # --- P0: pipeline auto_ack 僵尸 ---
     def test_pipeline_task_not_auto_ack(self):
-        chain = [{"step": 1, "to_person": "lingzhao", "status": "running", "planned_agents": ["lingxi"]}]
+        chain = [{"step": 1, "to_person": "agent-a", "status": "running", "planned_agents": ["agent-d"]}]
         _write_task(self.tmp, "game-stellar-test", chain)
-        msg = {"to": "lingzhao", "content": "【game-stellar-test】Step1", "type": "task", "action": {"execute": True}}
+        msg = {"to": "agent-a", "content": "【game-stellar-test】Step1", "type": "task", "action": {"execute": True}}
         self.assertFalse(should_auto_ack_message(msg, self.tmp, "hermes_profile"))
 
     # --- P0: notice 不应占 processing 槽（scanner 逻辑在 recover 里 digest notice）---
     def test_notice_not_treated_as_pipeline_execute(self):
-        msg = {"to": "lingzhao", "content": "团队规范已更新", "type": "notice"}
+        msg = {"to": "agent-a", "content": "团队规范已更新", "type": "notice"}
         self.assertTrue(should_auto_ack_message(msg, self.tmp, "hermes_profile"))
 
     # --- P0: bus send 不建重复 tracker ---
     def test_no_duplicate_tracker_for_pipeline_task_id(self):
-        chain = [{"step": 1, "to_person": "lingzhao", "status": "running", "planned_agents": ["lingxi"]}]
+        chain = [{"step": 1, "to_person": "agent-a", "status": "running", "planned_agents": ["agent-d"]}]
         _write_task(self.tmp, "game-stellar-test", chain)
         self.assertFalse(should_create_tracker_for_send("【game-stellar-test】Step1", self.tmp))
 
     def test_cancel_duplicate_msg_tracker_on_heal(self):
-        chain = [{"step": 1, "to_person": "lingzhao", "status": "running", "planned_agents": ["lingxi"]}]
+        chain = [{"step": 1, "to_person": "agent-a", "status": "running", "planned_agents": ["agent-d"]}]
         _write_task(self.tmp, "game-stellar-test", chain)
         tr = TaskTracker(self.tmp)
-        tr.create(task_id="msg-fake-001", summary="【game-stellar-test】dup", assignee="lingzhao")
+        tr.create(task_id="msg-fake-001", summary="【game-stellar-test】dup", assignee="agent-a")
         n = normalize_legacy_tracker_audit_flags(self.tmp)
         self.assertGreaterEqual(n, 1)
         self.assertEqual(tr.get("msg-fake-001")["status"], "cancelled")
 
-    # --- P0: planned pop 跳过连续同 agent (xiaoqi→xiaoqi) ---
+    # --- P0: planned pop 跳过连续同 agent (agent-m→agent-m) ---
     def test_planned_skips_consecutive_same_agent(self):
         chain = [{
             "step": 5,
-            "to_person": "xiaoqi",
+            "to_person": "agent-m",
             "to_role": "调度员",
             "status": "running",
-            "planned_agents": ["xiaoqi", "lingxiao"],
+            "planned_agents": ["agent-m", "agent-g"],
         }]
         role, person = resolve_next_assignee(chain, {}, "调度员", "done", agents={})
-        self.assertEqual(person, "lingxiao")
+        self.assertEqual(person, "agent-g")
         self.assertEqual(chain[0]["planned_agents"], [])
 
     # --- P0: phantom completion — 无 msg-results 验收失败 ---
     def test_verify_delivery_rejects_missing_msg_results(self):
-        chain = [{"step": 1, "to_person": "lingzhao", "status": "running"}]
+        chain = [{"step": 1, "to_person": "agent-a", "status": "running"}]
         _write_task(self.tmp, "game-stellar-test", chain)
         ok, reason = verify_pipeline_step_delivery(
-            self.tmp, "lingzhao",
+            self.tmp, "agent-a",
             {"content": "【game-stellar-test】", "task_id": "game-stellar-test"},
         )
         self.assertFalse(ok)
         self.assertEqual(reason, "missing_msg_results")
 
     def test_verify_delivery_accepts_valid_msg_results(self):
-        chain = [{"step": 1, "to_person": "lingzhao", "status": "running", "step_id": "s1"}]
+        chain = [{"step": 1, "to_person": "agent-a", "status": "running", "step_id": "s1"}]
         _write_task(self.tmp, "game-stellar-test", chain)
         step_dir = os.path.join(self.tmp, "msg-results", "game-stellar-test")
         os.makedirs(step_dir, exist_ok=True)
         json_write(os.path.join(step_dir, "step-s1.json"), {
             "task_id": "game-stellar-test",
-            "agent": "lingzhao",
+            "agent": "agent-a",
             "pipeline_step": 1,
             "step_id": "s1",
             "conclusion": "done",
             "summary": "ok",
         })
         ok, reason = verify_pipeline_step_delivery(
-            self.tmp, "lingzhao",
+            self.tmp, "agent-a",
             {"content": "【game-stellar-test】", "task_id": "game-stellar-test"},
         )
         self.assertTrue(ok, reason)
@@ -130,17 +130,17 @@ class TestV2BugRegression(unittest.TestCase):
 
     def test_verify_delivery_stale_prior_step_results(self):
         """Step5 assignee 不应因 Step4 遗留 msg-results 被判 wrong_agent。"""
-        chain = [{"step": 5, "to_person": "lingxiao", "status": "running"}]
+        chain = [{"step": 5, "to_person": "agent-g", "status": "running"}]
         _write_task(self.tmp, "game-stellar-test", chain)
         json_write(os.path.join(self.tmp, "msg-results", "game-stellar-test.json"), {
             "task_id": "game-stellar-test",
-            "agent": "xiaoqi",
+            "agent": "agent-m",
             "pipeline_step": 4,
             "conclusion": "done",
             "summary": "step4 done",
         })
         ok, reason = verify_pipeline_step_delivery(
-            self.tmp, "lingxiao",
+            self.tmp, "agent-g",
             {"content": "【game-stellar-test】", "task_id": "game-stellar-test"},
         )
         self.assertFalse(ok)
@@ -148,12 +148,12 @@ class TestV2BugRegression(unittest.TestCase):
 
     # --- P0: success 后关闭 pipeline inbox ---
     def test_close_pipeline_inbox_on_success(self):
-        agents = {"lingzhao": {}}
+        agents = {"agent-a": {}}
         paths = resolve_paths(self.tmp)
         tid = "game-stellar-test"
-        inbox_file = os.path.join(self.tmp, "inbox", "lingzhao", "inbox.json")
+        inbox_file = os.path.join(self.tmp, "inbox", "agent-a", "inbox.json")
         json_write(inbox_file, {
-            "agent": "lingzhao",
+            "agent": "agent-a",
             "has_unread": True,
             "messages": [{
                 "id": "msg-test-1",
@@ -171,14 +171,14 @@ class TestV2BugRegression(unittest.TestCase):
     # --- P1: inbox 不因 msg-results 过早 done（running step 未 consumed）---
     def test_inbox_not_closed_while_step_running(self):
         tid = "game-stellar-test"
-        chain = [{"step": 1, "to_person": "lingzhao", "status": "running", "result_consumed": False}]
+        chain = [{"step": 1, "to_person": "agent-a", "status": "running", "result_consumed": False}]
         _write_task(self.tmp, tid, chain)
         json_write(os.path.join(self.tmp, "msg-results", f"{tid}.json"), {
-            "task_id": tid, "agent": "lingzhao", "pipeline_step": 1, "conclusion": "done",
+            "task_id": tid, "agent": "agent-a", "pipeline_step": 1, "conclusion": "done",
         })
-        inbox_file = os.path.join(self.tmp, "inbox", "lingzhao", "inbox.json")
+        inbox_file = os.path.join(self.tmp, "inbox", "agent-a", "inbox.json")
         json_write(inbox_file, {
-            "agent": "lingzhao",
+            "agent": "agent-a",
             "has_unread": True,
             "messages": [{
                 "id": "msg-x",
@@ -187,18 +187,18 @@ class TestV2BugRegression(unittest.TestCase):
                 "state": "processing",
             }],
         })
-        stats = sync_tracker_and_inbox(self.tmp, {"lingzhao": {}})
+        stats = sync_tracker_and_inbox(self.tmp, {"agent-a": {}})
         self.assertEqual(stats.get("inbox_closed", 0), 0)
         inbox = Inbox.from_dict(json.load(open(inbox_file)))
         self.assertNotEqual(inbox.msg_field(inbox.messages[0], "state", ""), MsgStatus.DONE)
 
     # --- P1: stale queue 清理 ---
     def test_stale_queue_removed_when_inbox_empty(self):
-        json_write(os.path.join(self.tmp, "inbox", "lingzhao", "inbox.json"), {
-            "agent": "lingzhao", "has_unread": False, "messages": [],
+        json_write(os.path.join(self.tmp, "inbox", "agent-a", "inbox.json"), {
+            "agent": "agent-a", "has_unread": False, "messages": [],
         })
-        json_write(os.path.join(self.tmp, "queue", "urgent", "lingzhao.json"), [{"id": "stale"}])
-        n = _cleanup_stale_queue_files(self.tmp, {"lingzhao": {}})
+        json_write(os.path.join(self.tmp, "queue", "urgent", "agent-a.json"), [{"id": "stale"}])
+        n = _cleanup_stale_queue_files(self.tmp, {"agent-a": {}})
         self.assertEqual(n, 1)
 
     # --- P1: primary pipeline repush cooldown ---
@@ -211,15 +211,15 @@ class TestV2BugRegression(unittest.TestCase):
     def test_stale_pipeline_inbox_after_step_advance(self):
         tid = "pipeline-mini-test"
         chain = [
-            {"step": 1, "to_person": "lingzhao", "status": "completed", "result_consumed": True},
-            {"step": 2, "to_person": "lingxi", "status": "running", "result_consumed": False},
+            {"step": 1, "to_person": "agent-a", "status": "completed", "result_consumed": True},
+            {"step": 2, "to_person": "agent-d", "status": "running", "result_consumed": False},
         ]
         _write_task(self.tmp, tid, chain)
-        self.assertTrue(pipeline_inbox_message_stale(self.tmp, "lingzhao", f"【{tid}】Step1"))
-        self.assertFalse(pipeline_inbox_message_stale(self.tmp, "lingxi", f"【{tid}】Step2"))
-        inbox_file = os.path.join(self.tmp, "inbox", "lingzhao", "inbox.json")
+        self.assertTrue(pipeline_inbox_message_stale(self.tmp, "agent-a", f"【{tid}】Step1"))
+        self.assertFalse(pipeline_inbox_message_stale(self.tmp, "agent-d", f"【{tid}】Step2"))
+        inbox_file = os.path.join(self.tmp, "inbox", "agent-a", "inbox.json")
         json_write(inbox_file, {
-            "agent": "lingzhao",
+            "agent": "agent-a",
             "has_unread": True,
             "messages": [{
                 "id": "msg-lz-stale",
@@ -229,20 +229,20 @@ class TestV2BugRegression(unittest.TestCase):
                 "action": {"execute": True},
             }],
         })
-        stats = recover_inbox_stale_states(self.tmp, {"lingzhao": {}, "lingxi": {}})
-        self.assertGreaterEqual(stats.get("lingzhao", 0), 1)
+        stats = recover_inbox_stale_states(self.tmp, {"agent-a": {}, "agent-d": {}})
+        self.assertGreaterEqual(stats.get("agent-a", 0), 1)
         inbox = Inbox.from_dict(json.load(open(inbox_file)))
         self.assertEqual(inbox.msg_field(inbox.messages[0], "state", ""), MsgStatus.DONE)
 
     # --- L2: 当前 assignee 的 resending → pending ---
     def test_resending_reset_for_current_assignee(self):
         tid = "pipeline-mini-test"
-        chain = [{"step": 2, "to_person": "lingxi", "status": "running", "result_consumed": False}]
+        chain = [{"step": 2, "to_person": "agent-d", "status": "running", "result_consumed": False}]
         _write_task(self.tmp, tid, chain)
-        self.assertTrue(is_current_pipeline_assignee(self.tmp, tid, "lingxi"))
-        inbox_file = os.path.join(self.tmp, "inbox", "lingxi", "inbox.json")
+        self.assertTrue(is_current_pipeline_assignee(self.tmp, tid, "agent-d"))
+        inbox_file = os.path.join(self.tmp, "inbox", "agent-d", "inbox.json")
         json_write(inbox_file, {
-            "agent": "lingxi",
+            "agent": "agent-d",
             "has_unread": True,
             "messages": [{
                 "id": "msg-lx-resend",
@@ -253,8 +253,8 @@ class TestV2BugRegression(unittest.TestCase):
                 "action": {"execute": True},
             }],
         })
-        stats = recover_inbox_stale_states(self.tmp, {"lingxi": {}})
-        self.assertGreaterEqual(stats.get("lingxi", 0), 1)
+        stats = recover_inbox_stale_states(self.tmp, {"agent-d": {}})
+        self.assertGreaterEqual(stats.get("agent-d", 0), 1)
         inbox = Inbox.from_dict(json.load(open(inbox_file)))
         self.assertEqual(inbox.msg_field(inbox.messages[0], "state", ""), MsgStatus.PENDING)
 
@@ -268,9 +268,9 @@ class TestV2BugRegression(unittest.TestCase):
         json_write(os.path.join(self.tmp, "iterations", "round-1-gate.json"), {
             "round2_unlocked": False,
         })
-        inbox_file = os.path.join(self.tmp, "inbox", "lingzhao", "inbox.json")
+        inbox_file = os.path.join(self.tmp, "inbox", "agent-a", "inbox.json")
         json_write(inbox_file, {
-            "agent": "lingzhao",
+            "agent": "agent-a",
             "has_unread": False,
             "messages": [{
                 "id": "msg-r2-done",
@@ -280,7 +280,7 @@ class TestV2BugRegression(unittest.TestCase):
                 "action": {"execute": True},
             }],
         })
-        stats = reconcile_execution_order(self.tmp, {"lingzhao": {}}, mode="light")
+        stats = reconcile_execution_order(self.tmp, {"agent-a": {}}, mode="light")
         self.assertEqual(stats.get("reset_inbox", 0), 0)
         inbox = Inbox.from_dict(json.load(open(inbox_file)))
         self.assertEqual(inbox.msg_field(inbox.messages[0], "state", ""), MsgStatus.DONE)

@@ -13,8 +13,9 @@ _LOADED = False
 
 
 def default_hermes_data_dir(repo_parent: Path) -> str:
-    """Hermes 数据目录默认在 ai_tools 同级 E:/hermes-data/.hermes（非 ai_tools/hermes-data）。"""
+    """Hermes 运行时默认：<PROJECT_ROOT>/mailbus-hermes/.hermes（与 mail 同盘；旧 hermes-data/.hermes 仅作回退）。"""
     candidates = (
+        repo_parent / "mailbus-hermes" / ".hermes",
         repo_parent.parent / "hermes-data" / ".hermes",
         repo_parent / "hermes-data" / ".hermes",
     )
@@ -95,8 +96,8 @@ def load_mailbus_env() -> None:
         os.environ.get("TEAM_PACK_ROOT") or str(parent / "team-pack"),
     )
     os.environ.setdefault(
-        "LINGXIAO_WORKSPACE",
-        os.environ.get("LINGXIAO_WORKSPACE") or str(parent / "lingxiao"),
+        "CODEX_WORKSPACE",
+        os.environ.get("CODEX_WORKSPACE") or str(parent / "codex"),
     )
     # 知识库根：未设置时不 setdefault，由 constants 回落到仓库内 demo 路径。
     # 本机开发：靠 junction（mail/skills → Vault）+ docker-compose.override.yml；
@@ -123,7 +124,7 @@ def mailbus_paths() -> dict[str, str]:
         "opencode_root": os.environ.get("OPENCODE_ROOT", str(repo_parent / "opencode")),
         "node_modules": os.environ.get("NODE_MODULES", str(repo_parent / "node_modules")),
         "hermes_data": hermes_data,
-        "lingxiao_workspace": os.environ.get("LINGXIAO_WORKSPACE", str(repo_parent / "lingxiao")),
+        "codex_workspace": os.environ.get("CODEX_WORKSPACE", str(repo_parent / "codex")),
         "skills_root": os.environ.get("MAILBUS_SKILLS_ROOT", str(root / "skills")),
         "rules_root": os.environ.get("MAILBUS_RULES_ROOT", str(root / "rules")),
         "plans_root": os.environ.get("MAILBUS_PLANS_ROOT", str(root / "plans")),

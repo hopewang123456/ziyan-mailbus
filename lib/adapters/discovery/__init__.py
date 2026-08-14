@@ -42,8 +42,8 @@ class EnvDiscoverySource:
             ("OPENCLAW_WORKSPACE", "openclaw"),
             ("HERMES_DATA", "hermes"),
             ("OPENCODE_ROOT", "opencode"),
-            ("LINGXIAO_WORKSPACE", "codex"),
-            ("LINGJIAN_WORKSPACE", "codex"),
+            ("CODEX_WORKSPACE", "codex"),
+            ("CODEX_REVIEW_WORKSPACE", "codex"),
             ("CODEX_HOME", "codex"),
         ]
         for env_key, fw in mapping:
@@ -75,7 +75,7 @@ class DirDiscoverySource:
                 (Path(f"{drive}/ai_tools/openclaw_space"), "openclaw"),
                 (Path(f"{drive}/hermes-data/.hermes"), "hermes"),
                 (Path(f"{drive}/ai_tools/opencode"), "opencode"),
-                (Path(f"{drive}/ai_tools/lingxiao"), "codex"),
+                (Path(f"{drive}/ai_tools/codex"), "codex"),
             ])
         out: list[dict[str, Any]] = []
         seen: set[str] = set()
@@ -92,6 +92,28 @@ class DirDiscoverySource:
                     "enabled": False,
                 })
         return [_hit_to_discovered(h) for h in out]
+
+
+def _compose_service_hints() -> dict[str, str]:
+    """从 store/config.json agents 的 docker.compose_service 推导容器名→framework。"""
+    import json
+
+    hints: dict[str, str] = {}
+    data_dir = os.environ.get("MAILBUS_DATA") or os.environ.get("DATA_DIR") or ""
+    if not data_dir:
+        return hints
+    cfg_path = os.path.join(data_dir, "config.json")
+    try:
+        if not os.path.isfile(cfg_path):
+            return hints
+        cfg = json.load(open(cfg_path, encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return hints
+    for aid, ac in (cfg.get("agents") or {}).items():
+        svc = (ac.get("docker") or {}).get("compose_service") or (ac.get("docker") or {}).get("service")
+        if svc:
+            hints[str(svc)] = ac.get("type") or "hermes_profile"
+    return hints
 
 
 class DockerDiscoverySource:
@@ -112,13 +134,14 @@ class DockerDiscoverySource:
             hints = {
                 "openclaw": "openclaw",
                 "hermes": "hermes",
-                "lingxiao": "codex",
-                "lingjian": "codex",
-                "dali": "opencode",
+                "codex": "codex",
+                "codex-web": "codex",
+                "codex-review": "codex",
                 "opencode": "opencode",
                 "agentmemory": "agentmemory",
                 "iii-engine": "agentmemory",
             }
+            hints.update(_compose_service_hints())
             for line in (r.stdout or "").splitlines():
                 parts = line.split("\t")
                 if len(parts) < 2:

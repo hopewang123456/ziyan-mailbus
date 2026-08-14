@@ -42,7 +42,7 @@ def main() -> int:
 
     text = TEMPLATE.read_text(encoding="utf-8")
     mailbus = str(args.mailbus_root.resolve()).replace("\\", "/")
-    text = text.replace("/mnt/e/ai_tools/mail", mailbus)
+    text = text.replace("<MAILBUS_WSL_ROOT>", mailbus)
     if args.publish:
         text = text.replace('PUBLISH_FLAG="--dry-run"', 'PUBLISH_FLAG=""')
         text = text.replace("${MAILBUS_PUBLISH:-0}", "1")

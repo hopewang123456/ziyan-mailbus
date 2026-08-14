@@ -26,7 +26,7 @@ infra:
     path: openclaw_space
     optional: true
   - env: OPENCODE_ROOT
-    description: OpenCode（大力）工作区
+    description: OpenCode 工作区
     path: opencode
     optional: true
   - env: TEAM_PACK_ROOT
@@ -36,9 +36,9 @@ infra:
 
 # framework agent workspace — 也可在 import 时从 transport.json 推导
 framework_workspaces:
-  - env: LINGXIAO_WORKSPACE
-    agent_id: lingxiao
-    default_subpath: lingxiao
+  - env: CODEX_WORKSPACE
+    agent_id: agent-f
+    default_subpath: agent-f
 
 path_rewrite_globs:
   - "store/**/*.json"

@@ -63,11 +63,11 @@ export function AuditPage() {
     <div className="space-y-4">
       <header>
         <p className="hud-label">Flight recorder</p>
-        <h2 className="mt-1 font-display text-2xl tracking-wide">审计</h2>
+        <h2 className="mt-1 font-display text-2xl tracking-[-0.02em]">审计</h2>
       </header>
       <ErrorAlert message={err} />
 
-      <div className="rounded-sm border border-rail bg-hull/50 p-4">
+      <div className="soft-panel">
         <p className="hud-label">Stats</p>
         {!stats ? (
           <p className="mt-2 text-sm text-mute">加载中…</p>
@@ -88,7 +88,7 @@ export function AuditPage() {
         )}
       </div>
 
-      <div className="rounded-sm border border-rail bg-hull/50 p-4">
+      <div className="soft-panel">
         <p className="hud-label">
           Pending audit <span className="text-mute">({pendingCount})</span>
         </p>

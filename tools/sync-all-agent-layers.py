@@ -27,10 +27,16 @@ def _sync_framework_workspace(
     *,
     use_symlink: bool,
 ) -> int:
+    sync_py = ROOT / "tools" / "sync_framework_workspace_skills.py"
+    if not sync_py.exists():
+        # 新架构下 workspace skills 由运行时 junction 挂载（Vault SoT），
+        # 构建时复制脚本已移除，直接跳过。
+        print(f"[sync-all] skip workspace/{agent} (runtime junction SoT)")
+        return 0
     target.mkdir(parents=True, exist_ok=True)
     cmd = [
         sys.executable,
-        str(ROOT / "tools" / "sync_framework_workspace_skills.py"),
+        str(sync_py),
         agent,
         str(target),
         "--data-dir",

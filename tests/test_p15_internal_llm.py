@@ -53,10 +53,10 @@ def _seed_store(tmp: str, *, llm_enabled: bool = True) -> None:
         if os.path.isdir(src):
             shutil.copytree(src, dst, dirs_exist_ok=True)
     os.makedirs(os.path.join(tmp, "tasks"), exist_ok=True)
-    os.makedirs(os.path.join(tmp, "inbox", "dali"), exist_ok=True)
-    os.makedirs(os.path.join(tmp, "inbox", "lingxiao"), exist_ok=True)
-    json_write(os.path.join(tmp, "inbox", "dali", "inbox.json"), {"agent": "dali", "messages": []})
-    json_write(os.path.join(tmp, "inbox", "lingxiao", "inbox.json"), {"agent": "lingxiao", "messages": []})
+    os.makedirs(os.path.join(tmp, "inbox", "agent-i"), exist_ok=True)
+    os.makedirs(os.path.join(tmp, "inbox", "agent-g"), exist_ok=True)
+    json_write(os.path.join(tmp, "inbox", "agent-i", "inbox.json"), {"agent": "agent-i", "messages": []})
+    json_write(os.path.join(tmp, "inbox", "agent-g", "inbox.json"), {"agent": "agent-g", "messages": []})
     json_write(os.path.join(tmp, "human-queue.json"), {"version": "1.0.0", "updated_at": "2026-06-18T00:00:00+08:00", "items": []})
     llm_cfg = {
         "enabled": llm_enabled,

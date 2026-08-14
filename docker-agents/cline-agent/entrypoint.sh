@@ -1,5 +1,5 @@
 #!/bin/bash
-# 灵霄 Cline：优先加载 Hermes 同源 .env，保证 DeepSeek key 与团队一致
+# Cline agent：优先加载 Hermes 同源 .env，保证 DeepSeek key 与团队一致
 set -euo pipefail
 
 if [ -f /run/hermes/.env ]; then

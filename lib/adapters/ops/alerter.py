@@ -1,4 +1,4 @@
-"""ziyan-mailbus 告警系统
+"""mailbus 告警系统
 
 健康异常时推送告警消息给管理员或指定 Agent。"""
 import os
@@ -76,7 +76,7 @@ def push_alert(data_dir: str, alert_type: str, severity: str,
 
 
 def _notify_admin(data_dir: str, alert: dict):
-    """写入 inbox；inbox_overflow 只通知当事 agent，其他告警通知灵昭/小七。不即时 CLI 推送（由 scan 串行调度）。"""
+    """写入 inbox；inbox_overflow 只通知当事 agent，其他告警通知默认值班 agent。不即时 CLI 推送（由 scan 串行调度）。"""
     config_path = os.path.join(data_dir, "config.json")
     config = json_read(config_path, {})
     if not config:
@@ -92,10 +92,15 @@ def _notify_admin(data_dir: str, alert: dict):
     from lib.domain.models import Inbox
     paths = resolve_paths(data_dir)
 
+    from lib.infra.org_defaults import org_default_list
+
+    notify_targets = org_default_list(data_dir, "notify_agents")
     if alert.get("type") == "inbox_overflow":
         targets = [alert["agent"]] if alert.get("agent") in agents else []
     else:
-        targets = [n for n in ("lingzhao", "xiaoqi") if n in agents]
+        targets = [n for n in notify_targets if n in agents] or [
+            n for n in ("agent-a", "agent-m") if n in agents
+        ]
 
     for name in targets:
         if name not in agents:
@@ -115,7 +120,7 @@ def _notify_admin(data_dir: str, alert: dict):
         inbox.messages.append(msg.to_dict())
         json_write(inbox_file, inbox.to_dict())
 
-    alert["assignee"] = "lingzhao"
+    alert["assignee"] = (notify_targets or ["agent-a"])[0]
 
 
 def get_recent_alerts(data_dir: str, limit: int = 10) -> list:

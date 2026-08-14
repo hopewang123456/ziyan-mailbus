@@ -7,20 +7,20 @@ from lib.adapters.ops.alerter import push_alert, get_recent_alerts, load_alerts
 
 def test_push_and_get():
     with tempfile.TemporaryDirectory() as td:
-        push_alert(td, "agent_offline", "critical", "灵霄",
-                   "灵霄离线超过3次心跳")
+        push_alert(td, "agent_offline", "critical", "agent-f",
+                   "agent-f 离线超过3次心跳")
         alerts = get_recent_alerts(td)
         assert len(alerts) == 1
         assert alerts[0]["type"] == "agent_offline"
         assert alerts[0]["severity"] == "critical"
-        assert alerts[0]["agent"] == "灵霄"
+        assert alerts[0]["agent"] == "agent-f"
     print("  ✓ test_push_and_get")
 
 
 def test_multiple_alerts():
     with tempfile.TemporaryDirectory() as td:
         push_alert(td, "disk_full", "warn", "system", "磁盘空间不足")
-        push_alert(td, "key_missing", "critical", "大力", "API Key 缺失")
+        push_alert(td, "key_missing", "critical", "agent-e", "API Key 缺失")
         push_alert(td, "agentmemory_down", "critical", "system", "AM 断联")
 
         alerts = get_recent_alerts(td, limit=10)
@@ -54,8 +54,8 @@ def test_push_to_admin_missing():
 def test_alert_dedupe():
     """同 type+agent 的 active 告警不重复写入"""
     with tempfile.TemporaryDirectory() as td:
-        push_alert(td, "key_missing", "critical", "大力", "API Key 缺失")
-        push_alert(td, "key_missing", "critical", "大力", "API Key 缺失 again")
+        push_alert(td, "key_missing", "critical", "agent-e", "API Key 缺失")
+        push_alert(td, "key_missing", "critical", "agent-e", "API Key 缺失 again")
         alerts = load_alerts(td)
         assert len(alerts["alerts"]) == 1
     print("  ✓ test_alert_dedupe")

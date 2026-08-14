@@ -4,7 +4,7 @@
 Usage:
   python tools/generate-compose-volumes.py
   python tools/generate-compose-volumes.py --check   # exit 2 if compose drift
-  python tools/generate-compose-volumes.py --host-prefix /mnt/e
+  python tools/generate-compose-volumes.py --host-prefix /mnt/<DRIVE>
 """
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ FORBIDDEN_PATTERNS = (
     re.compile(r"adapters/\.sync"),
 )
 
-# Required on agent-facing services (hermes, openclaw, codex*, dali, mailbus)
+# Required on agent-facing services (hermes, openclaw, codex*, opencode, mailbus)
 REQUIRED_AGENT_MOUNTS = (
     "/mailbus/skills",
     "/mailbus/access",
@@ -60,12 +60,30 @@ def _host_prefix(arg: str, mail_root: Path) -> str:
 
 def _to_compose_host(path: Path, host_prefix: str) -> str:
     """Native Path → /mnt/e/... for compose."""
-    s = str(path.resolve()).replace("\\", "/")
+    s = str(path).replace("\\", "/")
     if s.startswith("/mnt/"):
         return s
+    # WSL-style already-absolute without resolve()
+    if re.match(r"^/[a-z]", s) and not re.match(r"^[A-Za-z]:/", s):
+        try:
+            s = str(Path(s).resolve()).replace("\\", "/")
+        except OSError:
+            pass
+        if s.startswith("/mnt/"):
+            return s
     m = re.match(r"^([A-Za-z]):/(.*)$", s)
     if m:
         return f"{host_prefix}/{m.group(2)}"
+    # last resort resolve (may fail for Windows paths on Linux)
+    try:
+        s2 = str(Path(path).resolve()).replace("\\", "/")
+        m2 = re.match(r"^([A-Za-z]):/(.*)$", s2)
+        if m2:
+            return f"{host_prefix}/{m2.group(2)}"
+        if s2.startswith("/mnt/"):
+            return s2
+    except OSError:
+        pass
     return s
 
 
@@ -122,13 +140,13 @@ def workspace_mounts(host_prefix: str, *, mail_root: Path | None = None) -> dict
             skills_hp = _to_compose_host(host_path / "skills", host_prefix)
             lines.append(f"      - {skills_hp}:/workspace/opencode/skills")
         elif fw == "openclaw":
-            # 只挂一次主 workspace；a-yige 等已在 openclaw_space 子目录内
+            # 只挂一次主 workspace；a-agent-l 等已在 openclaw_space 子目录内
             root_line = f"      - {hp}:/workspace"
             already = any(
                 x.split(":")[0].strip("- ").rstrip() == hp and ":/workspace" in x and "/workspace/" not in x.split(":/")[-1]
                 for x in lines
             )
-            # 若 ws 是已挂载目录的子路径，跳过（避免 a-yige 盖掉 /workspace）
+            # 若 ws 是已挂载目录的子路径，跳过（避免 a-agent-l 盖掉 /workspace）
             parent_mounted = any(
                 hp.startswith(x.split(":")[0].strip("- ").rstrip().rstrip("/") + "/")
                 for x in lines
@@ -192,14 +210,19 @@ def infra_volume_lines(host_prefix: str = "", *, mail_root: Path | None = None) 
     if Path(hermes_sm).exists():
         add("hermes", hermes_sm, "/hermes/shared-memory", "rw")
     add("openclaw", paths.get("openclaw_workspace", ""), "/workspace", "rw")
-    add("dali", paths.get("opencode_root", ""), "/workspace/opencode", "rw")
+    from lib.adapters.config.compose_registry import resolve_logical_service
+
+    opencode_svc = resolve_logical_service("opencode-agent") or "opencode"
+    codex_web_svc = resolve_logical_service("codex-agent") or "codex-web"
+    codex_review_svc = resolve_logical_service("codex-review-agent") or "codex-review"
+    add(opencode_svc, paths.get("opencode_root", ""), "/workspace/opencode", "rw")
     op_sk = str(Path(paths.get("opencode_root", "")) / "skills") if paths.get("opencode_root") else ""
-    add("dali", op_sk, "/workspace/opencode/skills", "rw")
+    add(opencode_svc, op_sk, "/workspace/opencode/skills", "rw")
     nm = paths.get("node_modules", "")
-    for svc in ("agentmemory", "lingxiao", "lingjian"):
+    for svc in ("agentmemory", codex_web_svc, codex_review_svc):
         add(svc, nm, "/node_modules", "ro")
-    lx = paths.get("lingxiao_workspace", "")
-    add("lingxiao", lx, "/workspace/lingxiao", "ro")
+    lx = paths.get("codex_workspace", "")
+    add(codex_web_svc, lx, "/workspace/codex", "ro")
     return lines
 
 
@@ -218,7 +241,9 @@ def emit_override(host_prefix: str = "", *, mail_root: Path | None = None) -> st
     mroot = _to_compose_host(Path(paths["root"]), hp)
     skills_hp = _to_compose_host(MAILBUS_SKILLS_ROOT, hp)
     rules_hp = _to_compose_host(MAILBUS_RULES_ROOT, hp)
-    vault_hp = _to_compose_host(AGENT_VAULT_ROOT, hp) if AGENT_VAULT_ROOT.exists() else ""
+    vault_hp = _to_compose_host(AGENT_VAULT_ROOT, hp)
+    if not (Path(vault_hp).is_dir() or AGENT_VAULT_ROOT.is_dir()):
+        vault_hp = ""
 
     shared = [
         f"      - {data}:/mailbus/store",
@@ -237,7 +262,12 @@ def emit_override(host_prefix: str = "", *, mail_root: Path | None = None) -> st
     ws = workspace_mounts(hp, mail_root=root)
     infra = infra_volume_lines(hp, mail_root=root)
 
-    agent_services = ["hermes", "openclaw", "lingxiao", "lingjian", "dali", "mailbus"]
+    from lib.adapters.config.compose_registry import resolve_logical_service
+
+    opencode_svc = resolve_logical_service("opencode-agent") or "opencode"
+    codex_web_svc = resolve_logical_service("codex-agent") or "codex-web"
+    codex_review_svc = resolve_logical_service("codex-review-agent") or "codex-review"
+    agent_services = ["hermes", "openclaw", codex_web_svc, codex_review_svc, opencode_svc, "mailbus"]
     out_lines = [
         "# Generated by mailbus compose sync — do not edit by hand",
         "# Regenerate: mailbus compose sync",
@@ -256,17 +286,17 @@ def emit_override(host_prefix: str = "", *, mail_root: Path | None = None) -> st
         # Runtime skills/memory SoT = Vault（须在 workspace 挂载之后，覆盖本地 junction）
         if vault_hp:
             if svc == "openclaw":
-                vols.append(f"      - {vault_hp}/skills/library/openclaw:/workspace/skills:ro")
-                vols.append(f"      - {vault_hp}/memories/xiaoqi:/workspace/memory")
-            elif svc in ("lingxiao", "lingjian"):
+                vols.append(f"      - {vault_hp}/02-members/022-category/0222-openclaw/02222-skills:/workspace/skills:ro")
+                vols.append(f"      - {vault_hp}/02-members/022-category/0222-openclaw/02223-persons/022231-agent-a/0222313-memory:/workspace/memory")
+            elif svc in (codex_web_svc, codex_review_svc):
                 vols.append(
-                    f"      - {vault_hp}/skills/02-agent-specific/codex:/home/node/.codex/skills:ro"
+                    f"      - {vault_hp}/02-members/022-category/0223-codex/02232-skills:/home/node/.codex/skills:ro"
                 )
-            elif svc == "dali":
+            elif svc == opencode_svc:
                 vols.append(
-                    f"      - {vault_hp}/skills/02-agent-specific/opencode:/workspace/opencode/skills:rw"
+                    f"      - {vault_hp}/02-members/022-category/0226-opencode/02262-skills:/workspace/opencode/skills:rw"
                 )
-                vols.append(f"      - {vault_hp}/memories/dali:/workspace/opencode/memory")
+                vols.append(f"      - {vault_hp}/02-members/022-category/0226-opencode/02263-persons/022631-agent-d/0226313-memory:/workspace/opencode/memory")
         if svc == "mailbus":
             vols = [
                 f"      - {mroot}:/mailbus",

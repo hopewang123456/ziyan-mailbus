@@ -1,5 +1,5 @@
 #!/bin/bash
-# ziyan AI Team - Hermes container entrypoint
+# Mailbus - Hermes container entrypoint
 # 自动拉起 hermes_profile 编制内全部 dashboard（与 ORGANIZATION.md 一致）
 
 sleep 3
@@ -20,7 +20,7 @@ fi
 # Hermes 实际加载: profiles/<id>/skills → Vault views/roles 或 library（junction）。
 # 默认 symlink；仅当 HERMES_SKILL_COPY=1 时写实体副本。
 if [ -x /mailbus/tools/sync-hermes-framework-skill.sh ]; then
-  for agent in lingzhao lingjin lingxi lingtuo lingxun lingzhang; do
+  for agent in $(python3.12 -c "import json; print(' '.join(a for a, c in json.load(open('/mailbus/store/config.json', encoding='utf-8')).get('agents', {}).items() if (c.get('type') or '') == 'hermes_profile'))" 2>/dev/null); do
     HERMES_AGENT="$agent" HERMES_FRAMEWORK_SKILLS_DIR="/mailbus/access/hermes/.sync/${agent}/skills" \
       bash /mailbus/tools/sync-hermes-framework-skill.sh || true
   done
@@ -29,7 +29,7 @@ fi
 echo "[entrypoint] Starting Hermes dashboards..."
 python3.12 -m lib.adapters.frameworks.hermes_dashboard start-all
 
-echo "[entrypoint] Hermes profile dashboards launched (6 agents)"
-echo "[entrypoint] lingjian/lingyan → Codex/Claude Code（非 Hermes 容器）"
+echo "[entrypoint] Hermes profile dashboards launched"
+echo "[entrypoint] codex/claude_code → Codex/Claude Code（非 Hermes 容器）"
 
 exec tail -f /dev/null

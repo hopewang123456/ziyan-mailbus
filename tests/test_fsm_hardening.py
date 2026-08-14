@@ -41,19 +41,19 @@ class TestPipelineResultCheck(unittest.TestCase):
             "task_id": "t1",
             "status": "running",
             "chain": [{
-                "step": 2, "step_id": "s2", "to_person": "lingxiao",
+                "step": 2, "step_id": "s2", "to_person": "agent-g",
                 "to_role": "开发工程师", "status": "running",
                 "fsm_state": "awaiting_result", "result_consumed": True,
             }],
         }
         ensure_fsm(task)
         write_step_result(self.tmp, "t1", task["chain"][0], {
-            "agent": "lingxiao", "pipeline_step": 2, "step_id": "s2",
+            "agent": "agent-g", "pipeline_step": 2, "step_id": "s2",
             "conclusion": "done", "summary": "ok",
         })
         json_write(os.path.join(self.tmp, "tasks", "t1.json"), task)
         ok, reason = pipeline_step_result_matches(
-            self.tmp, task, "lingxiao", require_consumed=True,
+            self.tmp, task, "agent-g", require_consumed=True,
         )
         self.assertTrue(ok, reason)
 
@@ -62,15 +62,15 @@ class TestPipelineResultCheck(unittest.TestCase):
             "task_id": "t1",
             "status": "running",
             "chain": [{
-                "step": 2, "step_id": "s2", "to_person": "lingxiao",
+                "step": 2, "step_id": "s2", "to_person": "agent-g",
                 "status": "running", "fsm_state": "awaiting_result",
             }],
         }
         ensure_fsm(task)
         json_write(os.path.join(self.tmp, "msg-results", "t1.json"), {
-            "agent": "xiaoqi", "pipeline_step": 1, "conclusion": "done",
+            "agent": "agent-m", "pipeline_step": 1, "conclusion": "done",
         })
-        ok, reason = pipeline_step_result_matches(self.tmp, task, "lingxiao")
+        ok, reason = pipeline_step_result_matches(self.tmp, task, "agent-g")
         self.assertFalse(ok)
         # legacy flat msg-results/{tid}.json 已移除；无 step 路径时为 missing
         self.assertIn(reason, ("stale_prior_step", "missing_msg_results", "stale"))

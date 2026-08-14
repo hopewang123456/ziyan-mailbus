@@ -1,5 +1,5 @@
 [Unit]
-Description=子言·AI 团队 Docker Agent 容器
+Description=Mailbus Docker Agent 容器
 After=docker.service network-online.target
 Wants=docker.service network-online.target
 # 不用 Requires=docker.service —— Docker 重启时不应触发 compose down 停掉全部容器

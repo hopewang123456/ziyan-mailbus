@@ -2,7 +2,7 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MAILBUS_ROOT="${MAILBUS_ROOT:-$(cd "$SCRIPT_DIR/.." && pwd)}"
-for ctr in docker-agents-lingxiao-1 docker-agents-lingjian-1; do
+for ctr in docker-agents-codex-web-1 docker-agents-codex-review-1; do
   echo "=== install codexapp in $ctr ==="
   docker exec "$ctr" npm install -g codexapp 2>&1 | tail -5
   docker cp "${MAILBUS_ROOT}/docker-agents/codex-agent/start-codex-ui.sh" "$ctr:/usr/local/bin/start-codex-ui.sh"

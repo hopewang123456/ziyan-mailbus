@@ -1,5 +1,5 @@
 """
-ziyan-mailbus 工具函数
+mailbus 工具函数
 
 文件锁、JSON 读写、日志、消息构建等通用工具。
 """
@@ -12,6 +12,7 @@ import copy
 import time
 import contextlib
 import tempfile
+import threading
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Any
 
@@ -24,6 +25,7 @@ else:
 from lib.domain.models import Message, MsgStatus, Priority, MsgType, Level, generate_msg_id
 from .constants import (
     _now_iso,
+    AGENT_VAULT_ROOT_STR,
     MAILBUS_ROOT_STR,
     MAILBUS_SKILLS_ROOT_STR,
     MAILBUS_IDENTITIES_ROOT_STR,
@@ -137,6 +139,10 @@ def resolve_mailbus_path(data_dir: str, ref: str) -> str:
     ref = ref.strip().replace("\\", "/")
     if os.path.isfile(ref):
         return ref
+    # Obsidian Vault 相对路径（01-mailbus/02-members/03-shared）解析到 AGENT_VAULT_ROOT
+    if ref.startswith(("01-mailbus/", "02-members/", "03-shared/")):
+        cand = os.path.join(AGENT_VAULT_ROOT_STR, ref.replace("/", os.sep))
+        return cand if os.path.isfile(cand) else cand
     root = MAILBUS_ROOT_STR if os.path.isdir(os.path.join(MAILBUS_ROOT_STR, "access")) else os.path.dirname(os.path.abspath(data_dir))
     # WSL: /mnt/e/... → E:\...
     if ref.startswith("/mnt/e/"):
@@ -189,14 +195,18 @@ def resolve_mailbus_path(data_dir: str, ref: str) -> str:
 
 
 def identity_candidates(data_dir: str, agent: str, configured: str = "") -> list[str]:
-    """identity 文件候选路径（Docker / WSL / 本地）。"""
+    """identity 文件候选路径（Docker / WSL / 本地）。
+
+    身份 SoT 已迁入 Obsidian：人物 config 目录 overlay-<agent>.md 与
+    AGENT_VAULT_ROOT/01-mailbus/018-identities/<id>/。旧 team-pack
+    roles/overlays 路径已废弃（team-pack 瘦身为绑定层）。
+    """
     root = os.path.dirname(os.path.abspath(data_dir))
     cands: list[str] = []
     if configured:
         cands.append(resolve_mailbus_path(data_dir, configured))
-    cands.append(
-        os.path.join(TEAM_PACK_SKILLS_ROOT_STR, "roles", "overlays", agent, "SKILL.md")
-    )
+    cands.append(os.path.join(AGENT_VAULT_ROOT_STR, "01-mailbus", "018-identities", agent, "SOUL.md"))
+    cands.append(os.path.join(AGENT_VAULT_ROOT_STR, "01-mailbus", "018-identities", agent, "overlay.md"))
     cands.append(os.path.join(MAILBUS_IDENTITIES_ROOT_STR, agent, "SOUL.md"))
     cands.append(os.path.join(MAILBUS_IDENTITIES_ROOT_STR, f"{agent}-soul.md"))
     cands.append(os.path.join(MAILBUS_IDENTITIES_ROOT_STR, f"{agent}.md"))
@@ -232,7 +242,7 @@ import hashlib
 _LOCK_ROOT = os.environ.get("MAILBUS_LOCK_DIR") or (
     tempfile.gettempdir() if sys.platform == "win32" else "/tmp"
 )
-GLOBAL_LOCK_FILE = os.path.join(_LOCK_ROOT, "ziyan-mailbus.lock")
+GLOBAL_LOCK_FILE = os.path.join(_LOCK_ROOT, "mailbus.lock")
 
 
 def get_lock_root() -> str:
@@ -244,7 +254,7 @@ def _lock_path(path: str = "") -> str:
     """生成锁文件路径：有 path 用 per-file 锁，否则用全局锁。"""
     if path:
         h = hashlib.sha256(path.encode()).hexdigest()[:16]
-        return os.path.join(_LOCK_ROOT, f"ziyan-mailbus-{h}.lock")
+        return os.path.join(_LOCK_ROOT, f"mailbus-{h}.lock")
     return GLOBAL_LOCK_FILE
 
 
@@ -291,14 +301,35 @@ def _open_lock_file(lock_file: str, *, retries: int = 8):
     return open(lock_file, "a+")
 
 
+_LOCK_STATE = threading.local()
+
+
+def _held_locks() -> set[str]:
+    """当前线程已持有的锁文件路径集合（用于同线程重入检测）。"""
+    s = getattr(_LOCK_STATE, "held", None)
+    if s is None:
+        s = _LOCK_STATE.held = set()
+    return s
+
+
 @contextlib.contextmanager
 def file_lock(timeout: float = 10.0, path: str = ""):
-    """文件锁 — 防止多个进程同时写同一份文件（带超时，防死锁）"""
+    """文件锁 — 防止多个进程同时写同一份文件（带超时，防死锁，支持同线程重入）。
+
+    同线程重入场景：``json_write`` 内部自带 ``file_lock``，而调用方（如 token_store）
+    外层已对同一 path 持有锁时，嵌套调用应直接通过而非自我死锁。
+    """
     os.makedirs(_LOCK_ROOT, exist_ok=True)
     lock_file = _lock_path(path)
+    held = _held_locks()
+    # 同线程重入：已持有该锁或全局兜底锁 → 直接通过
+    if lock_file in held or (lock_file != GLOBAL_LOCK_FILE and GLOBAL_LOCK_FILE in held):
+        yield
+        return
     lock_fd = _open_lock_file(lock_file)
     deadline = now_ts() + timeout
     acquired = False
+    effective = lock_file
     try:
         while now_ts() < deadline:
             if _try_acquire_lock(lock_fd, non_blocking=True):
@@ -314,14 +345,17 @@ def file_lock(timeout: float = 10.0, path: str = ""):
                 while now_ts() < deadline2:
                     if _try_acquire_lock(lock_fd, non_blocking=True):
                         acquired = True
+                        effective = fallback
                         break
                     time.sleep(0.1)
             if not acquired:
                 raise TimeoutError(f"无法获取文件锁 (path={path}, timeout={timeout}s)")
+        held.add(effective)
         yield
     except Exception:
         raise
     finally:
+        held.discard(effective)
         if acquired:
             _release_lock(lock_fd)
         lock_fd.close()

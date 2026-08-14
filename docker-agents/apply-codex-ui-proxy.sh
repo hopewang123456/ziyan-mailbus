@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 PROJECT="${COMPOSE_PROJECT_NAME:-docker-agents}"
 PROXY="$ROOT/codex-agent/codex-ui-proxy.mjs"
 
-for name in lingxiao lingjian; do
+for name in codex-web codex-review; do
   ctr="${PROJECT}-${name}-1"
   echo "=== $ctr ==="
   docker cp "$PROXY" "${ctr}:/usr/local/share/codex/codex-ui-proxy.mjs"

@@ -9,7 +9,7 @@
 
 ## 不能做 / 慎做
 
-- 替代 OpenCode/Codex 的大块编码（应派 dali / lingxiao / lingyun）
+- 替代 OpenCode/Codex 的大块编码（应派编码 agent）
 - 假设 push 后会自动续 session（每 push 独立 `-q`）
 - 修改 mailbus Core / adapter 代码（除非工单明确）
 - 绕过 human gate 的自动化（见 ADR-008）

@@ -22,14 +22,23 @@ def require_yaml() -> None:
             "ERROR: PyYAML required for migrate. Install: pip install PyYAML  (or pip install -e mailbus-core)"
         )
 
-OLD_PREFIXES = (
-    "/mnt/e/ai_tools",
-    "E:/ai_tools",
-    "E:\\ai_tools",
-    "/mnt/e/hermes-data",
-    "E:/hermes-data",
-    "E:\\hermes-data",
-)
+def _old_prefixes() -> tuple[str, ...]:
+    """迁移时识别的旧前缀；可用 MAILBUS_OLD_PREFIXES 覆盖（逗号分隔）。"""
+    override = os.environ.get("MAILBUS_OLD_PREFIXES", "").strip()
+    if override:
+        return tuple(p.strip() for p in override.split(",") if p.strip())
+    return (
+        "/mnt/<OLD_MAILBUS_ROOT>",
+        "<OLD_MAILBUS_ROOT>",
+        "<OLD_MAILBUS_ROOT_BS>",
+        "/mnt/<OLD_HERMES_DATA>",
+        "<OLD_HERMES_DATA>",
+        "<OLD_HERMES_DATA_BS>",
+    )
+
+
+# 兼容旧引用：默认取 _old_prefixes()
+OLD_PREFIXES = _old_prefixes()
 
 
 def load_manifest() -> dict[str, Any]:

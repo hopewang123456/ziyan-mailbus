@@ -1,5 +1,5 @@
 {
-  "name": "ziyan-mailbus-cockpit",
+  "name": "mailbus-cockpit",
   "private": true,
   "version": "0.1.0",
   "type": "module",

@@ -13,7 +13,7 @@ from lib.adapters.frameworks import resolve_interactive_cli, resolve_push_cli
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("agent", help="agent key，如 lingxi")
+    ap.add_argument("agent", help="agent key，如 agent-a")
     ap.add_argument("--mode", choices=("push", "interactive"), default="interactive")
     ap.add_argument("--data-dir", default=os.environ.get("DATA_DIR", "store"))
     args = ap.parse_args()

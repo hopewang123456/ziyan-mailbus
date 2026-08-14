@@ -21,19 +21,59 @@ from pathlib import Path
 from typing import Optional
 
 # ── 编制内全部 dashboard（与 entrypoint.sh / ORGANIZATION.md 一致）──
-DASHBOARDS: list[tuple[str, int]] = [
-    ("lingzhao", 9120),
-    ("lingjin", 9121),
-    ("lingxi", 9122),
-    ("lingxun", 9125),
-    ("lingtuo", 9126),
-    ("lingzhang", 9127),
+# 从 store/config.json 的 hermes_profile 类型 agents 读取，demo 名作为 fallback
+_DEMO_DASHBOARDS: list[tuple[str, int]] = [
+    ("agent-a", 9120),
+    ("agent-b", 9121),
+    ("agent-c", 9122),
 ]
+
+
+def _data_dir() -> str:
+    return os.environ.get("MAILBUS_DATA_DIR") or os.environ.get("DATA_DIR") or str(
+        Path(__file__).resolve().parents[3] / "store"
+    )
+
+
+def dashboards() -> list[tuple[str, int]]:
+    """读取编制内 dashboard：config.json hermes_profile · port / launch.browser / launch-ports。"""
+    import json as _json
+
+    cfg_path = Path(_data_dir()) / "config.json"
+    items: list[tuple[str, int]] = []
+    try:
+        if cfg_path.is_file():
+            cfg = _json.loads(cfg_path.read_text(encoding="utf-8"))
+            agents = cfg.get("agents") or {}
+            from lib.adapters.config.launch_ports import resolve_port
+
+            for aid, ac in agents.items():
+                if not isinstance(ac, dict):
+                    continue
+                if (ac.get("type") or "").strip() != "hermes_profile":
+                    continue
+                launch = ac.get("launch") or {}
+                browser = dict(launch.get("browser") or {})
+                port = resolve_port(aid, ac, browser, group="hermes_dashboard")
+                if port in (None, ""):
+                    port = ac.get("port")
+                if port in (None, ""):
+                    continue
+                items.append((aid, int(port)))
+    except Exception:
+        pass
+    if items:
+        return items
+    return list(_DEMO_DASHBOARDS)
 
 PYTHON_BIN = "python3.12"
 HERMES_MODULE = "hermes_cli.main"
 
 # dashboard 启动通用参数
+# --insecure：跳过非 loopback 绑定(0.0.0.0)时的 OAuth auth gate（容器内未装
+# DashboardAuthProvider 插件）。鉴权改为 mailbus 注入固定 HERMES_DASHBOARD_SESSION_TOKEN
+# （跨重启不变，见 _session_token()）——loopback/--insecure 模式下 SPA 从 HTML 注入该
+# token 并经 X-Hermes-Session-Token 回传，实现持久免密。
 DASH_ARGS = [
     "dashboard",
     "--host", "0.0.0.0",
@@ -43,6 +83,29 @@ DASH_ARGS = [
 ]
 
 LOG_DIR = "/tmp"
+
+
+def _session_token() -> str:
+    """固定 Hermes dashboard session token（跨重启不变，存 store/secrets.json）。
+
+    Hermes 每次启动默认随机 mint session token 导致浏览器反复要 token；
+    mailbus 生成固定值持久化并注入 env，浏览器第一次输入后记住免密。
+    """
+    env_token = os.environ.get("HERMES_DASHBOARD_SESSION_TOKEN", "").strip()
+    if env_token:
+        return env_token
+    try:
+        from lib.adapters.config.token_store import ensure_browser_credentials
+
+        cred = ensure_browser_credentials(_data_dir(), "hermes", mode="token")
+        token = (cred.get("token") or "").strip()
+        if token:
+            return token
+    except Exception:
+        pass
+    import secrets as _secrets
+
+    return _secrets.token_urlsafe(24)
 
 
 # ── 健康检查 ──────────────────────────────────────────────────────
@@ -82,6 +145,8 @@ def start_dashboard(profile: str, port: int) -> bool:
     ]
 
     print(f"  {profile} ({port}) starting...")
+    env = os.environ.copy()
+    env["HERMES_DASHBOARD_SESSION_TOKEN"] = _session_token()
     with open(log_path, "wb") as log_file:
         proc = subprocess.Popen(
             cmd,
@@ -89,6 +154,7 @@ def start_dashboard(profile: str, port: int) -> bool:
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             start_new_session=True,  # daemonize
+            env=env,
         )
     pid = proc.pid
     print(f"  {profile} ({port}) starting pid={pid}")
@@ -133,7 +199,7 @@ def ensure_dashboard(profile: str, port: int) -> bool:
 def ensure_all() -> int:
     """确保全部 dashboard 就绪。返回失败数。"""
     failures = 0
-    for profile, port in DASHBOARDS:
+    for profile, port in dashboards():
         try:
             if not ensure_dashboard(profile, port):
                 failures += 1
@@ -150,7 +216,7 @@ def ensure_all() -> int:
 def start_all() -> int:
     """启动全部 dashboard。返回失败数。"""
     failures = 0
-    for profile, port in DASHBOARDS:
+    for profile, port in dashboards():
         try:
             if not start_dashboard(profile, port):
                 failures += 1

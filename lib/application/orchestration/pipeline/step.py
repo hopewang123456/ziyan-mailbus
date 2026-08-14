@@ -18,22 +18,6 @@ _ROLE_TYPE_ZH = {
     12: "验收员",
 }
 
-_AGENT_ROLE = {
-    "lingzhao": "方案设计师",
-    "xiaoqi": "调度员",
-    "lingxiao": "开发工程师",
-    "dali": "开发工程师",
-    "lingjian": "审查官",
-    "lingyun": "开发工程师",
-    "lingyan": "测试工程师",
-    "lingjin": "安全审计师",
-    "lingxi": "技术研究员",
-    "lingxun": "巡检官",
-    "lingtuo": "市场拓展官",
-    "lingzhang": "财务跟进官",
-    "yige": "运营",
-}
-
 
 def is_pipeline_step(item: Any) -> bool:
     return isinstance(item, dict) and bool(item.get("step_id") or item.get("to_agent") or item.get("to_person"))
@@ -64,7 +48,7 @@ def step_role_type(step: dict) -> int:
     return 0
 
 
-def step_role_zh(step: dict) -> str:
+def step_role_zh(step: dict, data_dir: str = "") -> str:
     role = step.get("to_role")
     if role:
         return role
@@ -72,7 +56,11 @@ def step_role_zh(step: dict) -> str:
     if rt is not None:
         return _ROLE_TYPE_ZH.get(int(rt), "方案设计师")
     agent = step_agent(step)
-    return _AGENT_ROLE.get(agent, "方案设计师") if agent else "方案设计师"
+    if not agent:
+        return "方案设计师"
+    from lib.application.orchestration.pipeline.chain import _agent_role_map
+
+    return _agent_role_map(data_dir).get(agent, "方案设计师")
 
 
 def planned_agents_remaining(chain: List[dict]) -> List[str]:

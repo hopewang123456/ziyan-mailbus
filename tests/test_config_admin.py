@@ -59,20 +59,41 @@ class TestConfigAdmin(unittest.TestCase):
         self.assertIn("test_gate", out["data"]["tool_live_gates"])
 
     def test_patch_agent_models(self):
+        seed = get_section(self.tmp, "agents")
+        agents = seed.get("agents") or []
+        if not agents:
+            self.skipTest("no seeded agents")
+        aid = agents[0]["id"]
         patch_section(
             self.tmp,
             "agents",
-            {"agent_id": "dali", "fields": {"models": ["deepseek-flash"], "max_concurrency": 2}},
+            {"agent_id": aid, "fields": {"models": ["deepseek-flash"], "max_concurrency": 2}},
         )
         out = get_section(self.tmp, "agents")
-        dali = next(a for a in out["agents"] if a["id"] == "dali")
-        self.assertEqual(dali["models"], ["deepseek-flash"])
-        self.assertEqual(dali["max_concurrency"], 2)
+        found = next(a for a in out["agents"] if a["id"] == aid)
+        self.assertEqual(found["models"], ["deepseek-flash"])
+        self.assertEqual(found["max_concurrency"], 2)
 
     def test_env_status_shape(self):
         st = env_status(self.tmp)
         self.assertIn("groups", st)
         self.assertIn("llm", st["groups"])
+
+    def test_env_status_has_vault_and_memory_specs(self):
+        st = env_status(self.tmp)
+        keys = {s["key"] for s in st.get("specs", [])}
+        self.assertIn("AGENT_VAULT_ROOT", keys)
+        self.assertIn("MEMORY_BRIDGE_AGENTMEMORY", keys)
+        self.assertIn("MAILBUS_SKILLS_ROOT", keys)
+
+    def test_agents_section_has_install_fields(self):
+        out = get_section(self.tmp, "agents")
+        for it in out.get("agents") or []:
+            self.assertIn("install_path", it)
+            self.assertIn("install_path_default", it)
+            self.assertIn("run_target", it)
+            self.assertIn("run_targets", it)
+            self.assertIn("install_configured", it)
 
     def test_get_scheduler_section(self):
         out = get_section(self.tmp, "scheduler")
@@ -124,10 +145,10 @@ class TestConfigAdmin(unittest.TestCase):
         patch_section(
             self.tmp,
             "mailbus_claude",
-            {"windows": {"browser_ports": {"lingyun": 9260, "lingyan": 9261}}},
+            {"windows": {"browser_ports": {"agent-h": 9260, "agent-f": 9261}}},
         )
         out = get_section(self.tmp, "mailbus_claude")
-        self.assertEqual(out["data"]["windows"]["browser_ports"]["lingyan"], 9261)
+        self.assertEqual(out["data"]["windows"]["browser_ports"]["agent-f"], 9261)
 
     def test_get_smart_routing_section(self):
         out = get_section(self.tmp, "smart_routing")
@@ -149,6 +170,85 @@ class TestConfigAdmin(unittest.TestCase):
         out = get_section(self.tmp, "smart_routing")
         self.assertEqual(out["data"]["tier_map"]["L1"], "ollama-local")
         self.assertTrue(out["data"]["use_ollama"])
+
+    def test_get_asset_paths_section(self):
+        out = get_section(self.tmp, "asset_paths")
+        self.assertEqual(out["section"], "asset_paths")
+        items = out["data"]["items"]
+        self.assertEqual(len(items), 3)
+        keys = {it["key"] for it in items}
+        self.assertEqual(keys, {"skills", "rules", "identity"})
+        for it in items:
+            self.assertIn("mode", it)
+            self.assertIn("env", it)
+            self.assertIn("default", it)
+            self.assertIn("vault", it)
+
+    def test_patch_asset_paths_custom_and_default(self):
+        # 模拟 store 在 mail 根下：data_dir = {base}/store → .env 在 {base}/.env
+        base = tempfile.mkdtemp()
+        try:
+            data_dir = os.path.join(base, "store")
+            os.makedirs(data_dir)
+            import json as _json
+            _json.dump(
+                _json.load(open(os.path.join(os.path.dirname(__file__), "..", "store", "config.json"), encoding="utf-8")),
+                open(os.path.join(data_dir, "config.json"), "w", encoding="utf-8"),
+            )
+            env_file = os.path.join(base, ".env")
+            # 1) 切到 custom：写 .env 键
+            result, restart = patch_section(
+                data_dir,
+                "asset_paths",
+                {
+                    "items": [
+                        {"env": "MAILBUS_SKILLS_ROOT", "mode": "custom", "custom": r"D:\skills"},
+                        {"env": "MAILBUS_RULES_ROOT", "mode": "default"},
+                    ]
+                },
+            )
+            self.assertEqual(result["section"], "asset_paths")
+            self.assertIn("MAILBUS_SKILLS_ROOT", result["updated"])
+            self.assertEqual(restart, ["env"])
+            self.assertTrue(os.path.isfile(env_file))
+            text = open(env_file, encoding="utf-8").read()
+            self.assertIn("MAILBUS_SKILLS_ROOT=D:\\skills", text)
+            self.assertNotIn("MAILBUS_RULES_ROOT=", text)
+            # 2) 切回 default：删除键
+            result, _ = patch_section(
+                data_dir,
+                "asset_paths",
+                {"items": [{"env": "MAILBUS_SKILLS_ROOT", "mode": "default"}]},
+            )
+            text = open(env_file, encoding="utf-8").read()
+            self.assertNotIn("MAILBUS_SKILLS_ROOT=", text)
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
+
+    def test_patch_asset_paths_rejects_empty_items(self):
+        with self.assertRaises(ValueError):
+            patch_section(self.tmp, "asset_paths", {"items": []})
+
+    def test_patch_asset_paths_ignores_unknown_env(self):
+        base = tempfile.mkdtemp()
+        try:
+            data_dir = os.path.join(base, "store")
+            os.makedirs(data_dir)
+            import json as _json
+            _json.dump(
+                _json.load(open(os.path.join(os.path.dirname(__file__), "..", "store", "config.json"), encoding="utf-8")),
+                open(os.path.join(data_dir, "config.json"), "w", encoding="utf-8"),
+            )
+            env_file = os.path.join(base, ".env")
+            result, _ = patch_section(
+                data_dir,
+                "asset_paths",
+                {"items": [{"env": "MAILBUS_UNKNOWN_ROOT", "mode": "custom", "custom": r"D:\x"}]},
+            )
+            self.assertEqual(result["updated"], [])
+            self.assertFalse(os.path.isfile(env_file))
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
 
 
 if __name__ == "__main__":

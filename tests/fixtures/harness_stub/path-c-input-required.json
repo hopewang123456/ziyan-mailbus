@@ -1,7 +1,7 @@
 {
   "schema": "mailbus-harness-stub-v1",
   "path": "c",
-  "agent_id": "lingzhao",
+  "agent_id": "agent-a",
   "transport_channel": "a2a_standard",
   "a2a": {
     "get_task_sequence": [
@@ -30,7 +30,7 @@
     "type": "a2a_input_required",
     "status": "pending",
     "task_id": "feat-auth-001",
-    "title": "灵昭需确认认证方案选型",
+    "title": "需确认认证方案选型",
     "context": {
       "step_id": "s1",
       "a2a_task_id": "a2a-aaa-bbb",

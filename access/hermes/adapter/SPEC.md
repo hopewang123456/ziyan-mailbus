@@ -4,7 +4,7 @@
 
 ## Agents
 
-lingzhao, lingjin, lingxi, lingtuo, lingxun, lingzhang
+agent-a, agent-b, agent-c, agent-d, agent-e, agent-f
 
 ## Runtime 契约
 

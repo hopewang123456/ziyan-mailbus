@@ -46,9 +46,28 @@ _THIN_DIRS_WARN_BELOW = {
 }
 
 
-_EXPECTED_HERMES_AGENTS = (
-    "lingjin", "lingtuo", "lingxi", "lingxun", "lingzhang", "lingzhao",
+_DEMO_HERMES_AGENTS = (
+    "agent-a", "agent-b", "agent-c", "agent-d",
 )
+
+
+def expected_hermes_agents(data_dir: str) -> list[str]:
+    """config.json 中 hermes_profile 类型 agents；缺失时回落到 demo 名单。"""
+    import json
+
+    cfg_path = os.path.join(data_dir, "config.json")
+    try:
+        if os.path.isfile(cfg_path):
+            cfg = json.load(open(cfg_path, encoding="utf-8"))
+            agents = [
+                aid for aid, ac in (cfg.get("agents") or {}).items()
+                if (ac.get("type") or "").strip() == "hermes_profile"
+            ]
+            if agents:
+                return agents
+    except (OSError, json.JSONDecodeError):
+        pass
+    return list(_DEMO_HERMES_AGENTS)
 
 
 @dataclass
@@ -57,9 +76,26 @@ class DoctorItem:
     category: str
     message: str
     detail: str = ""
+    layer: str = "core"
 
     def to_dict(self) -> dict[str, str]:
-        return asdict(self)
+        d = asdict(self)
+        d["layer"] = CATEGORY_LAYERS.get(self.category, self.layer)
+        return d
+
+
+# 分层健康：core（必需，红/绿）· host（宿主机执行，容器内不误红）· integrations（可选，未配置灰/黄）
+CATEGORY_LAYERS = {
+    "docker": "host",
+    "compose": "host",
+    "hermes": "host",
+    "frameworks": "host",
+    "agentmemory": "integrations",
+    "n8n": "integrations",
+    "comfyui": "integrations",
+    "ollama": "integrations",
+    "integrations": "integrations",
+}
 
 
 def docker_ready_wsl(distro: str = "Ubuntu") -> tuple[bool, str]:
@@ -246,12 +282,12 @@ def check_hermes_readiness(
             "fail",
             "hermes",
             "HERMES_DATA 不存在",
-            f"{hermes_data}；典型路径 E:/hermes-data/.hermes",
+            f"{hermes_data}；典型路径 <HERMES_DATA>/.hermes",
         ))
 
     sync_root = root / "access" / "hermes" / ".sync"
     missing_sync = [
-        a for a in _EXPECTED_HERMES_AGENTS
+        a for a in expected_hermes_agents(paths["data_dir"])
         if not (sync_root / a / "skills").is_dir()
     ]
     if missing_sync:
@@ -309,16 +345,17 @@ def check_hermes_readiness(
                     "检查 docker-agents/.env 与 compose env",
                 ))
             if chat_probe:
+                probe_agent = (expected_hermes_agents(paths["data_dir"]) or ["agent-a"])[0]
                 chat_r = run(
                     [
                         wsl, "-d", wsl_distro, "-e", "bash", "-lc",
-                        f"docker exec {container} hermes chat -Q -q '只回复OK' --profile lingzhao 2>&1 | tail -5",
+                        f"docker exec {container} hermes chat -Q -q '只回复OK' --profile {probe_agent} 2>&1 | tail -5",
                     ],
                     timeout=90,
                 )
                 out = (chat_r.stdout or "") + (chat_r.stderr or "")
                 if "OK" in out and chat_r.returncode == 0:
-                    items.append(DoctorItem("ok", "hermes", "Hermes chat 探针 (DeepSeek)", "lingzhao → OK"))
+                    items.append(DoctorItem("ok", "hermes", "Hermes chat 探针 (DeepSeek)", f"{probe_agent} → OK"))
                 else:
                     items.append(DoctorItem(
                         "fail",
@@ -426,9 +463,9 @@ def run_doctor_checks(*, mail_root: Path | None = None, wsl_distro: str = "Ubunt
     except Exception:
         am_url = os.environ.get("AGENTMEMORY_URL", "http://127.0.0.1:3111")
     if probe_http(f"{am_url.rstrip('/')}/agentmemory/health") or probe_http(f"{am_url.rstrip('/')}/health"):
-        items.append(DoctorItem("ok", "services", f"AgentMemory {am_url}", ""))
+        items.append(DoctorItem("ok", "agentmemory", f"AgentMemory {am_url}", ""))
     else:
-        items.append(DoctorItem("fail", "services", f"AgentMemory unreachable: {am_url}", ""))
+        items.append(DoctorItem("warn", "agentmemory", f"AgentMemory 未配置或不可达: {am_url}", "可选集成；未配置不影响 Core"))
 
     # Drift guard: smart_routing.use_ollama requires agent_types.models.ollama-local
     store_cfg_path = Path(paths["data_dir"]) / "config.json"
@@ -510,14 +547,25 @@ def run_doctor_checks(*, mail_root: Path | None = None, wsl_distro: str = "Ubunt
         chat_probe=False,
     ))
 
-    fail_count = sum(1 for i in items if i.level == "fail")
-    warn_count = sum(1 for i in items if i.level == "warn")
+    def _layer_of(i: DoctorItem) -> str:
+        return CATEGORY_LAYERS.get(i.category, i.layer or "core")
+
+    core_fail = sum(1 for i in items if i.level == "fail" and _layer_of(i) == "core")
+    host_fail = sum(1 for i in items if i.level == "fail" and _layer_of(i) == "host")
+    integ_fail = sum(1 for i in items if i.level == "fail" and _layer_of(i) == "integrations")
+    fail_count = core_fail
+    warn_count = sum(1 for i in items if i.level == "warn") + host_fail + integ_fail
     return {
         "ok": fail_count == 0,
         "platform": plat,
         "docker": dstat,
         "issues": fail_count,
         "warnings": warn_count,
+        "layers": {
+            "core": {"issues": core_fail},
+            "host": {"issues": host_fail},
+            "integrations": {"issues": integ_fail},
+        },
         "items": [i.to_dict() for i in items],
     }
 

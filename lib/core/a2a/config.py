@@ -22,7 +22,7 @@ _DEFAULT = {
         "use_streaming": False,
     },
     "file_bus": {"enabled": True},
-    "fallback_alerts": {"enabled": True, "notify_agent": "lingxun"},
+    "fallback_alerts": {"enabled": True, "notify_agent": "agent-a"},
 }
 
 

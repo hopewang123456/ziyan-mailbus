@@ -1,7 +1,7 @@
 networks:
-  ziyan-net:
+  mailbus-net:
     # Fixed network name so COMPOSE_PROJECT_NAME changes do not recreate the subnet
-    name: docker-agents_ziyan-net
+    name: docker-agents_mailbus-net
     driver: bridge
     ipam:
       config:
@@ -10,6 +10,8 @@ networks:
 volumes:
   mailbus-data:
   iii-data:
+  codex-web-home:
+  codex-review-home:
 
 # Host paths: repo-relative under ../ (mail root). External deps via env
 # (see migrate/env.template). Machine/Vault absolute paths belong only in
@@ -24,7 +26,7 @@ services:
     ports:
       - "${MAILBUS_API_PORT:-9814}:${MAILBUS_API_PORT:-9814}"
     networks:
-      - ziyan-net
+      - mailbus-net
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -45,7 +47,7 @@ services:
     environment:
       - DATA_DIR=/mailbus/store
       - TZ=Asia/Shanghai
-      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-ziyan-team}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-change-me}
       # Defaults only — compose sync override injects config/services docker profile
       - AGENTMEMORY_URL=${AGENTMEMORY_URL:-http://iii-engine:3111}
       - TEAM_MEMORY_DB=/hermes/shared-memory/team-memory.db
@@ -94,7 +96,7 @@ services:
       - "3111:3111"
       - "3112:3112"
     networks:
-      - ziyan-net
+      - mailbus-net
     volumes:
       - iii-data:/data
       - ./agentmemory/iii-config.docker.yaml:/app/config.yaml:ro
@@ -115,7 +117,7 @@ services:
       iii-engine:
         condition: service_healthy
     networks:
-      - ziyan-net
+      - mailbus-net
     volumes:
       - ${NODE_MODULES:-../node_modules}:/node_modules:ro
     working_dir: /node_modules/@agentmemory/agentmemory
@@ -149,7 +151,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - ziyan-net
+      - mailbus-net
     volumes:
       - ${HERMES_DATA:-../.local/hermes}:/home/hermes/.hermes
       - ../store:/mailbus/store
@@ -165,6 +167,7 @@ services:
       - ../store/inbox:/home/hermes/inbox:ro
     environment:
       - HERMES_HOME=/home/hermes/.hermes
+      - DATA_DIR=/mailbus/store
       - PYTHONPATH=/mailbus
       - AGENTMEMORY_URL=http://iii-engine:3111
       - TZ=Asia/Shanghai
@@ -191,7 +194,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - ziyan-net
+      - mailbus-net
     volumes:
       - ${OPENCLAW_WORKSPACE:-../openclaw_space}:/workspace
       - ../store:/mailbus/store
@@ -211,7 +214,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - HERMES_SECRETS_DIR=/hermes-secrets
-      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-ziyan-team}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-change-me}
       # 默认保留 pairing；仅排障时设 1
       - RESET_OPENCLAW_PAIRING=${RESET_OPENCLAW_PAIRING:-0}
       - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
@@ -223,7 +226,7 @@ services:
       - iii-engine
     command: ["tail", "-f", "/dev/null"]
 
-  lingxiao:
+  codex-web:
     build:
       context: ./codex-agent
       args:
@@ -235,7 +238,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - ziyan-net
+      - mailbus-net
     volumes:
       - ../store:/mailbus/store
       - ../tools:/mailbus/tools:ro
@@ -244,20 +247,22 @@ services:
       - ../rules:/mailbus/rules:ro
       - ../access:/mailbus/access:ro
       - ../access/external-tools:/mailbus/external-tools:ro
-      - ${LINGXIAO_WORKSPACE:-../lingxiao}:/workspace/lingxiao:ro
+      - ${CODEX_WORKSPACE:-../codex}:/workspace/codex:ro
       - ${HERMES_DATA:-../.local/hermes}/.env:/run/hermes/.env:ro
       - ${CODEX_SKILLS:-../.codex/skills}:/home/node/.codex/skills
       - ${NODE_MODULES:-../node_modules}:/node_modules:ro
       - ./codex-agent/deepseek-model-catalog.json:/usr/local/share/codex/deepseek-model-catalog.json:ro
       - ./codex-agent/deepseek-model-aliases.json:/usr/local/share/codex/deepseek-model-aliases.json:ro
+      # CODEX_HOME 卷持久化：codexui-password + auth.json 跨重建保持（登录 cookie 免密）
+      - codex-web-home:/home/node/.codex
     environment:
       - TZ=Asia/Shanghai
       - CODEX_HOME=/home/node/.codex
-      - CODEX_AGENT=lingxiao
+      - CODEX_AGENT=agent-g
       - CODEX_MODEL=deepseek-v4-flash
       - CODEX_UI_PORT=7681
-      - CODEX_UI_CWD=/home/node/agent-workspace/lingxiao
-      - CODEX_PROJECT_DIR=/home/node/agent-workspace/lingxiao
+      - CODEX_UI_CWD=/home/node/agent-workspace/codex-web
+      - CODEX_PROJECT_DIR=/home/node/agent-workspace/codex-web
       - CODEX_UI_ENABLED=1
       - CODEX_WEB_PORT=7682
       - CODEX_WEB_CWD=/mailbus/store
@@ -266,6 +271,7 @@ services:
       - FORCE_RENDER_CODEX_CONFIG=${FORCE_RENDER_CODEX_CONFIG:-0}
       - AGENTMEMORY_URL=http://iii-engine:3111
       - DEEPSEEK_GATEWAY_PORT=3000
+      - HOST=0.0.0.0
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - OPENAI_API_KEY=${DEEPSEEK_API_KEY}
       - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
@@ -277,7 +283,7 @@ services:
       - iii-engine
     command: ["tail", "-f", "/dev/null"]
 
-  lingjian:
+  codex-review:
     build:
       context: ./codex-agent
       args:
@@ -289,7 +295,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - ziyan-net
+      - mailbus-net
     volumes:
       - ../store:/mailbus/store
       - ../tools:/mailbus/tools:ro
@@ -298,20 +304,21 @@ services:
       - ../rules:/mailbus/rules:ro
       - ../access:/mailbus/access:ro
       - ../access/external-tools:/mailbus/external-tools:ro
-      - ${LINGJIAN_WORKSPACE:-../lingjian}:/workspace/lingjian:ro
+      - ${CODEX_REVIEW_WORKSPACE:-../codex-review}:/workspace/codex-review:ro
       - ${HERMES_DATA:-../.local/hermes}/.env:/run/hermes/.env:ro
       - ${CODEX_SKILLS:-../.codex/skills}:/home/node/.codex/skills
       - ${NODE_MODULES:-../node_modules}:/node_modules:ro
       - ./codex-agent/deepseek-model-catalog.json:/usr/local/share/codex/deepseek-model-catalog.json:ro
       - ./codex-agent/deepseek-model-aliases.json:/usr/local/share/codex/deepseek-model-aliases.json:ro
+      - codex-review-home:/home/node/.codex
     environment:
       - TZ=Asia/Shanghai
       - CODEX_HOME=/home/node/.codex
-      - CODEX_AGENT=lingjian
+      - CODEX_AGENT=agent-e
       - CODEX_MODEL=deepseek-reasoner
       - CODEX_UI_PORT=7681
-      - CODEX_UI_CWD=/home/node/agent-workspace/lingjian
-      - CODEX_PROJECT_DIR=/home/node/agent-workspace/lingjian
+      - CODEX_UI_CWD=/home/node/agent-workspace/codex-review
+      - CODEX_PROJECT_DIR=/home/node/agent-workspace/codex-review
       - CODEX_UI_ENABLED=1
       - CODEX_WEB_PORT=7682
       - CODEX_WEB_CWD=/mailbus/store
@@ -319,6 +326,7 @@ services:
       - FORCE_RENDER_CODEX_CONFIG=${FORCE_RENDER_CODEX_CONFIG:-0}
       - AGENTMEMORY_URL=http://iii-engine:3111
       - DEEPSEEK_GATEWAY_PORT=3000
+      - HOST=0.0.0.0
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - OPENAI_API_KEY=${DEEPSEEK_API_KEY}
       - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
@@ -330,7 +338,7 @@ services:
       - iii-engine
     command: ["tail", "-f", "/dev/null"]
 
-  dali:
+  opencode:
     build:
       context: ./opencode-agent
       args:
@@ -338,7 +346,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - ziyan-net
+      - mailbus-net
     volumes:
       - ../store:/mailbus/store
       - ../tools:/mailbus/tools:ro

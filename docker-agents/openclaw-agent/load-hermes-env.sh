@@ -1,5 +1,5 @@
 #!/bin/bash
-# 从 Hermes 挂载目录读取 API Key（与 hermes 容器共用 /mnt/e/hermes-data/.hermes）
+# 从 Hermes 挂载目录读取 API Key（与 hermes 容器共用 <HERMES_DATA>/.hermes）
 
 HERMES_DIR="${HERMES_SECRETS_DIR:-/hermes-secrets}"
 CONFIG="${HERMES_DIR}/config.yaml"

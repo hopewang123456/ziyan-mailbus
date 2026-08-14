@@ -1,0 +1,25 @@
+{
+  "_note": "可复现安装的最小示例名册：2 个纯文件角色（type=none），无需框架/CLI/Vault，file_bus 即可闭环投递。init 后删掉或改成你自己的员工即可。",
+  "agents": {
+    "agent-dispatcher": {
+      "name": "调度员",
+      "role": "调度协调",
+      "type": "none",
+      "agent_id": "agent-dispatcher",
+      "archetype": "orchestrator",
+      "models": ["deepseek-flash"],
+      "max_concurrency": 1,
+      "enabled": true
+    },
+    "agent-executor": {
+      "name": "执行者",
+      "role": "编码执行",
+      "type": "none",
+      "agent_id": "agent-executor",
+      "archetype": "coding-executor",
+      "models": ["deepseek-flash"],
+      "max_concurrency": 1,
+      "enabled": true
+    }
+  }
+}

@@ -10,5 +10,15 @@
   },
   "mailbus_automation": {
     "legacy_result_read": false
+  },
+  "org_defaults": {
+    "reviewer": "agent-a",
+    "escalate_agent": "agent-a",
+    "notify_agent": "agent-a",
+    "notify_agents": ["agent-a", "agent-m"],
+    "scheduler": "agent-b",
+    "finance_followup": "agent-c",
+    "audit_reviewers": ["agent-a", "agent-f"],
+    "_note": "Open-source default roster (demo ids). Copy to store/config.json and replace with your own agent ids."
   }
 }

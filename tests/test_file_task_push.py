@@ -40,29 +40,29 @@ class TestFileTaskPush(unittest.TestCase):
             "type": "codex",
             "model": "deepseek-chat",
             "push": {"cwd": "/mailbus/store"},
-            "docker": {"service": "lingxiao"},
+            "docker": {"service": "agent-g"},
         }
-        cmd = resolve_push_cli("lingxiao", agent_cfg, {"models": {}})
+        cmd = resolve_push_cli("agent-g", agent_cfg, {"models": {}})
         self.assertIn("codex exec", cmd)
         self.assertIn("deepseek-chat", cmd)
         self.assertIn("MSG", cmd)
 
     def test_work_order_and_verify(self):
-        msg = {"id": "msg-test001", "from": "lingzhao", "type": "task", "content": "改 index.html"}
-        mid, wo, rf = ensure_file_task_work_order(self.tmp, "lingxiao", msg)
+        msg = {"id": "msg-test001", "from": "agent-a", "type": "task", "content": "改 index.html"}
+        mid, wo, rf = ensure_file_task_work_order(self.tmp, "agent-g", msg)
         self.assertTrue(os.path.isfile(wo))
-        ok, reason = verify_file_task_delivery(self.tmp, "lingxiao", msg)
+        ok, reason = verify_file_task_delivery(self.tmp, "agent-g", msg)
         self.assertFalse(ok)
         self.assertEqual(reason, "missing_msg_results")
         with open(rf, "w", encoding="utf-8") as f:
-            json.dump({"agent": "lingxiao", "conclusion": "done", "summary": "ok"}, f)
-        ok, reason = verify_file_task_delivery(self.tmp, "lingxiao", msg)
+            json.dump({"agent": "agent-g", "conclusion": "done", "summary": "ok"}, f)
+        ok, reason = verify_file_task_delivery(self.tmp, "agent-g", msg)
         self.assertTrue(ok)
 
     def test_phantom_reply(self):
-        msg = {"id": "msg-p1", "type": "task", "content": "test", "to": "lingxiao"}
+        msg = {"id": "msg-p1", "type": "task", "content": "test", "to": "agent-g"}
         is_ph, reason = check_phantom_completion(
-            self.tmp, "lingxiao", msg,
+            self.tmp, "agent-g", msg,
             reply_text="✅ 任务完成回执",
             agent_type="cline",
         )
@@ -71,7 +71,7 @@ class TestFileTaskPush(unittest.TestCase):
 
     def test_push_body_has_paths(self):
         body = build_file_task_push_body(
-            from_="lingzhao", msg_id="msg-x", msg_type="task",
+            from_="agent-a", msg_id="msg-x", msg_type="task",
             wo_path="/store/msg-files/msg-x.md",
             result_path="/store/msg-results/msg-x.json",
         )

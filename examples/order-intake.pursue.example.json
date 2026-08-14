@@ -10,7 +10,7 @@
   "contact": {"status": "not_contacted"},
   "commercial_gates": [
     {"gate_id": "contact_done", "status": "pending"},
-    {"gate_id": "req_to_lingzhao", "status": "pending"},
+    {"gate_id": "req_to_solution", "status": "pending"},
     {"gate_id": "customer_design_ok", "status": "pending"},
     {"gate_id": "start_delivery", "status": "pending"},
     {"gate_id": "content_start", "status": "pending"}

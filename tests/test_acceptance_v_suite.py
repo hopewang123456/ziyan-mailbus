@@ -144,7 +144,7 @@ class TestAcceptanceVSuite(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as td:
             Path(td, "config.json").write_text(
-                '{"frameworks": {}, "agents": {"ziyan": {"type": "hermes", "enabled": true}}}',
+                '{"frameworks": {}, "agents": {"mailbus": {"type": "hermes", "enabled": true}}}',
                 encoding="utf-8",
             )
             run_enable_probe_fail_no_half_finished(td)
@@ -203,7 +203,7 @@ class TestAcceptanceVSuite(unittest.TestCase):
         desk = Path.home() / "Desktop"
         if desk.is_dir():
             for p in desk.iterdir():
-                if p.is_dir() and ("AI" in p.name or "子言" in p.name):
+                if p.is_dir() and ("AI" in p.name or p.name.startswith("mailbus")):
                     launchers.extend(p.glob("*.bat"))
         if not launchers:
             self.skipTest("no desktop/tools/mailbus *.bat found")

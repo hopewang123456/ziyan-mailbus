@@ -30,7 +30,7 @@ class TestProductionHarnessWait(unittest.TestCase):
         with open(cfg_path, encoding="utf-8") as f:
             cfg = json.load(f)
         cfg.setdefault("harness", {})["mode"] = "production"
-        cfg.setdefault("agents", {})["dali"] = {
+        cfg.setdefault("agents", {})["agent-i"] = {
             "type": "opencode",
             "channels": {"a2a": {"enabled": False}, "file_bus": {"enabled": True}},
         }
@@ -42,7 +42,7 @@ class TestProductionHarnessWait(unittest.TestCase):
     def _spawn(self, task_id: str = "feat-auth-001", step_id: str = "s3"):
         harness = get_harness({"harness": {"mode": "production"}})
         session = harness.spawn(
-            "dali",
+            "agent-i",
             {
                 "data_dir": self.tmp,
                 "task_id": task_id,
@@ -55,7 +55,7 @@ class TestProductionHarnessWait(unittest.TestCase):
         harness, session = self._spawn()
         write_step_result_file(
             self.tmp, "feat-auth-001", "s3",
-            {"conclusion": "done", "agent": "dali", "summary": "ok"},
+            {"conclusion": "done", "agent": "agent-i", "summary": "ok"},
         )
         outcome = harness.wait_completion(session, timeout=5)
         self.assertTrue(outcome.ok)
@@ -68,7 +68,7 @@ class TestProductionHarnessWait(unittest.TestCase):
             time.sleep(0.3)
             write_step_result_file(
                 self.tmp, "poll-task", "s1",
-                {"conclusion": "done", "agent": "dali"},
+                {"conclusion": "done", "agent": "agent-i"},
             )
 
         threading.Thread(target=_write_later, daemon=True).start()
@@ -78,7 +78,7 @@ class TestProductionHarnessWait(unittest.TestCase):
     def test_wait_records_ack_from_pusher_path(self):
         harness, session = self._spawn()
         paths = resolve_paths(self.tmp)
-        ack_dir = os.path.join(paths["inbox"], "dali")
+        ack_dir = os.path.join(paths["inbox"], "agent-i")
         os.makedirs(ack_dir, exist_ok=True)
         json_write(
             os.path.join(ack_dir, "ack.json"),
@@ -86,7 +86,7 @@ class TestProductionHarnessWait(unittest.TestCase):
         )
         write_step_result_file(
             self.tmp, "feat-auth-001", "s3",
-            {"conclusion": "done", "agent": "dali"},
+            {"conclusion": "done", "agent": "agent-i"},
         )
         outcome = harness.wait_completion(session, timeout=5)
         self.assertTrue(outcome.ok)
@@ -109,7 +109,7 @@ class TestFileBusProductionWait(unittest.TestCase):
         cfg.setdefault("harness", {})["mode"] = "production"
         cfg.setdefault("harness", {}).setdefault("file_bus", {})["ack_timeout_sec"] = 3
         cfg.setdefault("transport", {})["use_router"] = True
-        cfg.setdefault("agents", {})["dali"] = {
+        cfg.setdefault("agents", {})["agent-i"] = {
             "type": "opencode",
             "channels": {"a2a": {"enabled": False}, "file_bus": {"enabled": True}},
         }
@@ -125,17 +125,17 @@ class TestFileBusProductionWait(unittest.TestCase):
 
     def test_production_dispatch_waits_for_delayed_step_result(self):
         transport = self._transport()
-        ctx = DispatchContext(self.tmp, "wait-task", "s2", "dali", 8, intent="run step")
+        ctx = DispatchContext(self.tmp, "wait-task", "s2", "agent-i", 8, intent="run step")
 
         def _write_later():
             time.sleep(0.5)
             write_step_result_file(
                 self.tmp, "wait-task", "s2",
-                {"conclusion": "done", "agent": "dali", "summary": "ok"},
+                {"conclusion": "done", "agent": "agent-i", "summary": "ok"},
             )
 
         threading.Thread(target=_write_later, daemon=True).start()
-        result = transport.dispatch(ctx, {"dali": {"type": "opencode"}})
+        result = transport.dispatch(ctx, {"agent-i": {"type": "opencode"}})
         self.assertTrue(result.ok)
         self.assertTrue(result.step_result_path)
         self.assertTrue(os.path.isfile(result.step_result_path))
@@ -146,11 +146,11 @@ class TestFileBusProductionWait(unittest.TestCase):
         transport = self._transport()
         write_step_result_file(
             self.tmp, "inbox-task", "s1",
-            {"conclusion": "done", "agent": "dali"},
+            {"conclusion": "done", "agent": "agent-i"},
         )
-        ctx = DispatchContext(self.tmp, "inbox-task", "s1", "dali", 8)
-        transport.dispatch(ctx, {"dali": {"type": "opencode"}})
-        inbox_path = os.path.join(self.tmp, "inbox", "dali", "inbox.json")
+        ctx = DispatchContext(self.tmp, "inbox-task", "s1", "agent-i", 8)
+        transport.dispatch(ctx, {"agent-i": {"type": "opencode"}})
+        inbox_path = os.path.join(self.tmp, "inbox", "agent-i", "inbox.json")
         with open(inbox_path, encoding="utf-8") as f:
             inbox = json.load(f)
         ids = [m.get("id") for m in inbox.get("messages") or []]
@@ -158,8 +158,8 @@ class TestFileBusProductionWait(unittest.TestCase):
 
     def test_production_dispatch_timeout_audit(self):
         transport = self._transport()
-        ctx = DispatchContext(self.tmp, "timeout-task", "s9", "dali", 8)
-        result = transport.dispatch(ctx, {"dali": {"type": "opencode"}})
+        ctx = DispatchContext(self.tmp, "timeout-task", "s9", "agent-i", 8)
+        result = transport.dispatch(ctx, {"agent-i": {"type": "opencode"}})
         self.assertFalse(result.ok)
         self.assertTrue(result.error.startswith("retryable:"))
         err_dir = os.path.join(self.tmp, "errors")
@@ -168,13 +168,13 @@ class TestFileBusProductionWait(unittest.TestCase):
     def test_dispatch_integration_production_wait(self):
         write_step_result_file(
             self.tmp, "pipe-task", "s1",
-            {"conclusion": "done", "agent": "dali"},
+            {"conclusion": "done", "agent": "agent-i"},
         )
         out = dispatch_pipeline_step(
             self.tmp,
             task_id="pipe-task",
             step_id="s1",
-            to_agent="dali",
+            to_agent="agent-i",
             role_type=8,
             intent="pipeline step",
         )

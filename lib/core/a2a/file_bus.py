@@ -64,7 +64,7 @@ class FileBusTransport:
             "ack_received": ack_received,
             "error": error,
             "ts": _now_iso(),
-            "notify": ["dashboard", "lingxun_inbox"],
+            "notify": ["dashboard", "ops_inbox"],
         })
 
     def _dispatch_production(self, ctx: DispatchContext, agents: dict) -> DispatchResult:
@@ -127,7 +127,7 @@ class FileBusTransport:
         )
 
     def _dispatch_stub(self, ctx: DispatchContext, fixture_name: Optional[str]) -> DispatchResult:
-        name = fixture_name or "path-d-dali-opencode.json"
+        name = fixture_name or "path-d-agent-i-opencode.json"
         fixture = _load_stub_fixture(name)
         result = dict(fixture.get("on_complete_step_result") or {})
         if not result:

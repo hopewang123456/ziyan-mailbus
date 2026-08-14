@@ -11,7 +11,7 @@ Agent 通用测试工具 — 从 store/config.json 读取全部 agent，逐项�
 
 用法：
   python tools/test_agents.py              # 全部 agent
-  python tools/test_agents.py lingzhao     # 单个 agent
+  python tools/test_agents.py agent-a     # 单个 agent
   python tools/test_agents.py --json       # JSON 输出（CI）
   python tools/test_agents.py --data-dir ./store
 """
@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -64,8 +63,9 @@ def probe_http(url: str, timeout: float = 5.0, ok_codes: frozenset | None = None
         return out
     probed = url
     try:
-        if os.path.exists("/.dockerenv") and "127.0.0.1" in url:
-            probed = url.replace("127.0.0.1", "host.docker.internal")
+        from lib.infra.runtime_net import resolve_loopback
+
+        probed = resolve_loopback(url)
     except Exception:
         pass
     try:
@@ -106,21 +106,26 @@ def _api_available() -> bool:
 
 
 # ── Docker 容器探测 ───────────────────────────────────────────────────
-def _is_docker_available() -> bool:
-    try:
-        return os.path.exists("/var/run/docker.sock") or subprocess.run(
-            ["docker", "info"], capture_output=True, timeout=5
-        ).returncode == 0
-    except Exception:
-        return False
-
-
 def _running_containers() -> set[str]:
+    """运行中容器名集合：本机 docker 优先，Windows 无 docker CLI 时经 wsl -e docker 双探。"""
     try:
-        r = subprocess.run(
-            ["docker", "ps", "--format", "{{.Names}}"],
-            capture_output=True, text=True, timeout=10,
-        )
+        from lib.adapters.ops.doctor_checks import docker_status
+        from lib.adapters.plane.platform_runner import docker_argv, run, wsl_exe
+
+        dstat = docker_status()
+        if not dstat.get("ready"):
+            return set()
+        if dstat.get("source") == "wsl":
+            wsl = wsl_exe()
+            if not wsl:
+                return set()
+            r = run(
+                [wsl, "-d", "Ubuntu", "-e", "bash", "-lc",
+                 "docker ps --format '{{.Names}}'"],
+                timeout=10,
+            )
+        else:
+            r = run(docker_argv("ps", "--format", "{{.Names}}"), timeout=10)
         if r.returncode == 0:
             return set(r.stdout.strip().splitlines())
     except Exception:
@@ -309,7 +314,7 @@ def _browser_url(agent_cfg: dict, agent_types: dict) -> str:
 def _find_container(running: set[str], patterns: list[str]) -> str | None:
     """从运行中的容器列表里匹配容器名。
     匹配规则：pat 必须是容器名中的完整名称段（以 `-` 或边界分隔）。
-    例如 'lingxi' 不会匹配 'docker-agents-lingxiao-1'。
+    例如 'agent-d' 不会匹配 'docker-agents-codex-web-1'。
     """
     for pat in patterns:
         for c in sorted(running):
@@ -344,7 +349,7 @@ def _resolve_container(agent_cfg: dict, running: set[str]) -> str | None:
     if atype == "openclaw":
         return _find_container(running, ["openclaw"])
     if atype == "opencode":
-        return _find_container(running, ["opencode", "dali"])
+        return _find_container(running, ["opencode"])
     if service:
         return _find_container(running, [service])
 
@@ -352,7 +357,7 @@ def _resolve_container(agent_cfg: dict, running: set[str]) -> str | None:
 
 
 # ── 单个 agent 测试 ──────────────────────────────────────────────────
-def test_agent(name: str, cfg: dict, agent_types: dict,
+def check_agent(name: str, cfg: dict, agent_types: dict,
                running: set[str], use_api: bool) -> dict:
     atype = cfg.get("type", "?")
     has_br = _has_browser(cfg, agent_types)
@@ -397,7 +402,7 @@ def test_agent(name: str, cfg: dict, agent_types: dict,
         else:
             svc = service or {"hermes": "hermes", "hermes_profile": "hermes",
                               "codex": "codex-agent", "openclaw": "openclaw",
-                              "opencode": "dali"}.get(atype, atype)
+                              "opencode": "opencode"}.get(atype, atype)
             result["checks"]["container"] = {
                 "ok": False,
                 "detail": f"container not found (type={atype})",
@@ -565,14 +570,14 @@ def main(argv: list[str] | None = None) -> int:
     else:
         target = agents
 
-    running = _running_containers() if _is_docker_available() else set()
+    running = _running_containers()
     use_api = not args.no_api and _api_available()
     am_check = check_agentmemory()
 
     results = []
     for name in sorted(target.keys()):
         try:
-            results.append(test_agent(name, target[name], agent_types, running, use_api))
+            results.append(check_agent(name, target[name], agent_types, running, use_api))
         except Exception as exc:
             results.append({
                 "agent": name, "display": name, "type": "?",

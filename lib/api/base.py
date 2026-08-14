@@ -1,5 +1,5 @@
 """
-ziyan-mailbus HTTP API — 基础请求处理器
+mailbus HTTP API — 基础请求处理器
 
 包含: 认证、路由分发、静态文件服务、公共工具方法。
 具体业务逻辑在 handlers_*.py 中。
@@ -73,6 +73,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     agent_types = {}
     auth_token: Optional[str] = None
     require_api_auth: bool = False
+    exempt_cidrs: list[str] = []
     bulletin_permit = []
     bulletin_authors = {}
     bulletin_file = ""
@@ -81,13 +82,13 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     # ── 认证 ────────────────────────────────────────────────────────────
 
     def _client_is_loopback(self) -> bool:
-        """本机（含 Docker/WSL 网桥）视为本地请求。"""
+        """本机（含 Docker/WSL 网桥 + 用户豁免白名单）视为本地请求。"""
         from lib.application.mailbus_token import _is_local
         try:
             addr = (self.client_address[0] or "").strip().lower()
         except Exception:
             return False
-        return _is_local(addr)
+        return _is_local(addr, extra_cidrs=self.exempt_cidrs)
 
     def _check_auth(self, *, write: bool = False) -> bool:
         """Read: token optional unless require_api_auth; presented token must match.
@@ -117,7 +118,11 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         from lib.domain.types import AuthDecision
 
         ctx = client_context_from_handler(self)
-        decision = authorize_write(self.data_dir, ctx)
+        decision = authorize_write(
+            self.data_dir,
+            ctx,
+            config={"auth": {"exempt_cidrs": self.exempt_cidrs}},
+        )
         if decision == AuthDecision.ALLOW:
             return True
         self._send_json({
@@ -295,6 +300,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         h = _get_handlers()
 
         routes = {
+            "/api/health": lambda: h["system"].handle_health(self),
             "/api/status": lambda: h["system"].handle_status(self),
             "/api/agents": lambda: h["system"].handle_agents(self),
             "/api/frameworks": lambda: h["system"].handle_frameworks(self),
@@ -335,6 +341,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/settings/env": lambda: h["settings"].handle_settings_env_get(self),
             "/api/settings/paths": lambda: h["settings"].handle_settings_paths(self),
             "/api/settings/integrations": lambda: h["settings"].handle_integrations(self),
+            "/api/skills/index": lambda: h["settings"].handle_skills_index(self),
             "/api/discover": lambda: h["lifecycle"].handle_discover(self),
             "/api/align": lambda: h["lifecycle"].handle_align(self),
             "/api/agents/active": lambda: h["lifecycle"].handle_active_agents(self),
@@ -413,6 +420,15 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             h["inbox"].handle_inbox(self, path[len("/api/inbox/"):])
         elif path.startswith("/api/agent-profile/"):
             h["system"].handle_agent_profile(self, path[len("/api/agent-profile/"):])
+        elif path.startswith("/api/agent-avatar/"):
+            rest = path[len("/api/agent-avatar/"):].strip("/")
+            parts = rest.split("/", 1)
+            agent = parts[0] if parts else ""
+            kind = parts[1] if len(parts) > 1 else "portrait"
+            if agent:
+                h["system"].handle_agent_avatar(self, agent, kind)
+            else:
+                self._send_json({"error": "agent required"}, 400)
         elif path.startswith("/api/harness-reports/"):
             sha = path[len("/api/harness-reports/"):].strip("/")
             if sha:
@@ -507,6 +523,14 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             h["tasks"].handle_task_fsm_action(self, tid, action)
         elif path == "/api/send-msg":
             h["inbox"].handle_send_msg(self)
+        elif path == "/api/agents/scan":
+            h["lifecycle"].handle_agent_scan(self)
+        elif path == "/api/agent-instances":
+            h["lifecycle"].handle_agent_instance_upsert(self)
+        elif path == "/api/agent-instances/load-roles":
+            h["lifecycle"].handle_agent_instance_load_roles(self)
+        elif path == "/api/agent-instances/discover":
+            h["lifecycle"].handle_agent_instance_discover(self)
         elif path == "/api/internal-llm/dry-run":
             h["internal_llm"].handle_internal_llm_dry_run(self)
         elif path == "/api/internal-llm/rebuild-rag":

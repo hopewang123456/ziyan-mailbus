@@ -14,7 +14,7 @@ def test_load_config_defaults():
     """加载不存在的配置返回默认值"""
     with tempfile.TemporaryDirectory() as tmp:
         cfg = load_config(os.path.join(tmp, "nonexistent.json"))
-        assert cfg["project"] == "ziyan-mailbus"
+        assert cfg["project"] == "mailbus"
         assert cfg["ack_timeout"] == DEFAULT_ACK_TIMEOUT
         assert cfg["max_retries"] == 3
         assert cfg["agents"] == {}
@@ -37,17 +37,17 @@ def test_save_and_load_roundtrip():
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "config.json")
         original = {
-            "project": "ziyan-mailbus",
+            "project": "mailbus",
             "version": "1.0.0",
             "data_dir": tmp,
             "ack_timeout": 15,
             "max_retries": 5,
-            "agents": {"lingxiao": {"name": "灵霄", "type": "opencode"}},
+            "agents": {"agent-g": {"name": "Agent G", "type": "opencode"}},
         }
         save_config(path, original)
         loaded = load_config(path)
         assert loaded["ack_timeout"] == 15
-        assert loaded["agents"]["lingxiao"]["name"] == "灵霄"
+        assert loaded["agents"]["agent-g"]["name"] == "Agent G"
 
 
 def test_load_config_bad_json():
@@ -57,7 +57,7 @@ def test_load_config_bad_json():
         with open(path, "w") as f:
             f.write("{bad json}")
         cfg = load_config(path)
-        assert cfg["project"] == "ziyan-mailbus"
+        assert cfg["project"] == "mailbus"
 
 
 def test_get_system_message():

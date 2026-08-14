@@ -11,8 +11,8 @@ if [ -z "$PROJECT_DIR" ] || ! command -v curl >/dev/null 2>&1; then
 fi
 
 case "$AGENT" in
-  lingxiao) LABEL="灵霄" ;;
-  lingjian) LABEL="灵鉴" ;;
+  codex-web) LABEL="Codex Web" ;;
+  codex-review) LABEL="Codex Review" ;;
   *) LABEL="$AGENT" ;;
 esac
 

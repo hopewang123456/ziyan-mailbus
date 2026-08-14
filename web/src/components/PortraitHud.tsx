@@ -12,6 +12,22 @@ type Props = {
   onLaunch: (id: string, mode: "browser" | "cli" | "client") => void;
 };
 
+function maskAccessUrl(raw: string): string {
+  const s = (raw || "").trim();
+  if (!s) return s;
+  try {
+    const u = new URL(s);
+    if (u.username || u.password) {
+      if (u.username) u.username = "***";
+      if (u.password) u.password = "***";
+      return u.toString();
+    }
+  } catch {
+    /* ignore */
+  }
+  return s.replace(/\/\/([^/@\s]+)@/g, "//***@");
+}
+
 type AccessResp = {
   agent?: string;
   online?: boolean;
@@ -195,7 +211,7 @@ export function PortraitHud({
               ok={showBrowser ? browserOk : false}
               detail={
                 showBrowser
-                  ? access?.browser?.url || meta.launch_url || "未配置URL"
+                  ? maskAccessUrl(access?.browser?.url || meta.launch_url || "未配置URL")
                   : "未挂载浏览器入口"
               }
             />
@@ -234,10 +250,10 @@ export function PortraitHud({
         ) : null}
       </div>
 
-      {(card.personality || card.ziyan_bond) && (
+      {(card.personality || card.bond || card.ziyan_bond) && (
         <InfoCell label="性格 / 关系">
           <span className="whitespace-pre-wrap text-mute">
-            {String(card.personality || card.ziyan_bond).slice(0, 400)}
+            {String(card.personality || card.bond || card.ziyan_bond).slice(0, 400)}
           </span>
         </InfoCell>
       )}
@@ -269,7 +285,7 @@ export function PortraitHud({
 
       {/* 完整档案 — 结构化字段 */}
       {full && (
-        <div className="space-y-3 rounded border border-rail bg-abyss/30 p-3">
+        <div className="soft-inset space-y-3">
           {card.strengths && (
             <InfoCell label="优势">{card.strengths}</InfoCell>
           )}
@@ -334,7 +350,7 @@ export function PortraitHud({
             type="button"
             className="hud-btn"
             disabled={launching}
-            title={meta.launch_url || ""}
+            title={maskAccessUrl(meta.launch_url || "")}
             onClick={() => onLaunch(agent.id, "browser")}
           >
             {launchingMode === "browser" ? "…" : "浏览器"}

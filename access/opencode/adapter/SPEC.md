@@ -1,6 +1,6 @@
 # L1 — OpenCode Framework Spec
 
-> **Layer**: L1 · **Framework**: opencode · **Agent**: dali
+> **Layer**: L1 · **Framework**: opencode · **Agent**: agent-m
 
 ## Runtime 契约
 
@@ -15,7 +15,7 @@
 - git commit → format-patch → `store/patches/`
 - `store/replies/{sender}.json`
 
-msg-results **不是** dali pipeline 主 SoT。
+msg-results **不是** opencode pipeline 主 SoT。
 
 ## Sync
 

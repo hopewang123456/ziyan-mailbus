@@ -26,10 +26,10 @@ SECRET_RES = [
 
 # Should stay untracked (team-private); if still in index, fail
 FORBIDDEN_TRACKED_PREFIXES = (
-    "access/transport/dali/",
-    "access/transport/ling",  # lingyun/lingzhao/...
-    "access/transport/xiaoqi/",
-    "access/transport/yige/",
+    "access/transport/agent-i/",
+    "access/transport/ling",  # agent-h/agent-a/...
+    "access/transport/agent-m/",
+    "access/transport/agent-l/",
 )
 
 

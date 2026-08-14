@@ -1,0 +1,28 @@
+{
+  "schema": "mailbus-golden-a2a-path-v1",
+  "path": "d",
+  "scenario": {
+    "can_deliver_a2a": false,
+    "label": "opencode-replies"
+  },
+  "canonical_dispatch": {
+    "task_id": "feat-oc-001",
+    "step_id": "s1",
+    "role_type": 1,
+    "to_agent": "agent-coder",
+    "intent": "file bus only",
+    "message_id": "msg-d-001"
+  },
+  "canonical_step_result": {
+    "task_id": "feat-oc-001",
+    "step_id": "s1",
+    "agent": "agent-coder",
+    "role_type": 1,
+    "conclusion": "done",
+    "summary": "normalized from opencode replies",
+    "source": "opencode_replies",
+    "transport_used": "file_bus",
+    "normalized_from": "opencode_replies",
+    "timestamp": "2026-01-01T00:00:00Z"
+  }
+}

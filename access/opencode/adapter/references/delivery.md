@@ -1,6 +1,6 @@
 # OpenCode — 交付 SoT（L1 exclusive）
 
-**dali 完成依据：patch + replies。** msg-results 不是 pipeline 主 SoT。
+**编码 agent 完成依据：patch + replies。** msg-results 不是 pipeline 主 SoT。
 
 ## 步骤
 
@@ -10,7 +10,7 @@
 
 ```json
 {
-  "agent": "dali",
+  "agent": "agent-m",
   "msg_ids": ["<id>"],
   "reply": "已完成: <简述>",
   "patch": "/mailbus/store/patches/<file>",
@@ -22,9 +22,9 @@
 
 | 发件方 | replies 文件 |
 |--------|--------------|
-| 灵霄 lingxiao | `store/replies/lingxiao.json` |
-| 灵昭 lingzhao | `store/replies/lingzhao.json` |
-| 小七 xiaoqi | `store/replies/xiaoqi.json` |
+| Codex（agent-f） | `store/replies/agent-f.json` |
+| Hermes（agent-a） | `store/replies/agent-a.json` |
+| OpenClaw（agent-c） | `store/replies/agent-c.json` |
 
 ## 失败
 

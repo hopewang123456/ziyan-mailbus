@@ -41,7 +41,7 @@ class TestSchedulerJobsSoT(unittest.TestCase):
         path = MAILBUS_ROOT / "config" / "scheduler" / "jobs.json"
         data = json.loads(path.read_text(encoding="utf-8"))
         ids = {j["id"] for j in data.get("jobs") or []}
-        for jid in ("scan", "memory_bridge", "intake-bridge", "lingxun_patrol"):
+        for jid in ("scan", "memory_bridge", "intake-bridge", "agent-a_patrol"):
             self.assertIn(jid, ids)
 
 

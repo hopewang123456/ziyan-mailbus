@@ -1,5 +1,5 @@
 """
-ziyan-mailbus HTTP API — Inbox 相关路由处理器
+mailbus HTTP API — Inbox 相关路由处理器
 
 处理: /api/inbox/, /api/mark-read/, /api/send-msg, /api/replies, /api/actions/update/
 """

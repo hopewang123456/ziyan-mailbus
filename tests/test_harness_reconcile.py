@@ -16,7 +16,7 @@ from lib.infra.utils import json_write
 class TestHarnessReconcile(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        json_write(os.path.join(self.tmp, "config.json"), {"agents": {"lingzhao": {}}})
+        json_write(os.path.join(self.tmp, "config.json"), {"agents": {"agent-a": {}}})
 
     def tearDown(self):
         import shutil
@@ -35,7 +35,7 @@ class TestHarnessReconcile(unittest.TestCase):
         mock_run.assert_called_once()
         args, kwargs = mock_run.call_args
         self.assertEqual(args[0], self.tmp)
-        self.assertEqual(args[1], {"lingzhao": {}})
+        self.assertEqual(args[1], {"agent-a": {}})
         self.assertTrue(kwargs.get("fix"))
         self.assertEqual(kwargs.get("mode"), "light")
 

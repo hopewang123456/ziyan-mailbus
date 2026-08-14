@@ -26,7 +26,7 @@ DEFAULT_JOBS = [
     {"id": "triage-inbox", "enabled": True, "interval_seconds": 900, "lock": "mailbus-triage-inbox"},
     {"id": "pipeline_watchdog", "enabled": True, "interval_seconds": 300, "lock": "mailbus-watchdog"},
     {"id": "pipeline-repair", "enabled": True, "interval_seconds": 600, "lock": "mailbus-pipeline-repair"},
-    {"id": "lingxun_patrol", "enabled": True, "interval_seconds": 3600},
+    {"id": "patrol", "enabled": True, "interval_seconds": 3600},
     {"id": "daily_report", "enabled": True, "cron": "30 23 * * *"},
     {"id": "log_rotate", "enabled": True, "cron": "0 3 * * *"},
     {"id": "agent_cli_version_check", "enabled": True, "interval_seconds": 86400, "lock": "mailbus-agent-versions"},
@@ -65,7 +65,7 @@ def _register_runners():
     _JOB_RUNNERS["intake-bridge"] = lambda data_dir, cfg, job: job_mod.run_intake_bridge(data_dir)
     _JOB_RUNNERS["platform-scout"] = lambda data_dir, cfg, job: job_mod.run_platform_scout(data_dir)
     _JOB_RUNNERS["triage-inbox"] = lambda data_dir, cfg, job: job_mod.run_triage_inbox(data_dir, cfg)
-    _JOB_RUNNERS["lingxun_patrol"] = lambda data_dir, cfg, job: job_mod.run_lingxun_patrol(data_dir)
+    _JOB_RUNNERS["patrol"] = lambda data_dir, cfg, job: job_mod.run_patrol(data_dir)
     _JOB_RUNNERS["daily_report"] = lambda data_dir, cfg, job: job_mod.run_daily_report(data_dir)
     _JOB_RUNNERS["log_rotate"] = lambda data_dir, cfg, job: job_mod.run_log_rotate(data_dir)
     _JOB_RUNNERS["agent_cli_version_check"] = lambda data_dir, cfg, job: job_mod.run_agent_cli_version_check(data_dir)

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import List, Optional, Set, Tuple
 
-from lib.application.orchestration.pipeline.chain import AGENT_ROLE, agent_to_role
+from lib.application.orchestration.pipeline.chain import _agent_role_map, agent_to_role
 from lib.application.orchestration.role_flow import get_next_role, pick_person_for_role
 
 VALID_ROLES = frozenset({
@@ -45,10 +45,10 @@ def is_pipeline_terminal(
     }
 
 
-def _known_agent_ids(agents: Optional[dict]) -> Set[str]:
+def _known_agent_ids(agents: Optional[dict], data_dir: str = "") -> Set[str]:
     if agents:
         return set(agents.keys())
-    return set(AGENT_ROLE.keys())
+    return set(_agent_role_map(data_dir).keys())
 
 
 def _persons_served(chain: List[dict]) -> Set[str]:
@@ -83,7 +83,7 @@ def _resolve_role_type_assignee(
         cands = locale.role_type_candidates(int(role_type))
         if not cands or pin in cands:
             return n_role, pin
-    n_person = pick_person_for_role(n_role, exclude=_persons_served(chain))
+    n_person = pick_person_for_role(n_role, exclude=_persons_served(chain), data_dir=data_dir)
     return n_role, n_person
 
 
@@ -115,7 +115,7 @@ def resolve_next_assignee(
             head["planned_agents"] = planned
             cur_person = (chain[-1] or {}).get("to_person") if chain else ""
             if n_person and n_person != cur_person:
-                return agent_to_role(n_person) or "方案设计师", n_person
+                return agent_to_role(n_person, data_dir) or "方案设计师", n_person
 
     explicit_person = _pick_explicit_person(result, known)
     explicit_next = result.get("next_role")
@@ -128,7 +128,7 @@ def resolve_next_assignee(
         return None, None
 
     if explicit_person:
-        return agent_to_role(explicit_person) or n_role, explicit_person
+        return agent_to_role(explicit_person, data_dir) or n_role, explicit_person
 
-    n_person = pick_person_for_role(n_role, exclude=_persons_served(chain))
+    n_person = pick_person_for_role(n_role, exclude=_persons_served(chain), data_dir=data_dir)
     return n_role, n_person

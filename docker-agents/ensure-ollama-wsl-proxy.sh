@@ -41,11 +41,13 @@ start_proxy() {
     return 1
   fi
   stop_proxy
-  nohup python3 "$PROXY" --host 0.0.0.0 --port 11434 >>"$LOG" 2>&1 &
+  # listen_port defaults to 11435 (see config/services/ollama.json / ollama_proxy_listen)
+  nohup python3 "$PROXY" >>"$LOG" 2>&1 &
   echo $! >"$PID_FILE"
   sleep 1
-  if curl -sf --max-time 5 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
-    echo "[ollama-wsl-proxy] OK pid=$(cat "$PID_FILE")"
+  listen_port="${OLLAMA_WSL_PROXY_PORT:-11435}"
+  if curl -sf --max-time 5 "http://127.0.0.1:${listen_port}/api/tags" >/dev/null 2>&1; then
+    echo "[ollama-wsl-proxy] OK pid=$(cat "$PID_FILE") :${listen_port}"
     return 0
   fi
   echo "[ollama-wsl-proxy] failed to bind/listen — see $LOG" >&2

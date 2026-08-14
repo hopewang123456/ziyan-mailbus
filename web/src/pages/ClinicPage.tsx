@@ -21,6 +21,7 @@ type ClinicTool = {
   description?: string;
   category?: string;
   readonly?: boolean;
+  host_only?: boolean;
 };
 type RunResult = {
   ok?: boolean;
@@ -31,6 +32,7 @@ type RunResult = {
   tool_name?: string;
   returncode?: number;
   elapsed_seconds?: number;
+  host_only?: boolean;
 };
 type CheckEntry = { ok: boolean; detail: string; fix_hint?: string };
 type AgentEntry = {
@@ -57,13 +59,33 @@ type TasksResp = { tasks?: TaskRow[] };
 type StatsResp = {
   task_statuses?: Record<string, number>;
 };
+type HealthCheck = { ok: boolean; detail?: string };
+type HealthAgent = {
+  agent: string;
+  display: string;
+  type: string;
+  pass: boolean;
+  checks: Record<string, HealthCheck>;
+};
+type HealthService = { ok?: boolean; base_url?: string; detail?: string; error?: string };
+type HealthOverview = {
+  agents?: HealthAgent[];
+  services?: Record<string, HealthService>;
+  summary?: {
+    agents_total: number;
+    agents_passed: number;
+    services_total: number;
+    services_ok: number;
+    ok: boolean;
+  };
+};
 
 const LEVEL_STYLE: Record<string, string> = {
   fail: "text-flare",
   warn: "text-amber-signal",
   ok: "text-mint",
 };
-type ClinicTab = "agent" | "bus" | "tools";
+type ClinicTab = "agent" | "bus" | "tools" | "overview";
 
 // ── 修复建议卡片 ──────────────────────────────────────────────────────
 function FixHintCard({ hint }: { hint: string }) {
@@ -153,7 +175,7 @@ function AgentTab() {
       {test && failed.length === 0 && (
         <div className="rounded-sm border border-mint/20 bg-mint/5 p-4 text-center">
           <p className="text-mint font-display text-lg">全部检测通过 ✓</p>
-          <p className="text-xs text-mute mt-1">13 个 Agent 配置完整，容器运行正常，浏览器可达，身份就绪</p>
+          <p className="text-xs text-mute mt-1">Core 检查全部通过 · Host/集成项按分层展示</p>
         </div>
       )}
 
@@ -228,14 +250,6 @@ function BusTab() {
     });
   }, []);
 
-  async function runDoctor() {
-    setBusy(true);
-    setErr("");
-    const r = await api<DoctorResp>("/api/doctor");
-    setBusy(false);
-    if (r.ok) setDoctor(r.data);
-    else setErr(r.error);
-  }
   async function loadAll() {
     setBusy(true);
     setErr("");
@@ -269,7 +283,7 @@ function BusTab() {
 
       {/* 状态条 */}
       {status && (
-        <div className="rounded-sm border border-rail bg-hull/50 px-3 py-2 text-xs flex flex-wrap gap-x-4 gap-y-1">
+        <div className="soft-inset px-3 py-2 text-xs flex flex-wrap gap-x-4 gap-y-1">
           <span>
             <span className="text-mute">总线: </span>
             <span className={status.status === "ok" ? "text-mint" : "text-amber-signal"}>
@@ -297,7 +311,7 @@ function BusTab() {
 
       {/* ── 任务链诊断 ── */}
       {stats && (
-        <div className="rounded-sm border border-rail bg-hull/50 p-4">
+        <div className="soft-panel">
           <p className="hud-label mb-3">任务链诊断</p>
           <div className="grid grid-cols-5 gap-2 text-center text-xs">
             {[
@@ -350,7 +364,7 @@ function BusTab() {
 
       {/* Doctor 问题 */}
       {doctor && (
-        <div className="rounded-sm border border-rail bg-hull/50 p-4">
+        <div className="soft-panel">
           <div className="flex flex-wrap gap-3 text-xs mb-3">
             <span className={doctor.ok ? "text-mint" : "text-flare"}>{doctor.ok ? "OK" : "ISSUES"}</span>
             <span className="text-flare">issues {doctor.issues ?? 0}</span>
@@ -415,15 +429,14 @@ function ToolsTab() {
     if (h.ok) setLlmHealth(h.data);
   }
 
-  const agentTools = tools.filter((t) => (t.category || "").includes("Agent"));
+  const agentTools = tools.filter((t) => (t.category || "").includes("Agent") && !(t.category || "").includes("鉴权"));
   const busTools = tools.filter((t) =>
     (t.category || "").includes("mailbus") || (t.category || "").includes("Docker") || (t.category || "").includes("迁移")
   );
   const authTools = tools.filter((t) => (t.category || "").includes("鉴权"));
-  const otherTools = tools.filter((t) => {
-    const c = t.category || "";
-    return !c.includes("Agent") && !c.includes("mailbus") && !c.includes("Docker") && !c.includes("迁移") && !c.includes("鉴权");
-  });
+  const otherTools = tools.filter(
+    (t) => !agentTools.includes(t) && !busTools.includes(t) && !authTools.includes(t),
+  );
 
   function renderToolGroup(title: string, desc: string, list: ClinicTool[]) {
     if (list.length === 0) return null;
@@ -435,11 +448,15 @@ function ToolsTab() {
         </div>
         {list.map((t) => {
           const result = runResults[t.id];
+          const hostOnlyBlocked = result && result.host_only && !result.ok && (result.error === "host_only_in_docker");
           return (
-            <div key={t.id} className="rounded-sm border border-rail/50 p-2 text-xs">
+            <div key={t.id} className={`soft-inset p-2 text-xs ${t.host_only ? "bg-orange-500/5" : ""}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-frost">{t.name || t.id}</p>
+                  <p className="text-frost">
+                    {t.name || t.id}
+                    {t.host_only && <span className="ml-1 px-1 py-0.5 rounded text-[9px] bg-orange-500/20 text-orange-400" title="需在 WSL 宿主机执行">宿主机</span>}
+                  </p>
                   {t.description && <p className="text-mute mt-0.5">{t.description}</p>}
                 </div>
                 <button
@@ -452,15 +469,18 @@ function ToolsTab() {
                 </button>
               </div>
               {result && (
-                <div className={`mt-2 p-2 rounded ${result.ok ? "bg-mint/5 border border-mint/20" : "bg-flare/5 border border-flare/20"}`}>
-                  <p className={`${result.ok ? "text-mint" : "text-flare"}`}>
-                    {result.ok ? "ok" : (result.error || "failed")}
+                <div className={`mt-2 p-2 rounded ${hostOnlyBlocked ? "bg-orange-500/5 border border-orange-500/20" : result.ok ? "bg-mint/5 border border-mint/20" : "bg-flare/5 border border-flare/20"}`}>
+                  <p className={`${hostOnlyBlocked ? "text-orange-400" : result.ok ? "text-mint" : "text-flare"}`}>
+                    {hostOnlyBlocked ? "⚠ 需在 WSL 宿主机执行" : result.ok ? "ok" : (result.error || "failed")}
                     {result.elapsed_seconds != null && (
                       <span className="text-mute ml-2">{result.elapsed_seconds}s</span>
                     )}
                   </p>
                   {result.stdout && (
                     <pre className="mt-1 max-h-40 overflow-auto text-[10px] text-mute">{result.stdout.slice(-2000)}</pre>
+                  )}
+                  {hostOnlyBlocked && (
+                    <p className="mt-1 text-[10px] text-orange-400/70">请通过 WSL 终端手工执行，或在 Windows 侧运行对应脚本。</p>
                   )}
                 </div>
               )}
@@ -481,9 +501,9 @@ function ToolsTab() {
       {renderToolGroup("Agent 配置", "检查 config.json 中 agent 的 CLI 类型、profile、launch 模板一致性", agentTools)}
       {renderToolGroup("Agent 鉴权", "修复 Cline 鉴权、探测 Hermes 对话连通性", authTools)}
       {renderToolGroup("mailbus 总线 & Compose", "全量诊断、Compose 挂载校验、同步 Override", busTools)}
-      {renderToolGroup("其它", "源码完整性、n8n 工作流发布", otherTools)}
+      {renderToolGroup("其它", "Agent Inbox 待处理消息摘要", otherTools)}
 
-      <div className="rounded-sm border border-rail bg-hull/50 p-3">
+      <div className="soft-inset">
         <div className="flex items-center justify-between gap-2">
           <p className="hud-label">Internal LLM</p>
           <button type="button" className="hud-btn text-xs" onClick={() => void loadInternalLlm()}>
@@ -503,11 +523,119 @@ function ToolsTab() {
   );
 }
 
+// ── 全景体检 Tab ─────────────────────────────────────────────────────
+function OverviewTab() {
+  const [data, setData] = useState<HealthOverview | null>(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function runOverview() {
+    setBusy(true);
+    setErr("");
+    const r = await api<RunResult>("/api/clinic/run", {
+      method: "POST",
+      body: JSON.stringify({ tool_id: "health-overview", preset_index: 0 }),
+    });
+    setBusy(false);
+    if (!r.ok) {
+      setErr(r.error);
+      return;
+    }
+    const stdout = r.data?.stdout;
+    if (!stdout) {
+      setErr(r.data?.stderr || "体检执行失败");
+      return;
+    }
+    try {
+      setData(JSON.parse(stdout) as HealthOverview);
+    } catch {
+      setErr("体检结果解析失败");
+    }
+  }
+
+  useEffect(() => {
+    if (!data && !busy) void runOverview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const agents = data?.agents || [];
+  const services = data?.services || {};
+  const summary = data?.summary;
+
+  function dot(ok: boolean) {
+    return ok ? "text-mint" : "text-flare";
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-mute">
+          每个 agent 的浏览器 / CLI / 容器 / 身份，及第三方组件健康，一屏红绿汇总。
+          {summary && !busy && (
+            <span className={summary.ok ? "text-mint" : "text-flare"}>
+              {" "}— {summary.agents_passed}/{summary.agents_total} agent · {summary.services_ok}/{summary.services_total} 服务
+            </span>
+          )}
+        </p>
+        <button type="button" className="hud-btn" disabled={busy} onClick={() => void runOverview()}>
+          {busy ? "体检中…" : "重新体检"}
+        </button>
+      </div>
+      <ErrorAlert message={err} />
+
+      {busy && !data && <p className="text-sm text-mute text-center py-8 animate-pulse">正在体检…</p>}
+
+      {/* Agents */}
+      {agents.length > 0 && (
+        <div className="soft-panel">
+          <p className="hud-label mb-3">Agents</p>
+          <div className="space-y-1.5">
+            {agents.map((a) => {
+              const c = a.checks || {};
+              return (
+                <div key={a.agent} className="flex flex-wrap items-center gap-3 rounded border border-rail/40 px-2 py-1.5 text-xs">
+                  <span className={`shrink-0 ${a.pass ? "text-mint" : "text-flare"}`}>{a.pass ? "✓" : "✗"}</span>
+                  <span className="w-16 font-mono text-frost">{a.display}</span>
+                  <span className="w-16 text-mute">{a.type}</span>
+                  {(["browser", "cli", "container", "identity"] as const).map((k) => (
+                    <span key={k} className={`${dot(c[k]?.ok ?? false)}`} title={c[k]?.detail || ""}>
+                      {k === "browser" ? "浏览器" : k === "cli" ? "CLI" : k === "container" ? "容器" : "身份"}
+                      {c[k]?.ok ? "✓" : "✗"}
+                    </span>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Services */}
+      {Object.keys(services).length > 0 && (
+        <div className="soft-panel">
+          <p className="hud-label mb-3">第三方组件</p>
+          <div className="space-y-1.5">
+            {Object.entries(services).map(([name, s]) => (
+              <div key={name} className="flex flex-wrap items-center gap-3 rounded border border-rail/40 px-2 py-1.5 text-xs">
+                <span className={`shrink-0 ${s.ok ? "text-mint" : "text-flare"}`}>{s.ok ? "✓" : "✗"}</span>
+                <span className="w-28 font-mono text-frost">{name}</span>
+                <span className={`${dot(s.ok ?? false)}`}>{s.ok ? "正常" : (s.detail === "not_configured" ? "未配置" : "异常")}</span>
+                {(s.detail && s.detail !== "not_configured") && <span className="text-mute truncate">{s.base_url || s.detail || s.error}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 主页面 ───────────────────────────────────────────────────────────
 export function ClinicPage() {
-  const [tab, setTab] = useState<ClinicTab>("agent");
+  const [tab, setTab] = useState<ClinicTab>("overview");
 
   const TABS: { id: ClinicTab; label: string; desc: string }[] = [
+    { id: "overview", label: "全景体检", desc: "Agent + 第三方组件" },
     { id: "agent", label: "Agent 诊断", desc: "自动检测 · 修复建议" },
     { id: "bus", label: "总线修复", desc: "Doctor · 任务链" },
     { id: "tools", label: "其它工具", desc: "深度配置校验" },
@@ -517,7 +645,7 @@ export function ClinicPage() {
     <div className="space-y-4">
       <header>
         <p className="hud-label">Medbay</p>
-        <h2 className="mt-1 font-display text-2xl tracking-wide">诊所</h2>
+        <h2 className="mt-1 font-display text-2xl tracking-[-0.02em]">诊所</h2>
         <p className="mt-1 text-sm text-mute">
           一键诊断 + 修复建议 — 代替手动排查常见异常：
           <span className="text-amber-signal"> 浏览器/终端进不去</span> ·
@@ -527,7 +655,7 @@ export function ClinicPage() {
       </header>
 
       {/* 子 Tab 栏 */}
-      <div className="flex gap-1 rounded-sm border border-rail bg-hull/30 p-1">
+      <div className="flex gap-1 soft-inset p-1">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -537,12 +665,13 @@ export function ClinicPage() {
             }`}
             onClick={() => setTab(t.id)}
           >
-            <span className="block font-display tracking-wide">{t.label}</span>
+            <span className="block font-display tracking-[-0.02em]">{t.label}</span>
             <span className="block text-[10px] opacity-60">{t.desc}</span>
           </button>
         ))}
       </div>
 
+      {tab === "overview" && <OverviewTab />}
       {tab === "agent" && <AgentTab />}
       {tab === "bus" && <BusTab />}
       {tab === "tools" && <ToolsTab />}

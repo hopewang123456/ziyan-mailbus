@@ -1,0 +1,52 @@
+{
+  "vault_root": "fixtures",
+  "roots": {
+    "agent_root": "Agent",
+    "members_root": "Agent/02-members"
+  },
+  "persons": {
+    "agent-a": {"dir": "022131-agent-a", "id": "022131"},
+    "agent-b": {"dir": "022132-agent-b", "id": "022132"},
+    "agent-c": {"dir": "022133-agent-c", "id": "022133"},
+    "agent-d": {"dir": "022631-agent-d", "id": "022631"}
+  },
+  "frameworks": {
+    "hermes": {"dir": "0221-hermes", "persons": "02213-persons"},
+    "claude_code": {"dir": "0222-claude", "persons": "02223-persons"},
+    "opencode": {"dir": "0226-opencode", "persons": "02263-persons"}
+  },
+  "junctions": {
+    "mount_points": [
+      {
+        "framework": "hermes",
+        "native": "<HERMES_DATA>/.hermes/profiles/{id}/skills",
+        "target": "03-shared/hermes/skills",
+        "ids": ["agent-a", "agent-b"]
+      },
+      {
+        "framework": "hermes",
+        "native": "<HERMES_DATA>/.hermes/profiles/{id}/memories",
+        "target": "02-members/022-category/0221-hermes/02213-persons/{person_dir}/{person_id}3-memory",
+        "ids": ["agent-a", "agent-b"]
+      },
+      {
+        "framework": "claude_code",
+        "native": "%USERPROFILE%/.claude-agent-b/skills",
+        "target": "03-shared/claude/skills",
+        "ids": ["agent-b"]
+      },
+      {
+        "framework": "claude_code",
+        "native": "%USERPROFILE%/.claude-agent-c/skills",
+        "target": "03-shared/claude/skills",
+        "ids": ["agent-c"]
+      },
+      {
+        "framework": "opencode",
+        "native": "<OPENCODE_ROOT>/skills",
+        "target": "03-shared/opencode/skills",
+        "ids": ["agent-d"]
+      }
+    ]
+  }
+}

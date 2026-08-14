@@ -1,0 +1,54 @@
+{
+  "version": "1.0.0",
+  "_note": "Open-source demo role-types seed (generic agent ids). Copy to store/roles/json/role-types.json and replace candidates with your own roster; team-pack/org/json/role-types.json wins at runtime.",
+  "roles": {
+    "1": {
+      "display": { "zh": "方案设计师", "en": "Solution Designer" },
+      "candidates": ["agent-a"]
+    },
+    "2": {
+      "display": { "zh": "安全审计师", "en": "Security Auditor" },
+      "candidates": ["agent-c"]
+    },
+    "3": {
+      "display": { "zh": "技术研究员", "en": "Tech Researcher" },
+      "candidates": ["agent-c"]
+    },
+    "4": {
+      "display": { "zh": "市场拓展官", "en": "Market Expansion" },
+      "candidates": ["agent-d"]
+    },
+    "5": {
+      "display": { "zh": "审查官", "en": "Reviewer" },
+      "candidates": ["agent-a"]
+    },
+    "6": {
+      "display": { "zh": "测试工程师", "en": "Test Engineer" },
+      "candidates": ["agent-b"]
+    },
+    "7": {
+      "display": { "zh": "巡检官", "en": "Patroller" },
+      "candidates": ["agent-a"]
+    },
+    "8": {
+      "display": { "zh": "开发工程师", "en": "Coding Engineer" },
+      "candidates": ["agent-b"]
+    },
+    "9": {
+      "display": { "zh": "调度员", "en": "Dispatcher" },
+      "candidates": ["agent-b"]
+    },
+    "10": {
+      "display": { "zh": "财务跟进官", "en": "Finance Follow-up" },
+      "candidates": ["agent-c"]
+    },
+    "11": {
+      "display": { "zh": "运营", "en": "Operations" },
+      "candidates": ["agent-d"]
+    },
+    "12": {
+      "display": { "zh": "验收员", "en": "Acceptor" },
+      "candidates": ["agent-b"]
+    }
+  }
+}

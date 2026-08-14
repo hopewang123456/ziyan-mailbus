@@ -1,4 +1,4 @@
-# ziyan-mailbus 测试计划
+# mailbus-mailbus 测试计划
 
 > **2026-06-25 更新**：`tests/test_*.py` 共 56 文件、432 用例。运行：`python -m pytest tests -q`  
 > Windows 本机建议 `set PYTHONUTF8=1`；Docker/WSL 为 CI 推荐环境。

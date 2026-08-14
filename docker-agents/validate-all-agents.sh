@@ -17,8 +17,8 @@ echo "=== 3. Hermes profile CLI 启动探针（各 profile 仅验证不报 Unkno
 docker exec docker-agents-mailbus-1 python3 /mailbus/tools/smoke-hermes-profiles.py \
   --timeout "$TIMEOUT"
 
-echo "=== 4. Codex 容器探针（lingxiao / lingjian）==="
-for svc in lingxiao lingjian; do
+echo "=== 4. Codex 容器探针（codex-web / codex-review）==="
+for svc in codex-web codex-review; do
   cname="docker-agents-${svc}-1"
   if docker ps --format '{{.Names}}' | grep -qx "$cname"; then
     docker exec "$cname" codex --version

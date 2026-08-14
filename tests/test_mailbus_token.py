@@ -41,6 +41,40 @@ class TestMailbusToken(unittest.TestCase):
             self.assertTrue(ok.get("ok"))
             self.assertNotEqual(ok.get("token"), old)
 
+    def test_exempt_cidrs_whitelist_allows_remote(self):
+        """config["auth"]["exempt_cidrs"] 白名单网段免 token。"""
+        with tempfile.TemporaryDirectory() as td:
+            ensure_token(td)
+            cfg = {"auth": {"exempt_cidrs": ["10.0.0.0/8"]}}
+            self.assertEqual(
+                authorize_write(td, ClientContext(remote_addr="10.0.0.2"), config=cfg),
+                AuthDecision.ALLOW,
+            )
+
+    def test_exempt_cidrs_top_level_and_single_ip(self):
+        """顶层 exempt_cidrs + 单 IP 白名单。"""
+        with tempfile.TemporaryDirectory() as td:
+            ensure_token(td)
+            cfg = {"exempt_cidrs": "192.168.50.10"}
+            self.assertEqual(
+                authorize_write(td, ClientContext(remote_addr="192.168.50.10"), config=cfg),
+                AuthDecision.ALLOW,
+            )
+            # 非白名单 IP 仍被拒
+            self.assertEqual(
+                authorize_write(td, ClientContext(remote_addr="192.168.50.11"), config=cfg),
+                AuthDecision.DENY,
+            )
+
+    def test_exempt_cidrs_not_applied_without_config(self):
+        """无白名单时 10.x 仍是跨机需 token。"""
+        with tempfile.TemporaryDirectory() as td:
+            ensure_token(td)
+            self.assertEqual(
+                authorize_write(td, ClientContext(remote_addr="10.0.0.2")),
+                AuthDecision.DENY,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

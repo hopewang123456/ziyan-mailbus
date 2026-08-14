@@ -53,7 +53,7 @@ class RootOpsAdapter:
             "memory_bridge": lambda: jobs.run_memory_bridge(data_dir),
             "agentmemory_watchdog": lambda: jobs.run_agentmemory_watchdog(data_dir),
             "log_rotate": lambda: jobs.run_log_rotate(data_dir),
-            "lingxun_patrol": lambda: jobs.run_lingxun_patrol(data_dir),
+            "patrol": lambda: jobs.run_patrol(data_dir),
             "pipeline_watchdog": lambda: jobs.run_pipeline_watchdog(data_dir),
             "platform_scout": lambda: jobs.run_platform_scout(data_dir),
             "pipeline_repair": lambda: jobs.run_pipeline_repair(data_dir),

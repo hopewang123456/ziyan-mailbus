@@ -27,18 +27,18 @@
     }
   },
   "functional_group": {
-    "lingzhao": "product",
-    "lingxi": "product",
-    "lingjin": "security",
-    "lingtuo": "operations",
-    "lingjian": "engineering",
-    "lingyan": "engineering",
-    "lingxiao": "engineering",
-    "lingyun": "engineering",
-    "dali": "engineering",
-    "lingxun": "ops",
-    "lingzhang": "operations",
-    "yige": "operations",
-    "xiaoqi": "execution"
+    "agent-a": "product",
+    "agent-d": "product",
+    "agent-c": "security",
+    "agent-j": "operations",
+    "agent-e": "engineering",
+    "agent-h": "engineering",
+    "agent-g": "engineering",
+    "agent-b": "engineering",
+    "agent-i": "engineering",
+    "agent-f": "ops",
+    "agent-k": "operations",
+    "agent-l": "operations",
+    "agent-m": "execution"
   }
 }

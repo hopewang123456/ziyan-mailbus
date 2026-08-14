@@ -188,9 +188,9 @@ class A2ATransport:
         transport_cfg = cfg.get("transport") or cfg
         force_stub = transport_cfg.get("force_stub")
         if harness_mode == "stub" or force_stub:
-            name = ctx.stub_fixture or "path-a-lingzhao-s1.json"
-            if ctx.to_agent == "dali":
-                name = ctx.stub_fixture or "path-d-dali-opencode.json"
+            name = ctx.stub_fixture or "path-a-agent-a-s1.json"
+            if ctx.to_agent == "agent-i":
+                name = ctx.stub_fixture or "path-d-agent-i-opencode.json"
             return StubA2AClient.from_name(name)
         agent_cfg = (agents or {}).get(ctx.to_agent) or {}
         from .delivery import can_deliver_a2a
@@ -204,5 +204,5 @@ class A2ATransport:
             except Exception as exc:
                 from .errors import NonRetryableTransportError
                 raise NonRetryableTransportError(str(exc), code="http_client") from exc
-        name = ctx.stub_fixture or "path-a-lingzhao-s1.json"
+        name = ctx.stub_fixture or "path-a-agent-a-s1.json"
         return StubA2AClient.from_name(name)

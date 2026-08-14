@@ -30,8 +30,8 @@ def _design_task(**overrides):
             "step_id": "s1",
             "step": 1,
             "role_type": 1,
-            "to_agent": "lingzhao",
-            "to_person": "lingzhao",
+            "to_agent": "agent-a",
+            "to_person": "agent-a",
             "status": "running",
             "fsm_state": "awaiting_result",
             "planned_role_types": [8, 8, 5],
@@ -46,7 +46,7 @@ def _result(**extra):
     base = {
         "task_id": "decomp-test",
         "step_id": "s1",
-        "agent": "lingzhao",
+        "agent": "agent-a",
         "role_type": 1,
         "pipeline_step": 1,
     }

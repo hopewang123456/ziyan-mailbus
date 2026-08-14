@@ -1,0 +1,26 @@
+{
+  "schema": "mailbus-compose-registry-v1",
+  "_note": "Open-source demo mapping: logical build name / agent id → docker-compose service. Copy to store/config.json (compose_registry section) and replace with your own agent ids / service names.",
+  "logical_to_compose": {
+    "codex-agent": "codex-web",
+    "codex-review-agent": "codex-review",
+    "opencode-agent": "opencode",
+    "openclaw-agent": "openclaw",
+    "hermes-agent": "hermes",
+    "claude-agent": ""
+  },
+  "agent_compose_service": {
+    "agent-g": "codex-web",
+    "agent-e": "codex-review",
+    "agent-i": "opencode",
+    "agent-m": "openclaw",
+    "agent-l": "openclaw",
+    "agent-a": "hermes",
+    "agent-c": "hermes",
+    "agent-b": "hermes",
+    "agent-d": "hermes",
+    "agent-j": "hermes",
+    "agent-k": "hermes"
+  },
+  "default_services": ["mailbus", "agentmemory", "hermes", "openclaw", "codex-web", "codex-review", "opencode"]
+}

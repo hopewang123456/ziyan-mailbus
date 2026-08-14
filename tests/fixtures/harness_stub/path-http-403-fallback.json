@@ -1,7 +1,7 @@
 {
   "schema": "mailbus-harness-stub-v1",
   "path": "b403",
-  "agent_id": "lingzhao",
+  "agent_id": "agent-a",
   "transport_channel": "file_bus",
   "a2a": {
     "errors": ["http_403"]
@@ -12,7 +12,7 @@
   "on_complete_step_result": {
     "task_id": "feat-auth-001",
     "step_id": "s2",
-    "agent": "lingzhao",
+    "agent": "agent-a",
     "role_type": 1,
     "conclusion": "done",
     "summary": "403 降级后 file_bus 完成",

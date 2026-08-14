@@ -29,7 +29,7 @@ class TestWorkOrderSchema(unittest.TestCase):
             self.tmp,
             task_id="game-courier",
             step_num=1,
-            to_person="dali",
+            to_person="agent-i",
             to_role="编码执行",
             summary="实现 courier 模块",
             step_id="s1",
@@ -51,7 +51,7 @@ class TestWorkOrderSchema(unittest.TestCase):
             self.tmp,
             task_id="t1",
             step_num=2,
-            to_person="lingxiao",
+            to_person="agent-g",
             to_role="开发",
             step_id="s2",
         )

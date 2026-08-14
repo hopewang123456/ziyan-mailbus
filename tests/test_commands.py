@@ -34,8 +34,8 @@ def _create_tmp_lock(prefix: str, suffix: str = ".lock", age: float = 0) -> str:
 
 def test_cleanup_stale_mailbus_locks():
     """_cleanup_stale_locks: 清理超过 max_age 的 mailbus 锁文件"""
-    old_lock = _create_tmp_lock("ziyan-mailbus-aaaa.lock", age=600)
-    new_lock = _create_tmp_lock("ziyan-mailbus-bbbb.lock", age=10)
+    old_lock = _create_tmp_lock("mailbus-aaaa.lock", age=600)
+    new_lock = _create_tmp_lock("mailbus-bbbb.lock", age=10)
     try:
         _cleanup_stale_locks(max_age=300)
         assert not os.path.exists(old_lock), "过期 mailbus 锁文件应被清理"
@@ -48,7 +48,7 @@ def test_cleanup_stale_mailbus_locks():
 
 def test_cleanup_stale_skips_recent_locks():
     """_cleanup_stale_locks: max_age 内的锁文件不清理"""
-    recent = _create_tmp_lock("ziyan-mailbus-cccc.lock", age=60)
+    recent = _create_tmp_lock("mailbus-cccc.lock", age=60)
     try:
         _cleanup_stale_locks(max_age=300)
         assert os.path.exists(recent), "60秒前的锁文件应保留"
@@ -136,7 +136,7 @@ def test_cleanup_stale_no_files_to_clean():
     """_cleanup_stale_locks: 无文件时静默通过"""
     lock_root = get_lock_root()
     for pattern in [
-        os.path.join(lock_root, "ziyan-mailbus-*.lock"),
+        os.path.join(lock_root, "mailbus-*.lock"),
         os.path.join(lock_root, "session-*.lock"),
         os.path.join(lock_root, "hermes-*.db-shm"),
         os.path.join(lock_root, "agentmemory-*.sock"),

@@ -98,23 +98,23 @@ class TestNotifierF4(unittest.TestCase):
 
     def test_verify_escalation_calls_notifier(self):
         with tempfile.TemporaryDirectory() as tmp:
-            Path(tmp, "inbox", "lingzhao").mkdir(parents=True)
+            Path(tmp, "inbox", "agent-a").mkdir(parents=True)
             Path(tmp, "config.json").write_text("{}", encoding="utf-8")
             notify_verify_failure(
                 tmp,
                 task_id="t-esc-3",
-                agent="dali",
+                agent="agent-i",
                 role_label="实现",
                 reason="missing_artifact",
                 attempt=3,
-                escalate_cfg={"2": "xiaoqi", "3": "lingzhao"},
+                escalate_cfg={"2": "agent-m", "3": "agent-a"},
             )
             path = Path(tmp) / "system" / "notifications.jsonl"
             self.assertTrue(path.is_file())
             rows = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
             self.assertTrue(any(r["event"] == "verify_fail_escalation" for r in rows))
             esc = next(r for r in rows if r["event"] == "verify_fail_escalation")
-            self.assertEqual(esc["payload"]["escalate_to"], "lingzhao")
+            self.assertEqual(esc["payload"]["escalate_to"], "agent-a")
             self.assertEqual(esc["payload"]["attempt"], 3)
 
 

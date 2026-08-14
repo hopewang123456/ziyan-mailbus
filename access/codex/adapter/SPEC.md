@@ -1,6 +1,6 @@
 # L1 — Codex Framework Spec
 
-> **Layer**: L1 · **Framework**: codex · **Agents**: lingxiao, lingjian
+> **Layer**: L1 · **Framework**: codex · **Agents**: agent-f, agent-d
 
 ## Runtime 契约
 

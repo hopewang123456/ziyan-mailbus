@@ -25,7 +25,7 @@ from lib.adapters.frameworks.claude_launch import (
 AGENT_CFG = {
     "type": "claude_code",
     "models": ["deepseek-flash"],
-    "push": {"cwd": r"E:\ai_tools"},
+    "push": {"cwd": r"<PROJECT_ROOT>"},
 }
 
 TYPES = {
@@ -50,8 +50,8 @@ class TestClaudeLaunch(unittest.TestCase):
     def test_resolve_project_dir_prefers_push_cwd(self):
         plat = {"default_project_dir": "/tmp"}
         self.assertEqual(
-            resolve_project_dir(AGENT_CFG, plat, "lingyun"),
-            r"E:\ai_tools",
+            resolve_project_dir(AGENT_CFG, plat, "agent-h"),
+            r"<PROJECT_ROOT>",
         )
 
     @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="windows")
@@ -59,7 +59,7 @@ class TestClaudeLaunch(unittest.TestCase):
     def test_push_windows_from_wsl_uses_powershell(self, *_mocks):
         data_dir = os.path.join(os.path.dirname(__file__), "..", "store")
         cmd = build_push_command(
-            "lingyun", AGENT_CFG, TYPES, "deepseek-flash", data_dir=data_dir,
+            "agent-h", AGENT_CFG, TYPES, "deepseek-flash", data_dir=data_dir,
         )
         self.assertIn("powershell", cmd.lower())
         self.assertIn("claude", cmd)
@@ -74,9 +74,9 @@ class TestClaudeLaunch(unittest.TestCase):
     @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="linux")
     def test_push_linux_native_bash(self, *_mocks):
         cfg = dict(AGENT_CFG)
-        cfg["push"] = {"cwd": "/mnt/e/ai_tools"}
+        cfg["push"] = {"cwd": "/mnt/mailbus"}
         data_dir = os.path.join(os.path.dirname(__file__), "..", "store")
-        cmd = build_push_command("lingyun", cfg, TYPES, data_dir=data_dir)
+        cmd = build_push_command("agent-h", cfg, TYPES, data_dir=data_dir)
         self.assertIn("bash -lc", cmd)
         self.assertIn("claude", cmd)
         self.assertIn("-p", cmd)
@@ -85,11 +85,11 @@ class TestClaudeLaunch(unittest.TestCase):
     @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="windows")
     def test_interactive_windows_no_exit(self, *_mocks):
         data_dir = os.path.join(os.path.dirname(__file__), "..", "store")
-        cmd = build_interactive_command("lingyun", AGENT_CFG, TYPES, data_dir=data_dir)
+        cmd = build_interactive_command("agent-h", AGENT_CFG, TYPES, data_dir=data_dir)
         self.assertIn("NoExit", cmd)
         self.assertIn("claude", cmd)
 
-    def test_lingyan_push_uses_dontask_tools(self):
+    def test_dontask_push_flags_from_config(self):
         cfg = {
             "type": "claude_code",
             "models": ["minimax-m2"],
@@ -97,31 +97,34 @@ class TestClaudeLaunch(unittest.TestCase):
                 "permission_mode": "dontAsk",
                 "push_flags": '--allowedTools "Bash,Read,Glob,Grep"',
             },
-            "push": {"cwd": r"E:\ai_tools"},
+            "push": {"cwd": r"<PROJECT_ROOT>"},
         }
         from lib.adapters.frameworks.claude_launch import _claude_push_flags
 
-        flags = _claude_push_flags("lingyan", cfg, TYPES, "minimax-m2")
+        flags = _claude_push_flags("agent-h", cfg, TYPES, "minimax-m2")
         self.assertIn("dontAsk", flags)
         self.assertIn("Bash,Read,Glob,Grep", flags)
         self.assertNotIn("acceptEdits", flags)
 
-    def test_lingyun_push_uses_dontask_tools(self):
+    def test_dontask_push_allowed_tools(self):
         cfg = {
             "type": "claude_code",
-            "claude": {"permission_mode": "dontAsk"},
-            "push": {"cwd": r"E:\ai_tools"},
+            "claude": {
+                "permission_mode": "dontAsk",
+                "push_allowed_tools": "Bash,Read,Write,Glob,Grep,Edit",
+            },
+            "push": {"cwd": r"<PROJECT_ROOT>"},
         }
         from lib.adapters.frameworks.claude_launch import _claude_push_flags, _claude_push_argv_parts
 
-        flags = _claude_push_flags("lingyun", cfg, TYPES, None)
+        flags = _claude_push_flags("agent-h", cfg, TYPES, None)
         self.assertIn("dontAsk", flags)
         self.assertIn("Bash,Read,Write,Glob,Grep,Edit", flags)
-        argv = _claude_push_argv_parts("lingyun", cfg, TYPES, None, "hi")
+        argv = _claude_push_argv_parts("agent-h", cfg, TYPES, None, "hi")
         idx = argv.index("--allowedTools")
         self.assertEqual(argv[idx + 1], "Bash,Read,Write,Glob,Grep,Edit")
 
-    def test_lingyun_interactive_uses_accept_edits(self):
+    def test_dontask_interactive_overrides_accept_edits(self):
         cfg = {
             "type": "claude_code",
             "claude": {
@@ -129,25 +132,25 @@ class TestClaudeLaunch(unittest.TestCase):
                 "interactive_permission_mode": "acceptEdits",
             },
         }
-        flags = _interactive_claude_flags("lingyun", cfg, TYPES)
+        flags = _interactive_claude_flags("agent-h", cfg, TYPES)
         self.assertIn("acceptEdits", flags)
         self.assertNotIn("dontAsk", flags)
         self.assertNotIn("--allowedTools", flags)
 
-    def test_lingyun_push_uses_accept_edits(self):
+    def test_push_accept_edits_default(self):
         cfg = {
             "type": "claude_code",
             "claude": {"permission_mode": "acceptEdits"},
         }
         from lib.adapters.frameworks.claude_launch import _claude_push_flags
 
-        flags = _claude_push_flags("lingyun", cfg, TYPES, None)
+        flags = _claude_push_flags("agent-h", cfg, TYPES, None)
         self.assertIn("acceptEdits", flags)
 
     def test_host_cli_active_detects_print_mode(self):
-        ps = "hopew 123 claude -p 'mailbus task' --permission-mode acceptEdits\n"
+        ps = "user 123 claude -p 'mailbus task' --permission-mode acceptEdits\n"
         self.assertTrue(host_cli_active(ps))
-        self.assertFalse(host_cli_active("hopew 1 tail -f /dev/null\n"))
+        self.assertFalse(host_cli_active("user 1 tail -f /dev/null\n"))
 
     @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="windows")
     @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="windows")
@@ -156,16 +159,16 @@ class TestClaudeLaunch(unittest.TestCase):
             self.skipTest("Windows-only direct push")
         data_dir = os.path.join(os.path.dirname(__file__), "..", "store")
         spec = try_build_push_direct(
-            "lingyun",
+            "agent-h",
             AGENT_CFG,
             TYPES,
             data_dir=data_dir,
-            prompt="line1\nit's quoted\npath=E:/ai_tools",
+            prompt="line1\nit's quoted\npath=<PROJECT_ROOT>",
         )
         self.assertIsNotNone(spec)
         self.assertIn("-p", spec["argv"])
         idx = spec["argv"].index("-p")
-        self.assertEqual(spec["argv"][idx + 1], "line1\nit's quoted\npath=E:/ai_tools")
+        self.assertEqual(spec["argv"][idx + 1], "line1\nit's quoted\npath=<PROJECT_ROOT>")
         self.assertIn("CLAUDE_CONFIG_DIR", spec["env"])
         self.assertTrue(spec["cwd"])
         self.assertTrue(spec["argv"][0].lower().endswith("claude.exe"))
@@ -177,7 +180,7 @@ class TestClaudeLaunch(unittest.TestCase):
     def test_try_build_push_direct_on_linux(self, *_mocks):
         data_dir = os.path.join(os.path.dirname(__file__), "..", "store")
         spec = try_build_push_direct(
-            "lingyun",
+            "agent-h",
             AGENT_CFG,
             TYPES,
             data_dir=data_dir,

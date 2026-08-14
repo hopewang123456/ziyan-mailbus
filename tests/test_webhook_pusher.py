@@ -1,5 +1,5 @@
 """
-ziyan-mailbus Webhook 推送测试
+mailbus-mailbus Webhook 推送测试
 
 使用 http.server 模拟 Webhook 服务端来测试推送流程。
 """

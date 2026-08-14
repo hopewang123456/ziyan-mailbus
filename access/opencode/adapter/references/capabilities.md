@@ -9,7 +9,7 @@
 ## 不能做
 
 - auto_ack（adapter 层禁止）
-- 替代 lingyun 的超大跨仓库 refactor（应改派 pro）
+- 替代 pro 编码的超大跨仓库 refactor（应改派 pro）
 - 修改 mailbus 规则/adapter（除非工单明确）
 
 ## 会话
@@ -19,4 +19,4 @@
 
 ## 队友
 
-- 大壮（Aider）：替补 review → `opencode/message-dali-dazhuang.md`
+- 审查备选：`opencode/message-review.md`

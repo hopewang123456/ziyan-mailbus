@@ -57,7 +57,7 @@ class TestCodeReviewPlanner(unittest.TestCase):
         self.assertEqual(rts[0], 5)
         self.assertIn(12, rts)
 
-    def test_security_finding_adds_lingjin(self):
+    def test_security_finding_adds_reviewer(self):
         out = plan_tier0({
             "mode": "auto",
             "task_type": "code_review",
@@ -123,7 +123,7 @@ class TestHttpA2AClient(unittest.TestCase):
 
         with patch("lib.core.a2a.http_a2a.urlrequest.urlopen", fake_urlopen):
             out = client.send_message({
-                "task_id": "t1", "step_id": "s1", "to_agent": "lingzhao",
+                "task_id": "t1", "step_id": "s1", "to_agent": "agent-a",
                 "role_type": 1, "intent": "hello",
             })
         self.assertEqual(out["task"]["id"], "a2a-remote-1")

@@ -9,14 +9,14 @@ from lib.infra.utils import json_read
 def test_create():
     with tempfile.TemporaryDirectory() as td:
         t = TaskTracker(td)
-        task = t.create("task-test-001", summary="测试", assignee="小七")
+        task = t.create("task-test-001", summary="测试", assignee="agent-c")
         assert task["task_id"] == "task-test-001"
         # 有 assignee 时会初始化 pipeline chain，任务直接进入 running 且需审计
         assert task["status"] == "running"
         assert task.get("requires_audit") is True
         assert task.get("chain") and len(task["chain"]) == 1
         assert task["summary"] == "测试"
-        assert task["assignee"] == "小七"
+        assert task["assignee"] == "agent-c"
     print("  ✓ test_create")
 
 
@@ -63,20 +63,20 @@ def test_add_hop():
         json_write(t._task_path("task-hop-001"), {
             "task_id": "task-hop-001",
             "summary": "",
-            "assignee": "灵瑾",
+            "assignee": "agent-a",
             "status": "running",
-            "chain": [{"agent": "灵瑾", "action": "发起", "status": "done", "at": ts}],
+            "chain": [{"agent": "agent-a", "action": "发起", "status": "done", "at": ts}],
             "requires_audit": False,
             "created_at": ts,
             "updated_at": ts,
         })
-        t.add_hop("task-hop-001", "小七", "转发给一哥")
-        t.add_hop("task-hop-001", "一哥", "执行并回复")
+        t.add_hop("task-hop-001", "agent-c", "转发给agent-g")
+        t.add_hop("task-hop-001", "agent-g", "执行并回复")
         task = t.get("task-hop-001")
         assert len(task["chain"]) == 3
-        assert task["chain"][0]["agent"] == "灵瑾"
-        assert task["chain"][1]["agent"] == "小七"
-        assert task["chain"][2]["agent"] == "一哥"
+        assert task["chain"][0]["agent"] == "agent-a"
+        assert task["chain"][1]["agent"] == "agent-c"
+        assert task["chain"][2]["agent"] == "agent-g"
     print("  ✓ test_add_hop")
 
 
@@ -94,9 +94,9 @@ def test_check_reminders_normal():
     """催办没到时不应触发"""
     with tempfile.TemporaryDirectory() as td:
         t = TaskTracker(td)
-        t.create("task-norm-001", assignee="小七")
+        t.create("task-norm-001", assignee="agent-c")
         t.update_status("task-norm-001", "running")
-        agents = {"小七": {"name": "小七"}}
+        agents = {"agent-c": {"name": "agent-c"}}
         # reminder_minutes=5，刚创建不可能超过 5 分钟
         escalated = t.check_reminders(agents, reminder_minutes=5)
         assert len(escalated) == 0
@@ -107,9 +107,9 @@ def test_check_reminders_trigger():
     """催办触发"""
     with tempfile.TemporaryDirectory() as td:
         t = TaskTracker(td)
-        t.create("task-trig-001", summary="需要催办", assignee="小七")
+        t.create("task-trig-001", summary="需要催办", assignee="agent-c")
         t.update_status("task-trig-001", "running")
-        agents = {"小七": {"name": "小七"}}
+        agents = {"agent-c": {"name": "agent-c"}}
         # 设 reminder_minutes=0，立刻触发
         escalated = t.check_reminders(agents, reminder_minutes=0)
         assert len(escalated) == 1
@@ -121,7 +121,7 @@ def test_check_reminders_timeout():
     """催办超限自动 timeout"""
     with tempfile.TemporaryDirectory() as td:
         t = TaskTracker(td)
-        t.create("task-to-001", assignee="小七")
+        t.create("task-to-001", assignee="agent-c")
         t.update_status("task-to-001", "running")
         # create() 会挂 pipeline chain；有活跃 running step 时故意跳过 timeout
         task = t.get("task-to-001")
@@ -132,7 +132,7 @@ def test_check_reminders_timeout():
         t.increment_reminder("task-to-001")
         t.increment_reminder("task-to-001")
         t.increment_reminder("task-to-001")  # 已超过 max_reminders=3
-        agents = {"小七": {"name": "小七"}}
+        agents = {"agent-c": {"name": "agent-c"}}
         escalated = t.check_reminders(agents, reminder_minutes=0, max_reminders=3)
         task = t.get("task-to-001")
         assert task["status"] == "timeout"
@@ -234,12 +234,12 @@ def test_add_audit_with_new_fields():
     """测试增强的审计记录（含 category/severity/affected_components）"""
     with tempfile.TemporaryDirectory() as td:
         t = TaskTracker(td)
-        t.create("task-audit-new-001", summary="代码审查测试", assignee="lingxiao")
+        t.create("task-audit-new-001", summary="代码审查测试", assignee="agent-g")
         t.update_status("task-audit-new-001", "success")
 
         task = t.add_audit(
             task_id="task-audit-new-001",
-            reviewer="lingjian",
+            reviewer="agent-e",
             result="pass",
             issues=[{"desc": "代码风格良好", "severity": "low", "file": "lib/tracker.py"}],
             summary="首次审查通过",
@@ -250,7 +250,7 @@ def test_add_audit_with_new_fields():
         assert task is not None
         assert len(task["audit_log"]) == 1
         entry = task["audit_log"][0]
-        assert entry["reviewer"] == "lingjian"
+        assert entry["reviewer"] == "agent-e"
         assert entry["result"] == "pass"
         assert entry["category"] == "code_review"
         assert entry["severity"] == "high"
@@ -269,13 +269,13 @@ def test_audit_stats():
         # 创建任务并添加审计记录
         for i in range(5):
             tid = f"task-stats-{i:03d}"
-            t.create(tid, summary=f"测试任务{i}", assignee="lingxiao")
+            t.create(tid, summary=f"测试任务{i}", assignee="agent-g")
             t.update_status(tid, "success")
 
         # 给其中 3 个任务加审计
-        t.add_audit("task-stats-000", "lingjian", "pass", category="code_review")
-        t.add_audit("task-stats-001", "lingjian", "pass", category="code_review")
-        t.add_audit("task-stats-002", "lingyan", "fail", category="security",
+        t.add_audit("task-stats-000", "agent-e", "pass", category="code_review")
+        t.add_audit("task-stats-001", "agent-e", "pass", category="code_review")
+        t.add_audit("task-stats-002", "agent-f", "fail", category="security",
                      severity="critical", issues=[{"desc": "安全漏洞"}])
 
         stats = t.audit_stats()
@@ -287,8 +287,8 @@ def test_audit_stats():
         assert stats["warn_count"] == 0
         assert stats["pass_rate"] == 66.7
         assert stats["total_audit_entries"] == 3
-        assert stats["by_reviewer"]["lingjian"]["total"] == 2
-        assert stats["by_reviewer"]["lingyan"]["total"] == 1
+        assert stats["by_reviewer"]["agent-e"]["total"] == 2
+        assert stats["by_reviewer"]["agent-f"]["total"] == 1
         assert stats["by_category"]["code_review"] == 2
         assert stats["by_category"]["security"] == 1
         assert stats["by_severity"]["critical"] == 1
@@ -301,15 +301,15 @@ def test_list_pending_audit():
     with tempfile.TemporaryDirectory() as td:
         t = TaskTracker(td)
 
-        t.create("task-pend-001", summary="已完成未审计", assignee="lingxiao")
+        t.create("task-pend-001", summary="已完成未审计", assignee="agent-g")
         t.update_status("task-pend-001", "success")
 
-        t.create("task-pend-002", summary="进行中无需审计", assignee="lingxiao")
+        t.create("task-pend-002", summary="进行中无需审计", assignee="agent-g")
         t.update_status("task-pend-002", "running")
 
-        t.create("task-pend-003", summary="已审计任务", assignee="lingxiao")
+        t.create("task-pend-003", summary="已审计任务", assignee="agent-g")
         t.update_status("task-pend-003", "success")
-        t.add_audit("task-pend-003", "lingjian", "pass")
+        t.add_audit("task-pend-003", "agent-e", "pass")
 
         pending = t.list_pending_audit()
         assert len(pending) == 1
@@ -329,10 +329,10 @@ def test_audit_trend_day():
         task_path = os.path.join(tasks_dir, "task-trend-day-001.json")
         task_data = json_read(task_path, {})
         task_data["audit_log"] = [
-            {"reviewer": "lingjian", "result": "pass", "at": "2026-06-01T10:00:00+0800", "category": "code_review"},
-            {"reviewer": "lingyan", "result": "pass", "at": "2026-06-01T11:00:00+0800", "category": "security"},
-            {"reviewer": "lingjian", "result": "fail", "at": "2026-06-02T10:00:00+0800", "category": "code_review"},
-            {"reviewer": "lingyan", "result": "warn", "at": "2026-06-03T10:00:00+0800", "category": "performance"},
+            {"reviewer": "agent-e", "result": "pass", "at": "2026-06-01T10:00:00+0800", "category": "code_review"},
+            {"reviewer": "agent-f", "result": "pass", "at": "2026-06-01T11:00:00+0800", "category": "security"},
+            {"reviewer": "agent-e", "result": "fail", "at": "2026-06-02T10:00:00+0800", "category": "code_review"},
+            {"reviewer": "agent-f", "result": "warn", "at": "2026-06-03T10:00:00+0800", "category": "performance"},
         ]
         json_write(task_path, task_data)
 
@@ -366,9 +366,9 @@ def test_audit_trend_week():
         task_path = os.path.join(tasks_dir, "task-trend-week-001.json")
         task_data = json_read(task_path, {})
         task_data["audit_log"] = [
-            {"reviewer": "lingjian", "result": "pass", "at": "2026-06-01T10:00:00+0800"},  # W23
-            {"reviewer": "lingjian", "result": "pass", "at": "2026-06-02T10:00:00+0800"},  # W23
-            {"reviewer": "lingyan", "result": "fail", "at": "2026-06-08T10:00:00+0800"},    # W24
+            {"reviewer": "agent-e", "result": "pass", "at": "2026-06-01T10:00:00+0800"},  # W23
+            {"reviewer": "agent-e", "result": "pass", "at": "2026-06-02T10:00:00+0800"},  # W23
+            {"reviewer": "agent-f", "result": "fail", "at": "2026-06-08T10:00:00+0800"},    # W24
         ]
         json_write(task_path, task_data)
 
@@ -395,9 +395,9 @@ def test_audit_trend_month():
         task_path = os.path.join(tasks_dir, "task-trend-month-001.json")
         task_data = json_read(task_path, {})
         task_data["audit_log"] = [
-            {"reviewer": "lingjian", "result": "pass", "at": "2026-06-01T10:00:00+0800"},
-            {"reviewer": "lingyan", "result": "fail", "at": "2026-06-15T10:00:00+0800"},
-            {"reviewer": "lingyan", "result": "pass", "at": "2026-07-01T10:00:00+0800"},
+            {"reviewer": "agent-e", "result": "pass", "at": "2026-06-01T10:00:00+0800"},
+            {"reviewer": "agent-f", "result": "fail", "at": "2026-06-15T10:00:00+0800"},
+            {"reviewer": "agent-f", "result": "pass", "at": "2026-07-01T10:00:00+0800"},
         ]
         json_write(task_path, task_data)
 
@@ -441,14 +441,14 @@ def test_list_by_filters():
     with tempfile.TemporaryDirectory() as td:
         t = TaskTracker(td)
 
-        t.create("task-flt-001", summary="任务A", assignee="lingxiao")
+        t.create("task-flt-001", summary="任务A", assignee="agent-g")
         t.update_status("task-flt-001", "success")
-        t.add_audit("task-flt-001", "lingjian", "pass")
+        t.add_audit("task-flt-001", "agent-e", "pass")
 
-        t.create("task-flt-002", summary="任务B", assignee="dali")
+        t.create("task-flt-002", summary="任务B", assignee="agent-i")
         t.update_status("task-flt-002", "running")
 
-        t.create("task-flt-003", summary="任务C", assignee="lingxiao")
+        t.create("task-flt-003", summary="任务C", assignee="agent-g")
         t.update_status("task-flt-003", "success")
 
         # 按状态过滤
@@ -456,7 +456,7 @@ def test_list_by_filters():
         assert result["total"] == 2
 
         # 按负责人过滤
-        result = t.list_by_filters(assignee="dali")
+        result = t.list_by_filters(assignee="agent-i")
         assert result["total"] == 1
         assert result["tasks"][0]["task_id"] == "task-flt-002"
 
@@ -470,7 +470,7 @@ def test_list_by_filters():
         assert result["tasks"][0]["task_id"] == "task-flt-003"
 
         # 按审查人过滤
-        result = t.list_by_filters(reviewer="lingjian")
+        result = t.list_by_filters(reviewer="agent-e")
         assert result["total"] == 1
         assert result["tasks"][0]["task_id"] == "task-flt-001"
 

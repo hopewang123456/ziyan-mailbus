@@ -36,7 +36,7 @@ def test_smart_routing_disabled():
     assert not smart_routing_enabled(cfg)
     alias = pick_model_alias(
         {"type": "task", "content": "x" * 2000, "id": "m1"},
-        "lingzhao", {"models": ["deepseek-flash"], "type": "hermes_profile"},
+        "agent-a", {"models": ["deepseek-flash"], "type": "hermes_profile"},
         config=cfg,
     )
     assert alias == TIER_FLASH
@@ -52,7 +52,7 @@ def test_ollama_tier_l1(mock_ready):
     routing = {}
     alias = pick_model_alias(
         {"type": "task", "id": "m1", "content": "常规开发任务说明"},
-        "lingzhao", agent, config=cfg, routing_out=routing,
+        "agent-a", agent, config=cfg, routing_out=routing,
     )
     assert alias == TIER_OLLAMA
     assert routing.get("ollama_ready") is True
@@ -100,7 +100,7 @@ def test_log_routing_jsonl():
         log_routing_decision(
             tmp,
             {"complexity_tier": "L1", "model_alias": "ollama-local"},
-            agent_name="lingzhao",
+            agent_name="agent-a",
             config={"smart_routing": {"log_decisions": True}},
         )
         assert os.path.isfile(os.path.join(tmp, "logs", "smart-routing.jsonl"))

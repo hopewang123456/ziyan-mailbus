@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import subprocess
 import sys
 import time
 
@@ -115,13 +116,12 @@ def _start_wsl_interactive(cmd: str, title: str) -> bool:
         print(f"Launched {title} (cli) [docker-wsl bridge]")
         return True
     ts = int(time.time())
-    script = f"/tmp/launch-window-{ts}.sh"
     body = (
         "#!/bin/bash\nset +e\n"
+        f"echo '[mailbus] {title}'\n"
         f"{cmd}\n"
         'read -p "按 Enter 键关闭窗口..." _\n'
     )
-    # 写入 WSL 可访问路径
     if sys.platform == "win32":
         from lib.adapters.plane.platform_runner import wsl_exe
         from lib.infra.utils import to_wsl_path
@@ -134,17 +134,30 @@ def _start_wsl_interactive(cmd: str, title: str) -> bool:
         wsl = wsl_exe()
         if not wsl:
             return False
-        # start 新开窗口后立即返回，避免 subprocess 挂起
-        return (
-            run(
-                ["cmd", "/c", "start", "\"\"", wsl, "-e", "bash", script],
-                timeout=15,
-            ).returncode
-            == 0
-        )
-    with open(script, "w", encoding="utf-8", newline="\n") as fh:
+        wt = os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WindowsApps\wt.exe")
+        try:
+            if os.path.isfile(wt):
+                subprocess.Popen(
+                    [wt, "new-tab", "--title", title, wsl, "-d", "Ubuntu", "-e", "bash", script],
+                    close_fds=True,
+                )
+                return True
+            subprocess.Popen(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    f"Start-Process -FilePath '{wsl}' -ArgumentList '-d','Ubuntu','-e','bash','{script}'",
+                ],
+                close_fds=True,
+            )
+            return True
+        except OSError:
+            return False
+    with open(f"/tmp/launch-window-{ts}.sh", "w", encoding="utf-8", newline="\n") as fh:
         fh.write(body)
-    os.chmod(script, 0o755)
+    os.chmod(f"/tmp/launch-window-{ts}.sh", 0o755)
+    script = f"/tmp/launch-window-{ts}.sh"
     ps = "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
     if os.path.isfile(ps):
         run([ps, "-Command", f"Start-Process wsl.exe -ArgumentList '-d','Ubuntu','-e','bash','{script}'"], timeout=15)
@@ -166,7 +179,7 @@ def _ensure_codex_container(agent_key: str, cfg: dict, wait_sec: int) -> str:
 
 def _launch_browser(agent_key: str, data_dir: str, merged: dict, cfg: dict) -> int:
     kind = merged.get("kind", "none")
-    token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "ziyan-team")
+    token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "change-me")
 
     if kind in ("codex_desktop", "codex_web", "codex_ui", "codex_docker"):
         wait_sec = int(merged.get("start_wait_seconds", 15))
@@ -211,7 +224,10 @@ def _launch_browser(agent_key: str, data_dir: str, merged: dict, cfg: dict) -> i
         return 0
 
     if kind == "openclaw_gateway":
+        from lib.adapters.config.browser_auth import openclaw_gateway_token
+
         port = OpenClawAdapter.resolve_gateway_port(agent_key, merged)
+        token = openclaw_gateway_token() or os.environ.get("OPENCLAW_GATEWAY_TOKEN", "change-me")
         url = f"http://127.0.0.1:{port}/chat?token={token}"
         if not probe_http(f"http://127.0.0.1:{port}/", ok_codes=frozenset({200, 401, 403, 404})):
             start_cmd = merged.get("start_command", "")
@@ -252,8 +268,10 @@ def _launch_browser(agent_key: str, data_dir: str, merged: dict, cfg: dict) -> i
         print(f"Launched {agent_key} (browser) {url}")
         return 0
 
-    print(f"[ERROR] 未知 browser kind '{kind}' for agent {agent_key}", file=sys.stderr)
-    return 1
+    if kind in ("none", "", None) or not kind:
+        # CLI-only agents (opencode / cursor)：无浏览器属预期，勿 500
+        print(f"[INFO] agent {agent_key} has no browser (kind={kind!r})")
+        return 0
 
 
 def _python_exe() -> str:

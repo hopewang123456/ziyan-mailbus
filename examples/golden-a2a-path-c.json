@@ -1,0 +1,69 @@
+{
+  "schema": "mailbus-golden-a2a-path-v1",
+  "path": "c",
+  "scenario": {
+    "can_deliver_a2a": true,
+    "label": "input-required"
+  },
+  "canonical_dispatch": {
+    "task_id": "feat-gate-001",
+    "step_id": "s2",
+    "role_type": 2,
+    "to_agent": "agent-b",
+    "intent": "need human",
+    "message_id": "msg-c-001"
+  },
+  "wire": {
+    "get_task_terminal": {
+      "id": "a2a-task-c-001",
+      "status": "input-required",
+      "statusMessage": "Awaiting approval"
+    },
+    "resolve_send_message": {
+      "params": {
+        "message": {
+          "messageId": "resolve-c-001",
+          "role": "ROLE_AGENT",
+          "parts": [
+            {
+              "text": "approved"
+            }
+          ],
+          "metadata": {
+            "mailbus": {
+              "agentId": "agent-a",
+              "displayName": "Agent A",
+              "roleType": 2,
+              "hqType": "a2a_input_required",
+              "hqId": "hq-1",
+              "taskId": "feat-gate-001",
+              "stepId": "s2",
+              "protocolVersion": "mailbus-a2a/1"
+            }
+          }
+        }
+      }
+    }
+  },
+  "canonical_step_result": {
+    "task_id": "feat-gate-001",
+    "step_id": "s2",
+    "agent": "agent-b",
+    "role_type": 2,
+    "conclusion": "pending",
+    "summary": "Awaiting approval",
+    "source": "a2a_standard",
+    "transport_used": "a2a_standard",
+    "a2a_task_id": "a2a-task-c-001",
+    "timestamp": "2026-01-01T00:00:00Z"
+  },
+  "human_queue": {
+    "id": "hq-1",
+    "task_id": "feat-gate-001",
+    "step_id": "s2",
+    "agent": "agent-a",
+    "status": "pending",
+    "type": "a2a_input_required",
+    "prompt": "Awaiting approval"
+  }
+}

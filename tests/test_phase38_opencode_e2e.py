@@ -16,7 +16,7 @@ from lib.infra.utils import json_write
 
 
 class TestPhase38OpencodeE2E(unittest.TestCase):
-    """模拟 dali pipeline：push → reply+patch → normalizer → msg-results → FSM 可读。"""
+    """模拟 agent-i pipeline：push → reply+patch → normalizer → msg-results → FSM 可读。"""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
@@ -25,23 +25,23 @@ class TestPhase38OpencodeE2E(unittest.TestCase):
         os.makedirs(os.path.join(self.tmp, "replies"), exist_ok=True)
         os.makedirs(os.path.join(self.tmp, "patches"), exist_ok=True)
         os.makedirs(os.path.join(self.tmp, "msg-results", self.tid), exist_ok=True)
-        os.makedirs(os.path.join(self.tmp, "inbox", "dali"), exist_ok=True)
+        os.makedirs(os.path.join(self.tmp, "inbox", "agent-i"), exist_ok=True)
         os.makedirs(os.path.join(self.tmp, "tasks"), exist_ok=True)
         json_write(os.path.join(self.tmp, "config.json"), {
-            "agents": {"dali": {"type": "opencode", "name": "大力"}},
+            "agents": {"agent-i": {"type": "opencode", "name": "Opencode Dev"}},
             "framework_delivery": {"opencode": {"enabled": True, "sources": ["replies", "patches"]}},
         })
         task = {
             "task_id": self.tid,
             "status": "running",
-            "assignee": "dali",
+            "assignee": "agent-i",
             "chain": [{
                 "step": 1,
                 "step_id": self.sid,
                 "status": "running",
                 "fsm_state": "awaiting_result",
-                "to_agent": "dali",
-                "to_person": "dali",
+                "to_agent": "agent-i",
+                "to_person": "agent-i",
                 "to_role": "编码",
                 "started_at": "2026-06-01T00:00:00+08:00",
             }],
@@ -49,8 +49,8 @@ class TestPhase38OpencodeE2E(unittest.TestCase):
         ensure_fsm(task)
         json_write(os.path.join(self.tmp, "tasks", f"{self.tid}.json"), task)
         self.msg_id = "msg-e2e-courier"
-        json_write(os.path.join(self.tmp, "inbox", "dali", "inbox.json"), {
-            "agent": "dali",
+        json_write(os.path.join(self.tmp, "inbox", "agent-i", "inbox.json"), {
+            "agent": "agent-i",
             "messages": [{
                 "id": self.msg_id,
                 "task_id": self.tid,
@@ -67,7 +67,7 @@ class TestPhase38OpencodeE2E(unittest.TestCase):
 
     def test_phantom_reply_blocked_without_results(self):
         entry = {"id": self.msg_id, "type": "task", "content": "done"}
-        ok, reason = verify_file_task_delivery(self.tmp, "dali", entry, reply_text="已完成")
+        ok, reason = verify_file_task_delivery(self.tmp, "agent-i", entry, reply_text="已完成")
         self.assertFalse(ok)
         self.assertEqual(reason, "phantom_reply_text")
         self.assertTrue(is_phantom_reply_text("已完成", msg_type="task"))
@@ -77,14 +77,14 @@ class TestPhase38OpencodeE2E(unittest.TestCase):
         with open(patch_path, "w", encoding="utf-8") as f:
             f.write("diff --git a/courier.py b/courier.py\n+print('ok')\n")
         reply = {
-            "agent": "dali",
+            "agent": "agent-i",
             "msg_ids": [self.msg_id],
             "reply": "game-courier 模块已实现，见 patch",
             "patch": patch_path,
             "started_at": "2026-06-26T10:00:00+08:00",
             "timestamp": "2026-06-26T11:00:00+08:00",
         }
-        n = normalize_from_reply_record(self.tmp, "dali", reply)
+        n = normalize_from_reply_record(self.tmp, "agent-i", reply)
         self.assertEqual(n, 1)
         step = {"step_id": self.sid}
         result = read_step_result(self.tmp, self.tid, step)
@@ -98,28 +98,28 @@ class TestPhase38OpencodeE2E(unittest.TestCase):
         self.assertTrue(out.get("ok"), out)
 
     def test_batch_normalizer_from_replies_file(self):
-        json_write(os.path.join(self.tmp, "replies", "dali.json"), {
-            "agent": "dali",
+        json_write(os.path.join(self.tmp, "replies", "agent-i.json"), {
+            "agent": "agent-i",
             "msg_ids": [self.msg_id],
             "reply": "courier done",
         })
-        stats = normalize_opencode_deliveries(self.tmp, {"dali": {"type": "opencode"}})
+        stats = normalize_opencode_deliveries(self.tmp, {"agent-i": {"type": "opencode"}})
         self.assertGreaterEqual(stats.get("total", 0), 1)
         result = read_step_result(self.tmp, self.tid, {"step_id": self.sid})
         self.assertIsNotNone(result)
 
     def test_pipeline_inbox_not_done_without_step_result(self):
         from lib.domain.models import Inbox, MsgStatus
-        inbox = Inbox(agent="dali")
+        inbox = Inbox(agent="agent-i")
         inbox.messages.append({
             "id": self.msg_id,
-            "to": "dali",
+            "to": "agent-i",
             "task_id": self.tid,
             "type": "task",
             "state": MsgStatus.PROCESSING,
             "content": f"【{self.tid}】 step_id={self.sid}\n结果写入: msg-results/{self.tid}/step-{self.sid}.json",
         })
-        allowed, _reason = pipeline_inbox_may_mark_done(self.tmp, "dali", inbox.messages[0])
+        allowed, _reason = pipeline_inbox_may_mark_done(self.tmp, "agent-i", inbox.messages[0])
         self.assertFalse(allowed)
 
 

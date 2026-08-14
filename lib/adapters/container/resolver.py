@@ -24,7 +24,7 @@ def resolve_container(agent_cfg: dict, agent_name: str, default_service: str) ->
         return os.environ[env_key]
     from lib.adapters.config.compose_registry import resolve_compose_service
 
-    # 逻辑名 codex-agent/opencode-agent → 实际 compose service（lingxiao/dali）
+    # 逻辑名 codex-agent/opencode-agent → 实际 compose service
     resolved = resolve_compose_service(agent_name, docker_cfg)
     if not resolved or resolved == agent_name:
         fallback = (docker_cfg.get("service") or default_service or agent_name or "").strip()

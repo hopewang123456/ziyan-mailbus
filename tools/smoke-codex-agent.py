@@ -2,8 +2,8 @@
 """Codex agent 冒烟 — DeepSeek 网关 + AgentMemory + 人设 + 落盘探针。
 
 用法（WSL）:
-  python3 tools/smoke-codex-agent.py --container docker-agents-lingxiao-1
-  python3 tools/smoke-codex-agent.py --container docker-agents-lingjian-1
+  python3 tools/smoke-codex-agent.py --container docker-agents-codex-web-1
+  python3 tools/smoke-codex-agent.py --container docker-agents-codex-review-1
 """
 from __future__ import annotations
 
@@ -54,14 +54,14 @@ def main() -> int:
     code, out, _ = run(["docker", "exec", c, "bash", "-lc", "grep -q model_catalog_json /home/node/.codex/config.toml && test -f /home/node/.codex/deepseek-model-catalog.json && echo ok"])
     check("config.toml model catalog", code == 0 and "ok" in out)
 
-    code, out, _ = run(["docker", "exec", c, "bash", "-lc", "test -d /home/node/.codex/skills/lingxiao-identity -o -d /home/node/.codex/skills/github && echo ok"])
+    code, out, _ = run(["docker", "exec", c, "bash", "-lc", "test -d /home/node/.codex/skills/codex-identity -o -d /home/node/.codex/skills/github && echo ok"])
     check("skills mount", code == 0 and "ok" in out)
 
     code, out, _ = run(["docker", "exec", c, "bash", "-lc", "test -w /home/node/.codex/skills && echo ok"])
     check("skills writable", code == 0 and "ok" in out)
 
-    web_port = 9240 if "lingxiao" in c else 9241
-    ttyd_port = 9250 if "lingxiao" in c else 9251
+    web_port = 9240 if "codex-web" in c else 9241
+    ttyd_port = 9250 if "codex-web" in c else 9251
     code, out, _ = run(["curl", "-sf", f"http://127.0.0.1:{web_port}/"], timeout=15)
     check(f"codex ui :{web_port}", code == 0 and "html" in (out or "").lower())
     code, out, _ = run(["curl", "-sf", f"http://127.0.0.1:{ttyd_port}/"], timeout=15)

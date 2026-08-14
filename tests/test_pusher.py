@@ -19,17 +19,17 @@ TYPES = {
 
 
 def test_resolve_cli_hermes_profile():
-    cfg = {"type": "hermes_profile", "profile": "lingxi"}
-    cmd = resolve_cli(cfg, TYPES, agent_name="lingxi")
+    cfg = {"type": "hermes_profile", "profile": "agent-d"}
+    cmd = resolve_cli(cfg, TYPES, agent_name="agent-d")
     assert "docker-agents-hermes-1" in cmd
-    assert "--profile lingxi" in cmd
+    assert "--profile agent-d" in cmd
     assert "-q 'MSG'" in cmd
     print("  ✓ test_resolve_cli_hermes_profile")
 
 
 def test_resolve_cli_openclaw():
     cfg = {"type": "openclaw", "agent": "main"}
-    cmd = resolve_cli(cfg, TYPES, agent_name="xiaoqi")
+    cmd = resolve_cli(cfg, TYPES, agent_name="agent-m")
     assert "openclaw agent" in cmd
     assert "--agent main" in cmd
     print("  ✓ test_resolve_cli_openclaw")
@@ -37,7 +37,7 @@ def test_resolve_cli_openclaw():
 
 def test_resolve_cli_model_with_value():
     cfg = {"type": "opencode", "models": ["deepseek-chat"]}
-    cmd = resolve_cli(cfg, TYPES, model_alias="deepseek-chat", agent_name="dali")
+    cmd = resolve_cli(cfg, TYPES, model_alias="deepseek-chat", agent_name="agent-i")
     assert "--model deepseek/deepseek-chat" in cmd
     print("  ✓ test_resolve_cli_model_with_value")
 

@@ -20,8 +20,12 @@ def _log(log: LogFn | None, msg: str) -> None:
 
 
 def list_active_agents(cfg: dict) -> dict[str, dict]:
-    """Agents that are enabled at role level and whose framework is enabled."""
+    """Agents that are enabled at role level and whose framework is enabled.
+
+    三级门禁：角色 enabled（退役/工作）→ 实例 enabled（容器是否监测）→ 框架 registry enabled。
+    """
     frameworks = cfg.get("frameworks") or {}
+    instances = cfg.get("agent_instances") or {}
     agents = cfg.get("agents") or {}
     out = {}
     for aid, ac in agents.items():
@@ -29,6 +33,12 @@ def list_active_agents(cfg: dict) -> dict[str, dict]:
             continue
         if ac.get("enabled") is False:
             continue
+        # 实例级监测开关：disabled → 该实例下所有角色下架（不参与派发/监测，但不删除角色记录）
+        iid = str(ac.get("instance_id") or "").strip()
+        if iid:
+            inst = instances.get(iid)
+            if isinstance(inst, dict) and inst.get("enabled") is False:
+                continue
         fw = str(ac.get("type") or ac.get("framework") or "")
         fw_cfg = frameworks.get(fw) or frameworks.get(fw.replace("_", "-")) or {}
         # If frameworks section missing entry, treat as enabled for backward compat when agent.enabled True

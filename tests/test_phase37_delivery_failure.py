@@ -27,15 +27,15 @@ class TestNotePipelineVerifyFailure(unittest.TestCase):
                     "step_id": "s1",
                     "status": "running",
                     "fsm_state": "awaiting_result",
-                    "to_agent": "dali",
-                    "to_person": "dali",
+                    "to_agent": "agent-i",
+                    "to_person": "agent-i",
                 }],
             }
             with open(os.path.join(tasks, f"{task_id}.json"), "w", encoding="utf-8") as f:
                 json.dump(task, f)
             with open(os.path.join(td, "config.json"), "w", encoding="utf-8") as f:
                 json.dump({"pipeline_ops": {"max_failures_per_step": 3}}, f)
-            note_pipeline_verify_failure(td, task_id, "dali", "msg-1", reason="missing_msg_results")
+            note_pipeline_verify_failure(td, task_id, "agent-i", "msg-1", reason="missing_msg_results")
             updated = TaskTracker(td).get(task_id)
             self.assertEqual(updated["chain"][0].get("delivery_failures"), 1)
 

@@ -65,12 +65,12 @@ class TestExplicitChainTerminal(unittest.TestCase):
                 {
                     "step": 12,
                     "step_id": "s12",
-                    "to_person": "yige",
+                    "to_person": "agent-l",
                     "status": "running",
                     "planned_role_types": [],
                 }
             ],
-            "extensions": {"ziyan": {"workflow": {"workflow_id": "llm_adaptive"}}},
+            "extensions": {"mailbus": {"workflow": {"workflow_id": "llm_adaptive"}}},
         }
         ensure_fsm(task)
         with patch("lib.application.workflow.llm_route.route_next_step") as mock_route:
@@ -96,8 +96,8 @@ class TestStaleTimestamp(unittest.TestCase):
                 "chain": [{
                     "step": 1,
                     "step_id": "s1",
-                    "to_agent": "dali",
-                    "to_person": "dali",
+                    "to_agent": "agent-i",
+                    "to_person": "agent-i",
                     "status": "running",
                     "started_at": "2026-06-25T12:00:00+08:00",
                 }],
@@ -106,7 +106,7 @@ class TestStaleTimestamp(unittest.TestCase):
             json_write(os.path.join(tmp, "config.json"), {})
             result = {
                 "task_id": "t-stale",
-                "agent": "dali",
+                "agent": "agent-i",
                 "pipeline_step": 1,
                 "conclusion": "done",
                 "timestamp": "2026-06-25T10:00:00+08:00",
@@ -128,7 +128,7 @@ class TestStaleTimestamp(unittest.TestCase):
             }
             write_step_result(
                 tmp, "t1", step,
-                {"agent": "dali", "conclusion": "done", "timestamp": "2026-06-25T08:00:00+08:00"},
+                {"agent": "agent-i", "conclusion": "done", "timestamp": "2026-06-25T08:00:00+08:00"},
                 immediate_advance=False,
             )
             path = os.path.join(tmp, "msg-results", "t1", "step-s1.json")
@@ -143,11 +143,11 @@ class TestPhantomInbox(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         tid = "pipe-phantom"
         os.makedirs(os.path.join(self.tmp, "tasks"), exist_ok=True)
-        os.makedirs(os.path.join(self.tmp, "inbox", "dali"), exist_ok=True)
+        os.makedirs(os.path.join(self.tmp, "inbox", "agent-i"), exist_ok=True)
         json_write(os.path.join(self.tmp, "tasks", f"{tid}.json"), {
             "task_id": tid,
             "status": "running",
-            "chain": [{"step": 1, "to_agent": "dali", "to_person": "dali", "status": "running"}],
+            "chain": [{"step": 1, "to_agent": "agent-i", "to_person": "agent-i", "status": "running"}],
         })
         self.tid = tid
 
@@ -161,7 +161,7 @@ class TestPhantomInbox(unittest.TestCase):
             "content": f"【{self.tid}】execute",
             "action": {"execute": True},
         }
-        ok, reason = pipeline_inbox_may_mark_done(self.tmp, "dali", entry)
+        ok, reason = pipeline_inbox_may_mark_done(self.tmp, "agent-i", entry)
         self.assertFalse(ok)
         self.assertEqual(reason, "missing_msg_results")
 
@@ -179,12 +179,12 @@ class TestCooldownAndAuditDefer(unittest.TestCase):
             json_write(os.path.join(tmp, "tasks", f"{tid}.json"), {
                 "task_id": tid,
                 "status": "running",
-                "chain": [{"step": 1, "to_agent": "lingjian", "status": "running"}],
+                "chain": [{"step": 1, "to_agent": "agent-e", "status": "running"}],
             })
             json_write(os.path.join(tmp, "iterations", "iteration-state.json"), {
                 "primary_task_id": tid,
             })
-            self.assertTrue(side_audit_deferred_for_reviewer(tmp, "lingjian"))
+            self.assertTrue(side_audit_deferred_for_reviewer(tmp, "agent-e"))
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
 
@@ -193,7 +193,7 @@ class TestContainerPushBody(unittest.TestCase):
     def test_rewrite_removes_windows_drive(self):
         from lib.infra.utils import rewrite_host_store_refs
 
-        data = r"E:\ai_tools\mail\store"
+        data = r"Z:\mailbus\store"
         text = f"path: {data}\\msg-files\\a.md"
         out = rewrite_host_store_refs(data, text, {"type": "hermes_profile"})
         self.assertNotIn("E:\\", out)

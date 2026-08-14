@@ -29,7 +29,10 @@ def resolve_channel(agent_id: str, headers: Mapping[str, str], cfg: dict) -> str
         if ch == "webhook":
             return "webhook"
     channels = ac.get("channels") or {}
-    if channels.get("a2a") or ac.get("a2a_endpoint") or ac.get("agent_card_url"):
+    a2a_ch = channels.get("a2a") or {}
+    a2a_declared = bool(a2a_ch or ac.get("a2a_endpoint") or ac.get("agent_card_url"))
+    a2a_available = a2a_ch.get("available") is not False
+    if a2a_declared and a2a_available:
         return "http_a2a"
     if ac.get("webhook_url"):
         return "webhook"

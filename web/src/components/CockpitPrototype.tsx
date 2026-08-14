@@ -60,9 +60,9 @@ const PANEL_KEYS: Record<
   Exclude<PanelId, "mute">,
   { titleKey: I18nKey; blurbZh: string; blurbEn: string }
 > = {
-  home: { titleKey: "home", blurbZh: "子言情境 · 健康指标", blurbEn: "Context · health" },
+  home: { titleKey: "home", blurbZh: "总线情境 · 健康指标", blurbEn: "Context · health" },
   tasks: { titleKey: "tasks", blurbZh: "任务 / 审计 / 人机", blurbEn: "Tasks / audit / human" },
-  agents: { titleKey: "agents", blurbZh: "智能体员工 · 齐套后启用", blurbEn: "Crew · after avatars ready" },
+  agents: { titleKey: "agents", blurbZh: "智能体员工 · 点选测浏览器/终端", blurbEn: "Crew · launch browser / CLI" },
   llm: { titleKey: "llm", blurbZh: "模型配置 | 智能体配置", blurbEn: "Models | Agents" },
   integrations: { titleKey: "integrations", blurbZh: "限界集成 · AgentMemory", blurbEn: "Integrations · AgentMemory" },
   bus: { titleKey: "bus", blurbZh: "通道 · 路径 · 权限 · A2A", blurbEn: "Channels · paths · permission · A2A" },

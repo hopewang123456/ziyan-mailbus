@@ -303,7 +303,7 @@ elif [ "$LAUNCH_MODE" = "browser" ]; then
     "openclaw_gateway")
       PORT=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('gateway_port',18789))")
       URL="http://localhost:${PORT}/chat"
-      TOKEN="${OPENCLAW_GATEWAY_TOKEN:-ziyan-team}"
+      TOKEN="${OPENCLAW_GATEWAY_TOKEN:-change-me}"
       URL="${URL}?token=${TOKEN}"
       URL=$(subst_vars "$URL" "port" "$PORT" "agent" "$AGENT_KEY")
       START_CMD=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('start_command',''))")
@@ -325,7 +325,7 @@ elif [ "$LAUNCH_MODE" = "browser" ]; then
     "hermes_dashboard")
       PORT=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('dashboard_port',9119))")
       URL=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('url','http://localhost:{port}/chat'))")
-      HERMES_HOME=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('hermes_home','/mnt/e/hermes-data/.hermes'))")
+      HERMES_HOME=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('hermes_home','<HERMES_DATA>/.hermes'))")
       START_CMD=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('start_command',''))")
       WAIT_SEC=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('start_wait_seconds',15))")
 
@@ -390,7 +390,7 @@ else
         fi
         if [ -n "$CMD" ]; then
           SESSION=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('session','main'))")
-          HERMES_HOME=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('hermes_home','/mnt/e/hermes-data/.hermes'))")
+          HERMES_HOME=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('hermes_home','<HERMES_DATA>/.hermes'))")
           PROFILE_ARGS=$(echo "$CFG" | python3 -c "import json,sys; print(json.load(sys.stdin).get('profile_args',''))")
           CMD=$(subst_vars "$CMD" "session" "$SESSION" "hermes_home" "$HERMES_HOME" "profile_args" "$PROFILE_ARGS" "agent" "$AGENT_KEY")
           start_wsl "$CMD"

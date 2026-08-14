@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions
 chcp 65001 >nul 2>&1
-title ziyan-mailbus - Stop
+title mailbus - Stop
 cd /d "%~dp0..\.."
 if not exist "%CD%\tools\mailbus.py" (
   echo [ERROR] mailbus root not found: %CD%

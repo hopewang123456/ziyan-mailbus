@@ -7,8 +7,8 @@
     "mailbus_api": 9814,
     "agentmemory": 3111,
     "hermes": [9120, 9121, 9122, 9123, 9124, 9125, 9126, 9127],
-    "openclaw_xiaoqi": 18789,
-    "openclaw_yige": 18790,
+    "openclaw_agent_m": 18789,
+    "openclaw_agent_l": 18790,
     "codex_web": [9240, 9241],
     "codex_ttyd": [9250, 9251],
     "claude_ttyd": [9260, 9261]

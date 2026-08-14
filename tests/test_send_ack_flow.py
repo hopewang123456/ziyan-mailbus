@@ -128,7 +128,7 @@ def test_send_msg_api_writes_inbox():
     from lib.api.handlers_inbox import handle_send_msg
 
     mh = MockHandler(tmp, agents, "POST", "/api/send-msg")
-    mh._post_body = {"to": "test_agent", "content": "回归自测消息", "from": "lingyan", "type": "task"}
+    mh._post_body = {"to": "test_agent", "content": "回归自测消息", "from": "agent-f", "type": "task"}
     mh._read_post_body = lambda: mh._post_body
     handle_send_msg(mh)
 
@@ -140,7 +140,7 @@ def test_send_msg_api_writes_inbox():
     assert_eq(len(inbox_data.get("messages", [])), 1, "1 条消息")
     msg = inbox_data["messages"][0]
     assert_eq(msg.get("content"), "回归自测消息", "消息内容正确")
-    assert_eq(msg.get("from"), "lingyan", "发件人正确")
+    assert_eq(msg.get("from"), "agent-f", "发件人正确")
     assert_eq(msg.get("status"), "pending", "初始状态 pending")
 
 
@@ -178,7 +178,7 @@ def test_ack_process_updates_status():
     """Scenario 4: Agent 写 ack → process_ack 更新状态"""
     print("\n[Scenario 4] ack 处理流程")
     tmp, agents = _make_temp_env()
-    msg = build_message("lingyan", "test_agent", "回归测试消息")
+    msg = build_message("agent-f", "test_agent", "回归测试消息")
 
     inbox_path = os.path.join(tmp, "inbox", "test_agent", "inbox.json")
     inbox_data = json_read(inbox_path, {})
@@ -210,7 +210,7 @@ def test_scan_builds_queue():
     """Scenario 5: scan 识别 pending 消息进入队列"""
     print("\n[Scenario 5] 扫描队列构建")
     tmp, agents = _make_temp_env()
-    msg = build_message("lingyan", "test_agent", "待扫描消息", msg_type=MsgType.TASK)
+    msg = build_message("agent-f", "test_agent", "待扫描消息", msg_type=MsgType.TASK)
 
     inbox_path = os.path.join(tmp, "inbox", "test_agent", "inbox.json")
     inbox_data = json_read(inbox_path, {})
@@ -228,7 +228,7 @@ def test_ack_clears_unread_flag():
     """Scenario 6: 全部 ack 后 has_unread 自动变 false"""
     print("\n[Scenario 6] ack 后 unread 标记清除")
     tmp, agents = _make_temp_env()
-    msg = build_message("lingyan", "test_agent", "最后一条")
+    msg = build_message("agent-f", "test_agent", "最后一条")
 
     inbox_path = os.path.join(tmp, "inbox", "test_agent", "inbox.json")
     inbox_data = json_read(inbox_path, {})
@@ -253,7 +253,7 @@ def test_full_roundtrip():
     from lib.api.handlers_inbox import handle_send_msg
 
     mh = MockHandler(tmp, agents, "POST", "/api/send-msg")
-    mh._post_body = {"to": "test_agent", "content": "E2E 回归测试", "from": "lingyan", "type": "task"}
+    mh._post_body = {"to": "test_agent", "content": "E2E 回归测试", "from": "agent-f", "type": "task"}
     mh._read_post_body = lambda: mh._post_body
     handle_send_msg(mh)
 
@@ -313,7 +313,7 @@ def test_inbox_api_endpoint():
     tmp, agents = _make_temp_env()
     from lib.api.handlers_inbox import handle_inbox
 
-    msg = build_message("lingyan", "test_agent", "inbox端点测试")
+    msg = build_message("agent-f", "test_agent", "inbox端点测试")
     inbox_path = os.path.join(tmp, "inbox", "test_agent", "inbox.json")
     inbox_data = json_read(inbox_path, {})
     inbox = Inbox.from_dict(inbox_data)
@@ -334,7 +334,7 @@ def test_ack_forward_chain():
     """Scenario 11: 带 forward_chain 的 ack 处理"""
     print("\n[Scenario 11] forward_chain ack 处理")
     tmp, agents = _make_temp_env()
-    msg = build_message("lingyan", "test_agent", "转发链测试")
+    msg = build_message("agent-f", "test_agent", "转发链测试")
     msg_dict = msg.to_dict()
     msg_dict["forward_chain"] = {
         "hops": [{"agent": "test_agent", "status": "pending"}, {"agent": "other", "status": "pending"}],
@@ -361,7 +361,7 @@ def test_ack_forward_chain():
 
 def main():
     print("=" * 60)
-    print("  ziyan-mailbus send-msg & ack 回归自测")
+    print("  mailbus-mailbus send-msg & ack 回归自测")
     print("=" * 60)
 
     tests = [

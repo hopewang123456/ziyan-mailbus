@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mailbus"
 version = "0.2.0"
-description = "子言 AI 团队 mailbus 统一 CLI"
+description = "mailbus AI agent message bus CLI"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

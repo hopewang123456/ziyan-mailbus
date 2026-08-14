@@ -9,4 +9,4 @@ npm run dev    # :5173，代理 /api → :9814
 npm run build  # → web/dist
 ```
 
-设计：星系/舰桥 HUD（cyan + amber on void），品牌 **ziyan-mailbus** 为首屏英雄信号。HashRouter，免改后端深链。
+设计：星系/舰桥 HUD（cyan + amber on void），品牌 **mailbus** 为首屏英雄信号。HashRouter，免改后端深链。

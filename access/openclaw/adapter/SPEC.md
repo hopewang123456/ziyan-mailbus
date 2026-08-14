@@ -1,6 +1,6 @@
 # L1 — OpenClaw Framework Spec
 
-> **Layer**: L1 · **Framework**: openclaw · **Agents**: xiaoqi, yige
+> **Layer**: L1 · **Framework**: openclaw · **Agents**: agent-c, agent-g
 
 ## Runtime 契约
 

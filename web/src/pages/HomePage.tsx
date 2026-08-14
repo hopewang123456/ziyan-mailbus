@@ -21,7 +21,7 @@ export function HomePage() {
       <p className="hud-label mb-4">Starship bridge</p>
       {/* Motion #2: brand entrance */}
       <h1 className="animate-brand-in font-display text-4xl font-bold uppercase text-frost md:text-6xl">
-        ziyan-mailbus
+        mailbus
       </h1>
       <p className="mt-4 max-w-xl text-base text-mute md:text-lg">
         星系驾驶舱 · 编排总线与 agent 舰队的实时视界。非管理台，是舰桥。
@@ -49,7 +49,7 @@ export function HomePage() {
           <Link
             key={to}
             to={to}
-            className="group rounded-sm border border-rail bg-hull/60 p-4 transition hover:border-cyan-signal/40 hover:shadow-glow"
+            className="group soft-inset transition hover:border-white/15"
           >
             <p className="font-display text-xs tracking-wider text-cyan-signal">{title}</p>
             <p className="mt-1 text-sm text-mute group-hover:text-frost">{sub}</p>

@@ -15,6 +15,7 @@ sys.path.insert(0, ROOT)
 
 from lib.infra.constants import MAILBUS_ROOT
 from lib.adapters.frameworks.claude_launch import (
+    _to_fs_path,
     ensure_claude_agent_settings,
     load_mailbus_claude,
     resolve_claude_home,
@@ -123,7 +124,7 @@ def _sync_skills_from_index(
 
 
 def _neutralize_repo_claude_md(push_cwd: Path) -> None:
-    """仓库根 CLAUDE.md 若含单一 agent 人设，改为中性说明，避免子目录会话继承灵云。"""
+    """仓库根 CLAUDE.md 若含单一 agent 人设，改为中性说明，避免子目录会话继承特定人设。"""
     repo_md = push_cwd / "CLAUDE.md"
     if not repo_md.is_file():
         return
@@ -131,13 +132,11 @@ def _neutralize_repo_claude_md(push_cwd: Path) -> None:
         text = repo_md.read_text(encoding="utf-8")
     except OSError:
         return
-    if "灵云" in text or ("mailbus agent:" in text and "lingyun" in text):
+    if "灵云" in text or ("mailbus agent:" in text and "agent-h" in text):
         repo_md.write_text(
-            "# ai_tools\n\n"
-            "本仓库根目录**无单一 agent 人设**。Claude Code 请进入各 agent 独立工作区：\n\n"
-            "- 灵云 `lingyun` → `.mailbus/claude/lingyun/`\n"
-            "- 灵验 `lingyan` → `.mailbus/claude/lingyan/`\n\n"
-            "不要在根目录启动 Claude Code 会话。\n",
+            "# workspace\n\n"
+            "本仓库根目录**无单一 agent 人设**。Claude Code 请进入各 agent 独立工作区，"
+            "或在 mailbus 中配置自己的身份文件（`store/config.json` 的 agents）。\n",
             encoding="utf-8",
         )
 
@@ -152,7 +151,7 @@ def sync_agent(agent: str, data_dir: str) -> dict:
     global_cfg = load_mailbus_claude(data_dir)
     _, plat_cfg = resolve_claude_plat_cfg(global_cfg)
     ensure_claude_agent_settings(agent, data_dir)
-    claude_home = Path(resolve_claude_home(plat_cfg, agent))
+    claude_home = Path(_to_fs_path(resolve_claude_home(plat_cfg, agent)))
     access_rec = get_agent(agent) or {}
     ws = access_rec.get("workspace")
     if ws:

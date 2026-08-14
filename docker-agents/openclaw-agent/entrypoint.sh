@@ -1,13 +1,13 @@
 #!/bin/bash
-# ziyan AI Team - OpenClaw container entrypoint
+# Mailbus - OpenClaw container entrypoint
 set -euo pipefail
 
 export OPENCLAW_STATE_DIR=/workspace/data/.openclaw
 export OPENCLAW_CONFIG_PATH="$OPENCLAW_STATE_DIR/openclaw.json"
 
 # 配置里使用 WSL 路径，容器内做兼容
-mkdir -p /mnt/e/ai_tools
-ln -sfn /workspace /mnt/e/ai_tools/openclaw_space
+mkdir -p /mnt/<LOCAL_ROOT>
+ln -sfn /workspace /mnt/<LOCAL_ROOT>/openclaw_space
 
 # 从 Hermes 挂载目录注入 API Key
 # shellcheck disable=SC1091
@@ -26,14 +26,14 @@ bash /init-openclaw-profiles.sh || {
 }
 
 if [ -x /mailbus/tools/sync-openclaw-framework-skill.sh ]; then
-  for agent in xiaoqi yige; do
+  for agent in $(python3 -c "import json; print(' '.join(a for a, c in json.load(open('/mailbus/store/config.json', encoding='utf-8')).get('agents', {}).items() if (c.get('type') or '') == 'openclaw'))" 2>/dev/null); do
     OPENCLAW_AGENT="$agent" OPENCLAW_SKILLS_DIR="/workspace/skills" \
       bash /mailbus/tools/sync-openclaw-framework-skill.sh || true
   done
 fi
 
 echo "[entrypoint] Starting OpenClaw gateways..."
-OPENCLAW_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-ziyan-team}"
+OPENCLAW_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-change-me}"
 
 gateway_env_base=(
   "DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}"
@@ -53,7 +53,7 @@ start_gateway() {
   local port="$2"
   local statedir="/workspace/data/.openclaw-${name}"
   local extra=()
-  if [ "$name" = "yige" ]; then
+  if [ "${OPENCLAW_ALLOW_OLDER_DESTRUCTIVE:-0}" = "1" ]; then
     extra=("OPENCLAW_ALLOW_OLDER_BINARY_DESTRUCTIVE_ACTIONS=1")
   fi
   # 默认保留 pairing；仅 RESET_OPENCLAW_PAIRING=1 时清理（避免普通重启丢配对）
@@ -78,10 +78,27 @@ start_gateway() {
   echo "  ${name} (${port}) started [state=${statedir}] pid=$!"
 }
 
-start_gateway "xiaoqi" 18789
-# 错开启动，避免两 profile 同时抢迁移锁
-sleep 12
-start_gateway "yige" 18790
+# 从 store/config.json 读取 openclaw agents（名→端口）；缺失时回落 demo 名单
+while read -r name port; do
+  start_gateway "$name" "$port"
+  # 错开启动，避免多 profile 同时抢迁移锁
+  sleep 4
+done < <(python3 -c "
+import json, os
+try:
+    cfg = json.load(open('/mailbus/store/config.json', encoding='utf-8'))
+except Exception:
+    print('agent-m 18789')
+    print('agent-l 18790')
+    raise SystemExit
+for a, c in cfg.get('agents', {}).items():
+    if (c.get('type') or '') != 'openclaw':
+        continue
+    port = 18789
+    browser = (c.get('launch') or {}).get('browser') or {}
+    port = browser.get('gateway_port') or (c.get('docker') or {}).get('port') or port
+    print(f'{a} {port}')
+")
 
 # 等待端口就绪（最多 ~90s）
 for port in 18789 18790; do

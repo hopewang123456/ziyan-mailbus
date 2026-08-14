@@ -27,16 +27,16 @@ from tests.test_helpers import seed_a2a_harness
 from unittest.mock import patch
 
 
-def _lingzhao_agent() -> dict:
+def _agent_a_agent() -> dict:
     return {
         "type": "hermes_profile",
         "channels": {"a2a": {"enabled": True}, "file_bus": {"enabled": True}},
-        "endpoint": {"base_url": "https://mailbus.example/api/a2a/rpc/lingzhao"},
+        "endpoint": {"base_url": "https://mailbus.example/api/a2a/rpc/agent-a"},
         "supportedInterfaces": [{"protocolBinding": "JSONRPC", "protocolVersion": "1.0"}],
     }
 
 
-def _dali_agent() -> dict:
+def _agent_i_agent() -> dict:
     return {
         "type": "opencode",
         "channels": {"a2a": {"enabled": False}, "file_bus": {"enabled": True}},
@@ -58,8 +58,8 @@ def _seed_feat_auth_task(tmp: str, *, started_at: str | None = None) -> None:
                 "step_id": "s1",
                 "step": 1,
                 "role_type": 1,
-                "to_agent": "lingzhao",
-                "to_person": "lingzhao",
+                "to_agent": "agent-a",
+                "to_person": "agent-a",
                 "to_role": "方案设计师",
                 "status": "running",
                 "fsm_state": "awaiting_result",
@@ -87,8 +87,8 @@ class TestHarnessStubLoop(unittest.TestCase):
         with open(cfg_path, encoding="utf-8") as f:
             cfg = json.load(f)
         agents = cfg.setdefault("agents", {})
-        agents["lingzhao"] = _lingzhao_agent()
-        agents["dali"] = _dali_agent()
+        agents["agent-a"] = _agent_a_agent()
+        agents["agent-i"] = _agent_i_agent()
         cfg["harness"] = {
             "mode": "stub",
             "stub_fixtures_dir": "tests/fixtures/harness_stub",
@@ -121,7 +121,7 @@ class TestHarnessStubLoop(unittest.TestCase):
         with open(os.path.join(self.tmp, "config.json"), encoding="utf-8") as f:
             cfg = json.load(f)
         harness = get_harness(cfg)
-        session = harness.spawn("dali", {})
+        session = harness.spawn("agent-i", {})
         outcome = harness.wait_completion(session)
         self.assertTrue(outcome.ok)
         self.assertIsNotNone(outcome.step_result)
@@ -129,43 +129,44 @@ class TestHarnessStubLoop(unittest.TestCase):
     def test_file_bus_stub_writes_step_result(self):
         transport = FileBusTransport(mode="stub")
         ctx = DispatchContext(
-            self.tmp, "feat-auth-001", "s3", "dali", 8,
-            stub_fixture="path-d-dali-opencode.json",
+            self.tmp, "feat-auth-001", "s3", "agent-i", 8,
+            stub_fixture="path-d-agent-i-opencode.json",
         )
         result = transport.dispatch(ctx, {})
         self.assertTrue(result.ok)
         sr = read_step_result_file(self.tmp, "feat-auth-001", "s3")
-        self.assertEqual(sr.get("agent"), "dali")
+        self.assertEqual(sr.get("agent"), "agent-i")
         self.assertEqual(sr.get("conclusion"), "done")
 
     def test_h02_feat_auth_three_step_fsm(self):
         """H-02：s1→s2→s3 stub 闭环，三步完成后 task 进入终态。"""
         agents = self._agents()
         router = build_router(self.tmp)
-        router.a2a = A2ATransport(rpc=StubA2AClient.from_name("path-a-lingzhao-s1.json"))
+        router.a2a = A2ATransport(rpc=StubA2AClient.from_name("path-a-agent-a-s1.json"))
 
         s1 = DispatchContext(
-            self.tmp, "feat-auth-001", "s1", "lingzhao", 1,
-            stub_fixture="path-a-lingzhao-s1.json",
+            self.tmp, "feat-auth-001", "s1", "agent-a", 1,
+            stub_fixture="path-a-agent-a-s1.json",
         )
         self.assertTrue(router.dispatch_step(s1, agents).ok)
         self._refresh_result_timestamp("s1")
-        self._advance_without_redispatch(agents)
+        with patch("lib.application.orchestration.pipeline.routing._resolve_role_type_assignee", return_value=("方案设计师", "agent-a")):
+            self._advance_without_redispatch(agents)
 
         router.a2a = A2ATransport(rpc=StubA2AClient.from_name("path-b-a2a-fail.json"))
         router.config["a2a"]["retry_backoff_sec"] = [0, 0, 0]
         s2 = DispatchContext(
-            self.tmp, "feat-auth-001", "s2", "lingzhao", 1,
+            self.tmp, "feat-auth-001", "s2", "agent-a", 1,
             stub_fixture="path-b-a2a-fail.json",
         )
         self.assertTrue(router.dispatch_step(s2, agents).ok)
         self._refresh_result_timestamp("s2")
-        with patch("lib.application.orchestration.pipeline.routing.pick_person_for_role", return_value="dali"):
+        with patch("lib.application.orchestration.pipeline.routing._resolve_role_type_assignee", return_value=("工程实施", "agent-i")):
             self._advance_without_redispatch(agents)
 
         s3 = DispatchContext(
-            self.tmp, "feat-auth-001", "s3", "dali", 8,
-            stub_fixture="path-d-dali-opencode.json",
+            self.tmp, "feat-auth-001", "s3", "agent-i", 8,
+            stub_fixture="path-d-agent-i-opencode.json",
         )
         self.assertTrue(FileBusTransport(mode="stub").dispatch(s3, agents).ok)
         self._refresh_result_timestamp("s3")
@@ -193,7 +194,7 @@ class TestHarnessStubLoop(unittest.TestCase):
         router.config["a2a"]["retry_backoff_sec"] = [0, 0, 0]
         router.a2a = A2ATransport(rpc=StubA2AClient.from_name("path-b-a2a-fail.json"))
         fb_ctx = DispatchContext(
-            self.tmp, "feat-auth-001", "s2", "lingzhao", 1,
+            self.tmp, "feat-auth-001", "s2", "agent-a", 1,
             stub_fixture="path-b-a2a-fail.json",
         )
         fallback = router.dispatch_step(fb_ctx, agents)

@@ -21,12 +21,12 @@ from lib.infra.utils import json_write
 from tests.test_helpers import load_golden_a2a_path, seed_a2a_harness
 
 
-def _lingzhao_agent():
+def _agent_a_agent():
     return {
         "type": "hermes_profile",
         "role_types": [1],
         "channels": {"a2a": {"enabled": True}, "file_bus": {"enabled": True}},
-        "endpoint": {"base_url": "https://mailbus.example/api/a2a/rpc/lingzhao"},
+        "endpoint": {"base_url": "https://mailbus.example/api/a2a/rpc/agent-a"},
         "supportedInterfaces": [{"protocolBinding": "JSONRPC", "protocolVersion": "1.0"}],
     }
 
@@ -38,7 +38,7 @@ class TestHumanQueueA2A(unittest.TestCase):
         cfg_path = os.path.join(self.tmp, "config.json")
         with open(cfg_path, encoding="utf-8") as f:
             cfg = json.load(f)
-        cfg.setdefault("agents", {})["lingzhao"] = _lingzhao_agent()
+        cfg.setdefault("agents", {})["agent-a"] = _agent_a_agent()
         cfg["harness"] = {"mode": "stub"}
         cfg["transport"] = {"use_router": True, "a2a": {"retry_backoff_sec": [0, 0, 0]}}
         json_write(cfg_path, cfg)
@@ -48,7 +48,7 @@ class TestHumanQueueA2A(unittest.TestCase):
             os.path.join(self.tmp, "tasks", "feat-auth-001.json"),
             {
                 "task_id": "feat-auth-001",
-                "chain": [{"step_id": "s1", "to_agent": "lingzhao", "role_type": 1}],
+                "chain": [{"step_id": "s1", "to_agent": "agent-a", "role_type": 1}],
             },
         )
 
@@ -60,7 +60,7 @@ class TestHumanQueueA2A(unittest.TestCase):
         router = TransportRouter(data_dir=self.tmp)
         router.a2a = A2ATransport(rpc=fixture)
         ctx = DispatchContext(
-            self.tmp, "feat-auth-001", "s1", "lingzhao", 1,
+            self.tmp, "feat-auth-001", "s1", "agent-a", 1,
             stub_fixture="path-c-input-required.json",
         )
         agents = json.load(open(os.path.join(self.tmp, "config.json"), encoding="utf-8"))["agents"]
@@ -77,7 +77,7 @@ class TestHumanQueueA2A(unittest.TestCase):
             pending["id"],
             {
                 "decision": "approved",
-                "reviewer": "lingzhao",
+                "reviewer": "agent-a",
                 "comment": "采用自建 JWT + refresh，不用 OAuth2。",
             },
         )

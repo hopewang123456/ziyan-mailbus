@@ -52,7 +52,7 @@ def _tier0_reason(task_type: str, rt: int) -> str:
 
 
 def _code_review_chain(envelope: dict) -> List[int]:
-    """Quality harness code_review — 默认 s1 审阅，涉安加 lingjin，warn/M/L 加终验。"""
+    """Quality harness code_review — 默认 s1 审阅，涉安加审计 agent，warn/M/L 加终验。"""
     harness = (envelope.get("extensions") or {}).get("harness") or {}
     chain = [5]
     static = harness.get("layers", {}).get("static_analysis") or {}

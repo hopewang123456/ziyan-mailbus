@@ -62,7 +62,7 @@ export function ReviewsPage() {
     <div className="space-y-4">
       <header>
         <p className="hud-label">Sensor logs</p>
-        <h2 className="mt-1 font-display text-2xl tracking-wide">Reviews</h2>
+        <h2 className="mt-1 font-display text-2xl tracking-[-0.02em]">Reviews</h2>
       </header>
       <ErrorAlert message={err} />
 
@@ -86,7 +86,7 @@ export function ReviewsPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="hud-panel p-4">
+        <div className="soft-panel">
           <p className="hud-label">Reports</p>
           {filtered.length === 0 ? (
             <p className="mt-2 text-sm text-mute">无报告</p>
@@ -98,7 +98,7 @@ export function ReviewsPage() {
                   <li key={r.file}>
                     <button
                       type="button"
-                      className={`w-full border-b border-rail/50 px-1 py-2 text-left text-xs transition-colors ${
+                      className={`w-full soft-list-btn !w-full text-left text-xs transition-colors ${
                         active ? "bg-[rgba(61,224,255,0.1)] text-frost" : "text-mute hover:text-frost"
                       }`}
                       onClick={() => void selectReport(r.file, r.content)}
@@ -114,7 +114,7 @@ export function ReviewsPage() {
           )}
         </div>
 
-        <div className="hud-panel p-4">
+        <div className="soft-panel">
           <p className="hud-label">Preview</p>
           {!selected ? (
             <p className="mt-2 text-sm text-mute">选择报告预览</p>

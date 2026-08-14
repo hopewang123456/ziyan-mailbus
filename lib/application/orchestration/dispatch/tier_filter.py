@@ -17,7 +17,7 @@ def dispatch_action_from_envelope(envelope: dict) -> Dict[str, Any]:
     if isinstance(constraints.get("dispatch"), dict):
         action.update(constraints["dispatch"])
     ext = envelope.get("extensions") or {}
-    ziyan = ext.get("ziyan") if isinstance(ext.get("ziyan"), dict) else {}
+    ziyan = ext.get("mailbus") if isinstance(ext.get("mailbus"), dict) else {}
     disp = ziyan.get("dispatch") if isinstance(ziyan, dict) else {}
     if isinstance(disp, dict):
         action.update(disp)

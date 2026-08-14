@@ -13,6 +13,8 @@ export OPENAI_BASE_URL="${OPENAI_BASE_URL:-https://api.deepseek.com/v1}"
 export CODEX_HOME="${CODEX_HOME:-/home/node/.codex}"
 export AGENTMEMORY_URL="${AGENTMEMORY_URL:-http://iii-engine:3111}"
 export DEEPSEEK_GATEWAY_PORT="${DEEPSEEK_GATEWAY_PORT:-3000}"
+# 默认对外发布 922x→3000；仅绑 127.0.0.1 时宿主机映射不可达
+export HOST="${HOST:-0.0.0.0}"
 
 mkdir -p "$CODEX_HOME"
 

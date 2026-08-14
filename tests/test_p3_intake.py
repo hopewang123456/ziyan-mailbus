@@ -51,7 +51,7 @@ def _seed(tmp: str) -> None:
     seed_runtime_from_sot(tmp)
     example = load_pursue_intake_example()
     for g in example.get("commercial_gates") or []:
-        if g.get("gate_id") == "req_to_lingzhao":
+        if g.get("gate_id") == "req_to_solution":
             g["status"] = "pending"
         if g.get("gate_id") in ("customer_design_ok", "start_delivery"):
             g["status"] = "pending"
@@ -79,8 +79,8 @@ class TestP3Intake(unittest.TestCase):
         self.assertEqual(h.status, 200)
         self.assertEqual(h.payload["intake"]["intake_id"], "intake-20260615-a3f9c2")
 
-    def test_req_to_lingzhao_spawns_solution_task(self):
-        outcome = on_intake_gate_approve(self.tmp, "intake-20260615-a3f9c2", "req_to_lingzhao", {
+    def test_req_to_solution_spawns_solution_task(self):
+        outcome = on_intake_gate_approve(self.tmp, "intake-20260615-a3f9c2", "req_to_solution", {
             "reviewer": "human",
             "brief": "电商小程序需求包",
             "attachments": [{"kind": "file", "ref": "/mailbus/store/leads/req.md", "label": "需求"}],
@@ -91,7 +91,7 @@ class TestP3Intake(unittest.TestCase):
         task = tr.get(outcome["spawned_task_id"])
         self.assertIsNotNone(task)
         self.assertEqual(task["chain"][0]["role_type"], 1)
-        self.assertEqual(task["extensions"]["ziyan"]["intake"]["intake_id"], "intake-20260615-a3f9c2")
+        self.assertEqual(task["extensions"]["mailbus"]["intake"]["intake_id"], "intake-20260615-a3f9c2")
 
     def test_low_level_spawn_content(self):
         from lib.application.workflow.intake.store import get

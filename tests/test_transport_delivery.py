@@ -21,8 +21,8 @@ def _task_with_chain(tmp: str, *, task_id: str = "feat-auth-001") -> str:
         {
             "task_id": task_id,
             "chain": [
-                {"step_id": "s1", "to_agent": "lingzhao", "role_type": 1},
-                {"step_id": "s2", "to_agent": "lingzhao", "role_type": 1},
+                {"step_id": "s1", "to_agent": "agent-a", "role_type": 1},
+                {"step_id": "s2", "to_agent": "agent-a", "role_type": 1},
             ],
         },
     )
@@ -39,7 +39,7 @@ class TestPersistStepTransport(unittest.TestCase):
 
     def test_writes_transport_fields_on_matching_step(self):
         task_path = _task_with_chain(self.tmp)
-        ctx = DispatchContext(self.tmp, "feat-auth-001", "s1", "lingzhao", 1)
+        ctx = DispatchContext(self.tmp, "feat-auth-001", "s1", "agent-a", 1)
         attempts = [
             {"channel": "a2a_standard", "attempt": 1, "outcome": "ok", "ts": "2026-06-01T00:00:00+08:00"},
         ]
@@ -60,7 +60,7 @@ class TestPersistStepTransport(unittest.TestCase):
 
     def test_writes_retries_exhausted_flag(self):
         task_path = _task_with_chain(self.tmp)
-        ctx = DispatchContext(self.tmp, "feat-auth-001", "s2", "lingzhao", 1)
+        ctx = DispatchContext(self.tmp, "feat-auth-001", "s2", "agent-a", 1)
         attempts = [
             {"channel": "a2a_standard", "attempt": 1, "outcome": "fail", "error": "503"},
             {"channel": "file_bus", "attempt": 1, "outcome": "ok", "fallback_from": "a2a_standard"},
@@ -78,7 +78,7 @@ class TestPersistStepTransport(unittest.TestCase):
         self.assertEqual(len(step["transport_attempts"]), 2)
 
     def test_noop_when_task_file_missing(self):
-        ctx = DispatchContext(self.tmp, "missing-task", "s1", "lingzhao", 1)
+        ctx = DispatchContext(self.tmp, "missing-task", "s1", "agent-a", 1)
         persist_step_transport(
             self.tmp,
             ctx,
@@ -89,7 +89,7 @@ class TestPersistStepTransport(unittest.TestCase):
 
     def test_other_steps_unchanged_when_step_id_not_found(self):
         task_path = _task_with_chain(self.tmp)
-        ctx = DispatchContext(self.tmp, "feat-auth-001", "s99", "lingzhao", 1)
+        ctx = DispatchContext(self.tmp, "feat-auth-001", "s99", "agent-a", 1)
         persist_step_transport(
             self.tmp,
             ctx,

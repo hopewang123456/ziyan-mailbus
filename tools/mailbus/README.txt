@@ -15,4 +15,4 @@ Examples:
 Windows .bat wrappers in this folder:
   start.bat / stop.bat / restart.bat / fix-port.bat
 
-Desktop shortcuts (e.g. Desktop\子言AI\*.bat) should point here or scripts\*.bat.
+Desktop shortcuts (e.g. Desktop\Mailbus\*.bat) should point here or scripts\*.bat.

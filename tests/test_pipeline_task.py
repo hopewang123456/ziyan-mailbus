@@ -25,8 +25,8 @@ class TestPipelineTask(unittest.TestCase):
             "task_id": "game-stellar-20260617",
             "status": "running",
             "chain": [
-                {"step": 1, "to_person": "lingzhao", "status": "completed"},
-                {"step": 2, "to_person": "lingxi", "status": "running"},
+                {"step": 1, "to_person": "agent-a", "status": "completed"},
+                {"step": 2, "to_person": "agent-d", "status": "running"},
             ],
         }
         with open(os.path.join(self.tmp, "tasks", "game-stellar-20260617.json"), "w") as f:
@@ -37,7 +37,7 @@ class TestPipelineTask(unittest.TestCase):
 
     def test_pipeline_execute_message(self):
         msg = {
-            "to": "lingxi",
+            "to": "agent-d",
             "content": "【game-stellar-20260617】请执行",
             "type": "task",
         }
@@ -45,7 +45,7 @@ class TestPipelineTask(unittest.TestCase):
 
     def test_should_not_auto_ack_pipeline_step(self):
         msg = {
-            "to": "lingxi",
+            "to": "agent-d",
             "content": "【game-stellar-20260617】pipeline 步骤",
             "type": "task",
             "action": {"execute": True},
@@ -58,7 +58,7 @@ class TestPipelineTask(unittest.TestCase):
 
     def test_completion_block_contains_step(self):
         content = "【game-stellar-20260617】pipeline"
-        block = pipeline_completion_block(self.tmp, content, "lingxi")
+        block = pipeline_completion_block(self.tmp, content, "agent-d")
         self.assertIn("pipeline_step", block)
         self.assertIn("game-stellar-20260617", block)
 
@@ -68,7 +68,7 @@ class TestPipelineTask(unittest.TestCase):
         task = {
             "task_id": "game-stellar-20260617",
             "status": "running",
-            "chain": [{"step": 1, "to_person": "lingzhao", "status": "running", "planned_agents": ["lingxi"]}],
+            "chain": [{"step": 1, "to_person": "agent-a", "status": "running", "planned_agents": ["agent-d"]}],
         }
         with open(os.path.join(self.tmp, "tasks", "game-stellar-20260617.json"), "w") as f:
             json.dump(task, f)
@@ -82,12 +82,12 @@ class TestPipelineTask(unittest.TestCase):
         task = {
             "task_id": "game-stellar-20260617",
             "status": "running",
-            "chain": [{"step": 2, "to_person": "lingxi", "status": "running"}],
+            "chain": [{"step": 2, "to_person": "agent-d", "status": "running"}],
         }
         with open(os.path.join(self.tmp, "tasks", "game-stellar-20260617.json"), "w") as f:
             json.dump(task, f)
         ok, reason = verify_pipeline_step_delivery(
-            self.tmp, "lingxi", {"content": "【game-stellar-20260617】", "task_id": "game-stellar-20260617"}
+            self.tmp, "agent-d", {"content": "【game-stellar-20260617】", "task_id": "game-stellar-20260617"}
         )
         self.assertFalse(ok)
         self.assertEqual(reason, "missing_msg_results")

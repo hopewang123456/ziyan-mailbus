@@ -12,36 +12,23 @@ import urllib.request
 from pathlib import Path
 
 AGENT_DISPLAY = {
-    "lingxiao": "灵霄",
-    "lingjian": "灵鉴",
+    "agent-g": "Agent G",
+    "agent-e": "Agent E",
 }
 
 DEFAULT_MODELS = {
-    "lingjian": ("deepseek-reasoner", "low", "true", "auto"),
-    "lingxiao": ("deepseek-v4-flash", "low", "false", "none"),
+    "agent-e": ("deepseek-reasoner", "low", "true", "auto"),
+    "agent-g": ("deepseek-v4-flash", "low", "false", "none"),
 }
 
 
 def _identity_paths(agent: str) -> list[str]:
-    if agent == "lingxiao":
-        return [
-            "/mailbus/store/identities/codex/lingxiao/IDENTITY.md",
-            "/mailbus/access/codex/lingxiao/IDENTITY.md",
-            "/mailbus/skills/roles/overlays/lingxiao/IDENTITY.md",
-            "/mailbus/identities/lingxiao/IDENTITY.md",
-            "/mailbus/identities/lingxiao.md",
-        ]
-    if agent == "lingjian":
-        return [
-            "/mailbus/store/identities/codex/lingjian/IDENTITY.md",
-            "/mailbus/access/codex/lingjian/IDENTITY.md",
-            "/mailbus/skills/roles/overlays/lingjian/IDENTITY.md",
-            "/mailbus/identities/lingjian.md",
-        ]
     return [
         f"/mailbus/store/identities/codex/{agent}/IDENTITY.md",
         f"/mailbus/access/codex/{agent}/IDENTITY.md",
-        f"/mailbus/skills/roles/overlays/{agent}/IDENTITY.md",
+        f"/mailbus/01-mailbus/018-identities/{agent}/IDENTITY.md",
+        f"/mailbus/01-mailbus/018-identities/{agent}/overlay.md",
+        f"/mailbus/identities/{agent}/IDENTITY.md",
         f"/mailbus/identities/{agent}.md",
     ]
 
@@ -85,7 +72,7 @@ def _model_defaults(agent: str) -> tuple[str, str, str, str]:
 
 def render_codex_config() -> int:
     codex_home = Path(os.environ.get("CODEX_HOME", "/home/node/.codex"))
-    agent = os.environ.get("CODEX_AGENT", "lingxiao")
+    agent = os.environ.get("CODEX_AGENT", "agent-g")
     project_dir = Path(
         os.environ.get(
             "CODEX_PROJECT_DIR",
@@ -98,7 +85,7 @@ def render_codex_config() -> int:
     catalog_src = Path("/usr/local/share/codex/deepseek-model-catalog.json")
     mcp_standalone = Path("/node_modules/@agentmemory/agentmemory/dist/standalone.mjs")
     mcp_enabled = os.environ.get("CODEX_MCP_AGENTMEMORY", "1") == "1"
-    team_id = os.environ.get("AGENTMEMORY_TEAM_ID", "ziyan")
+    team_id = os.environ.get("AGENTMEMORY_TEAM_ID", "mailbus")
     user_id = os.environ.get("AGENTMEMORY_USER_ID", "mailbus")
 
     default_model, reasoning_effort, supports_reasoning, reasoning_summary = _model_defaults(agent)

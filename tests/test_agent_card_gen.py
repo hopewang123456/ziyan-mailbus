@@ -12,17 +12,31 @@ from lib.core.a2a.agent_card_cache import enrich_agent_channels, load_registry
 
 
 class TestAgentCardGen(unittest.TestCase):
-    def test_lingzhao_card_has_interface(self):
+    def test_hermes_card_has_interface(self):
         registry = load_registry()
-        entry = enrich_agent_channels("lingzhao", dict(registry.get("lingzhao") or {}))
-        card = to_agent_card("lingzhao", entry, display_name="灵昭")
-        self.assertEqual(card["metadata"]["mailbus"]["agent_id"], "lingzhao")
+        hermes = [
+            aid for aid, e in registry.items()
+            if (e.get("framework") or "").startswith("hermes")
+        ]
+        if not hermes:
+            self.skipTest("no hermes agent in registry")
+        aid = hermes[0]
+        entry = enrich_agent_channels(aid, dict(registry.get(aid) or {}))
+        card = to_agent_card(aid, entry, display_name="Agent X")
+        self.assertEqual(card["metadata"]["mailbus"]["agent_id"], aid)
         self.assertTrue(card.get("supportedInterfaces"))
 
-    def test_dali_card_no_interface(self):
+    def test_opencode_card_no_interface(self):
         registry = load_registry()
-        entry = enrich_agent_channels("dali", dict(registry.get("dali") or {}))
-        card = to_agent_card("dali", entry, display_name="大力")
+        opencode = [
+            aid for aid, e in registry.items()
+            if e.get("framework") == "opencode"
+        ]
+        if not opencode:
+            self.skipTest("no opencode agent in registry")
+        aid = opencode[0]
+        entry = enrich_agent_channels(aid, dict(registry.get(aid) or {}))
+        card = to_agent_card(aid, entry, display_name="Agent X")
         self.assertEqual(card["metadata"]["mailbus"]["transport_default"], "file_bus")
         self.assertEqual(card.get("supportedInterfaces"), [])
 

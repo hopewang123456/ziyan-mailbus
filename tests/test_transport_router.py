@@ -20,16 +20,16 @@ from lib.infra.utils import json_write
 from tests.test_helpers import load_golden_a2a_path, seed_a2a_harness
 
 
-def _lingzhao_a2a_agent() -> dict:
+def _agent_a_a2a_agent() -> dict:
     return {
         "type": "hermes_profile",
         "channels": {"a2a": {"enabled": True}, "file_bus": {"enabled": True}},
-        "endpoint": {"base_url": "https://mailbus.example/api/a2a/rpc/lingzhao"},
+        "endpoint": {"base_url": "https://mailbus.example/api/a2a/rpc/agent-a"},
         "supportedInterfaces": [{"protocolBinding": "JSONRPC", "protocolVersion": "1.0"}],
     }
 
 
-def _dali_filebus_agent() -> dict:
+def _agent_i_filebus_agent() -> dict:
     return {
         "type": "opencode",
         "channels": {"a2a": {"enabled": False}, "file_bus": {"enabled": True}},
@@ -37,13 +37,13 @@ def _dali_filebus_agent() -> dict:
 
 
 class TestCanDeliver(unittest.TestCase):
-    def test_dali_no_a2a(self):
-        ctx = DispatchContext("tmp", "t1", "s3", "dali", 8)
-        self.assertFalse(can_deliver_a2a("dali", _dali_filebus_agent(), ctx))
+    def test_agent_i_no_a2a(self):
+        ctx = DispatchContext("tmp", "t1", "s3", "agent-i", 8)
+        self.assertFalse(can_deliver_a2a("agent-i", _agent_i_filebus_agent(), ctx))
 
-    def test_lingzhao_a2a(self):
-        ctx = DispatchContext("tmp", "t1", "s1", "lingzhao", 1)
-        self.assertTrue(can_deliver_a2a("lingzhao", _lingzhao_a2a_agent(), ctx))
+    def test_agent_a_a2a(self):
+        ctx = DispatchContext("tmp", "t1", "s1", "agent-a", 1)
+        self.assertTrue(can_deliver_a2a("agent-a", _agent_a_a2a_agent(), ctx))
 
 
 class TestTransportRouter(unittest.TestCase):
@@ -54,8 +54,8 @@ class TestTransportRouter(unittest.TestCase):
         with open(cfg_path, encoding="utf-8") as f:
             cfg = json.load(f)
         agents = cfg.get("agents") or {}
-        agents["lingzhao"] = _lingzhao_a2a_agent()
-        agents["dali"] = _dali_filebus_agent()
+        agents["agent-a"] = _agent_a_a2a_agent()
+        agents["agent-i"] = _agent_i_filebus_agent()
         cfg["agents"] = agents
         cfg["harness"] = {"mode": "stub", "stub_fixtures_dir": "tests/fixtures/harness_stub"}
         json_write(cfg_path, cfg)
@@ -65,9 +65,9 @@ class TestTransportRouter(unittest.TestCase):
             {
                 "task_id": "feat-auth-001",
                 "chain": [
-                    {"step_id": "s1", "to_agent": "lingzhao", "role_type": 1},
-                    {"step_id": "s2", "to_agent": "lingzhao", "role_type": 1},
-                    {"step_id": "s3", "to_agent": "dali", "role_type": 8},
+                    {"step_id": "s1", "to_agent": "agent-a", "role_type": 1},
+                    {"step_id": "s2", "to_agent": "agent-a", "role_type": 1},
+                    {"step_id": "s3", "to_agent": "agent-i", "role_type": 8},
                 ],
             },
         )
@@ -81,13 +81,13 @@ class TestTransportRouter(unittest.TestCase):
         return TransportRouter(data_dir=self.tmp, config=cfg)
 
     def test_path_a_a2a_success(self):
-        fixture = StubA2AClient.from_name("path-a-lingzhao-s1.json")
+        fixture = StubA2AClient.from_name("path-a-agent-a-s1.json")
         router = self._router()
         router.a2a = __import__("lib.core.a2a.a2a_standard", fromlist=["A2ATransport"]).A2ATransport(rpc=fixture)
         ctx = DispatchContext(
-            self.tmp, "feat-auth-001", "s1", "lingzhao", 1,
+            self.tmp, "feat-auth-001", "s1", "agent-a", 1,
             intent="设计用户认证模块实施方案",
-            stub_fixture="path-a-lingzhao-s1.json",
+            stub_fixture="path-a-agent-a-s1.json",
         )
         agents = json.load(open(os.path.join(self.tmp, "config.json"), encoding="utf-8"))["agents"]
         result = router.dispatch_step(ctx, agents)
@@ -103,7 +103,7 @@ class TestTransportRouter(unittest.TestCase):
         router.config["a2a"]["retry_backoff_sec"] = [0, 0, 0]
         router.a2a = __import__("lib.core.a2a.a2a_standard", fromlist=["A2ATransport"]).A2ATransport(rpc=fixture)
         ctx = DispatchContext(
-            self.tmp, "feat-auth-001", "s2", "lingzhao", 1,
+            self.tmp, "feat-auth-001", "s2", "agent-a", 1,
             stub_fixture="path-b-a2a-fail.json",
         )
         agents = json.load(open(os.path.join(self.tmp, "config.json"), encoding="utf-8"))["agents"]
@@ -118,8 +118,8 @@ class TestTransportRouter(unittest.TestCase):
     def test_path_d_file_bus_only(self):
         router = self._router()
         ctx = DispatchContext(
-            self.tmp, "feat-auth-001", "s3", "dali", 8,
-            stub_fixture="path-d-dali-opencode.json",
+            self.tmp, "feat-auth-001", "s3", "agent-i", 8,
+            stub_fixture="path-d-agent-i-opencode.json",
         )
         agents = json.load(open(os.path.join(self.tmp, "config.json"), encoding="utf-8"))["agents"]
         result = router.dispatch_step(ctx, agents)
@@ -135,7 +135,7 @@ class TestTransportRouter(unittest.TestCase):
         router = self._router()
         router.a2a = __import__("lib.core.a2a.a2a_standard", fromlist=["A2ATransport"]).A2ATransport(rpc=fixture)
         ctx = DispatchContext(
-            self.tmp, "feat-auth-001", "s1", "lingzhao", 1,
+            self.tmp, "feat-auth-001", "s1", "agent-a", 1,
             stub_fixture="path-c-input-required.json",
         )
         agents = json.load(open(os.path.join(self.tmp, "config.json"), encoding="utf-8"))["agents"]
@@ -151,7 +151,7 @@ class TestTransportRouter(unittest.TestCase):
         router.config["a2a"]["retry_backoff_sec"] = [2, 5, 10]
         router.a2a = __import__("lib.core.a2a.a2a_standard", fromlist=["A2ATransport"]).A2ATransport(rpc=fixture)
         ctx = DispatchContext(
-            self.tmp, "feat-auth-001", "s2", "lingzhao", 1,
+            self.tmp, "feat-auth-001", "s2", "agent-a", 1,
             stub_fixture="path-http-403-fallback.json",
         )
         agents = json.load(open(os.path.join(self.tmp, "config.json"), encoding="utf-8"))["agents"]

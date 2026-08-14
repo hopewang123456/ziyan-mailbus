@@ -12,15 +12,15 @@ from lib.application.harness.contract import HarnessContract
 class TestFakePorts(unittest.TestCase):
     def test_fake_runtime_spawn_no_cli(self) -> None:
         rt = FakeRuntime()
-        agent = AgentRef(agent_id="lingyun", framework="claude_code", enabled=True)
+        agent = AgentRef(agent_id="agent-h", framework="claude_code", enabled=True)
         contract = HarnessContract(
-            agent_id="lingyun",
+            agent_id="agent-h",
             msg_id="m1",
             task_id="t1",
             step_id="s1",
         )
         handle = rt.spawn(agent, contract, timeout_seconds=12)
-        self.assertEqual(handle.agent_id, "lingyun")
+        self.assertEqual(handle.agent_id, "agent-h")
         self.assertEqual(handle.msg_id, "m1")
         self.assertIsNone(handle.pid)
         self.assertEqual(len(rt.spawns), 1)
@@ -34,7 +34,7 @@ class TestFakePorts(unittest.TestCase):
         path = store.write_step_result(
             StepResult(
                 step=step,
-                agent_id="lingyun",
+                agent_id="agent-h",
                 status="ok",
                 path="",
                 payload={"summary": "done"},
@@ -46,10 +46,10 @@ class TestFakePorts(unittest.TestCase):
         assert got is not None
         self.assertEqual(got.status, "ok")
         self.assertEqual(got.payload.get("summary"), "done")
-        unacked = store.list_unacked("lingyun", ["m1", "m2"])
+        unacked = store.list_unacked("agent-h", ["m1", "m2"])
         self.assertEqual(list(unacked), ["m1", "m2"])
-        self.assertEqual(store.ack("lingyun", ["m1"]), 1)
-        self.assertEqual(list(store.list_unacked("lingyun", ["m1", "m2"])), ["m2"])
+        self.assertEqual(store.ack("agent-h", ["m1"]), 1)
+        self.assertEqual(list(store.list_unacked("agent-h", ["m1", "m2"])), ["m2"])
 
     def test_fake_clock_importable_from_fakes(self) -> None:
         from lib.adapters.fakes import FakeClock as Reexported

@@ -1,5 +1,5 @@
 """
-ziyan-mailbus archiver
+mailbus archiver
 
 将已确认的 inbox 消息归档到 archive/ 目录。
 触发条件：acknowledged 后满 3 天 或 inbox 超过 300 条。

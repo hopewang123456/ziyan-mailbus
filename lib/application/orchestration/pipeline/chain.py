@@ -5,30 +5,37 @@ from typing import Callable, List, Optional
 from lib.application.orchestration.pipeline.step import is_pipeline_step as _is_pipeline_step
 from lib.infra.utils import _now_iso
 
-# agent id → 角色名（Legacy push 展示 · 迁移脚本用）
-AGENT_ROLE = {
-    "lingzhao": "方案设计师",
-    "xiaoqi": "调度员",
-    "lingxiao": "开发工程师",
-    "dali": "开发工程师",
-    "lingjian": "审查官",
-    "lingyun": "开发工程师",
-    "lingyan": "测试工程师",
-    "lingjin": "安全审计师",
-    "lingxi": "技术研究员",
-    "lingxun": "巡检官",
-    "lingtuo": "市场拓展官",
-    "lingzhang": "财务跟进官",
-    "yige": "运营",
+# Legacy fallback：agent id → 角色名（仅当 role-types.json SoT 缺失时用 demo 名）
+_LEGACY_AGENT_ROLE = {
+    "agent-a": "方案设计师",
+    "agent-b": "调度员",
+    "agent-c": "审查官",
+    "agent-d": "开发工程师",
 }
 
+# Legacy fallback 全流程顺序（demo 名）
 FULL_PIPELINE_AGENTS = [
-    "lingzhao", "xiaoqi", "lingxiao", "lingjian", "lingyan", "xiaoqi",
+    "agent-a", "agent-b", "agent-d", "agent-c", "agent-b",
 ]
 
 
-def agent_to_role(agent_id: str) -> str:
-    return AGENT_ROLE.get(agent_id, "方案设计师")
+def _agent_role_map(data_dir: str = "") -> dict:
+    """agent id → 角色中文名。SoT: role-types.json（store → team-pack → 公开 seed）。
+
+    反向推导：遍历所有 role_type，candidates 中出现的 agent 映射到该角色。
+    """
+    from lib.infra.role_types import role_type_candidates, role_type_to_zh, valid_role_types
+
+    out: dict[str, str] = {}
+    for rt in valid_role_types(data_dir):
+        zh = role_type_to_zh(rt, data_dir)
+        for cand in role_type_candidates(rt, data_dir):
+            out.setdefault(cand, zh)
+    return out or dict(_LEGACY_AGENT_ROLE)
+
+
+def agent_to_role(agent_id: str, data_dir: str = "") -> str:
+    return _agent_role_map(data_dir).get(agent_id, "方案设计师")
 
 
 def is_pipeline_step(item) -> bool:
@@ -146,7 +153,7 @@ def init_pipeline_chain(
 ) -> List[dict]:
     """Legacy API chain 规范化。"""
     if not chain_hops:
-        return [init_first_step(assignee or "lingzhao", task_id)]
+        return [init_first_step(assignee or "agent-a", task_id)]
 
     if is_pipeline_step(chain_hops[0]):
         return list(chain_hops)
@@ -158,14 +165,14 @@ def init_pipeline_chain(
             step["planned_agents"] = chain_hops[1:]
         return [step]
 
-    return [init_first_step(assignee or "lingzhao", task_id)]
+    return [init_first_step(assignee or "agent-a", task_id)]
 
 
 def normalize_task_chain(task: dict) -> dict:
     """就地修复 legacy 任务的 chain 格式，返回 task。"""
     chain = task.get("chain") or []
     if not chain:
-        assignee = task.get("assignee") or "lingzhao"
+        assignee = task.get("assignee") or "agent-a"
         task["chain"] = [init_first_step(assignee, task.get("task_id", ""))]
         return task
 

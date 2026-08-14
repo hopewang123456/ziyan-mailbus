@@ -11,7 +11,7 @@
       "integrations.plugins: same for register_integration; MAILBUS_INTEGRATION_PLUGINS / mailbus.integrations."
     ]
   },
-  "project": "ziyan-mailbus",
+  "project": "mailbus-mailbus",
   "version": "1.1.0",
   "data_dir": "/path/to/your/store",
   "ack_timeout": 30,
@@ -67,24 +67,6 @@
         "memory_dir": ""
       }
     },
-    "lingyun": {
-      "name": "灵云",
-      "role": "开发工程师 · Claude Code pro",
-      "type": "claude_code",
-      "models": [
-        "deepseek-pro"
-      ],
-      "max_concurrency": 1,
-      "file_task_for_executable": true,
-      "launch": {
-        "browser_ports": {
-          "lingyun": 9260
-        },
-        "default_project_roots": {
-          "lingyun": "/path/to/your/workspace"
-        }
-      }
-    },
     "agent-c": {
       "name": "Agent C",
       "role": "调度",
@@ -101,6 +83,24 @@
           "/path/to/agent-c/skills/"
         ],
         "memory_dir": "/path/to/agent-c/memory/"
+      }
+    },
+    "agent-e": {
+      "name": "Agent E",
+      "role": "开发工程师 · Claude Code pro",
+      "type": "claude_code",
+      "models": [
+        "deepseek-pro"
+      ],
+      "max_concurrency": 1,
+      "file_task_for_executable": true,
+      "launch": {
+        "browser_ports": {
+          "agent-e": 9260
+        },
+        "default_project_roots": {
+          "agent-e": "/path/to/your/workspace"
+        }
       }
     }
   },
@@ -119,15 +119,15 @@
     },
     "opencode": {
       "push": "opencode run 'MSG' --dangerously-skip-permissions MODEL",
-      "description": "OpenCode CLI（大力 dali）"
+      "description": "OpenCode CLI"
     },
     "codex": {
       "push": "codex exec 'MSG'",
-      "description": "Codex CLI（灵霄 lingxiao / 灵鉴 lingjian，Docker codex-agent）"
+      "description": "Codex CLI (Docker codex-agent)"
     },
     "cline": {
       "push": "cline 'MSG' PROVIDER --timeout 120",
-      "description": "Cline CLI（legacy：仅 WSL 宿主机直连；Docker lingxiao/lingjian 已迁移 codex）"
+      "description": "Cline CLI (legacy: WSL host direct)"
     },
     "claude_code": {
       "push": "claude -p 'MSG'",
@@ -239,12 +239,12 @@
       "ensure_on_launch": true,
       "_comment_ensure_on_launch": "false=不写 per-agent settings.json；true=无则创建、有则只补缺省 env",
       "browser_ports": {
-        "lingyun": 9260,
-        "lingyan": 9261
+        "agent-e": 9260,
+        "agent-f": 9261
       },
       "default_project_roots": {
-        "lingyun": "/path/to/workspace",
-        "lingyan": "/path/to/workspace"
+        "agent-e": "/path/to/workspace",
+        "agent-f": "/path/to/workspace"
       }
     },
     "linux": {
@@ -256,12 +256,12 @@
       "ensure_on_launch": true,
       "_comment_ensure_on_launch": "false=不写 per-agent settings.json；true=无则创建、有则只补缺省 env",
       "browser_ports": {
-        "lingyun": 9260,
-        "lingyan": 9261
+        "agent-e": 9260,
+        "agent-f": 9261
       },
       "default_project_roots": {
-        "lingyun": "/path/to/your/workspace",
-        "lingyan": "/path/to/your/workspace"
+        "agent-e": "/path/to/your/workspace",
+        "agent-f": "/path/to/your/workspace"
       }
     }
   }

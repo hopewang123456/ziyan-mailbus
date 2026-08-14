@@ -12,10 +12,29 @@ from lib.infra.constants import DEFAULT_API_BASE
 
 MAIL_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-_AGENT_OPTIONS = [
-    "lingzhao", "lingxi", "xiaoqi", "lingxiao", "dali", "lingjin", "lingjian",
-    "lingyan", "lingxun", "yige", "hermes", "openclaw",
+_DEMO_AGENTS = [
+    "agent-a", "agent-c", "agent-m", "agent-g", "agent-i", "agent-b",
+    "agent-e", "agent-h", "agent-d", "agent-l", "hermes", "openclaw",
 ]
+
+
+def _agent_options() -> list[str]:
+    """从 store/config.json 读取 agents 名；缺失时回落到 demo 名单。"""
+    import json
+
+    cfg_path = os.path.join(MAIL_ROOT, "store", "config.json")
+    try:
+        if os.path.isfile(cfg_path):
+            cfg = json.load(open(cfg_path, encoding="utf-8"))
+            agents = list((cfg.get("agents") or {}).keys())
+            if agents:
+                return agents
+    except (OSError, json.JSONDecodeError):
+        pass
+    return list(_DEMO_AGENTS)
+
+
+_AGENT_OPTIONS = _agent_options()
 
 # 仅 mailbus 总线与 agent 运维；不含 pipeline / V3 任务工具
 CLINIC_TOOLS: list[dict[str, Any]] = [
@@ -64,7 +83,7 @@ CLINIC_TOOLS: list[dict[str, Any]] = [
         "timeout": 30,
         "params": [
             {"name": "agent", "label": "Agent", "type": "select",
-             "options": _AGENT_OPTIONS, "default": "lingxi"},
+             "options": _AGENT_OPTIONS, "default": _AGENT_OPTIONS[0] if _AGENT_OPTIONS else ""},
             {"name": "mode", "label": "模式", "type": "select",
              "options": ["push", "interactive"], "default": "push"},
         ],
@@ -88,14 +107,14 @@ CLINIC_TOOLS: list[dict[str, Any]] = [
         "timeout": 30,
         "params": [
             {"name": "agent", "label": "Agent", "type": "select",
-             "options": _AGENT_OPTIONS, "default": "lingzhao"},
+             "options": _AGENT_OPTIONS, "default": _AGENT_OPTIONS[0] if _AGENT_OPTIONS else ""},
         ],
         "presets": [{"label": "查看", "args": ["--agent", "{agent}"]}],
     },
     {
         "id": "fix-cline-auth",
-        "name": "修复 Cline 鉴权（灵霄）",
-        "description": "同步 Hermes API key、重建 lingxiao 容器、cline auth。需在 WSL 宿主机执行（非容器内）。",
+        "name": "修复 Cline 鉴权",
+        "description": "同步 Hermes API key、重建 codex 容器、cline auth。需在 WSL 宿主机执行（非容器内）。",
         "category": "Agent 鉴权",
         "readonly": False,
         "host_only": True,
@@ -118,7 +137,7 @@ CLINIC_TOOLS: list[dict[str, Any]] = [
     {
         "id": "check-mailbus-integrity",
         "name": "源码/Store 完整性",
-        "description": "检查恢复后关键文件、13 个 transport、skills/hermes 目录是否偏少。",
+        "description": "检查恢复后关键文件、transport 名册、skills/hermes 目录是否偏少。",
         "category": "迁移与修复",
         "readonly": True,
         "timeout": 30,
@@ -151,7 +170,7 @@ CLINIC_TOOLS: list[dict[str, Any]] = [
         "readonly": True,
         "host_only": True,
         "timeout": 120,
-        "presets": [{"label": "lingzhao 探针", "args": []}],
+        "presets": [{"label": "Hermes 探针", "args": []}],
     },
     {
         "id": "ensure-n8n-publish-workflow",
@@ -176,7 +195,19 @@ CLINIC_TOOLS: list[dict[str, Any]] = [
         ],
         "presets": [
             {"label": "测试全部", "args": ["--json"]},
-            {"label": "测试灵昭", "args": ["lingzhao", "--json"]},
+            {"label": "测试指定 agent", "args": ["agent-a", "--json"]},
+            {"label": "交互报表", "args": []},
+        ],
+    },
+    {
+        "id": "health-overview",
+        "name": "全景体检",
+        "description": "一屏汇总：每 agent 浏览器/CLI/容器/身份可达性 + ollama/agentmemory/n8n/comfyui/external-tools 健康。",
+        "category": "全景体检",
+        "readonly": True,
+        "timeout": 120,
+        "presets": [
+            {"label": "体检", "args": ["--json"]},
             {"label": "交互报表", "args": []},
         ],
     },
@@ -254,6 +285,20 @@ def run_clinic_tool(
     script_path = os.path.join(MAIL_ROOT, script_rel.replace("/", os.sep))
     if not os.path.isfile(script_path):
         return {"ok": False, "error": "script_missing", "script": script_rel}
+
+    # host_only 工具：如果当前在 Docker 容器内运行，则拒绝执行并提示在宿主机操作
+    if tool.get("host_only") and os.path.exists("/.dockerenv"):
+        return {
+            "ok": False,
+            "tool_id": tool_id,
+            "tool_name": tool.get("name"),
+            "readonly": tool.get("readonly", False),
+            "host_only": True,
+            "error": "host_only_in_docker",
+            "message_zh": f"此工具需要在 WSL 宿主机执行，请在终端手动运行: python3 {script_rel}",
+            "stdout": "",
+            "stderr": f"[host_only] {tool.get('name')} 不能容器内执行，请 ssh 进 WSL 后手动运行。",
+        }
 
     cmd = [sys.executable, script_path, *args]
     timeout = int(tool.get("timeout") or 120)

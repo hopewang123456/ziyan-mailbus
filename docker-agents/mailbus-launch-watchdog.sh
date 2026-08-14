@@ -43,7 +43,7 @@ launch_one() {
     cat > "$vis_script" <<WRAP
 #!/bin/bash
 set +e
-cd /mnt/e
+cd /mnt/<WORKSPACE_DRIVE>
 ${cmd}
 EXIT_CODE=\$?
 echo ""
@@ -76,7 +76,7 @@ WRAP
   local wrapper="/tmp/launch-ps-wrapper-${ts}.sh"
   cat > "$wrapper" <<WRAP
 #!/bin/bash
-cd /mnt/e
+cd /mnt/<WORKSPACE_DRIVE>
 ${cmd}
 echo "--- ${title} 执行完毕 $(date) ---" >> /tmp/mailbus-launch.log 2>&1
 WRAP

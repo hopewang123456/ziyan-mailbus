@@ -17,18 +17,18 @@ CATALOG_SRC = os.path.join(ROOT, "docker-agents", "codex-agent", "deepseek-model
 CATALOG_NAME = "deepseek-model-catalog.json"
 
 AGENT_GATEWAY_PORTS = {
-    "lingxiao": 9220,
-    "lingjian": 9221,
+    "agent-g": 9220,
+    "agent-e": 9221,
 }
 
 AGENT_DEFAULTS: dict[str, dict[str, str | bool]] = {
-    "lingxiao": {
+    "agent-g": {
         "model": "deepseek-v4-flash",
         "reasoning_effort": "low",
         "supports_reasoning_summaries": False,
         "reasoning_summary": "none",
     },
-    "lingjian": {
+    "agent-e": {
         "model": "deepseek-reasoner",
         "reasoning_effort": "medium",
         "supports_reasoning_summaries": True,
@@ -63,7 +63,7 @@ def load_identity(data_dir: str, agent: str, agent_cfg: dict) -> str:
 
 
 def agent_reasoning_profile(agent: str, agent_cfg: dict) -> dict[str, str | bool]:
-    defaults = dict(AGENT_DEFAULTS.get(agent, AGENT_DEFAULTS["lingxiao"]))
+    defaults = dict(AGENT_DEFAULTS.get(agent, AGENT_DEFAULTS["agent-g"]))
     model = agent_cfg.get("model") or defaults["model"]
     defaults["model"] = model
     if model == "deepseek-reasoner":
@@ -111,7 +111,7 @@ def render_config_toml(
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="同步 Codex Desktop 配置")
-    ap.add_argument("agent", help="agent key，如 lingxiao / lingjian")
+    ap.add_argument("agent", help="agent key，如 agent-g / agent-e")
     ap.add_argument("--data-dir", default=os.path.join(ROOT, "store"))
     ap.add_argument("--codex-home", default=None)
     ap.add_argument("--gateway-port", type=int, default=None)

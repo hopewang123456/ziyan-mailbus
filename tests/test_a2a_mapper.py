@@ -52,7 +52,7 @@ class TestA2AMapper(unittest.TestCase):
         meta = msg["metadata"]["mailbus"]
         self.assertEqual(meta["taskId"], "feat-auth-001")
         self.assertEqual(meta["stepId"], "s1")
-        self.assertEqual(meta["toAgentId"], "lingzhao")
+        self.assertEqual(meta["toAgentId"], "agent-a")
 
     def test_from_a2a_task_matches_golden_a(self):
         data = load_golden_a2a_path("a")
@@ -82,7 +82,7 @@ class TestA2AMapper(unittest.TestCase):
         data = load_golden_a2a_path("c")
         msg = data["wire"]["resolve_send_message"]["params"]["message"]
         self.assertEqual(msg["role"], "ROLE_AGENT")
-        self.assertEqual(msg["metadata"]["mailbus"]["agentId"], "lingzhao")
+        self.assertEqual(msg["metadata"]["mailbus"]["agentId"], "agent-a")
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ INTAKE_ID = re.compile(r"^intake-[0-9]{8}-[a-z0-9]{6}$")
 TASK_ID = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{2,127}$")
 GATE_IDS = {
     "contact_done",
-    "req_to_lingzhao",
+    "req_to_solution",
     "customer_design_ok",
     "start_delivery",
     "content_start",
@@ -56,7 +56,7 @@ def _validate_a2a_task(data: dict, reg: dict, known_roles: set[int], name: str) 
         if rt not in known_roles:
             errors.append(f"{prefix}: planned_chain role_type={rt} 未知")
 
-    wf_ext = (data.get("extensions") or {}).get("ziyan.workflow") or {}
+    wf_ext = (data.get("extensions") or {}).get("mailbus.workflow") or {}
     wf_id = wf_ext.get("workflow_id")
     if wf_id:
         if wf_id not in (reg.get("workflows") or {}):

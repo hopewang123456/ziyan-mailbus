@@ -13,12 +13,12 @@
 
 ## msg-results（推荐）
 
-与 codex 同 schema，便于小七验收：
+与 codex 同 schema，便于验收：
 
 ```json
-{"agent":"lingzhao","msg_id":"...","status":"done","summary":"≤200字","timestamp":"..."}
+{"agent":"agent-a","msg_id":"...","status":"done","summary":"≤200字","timestamp":"..."}
 ```
 
 ## patch 流程
 
-Hermes 角色通常 **不** 走 dali 式 git patch；编码交付派给 dali/lingyun。
+Hermes 角色通常 **不** 走 git patch；编码交付派给编码 agent。

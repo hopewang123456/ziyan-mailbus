@@ -1,5 +1,5 @@
 """
-ziyan-mailbus 全局常量与路径
+mailbus 全局常量与路径
 
 所有硬编码路径统一收口到这里。
 
@@ -12,6 +12,7 @@ GitHub / CI：
   未设 env 时默认仓库内 demo 路径；需要时用 MAILBUS_*_ROOT / TEAM_PACK_*_ROOT 覆盖到仓库相对根。
 """
 
+import json
 import os
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -44,17 +45,36 @@ MAILBUS_IDENTITIES_ROOT = _env_path("MAILBUS_IDENTITIES_ROOT", MAILBUS_ROOT / "i
 TEAM_PACK_SKILLS_ROOT = _env_path("TEAM_PACK_SKILLS_ROOT", TEAM_PACK_ROOT / "skills")
 TEAM_PACK_RULES_ROOT = _env_path("TEAM_PACK_RULES_ROOT", TEAM_PACK_ROOT / "rules")
 
+# 技能共享组（skillgroup）根：一级子目录 = 一个组；跨框架可复用同一组。
+# 默认仓库 skills/skillgroup/ 开箱；本机 SoT 在 Vault 时用 MAILBUS_SKILLGROUP_ROOT 指过去。
+MAILBUS_SKILLGROUP_ROOT = _env_path("MAILBUS_SKILLGROUP_ROOT", MAILBUS_ROOT / "skills" / "skillgroup")
+
 # Agent Vault 根：compose 挂载 profiles 软链目标用（本地默认路径，非「用 env 指知识库」）
 # Docker 内 Hermes profile skills 常 symlink 到此树，容器需同路径 bind-mount。
-_default_vault = Path("E:/Obsidian/Vaults/Agent")
+# 公开仓库用通用占位；本机部署请设 AGENT_VAULT_ROOT 指向真实 Vault。
+_default_vault = Path("<AGENT_VAULT_ROOT>/Agent")
 if not (os.environ.get("AGENT_VAULT_ROOT") or "").strip():
-    # 若 MAILBUS_SKILLS_ROOT 已是 …/Agent/skills/mailbus（junction 解析后），可推断
+    # 从 _path-map.json 的 vault_root + roots.agent_root 解析（迁移工具生成），
+    # 不再靠旧路径形状（MAILBUS_SKILLS_ROOT.name=="mailbus"）猜测。
     try:
-        if MAILBUS_SKILLS_ROOT.name == "mailbus" and MAILBUS_SKILLS_ROOT.parent.name == "skills":
-            _default_vault = MAILBUS_SKILLS_ROOT.parent.parent
+        _path_map_candidates = (
+            [_default_vault / "_path-map.json"]
+            + [MAILBUS_ROOT / "_path-map.json"]
+            + list(MAILBUS_ROOT.glob("*/_path-map.json"))
+        )
+        for _pm in _path_map_candidates:
+            if not _pm.is_file():
+                continue
+            _pm_data = json.loads(_pm.read_text(encoding="utf-8"))
+            _vr = _pm_data.get("vault_root") or ""
+            _agent_root = ((_pm_data.get("roots") or {}).get("agent_root")) or "Agent"
+            if _vr:
+                _default_vault = Path(str(_vr)) / _agent_root
+                break
     except Exception:
         pass
 AGENT_VAULT_ROOT = _env_path("AGENT_VAULT_ROOT", _default_vault)
+AGENT_VAULT_ROOT_STR = str(AGENT_VAULT_ROOT)
 
 MAILBUS_SKILLS_ROOT_STR = str(MAILBUS_SKILLS_ROOT)
 MAILBUS_RULES_ROOT_STR = str(MAILBUS_RULES_ROOT)
@@ -63,6 +83,7 @@ MAILBUS_DOCS_ROOT_STR = str(MAILBUS_DOCS_ROOT)
 MAILBUS_IDENTITIES_ROOT_STR = str(MAILBUS_IDENTITIES_ROOT)
 TEAM_PACK_SKILLS_ROOT_STR = str(TEAM_PACK_SKILLS_ROOT)
 TEAM_PACK_RULES_ROOT_STR = str(TEAM_PACK_RULES_ROOT)
+MAILBUS_SKILLGROUP_ROOT_STR = str(MAILBUS_SKILLGROUP_ROOT)
 
 # ── 数据目录 ─────────────────────────────────────────────────────────────
 DEFAULT_DATA_DIR = os.environ.get("MAILBUS_DATA") or os.path.join(MAILBUS_ROOT_STR, "store")
@@ -93,7 +114,7 @@ MAILBUS_VERSION = "2.1.0"
 DEFAULT_HEARTBEAT_INTERVAL = 60
 
 # ── 全局锁文件 ───────────────────────────────────────────────────────────
-LOCK_FILE = "/tmp/ziyan-mailbus.lock"
+LOCK_FILE = "/tmp/mailbus.lock"
 
 
 # ── 工具函数 ──────────────────────────────────────────────────────────

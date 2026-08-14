@@ -22,7 +22,7 @@ TYPES = {
 
 class TestTaskCompletion(unittest.TestCase):
     def test_notice_not_complete_via_replies(self):
-        ok, reason = is_task_complete("/tmp", "xiaoqi", {"type": "notice", "id": "m1", "content": "hi"})
+        ok, reason = is_task_complete("/tmp", "agent-m", {"type": "notice", "id": "m1", "content": "hi"})
         self.assertFalse(ok)
         self.assertEqual(reason, "notice_not_task_complete")
 
@@ -32,20 +32,20 @@ class TestTaskCompletion(unittest.TestCase):
 
 class TestRecruitPushImport(unittest.TestCase):
     def test_resolve_cli_chain_importable_from_pusher(self):
-        cfg = {"type": "hermes_profile", "profile": "lingzhao", "models": ["deepseek-flash"]}
+        cfg = {"type": "hermes_profile", "profile": "agent-a", "models": ["deepseek-flash"]}
         chain = resolve_cli_chain(cfg, TYPES)
         self.assertTrue(chain)
 
 
 class TestValidateClineCodexDrift(unittest.TestCase):
-    def test_cline_on_lingxiao_service_warns(self):
+    def test_cline_on_codex_service_warns(self):
         from lib.adapters.frameworks import validate_agents
 
         agents = {
-            "lingxiao": {
-                "name": "灵霄",
+            "agent-g": {
+                "name": "Agent G",
                 "type": "cline",
-                "docker": {"service": "lingxiao"},
+                "docker": {"service": "codex-web"},
                 "models": ["deepseek-flash"],
             }
         }

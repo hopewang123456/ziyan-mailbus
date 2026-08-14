@@ -1,6 +1,6 @@
 {
   "schema": "mailbus-services-v1",
-  "services": ["ollama", "agentmemory"],
+  "services": ["ollama", "agentmemory", "n8n", "comfyui"],
   "runtime_profiles": ["windows", "wsl", "docker"],
   "notes": {
     "priority": "env override > store/config.services > config/services/*.json > code fallback",

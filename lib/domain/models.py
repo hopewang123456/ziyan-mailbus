@@ -1,5 +1,5 @@
 """
-ziyan-mailbus 数据模型
+mailbus 数据模型
 
 定义消息状态、消息格式、队列模型、配置模型等基础数据类型。
 """
@@ -345,7 +345,7 @@ class AgentConfig:
 @dataclass
 class BusConfig:
     """总线配置"""
-    project: str = "ziyan-mailbus"
+    project: str = "mailbus"
     version: str = "1.0.0"
     data_dir: str = field(default_factory=lambda: DEFAULT_DATA_DIR)
     ack_timeout: int = 30           # 等待 ack 超时（秒）

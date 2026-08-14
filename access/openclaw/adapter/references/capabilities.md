@@ -8,16 +8,16 @@
 
 ## 不能做
 
-- 大块编码（派 dali/lingyun）
-- 混淆 xiaoqi/yige state_dir（会话污染）
+- 大块编码（派编码 agent）
+- 混淆多 openclaw state_dir（会话污染）
 - 在群聊里代主人发声（AGENTS.md Red Lines）
 
 ## state_dir
 
 | agent | OPENCLAW_STATE_DIR |
 |-------|-------------------|
-| xiaoqi | `/workspace/data/.openclaw-xiaoqi` |
-| yige | `/workspace/data/.openclaw-yige` |
+| agent-c | `/workspace/data/.openclaw-agent-c` |
+| agent-g | `/workspace/data/.openclaw-agent-g` |
 
 ## 会话
 

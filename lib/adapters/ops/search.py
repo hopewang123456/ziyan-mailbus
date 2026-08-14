@@ -1,4 +1,4 @@
-"""ziyan-mailbus 消息检索（SQLite FTS5）
+"""mailbus 消息检索（SQLite FTS5）
 
 将消息索引到 SQLite 全文检索引擎，提供 mailbus search 命令。"""
 import os

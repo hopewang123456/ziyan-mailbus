@@ -1,5 +1,5 @@
 """
-ziyan-mailbus HTTP API — 系统相关路由处理器
+mailbus HTTP API — 系统相关路由处理器
 
 处理: /api/status, /api/agents, /api/heartbeat, /api/alerts,
       /api/config, /api/reports, /api/search, /api/templates,
@@ -13,8 +13,8 @@ import sys
 import time
 import shutil
 import subprocess
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from lib.infra.constants import MAILBUS_ROOT
+from lib.infra.runtime_net import rewrite_browser_host
 from lib.domain.models import Inbox
 from lib.infra.utils import json_read, json_write, resolve_paths, resolve_mailbus_path, identity_candidates, to_wsl_path, _now_iso
 from lib.adapters.ops.heartbeat import load_status as load_heartbeat
@@ -86,6 +86,15 @@ def _run_launch_script(script_path: str, agent: str, mode: str) -> subprocess.Co
     )
 
 
+def handle_health(handler):
+    """GET /api/health — 存活探针（无 IO、无依赖），供看门狗/负载均衡用。"""
+    handler._send_json({
+        "status": "ok",
+        "pid": os.getpid(),
+        "ts": _now_iso(),
+    })
+
+
 def handle_status(handler):
     """GET /api/status — 总线概要状态"""
     total = 0
@@ -116,10 +125,13 @@ def handle_status(handler):
             "has_unread": has_unread if isinstance(data, list) else (data.get("has_unread", False) if data else False),
             "type": handler.agents[name].get("type", "?"),
         }
+    project_name = json_read(
+        os.path.join(handler.data_dir, "config.json"), {}
+    ).get("project") or "mailbus"
     handler._send_json({
         "status": "ok",
         "version": "v2.0.0",
-        "project": "ziyan-mailbus",
+        "project": project_name,
         "agents": len(handler.agents),
         "total_messages": total,
         "unread_messages": unread,
@@ -144,17 +156,33 @@ def _parse_launch_stdout_url(stdout: str) -> str:
 
 
 def _resolve_agent_browser_url(handler, agent_name: str) -> str:
-    """解析 agent 浏览器 URL（Codex/Claude 含 per-agent 端口）。"""
-    cfg = handler.agents.get(agent_name, {})
+    """解析 agent 浏览器 URL；Claude 补鉴权注入；实例 host/port 覆盖。"""
+    from lib.adapters.runtime.cred_delivery import apply_instance_endpoint
+
+    cfg = handler.agents.get(agent_name, {}) or {}
     atype = cfg.get("type", "")
     if atype == "claude_code":
+        url = ""
         try:
             from lib.adapters.frameworks.claude_browser_launch import resolve_browser_url
 
-            return resolve_browser_url(agent_name, handler.data_dir)
+            url = resolve_browser_url(agent_name, handler.data_dir)
         except Exception:
-            pass
-    return _get_launch_url(handler, agent_name)
+            url = ""
+        if not url:
+            url = _get_launch_url(handler, agent_name)
+        else:
+            from lib.adapters.config.browser_auth import build_authed_url, resolve_agent_auth
+            from lib.infra.runtime_net import rewrite_browser_host
+
+            url = apply_instance_endpoint(cfg, url)
+            auth = resolve_agent_auth(cfg, agent_name, getattr(handler, "data_dir", "") or "")
+            url = build_authed_url(url, auth)
+            return rewrite_browser_host(url, authed=bool(auth.get("authed")))
+        return apply_instance_endpoint(cfg, url) if url else ""
+    url = _get_launch_url(handler, agent_name)
+    return apply_instance_endpoint(cfg, url) if url else ""
+
 
 
 def _agent_launch_meta(handler, name: str, cfg: dict) -> dict:
@@ -167,7 +195,7 @@ def _agent_launch_meta(handler, name: str, cfg: dict) -> dict:
     if atype in ("codex", "claude_code"):
         has_desktop = False
 
-    # 无 browser kind / 显式关闭 → 不算有浏览器（避免 dali 等假 has_browser）
+    # 无 browser kind / 显式关闭 → 不算有浏览器（避免按类型误判 has_browser）
     has_browser = launch.get("has_browser")
     if has_browser is None:
         tmpl_name = launch.get("template", "")
@@ -220,7 +248,7 @@ def handle_agents(handler):
 
 def handle_frameworks(handler):
     """GET /api/frameworks — framework discovery 状态（Dashboard 配置中心）。"""
-    from ..framework_discovery import framework_status, scan_framework_agents
+    from lib.adapters.frameworks.framework_discovery import framework_status, scan_framework_agents
 
     out: dict = {}
     for fw, st in framework_status().items():
@@ -768,25 +796,14 @@ def handle_agent_profile(handler, agent: str):
     hb_data = load_heartbeat(handler.data_dir)
     profile["heartbeat"] = (hb_data.get("agents", {}) or {}).get(agent, {}) if hb_data else {}
 
-    # 头像：web/public 与 docs/avatars 双根
-    from lib.infra.constants import MAILBUS_DOCS_ROOT_STR, MAILBUS_ROOT
+    # 头像：Agent 卡 paths.portrait / avatar_animated → 否则 web/public/avatars 约定
+    from lib.adapters.config.avatar_paths import resolve_avatar_urls
 
-    avatar_roots = [
-        os.path.join(str(MAILBUS_ROOT), "web", "public", "avatars"),
-        os.path.join(MAILBUS_DOCS_ROOT_STR, "avatars"),
-    ]
-
-    def _first(*names: str) -> str:
-        for root in avatar_roots:
-            for name in names:
-                if os.path.isfile(os.path.join(root, name)):
-                    return f"avatars/{name}"
-        return f"avatars/{names[0]}"
-
-    profile["avatar_url"] = _first(f"{agent}_portrait.png", f"{agent}_portrait.svg")
-    profile["avatar_animated"] = _first(f"{agent}_animated.webp", f"{agent}_animated.svg")
-    if not profile.get("avatar_animated"):
-        profile["avatar_animated"] = profile["avatar_url"]
+    av = resolve_avatar_urls(agent, cfg)
+    profile["avatar_url"] = av["avatar_url"]
+    profile["avatar_animated"] = av["avatar_animated"]
+    profile["portrait_path"] = av.get("portrait_path")
+    profile["animated_path"] = av.get("animated_path")
 
     profile["paths"] = {
         "identity": identity_used,
@@ -902,50 +919,75 @@ def handle_ping(handler, agent: str):
 
 
 def handle_avatars_manifest(handler):
-    """GET /api/avatars/manifest — 13 人静+动齐套门禁状态。"""
-    from lib.infra.constants import MAILBUS_DOCS_ROOT_STR, MAILBUS_ROOT
+    """GET /api/avatars/manifest — agent 静态/动态头像门禁状态。"""
+    from lib.adapters.config.avatar_paths import resolve_avatar_urls
 
-    roster = [
-        "ziyan",
-        "lingzhao",
-        "lingjin",
-        "lingxi",
-        "xiaoqi",
-        "yige",
-        "lingxiao",
-        "dali",
-        "lingjian",
-        "lingyan",
-        "lingxun",
-        "lingzhang",
-        "lingtuo",
-    ]
-    roots = [
-        os.path.join(MAILBUS_DOCS_ROOT_STR, "avatars"),
-        os.path.join(str(MAILBUS_ROOT), "web", "public", "avatars"),
-    ]
+    cfg = json_read(os.path.join(handler.data_dir, "config.json"), {})
+    roster = list((cfg.get("agents") or {}).keys()) or list(handler.agents.keys())
     pairs = []
-    ok_n = 0
     for aid in roster:
-        still = any(os.path.isfile(os.path.join(r, f"{aid}_portrait.png")) for r in roots)
-        motion = any(os.path.isfile(os.path.join(r, f"{aid}_animated.webp")) for r in roots)
-        ready = still and motion
-        if ready:
-            ok_n += 1
-        pairs.append({"id": aid, "portrait": still, "animated": motion, "ready": ready})
-    handler._send_json(
-        {
-            "expected": len(roster),
-            "count": ok_n,
-            "complete": ok_n >= len(roster),
-            "pairs": pairs,
-            "gate": "all_13_static_plus_animated_same_identity",
-        }
+        ac = (cfg.get("agents") or {}).get(aid) or handler.agents.get(aid) or {}
+        av = resolve_avatar_urls(aid, ac if isinstance(ac, dict) else {})
+        pairs.append({
+            "id": aid,
+            "portrait": bool(av.get("portrait_exists")),
+            "animated": bool(av.get("animated_exists")),
+            "ready": bool(av.get("portrait_exists")),
+            "portrait_path": av.get("portrait_path"),
+            "animated_path": av.get("animated_path"),
+        })
+    ready_count = sum(1 for p in pairs if p.get("ready"))
+    handler._send_json({
+        "agents": pairs,
+        "gate": "card_paths_or_public_avatars",
+        "count": len(pairs),
+        "ready_count": ready_count,
+        # Cockpit 轨道：有名册即可上环；缺肖像用占位，不再卡 complete
+        "complete": True if pairs else False,
+    })
+
+
+def handle_agent_avatar(handler, agent: str, kind: str):
+    """GET /api/agent-avatar/<agent>/<portrait|animated> — 按卡片路径供图。"""
+    from lib.adapters.config.avatar_paths import resolve_animated_file, resolve_portrait_file
+
+    agents, _ = _reload_store_config(handler)
+    cfg = agents.get(agent) or {}
+    kind_l = (kind or "portrait").strip().lower()
+    path = (
+        resolve_animated_file(agent, cfg)
+        if kind_l in ("animated", "motion", "webp")
+        else resolve_portrait_file(agent, cfg)
     )
+    if not path or not os.path.isfile(path):
+        handler._send_json({"error": "avatar not found", "agent": agent, "kind": kind_l}, 404)
+        return
+    ext = os.path.splitext(path)[1].lower()
+    mime = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+        ".svg": "image/svg+xml",
+        ".gif": "image/gif",
+    }.get(ext, "application/octet-stream")
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except OSError as e:
+        handler._send_json({"error": str(e)}, 500)
+        return
+    handler.send_response(200)
+    handler.send_header("Content-Type", mime)
+    handler.send_header("Cache-Control", "no-cache")
+    handler.send_header("Access-Control-Allow-Origin", "*")
+    handler.send_header("Content-Length", str(len(data)))
+    handler.end_headers()
+    handler.wfile.write(data)
 
 
 def handle_agent_recruit(handler):
-    """POST /api/agents/recruit — 提交新员工需求，派发给灵昭生成 AI 员工方案。"""
+    """POST /api/agents/recruit — 提交新员工需求，派发给方案设计 agent 生成 AI 员工方案。"""
     body = handler._read_post_body()
     platform = (body.get("platform") or "").strip()
     display_name = (body.get("name") or body.get("display_name") or "").strip()
@@ -982,7 +1024,7 @@ def handle_agent_recruit(handler):
         lines.append(f"工作要求: {work_req}")
     lines.extend([
         "",
-        "请灵昭输出：",
+        "请方案设计 agent 输出：",
         "1. agent id 建议（英文 snake_case）",
         "2. config.json agents 条目草案（含 type/profile_paths/launch）",
         "3. identities/{id}.md 完整人设（含年龄/星座/MBTI/角色/核心特质/职责）",
@@ -990,9 +1032,10 @@ def handle_agent_recruit(handler):
     ])
     content = "\n".join(lines)
 
-    to = "lingzhao"
+    from lib.infra.org_defaults import org_default
+    to = org_default(handler.data_dir, "reviewer") or "agent-a"
     if to not in handler.agents:
-        handler._send_json({"error": "lingzhao 未注册"}, 503)
+        handler._send_json({"error": f"{to} 未注册"}, 503)
         return
     from lib.infra.utils import build_message
     msg_dict = build_message("dashboard", to, content, "task", "high").to_dict()
@@ -1033,45 +1076,23 @@ def handle_agent_recruit(handler):
 
 
 def _get_gateway_token() -> str:
-    """读取 OpenClaw gateway token（与 Docker entrypoint 保持一致）"""
-    env_token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "").strip()
-    if env_token:
-        return env_token
+    """读取 OpenClaw gateway token（委托统一组件，与 Docker entrypoint 保持一致）"""
+    from lib.adapters.config.browser_auth import openclaw_gateway_token
 
-    candidates = [
-        str(MAILBUS_ROOT.parent / "openclaw_space" / "data" / ".openclaw" / "openclaw.json"),
-        os.path.expanduser("~/.openclaw-data/openclaw.json"),
-        os.path.expanduser("~/.openclaw/openclaw.json"),
-    ]
-    for oc_path in candidates:
-        try:
-            if os.path.isfile(oc_path):
-                with open(oc_path) as f:
-                    oc = json.load(f)
-                gw = oc.get("gateway", {})
-                auth = gw.get("auth", {})
-                if auth.get("mode") == "token":
-                    token = auth.get("token", "")
-                    if token:
-                        return token
-        except Exception:
-            pass
-    return "ziyan-team"
+    return openclaw_gateway_token()
 
 
 def _with_gateway_token(url: str, token: str) -> str:
-    """把 URL 里的 token 参数统一替换成当前 gateway token"""
+    """把 URL 里的 token 参数统一替换成当前 gateway token（收编自统一组件）。"""
     if not url or not token:
         return url
-    parsed = urlparse(url)
-    query = parse_qs(parsed.query, keep_blank_values=True)
-    query["token"] = [token]
-    new_query = urlencode(query, doseq=True)
-    return urlunparse(parsed._replace(query=new_query))
+    from lib.adapters.config.browser_auth import build_authed_url
+
+    return build_authed_url(url, {"mode": "token", "token": token})
 
 
 def _get_launch_url(handler, agent_name: str) -> str:
-    """从 agent 配置中提取浏览器启动 URL（含 gateway token）"""
+    """从 agent 配置中提取浏览器启动 URL（含鉴权注入 + 白名单门槛）"""
     cfg = handler.agents.get(agent_name, {})
     launch = cfg.get("launch", {})
     if not launch:
@@ -1082,7 +1103,6 @@ def _get_launch_url(handler, agent_name: str) -> str:
     browser_cfg = dict(tmpl.get("browser", {}))
     browser_cfg.update(launch.get("browser", {}))
     url = browser_cfg.get("url", "")
-    tmpl_name = launch.get("template", "")
     if tmpl_name == "openclaw_gateway" or cfg.get("type") == "openclaw":
         from lib.adapters.frameworks import OpenClawAdapter
 
@@ -1097,11 +1117,14 @@ def _get_launch_url(handler, agent_name: str) -> str:
         return ""
     if url:
         url = url.replace("{agent}", agent_name)
-    # 仅 OpenClaw gateway 需要 token，Hermes/Cline 等不要误加
-    if tmpl_name == "openclaw_gateway" or cfg.get("type") == "openclaw":
-        token = _get_gateway_token()
-        url = _with_gateway_token(url, token)
-    return url
+
+    # 统一鉴权注入 + 白名单门槛（token→?token=、basic→userinfo、session/password 不注入）
+    from lib.adapters.config.browser_auth import build_authed_url, resolve_agent_auth
+
+    data_dir = getattr(handler, "data_dir", "") or ""
+    auth = resolve_agent_auth(cfg, agent_name, data_dir)
+    url = build_authed_url(url, auth)
+    return rewrite_browser_host(url, authed=bool(auth.get("authed")))
 
 
 def handle_list_launchable(handler):
@@ -1421,6 +1444,8 @@ def handle_clinic_run(handler):
     status = 200 if result.get("ok") else 500
     if result.get("error") in ("unknown_tool",):
         status = 404
+    if result.get("error") in ("host_only_in_docker",):
+        status = 200  # 非服务端错误，前端应正常渲染提示信息
     handler._send_json(result, status)
 
 

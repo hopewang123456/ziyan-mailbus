@@ -17,8 +17,8 @@ from lib.infra.utils import json_write
 class TestTaskInterrupt(unittest.TestCase):
     def test_detect_flags_inactive_cli(self):
         with tempfile.TemporaryDirectory() as tmp:
-            agents = {"dali": {"type": "opencode", "inbox": f"{tmp}/inbox/dali"}}
-            os.makedirs(agents["dali"]["inbox"], exist_ok=True)
+            agents = {"agent-i": {"type": "opencode", "inbox": f"{tmp}/inbox/agent-i"}}
+            os.makedirs(agents["agent-i"]["inbox"], exist_ok=True)
             task = {
                 "task_id": "t-interrupt-001",
                 "status": "running",
@@ -27,7 +27,7 @@ class TestTaskInterrupt(unittest.TestCase):
                 "chain": [{
                     "step": 1,
                     "step_id": "step-1-1",
-                    "to_person": "dali",
+                    "to_person": "agent-i",
                     "fsm_state": "in_progress",
                     "status": "running",
                     "started_at": "2020-01-01T00:00:00+00:00",

@@ -4,10 +4,10 @@ import { api } from "../lib/api";
 
 export function InboxPage() {
   const [replies, setReplies] = useState<unknown>(null);
-  const [agent, setAgent] = useState("lingyun");
+  const [agent, setAgent] = useState("agent-a");
   const [inbox, setInbox] = useState<unknown>(null);
   const [err, setErr] = useState("");
-  const [to, setTo] = useState("lingyun");
+  const [to, setTo] = useState("agent-a");
   const [content, setContent] = useState("");
   const [priority, setPriority] = useState("normal");
   const [msgType, setMsgType] = useState("notice");
@@ -44,10 +44,10 @@ export function InboxPage() {
     <div className="space-y-4">
       <header>
         <p className="hud-label">Comms</p>
-        <h2 className="mt-1 font-display text-2xl tracking-wide">Inbox</h2>
+        <h2 className="mt-1 font-display text-2xl tracking-[-0.02em]">Inbox</h2>
       </header>
 
-      <section className="space-y-3 rounded-sm border border-rail bg-hull/40 p-4">
+      <section className="space-y-3 soft-panel">
         <p className="hud-label">发送 · POST /api/send-msg</p>
         <div className="flex flex-wrap items-end gap-2">
           <label className="block">
@@ -121,13 +121,13 @@ export function InboxPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         <div>
           <p className="hud-label mb-2">/api/replies</p>
-          <pre className="max-h-80 overflow-auto rounded-sm border border-rail bg-hull/50 p-3 text-xs text-mute">
+          <pre className="max-h-80 overflow-auto soft-inset text-xs text-mute">
             {replies ? JSON.stringify(replies, null, 2) : "—"}
           </pre>
         </div>
         <div>
           <p className="hud-label mb-2">/api/inbox/…</p>
-          <pre className="max-h-80 overflow-auto rounded-sm border border-rail bg-hull/50 p-3 text-xs text-mute">
+          <pre className="max-h-80 overflow-auto soft-inset text-xs text-mute">
             {inbox ? JSON.stringify(inbox, null, 2) : "选择 agent 后拉取"}
           </pre>
         </div>

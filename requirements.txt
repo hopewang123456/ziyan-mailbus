@@ -1,0 +1,6 @@
+# Runtime deps for mailbus (keep in sync with pyproject.toml)
+PyYAML>=6.0
+Markdown>=3.5
+
+# Dev (optional): pip install -e ".[dev]"
+# pytest>=7.0

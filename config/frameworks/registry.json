@@ -22,7 +22,7 @@
     },
     "codex": {
       "enabled": true,
-      "path_env": "LINGXIAO_WORKSPACE",
+      "path_env": "CODEX_WORKSPACE",
       "probe": "dir"
     }
   }

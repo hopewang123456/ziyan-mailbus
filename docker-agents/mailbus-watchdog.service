@@ -1,5 +1,5 @@
 [Unit]
-Description=子言AI mailbus 终端弹窗 Watchdog
+Description=Mailbus 终端弹窗 Watchdog
 After=network.target docker.service
 Wants=docker.service
 

@@ -4,8 +4,8 @@
 不创建 pipeline tracker，不跑 12 步链。仅验证：agent CLI 能否写入共享 store。
 
 用法（mailbus 容器内）:
-  python3 tools/smoke-agent-disk-write.py --agent lingzhao
-  python3 tools/smoke-agent-disk-write.py --agent lingzhao --timeout 600
+  python3 tools/smoke-agent-disk-write.py --agent agent-a
+  python3 tools/smoke-agent-disk-write.py --agent agent-a --timeout 600
 
 退出码: 0=落盘成功, 1=超时/内容不符, 2=推送失败
 """
@@ -83,7 +83,7 @@ def validate_probe(path: str, agent: str, run_id: str) -> tuple[bool, str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Agent 落盘最短探针")
-    ap.add_argument("--agent", default="lingzhao")
+    ap.add_argument("--agent", default="agent-a")
     ap.add_argument("--data-dir", default=os.environ.get("DATA_DIR", "store"))
     from lib.infra.constants import DEFAULT_API_BASE
     ap.add_argument("--api", default=os.environ.get("MAILBUS_API", DEFAULT_API_BASE))

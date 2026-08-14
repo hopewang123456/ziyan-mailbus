@@ -1,0 +1,48 @@
+{
+  "schema": "mailbus-golden-a2a-path-v1",
+  "path": "b",
+  "scenario": {
+    "can_deliver_a2a": true,
+    "label": "retries-exhausted"
+  },
+  "canonical_dispatch": {
+    "task_id": "feat-retry-001",
+    "step_id": "s1",
+    "role_type": 1,
+    "to_agent": "agent-a",
+    "intent": "retry me",
+    "message_id": "msg-b-001"
+  },
+  "transport_audit": {
+    "a2a_retries_exhausted": true,
+    "transport_attempts": [
+      {
+        "channel": "a2a_standard",
+        "outcome": "fail"
+      },
+      {
+        "channel": "a2a_standard",
+        "outcome": "fail"
+      },
+      {
+        "channel": "a2a_standard",
+        "outcome": "fail"
+      },
+      {
+        "channel": "file_bus",
+        "outcome": "ok"
+      }
+    ]
+  },
+  "canonical_step_result": {
+    "task_id": "feat-retry-001",
+    "step_id": "s1",
+    "agent": "agent-a",
+    "role_type": 1,
+    "conclusion": "done",
+    "summary": "delivered via file_bus",
+    "source": "file_bus",
+    "transport_used": "file_bus",
+    "timestamp": "2026-01-01T00:00:00Z"
+  }
+}

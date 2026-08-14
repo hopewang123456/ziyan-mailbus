@@ -28,7 +28,7 @@ p=Path('config/mailbus/launch-ports.json'); materialize_from_example(p); print(p
 | `access/external-tools/grants.json` | `access/external-tools/grants.example.json` |
 | `.env`, `store/secrets.json` | `migrate/env.template`, `config/env.template`, `docker-agents/.env.example` |
 
-### Your own Agents (e.g. replace 大力 / 小七)
+### Your own Agents (e.g. replace example agent ids)
 
 1. Copy `examples/transport/agent-coder/transport.json` → `access/transport/<your-id>/transport.json` and edit paths.
 2. Copy `config/agents/coder.override.example.json` → `config/agents/<your-id>.override.json`.
@@ -55,6 +55,6 @@ If the real file is missing, copy the example first.
 
 - 案例文件名 = 实文件名多一段 `.example`；Git 只交 example；本机只用无 `.example` 的文件。
 - Clone 后：复制 → 去掉 `.example` → 填自己的密钥与 **自己的 Agent id**。
-- 个人名册（大力/小七等）不进仓库；用 `agent-coder` / `agent-chat` 等通用 example 起步。
+- 个人名册（真实人名等）不进仓库；用 `agent-coder` / `agent-chat` 等通用 example 起步。
 - 无敏感的公共 JSON 可直接提交，不必强行拆 example。
 - **代码只读不带 example 的实文件。**

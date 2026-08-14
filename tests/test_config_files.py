@@ -20,7 +20,7 @@ class TestConfigFiles(unittest.TestCase):
         self.assertTrue(is_example_config_name("coder.override.example.json"))
         self.assertTrue(is_example_config_name("transport.template.json"))
         self.assertFalse(is_example_config_name("launch-ports.json"))
-        self.assertFalse(is_example_config_name("lingyun.override.json"))
+        self.assertFalse(is_example_config_name("agent-h.override.json"))
 
     def test_resolve_prefers_real_never_example(self) -> None:
         with tempfile.TemporaryDirectory() as td:

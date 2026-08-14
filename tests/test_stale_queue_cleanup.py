@@ -16,21 +16,21 @@ from lib.infra.utils import json_write
 class TestStaleQueueCleanup(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        for sub in ("inbox/lingzhao", "queue/urgent", "queue/normal"):
+        for sub in ("inbox/agent-a", "queue/urgent", "queue/normal"):
             os.makedirs(os.path.join(self.tmp, sub), exist_ok=True)
         json_write(
-            os.path.join(self.tmp, "inbox", "lingzhao", "inbox.json"),
-            {"agent": "lingzhao", "has_unread": False, "messages": [], "since": "2026-06-17T00:00:00+0800"},
+            os.path.join(self.tmp, "inbox", "agent-a", "inbox.json"),
+            {"agent": "agent-a", "has_unread": False, "messages": [], "since": "2026-06-17T00:00:00+0800"},
         )
         json_write(
-            os.path.join(self.tmp, "queue", "urgent", "lingzhao.json"),
+            os.path.join(self.tmp, "queue", "urgent", "agent-a.json"),
             [{"id": "msg-stale", "state": "pending"}],
         )
 
     def test_removes_stale_queue_when_no_pending_inbox(self):
-        n = _cleanup_stale_queue_files(self.tmp, {"lingzhao": {}})
+        n = _cleanup_stale_queue_files(self.tmp, {"agent-a": {}})
         self.assertEqual(n, 1)
-        self.assertFalse(os.path.isfile(os.path.join(self.tmp, "queue", "urgent", "lingzhao.json")))
+        self.assertFalse(os.path.isfile(os.path.join(self.tmp, "queue", "urgent", "agent-a.json")))
 
 
 if __name__ == "__main__":

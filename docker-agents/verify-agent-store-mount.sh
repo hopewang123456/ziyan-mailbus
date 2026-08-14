@@ -37,14 +37,14 @@ check "hermes 读 rules" \
 check "openclaw 写 store" \
   "docker exec docker-agents-openclaw-1 sh -c 'echo ok > ${STORE}/.${PROBE} && rm -f ${STORE}/.${PROBE}'"
 
-check "dali 写 store" \
-  "docker exec docker-agents-dali-1 sh -c 'echo ok > ${STORE}/.${PROBE} && rm -f ${STORE}/.${PROBE}'"
+check "opencode 写 store" \
+  "docker exec docker-agents-opencode-1 sh -c 'echo ok > ${STORE}/.${PROBE} && rm -f ${STORE}/.${PROBE}'"
 
-check "lingxiao 写 store" \
-  "docker exec docker-agents-lingxiao-1 sh -c 'echo ok > ${STORE}/.${PROBE} && rm -f ${STORE}/.${PROBE}'"
+check "codex-web 写 store" \
+  "docker exec docker-agents-codex-web-1 sh -c 'echo ok > ${STORE}/.${PROBE} && rm -f ${STORE}/.${PROBE}'"
 
-check "lingjian 写 store" \
-  "docker exec docker-agents-lingjian-1 sh -c 'echo ok > ${STORE}/.${PROBE} && rm -f ${STORE}/.${PROBE}'"
+check "codex-review 写 store" \
+  "docker exec docker-agents-codex-review-1 sh -c 'echo ok > ${STORE}/.${PROBE} && rm -f ${STORE}/.${PROBE}'"
 
 echo "---"
 echo "PASS=$PASS FAIL=$FAIL"

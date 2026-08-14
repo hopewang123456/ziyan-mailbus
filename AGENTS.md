@@ -2,7 +2,7 @@
 
 ## Product
 
-**ziyan-mailbus**: file-based Agent-to-Agent message bus. Framework-agnostic (Hermes, OpenClaw, Codex, Claude Code, …).
+**mailbus**: file-based Agent-to-Agent message bus. Framework-agnostic (Hermes, OpenClaw, Codex, Claude Code, …).
 
 ## Repo roots
 
@@ -20,9 +20,10 @@
 
 ## Architecture SoT
 
-- In-repo: [`ARCHITECTURE.md`](ARCHITECTURE.md) (created/updated during deep cleanup)
-- Vault plans: `Projects/mailbus/plans/` (Obsidian)
-- Cursor plan: `mailbus-arch-deep-cleanup` (do not edit plan file while executing)
+- 代码分层/快速开始：本文件上方 [`ARCHITECTURE.md`](ARCHITECTURE.md)
+- 完整架构文档：Obsidian `Agent/01-mailbus/016-docs/0161-architecture/`（SoT）
+- Vault 计划：`Agent/01-mailbus/017-plans/`（Obsidian）
+- 路径/结构映射：`Agent/_path-map.json`（机器可读）
 
 ## Dependency rule (target)
 

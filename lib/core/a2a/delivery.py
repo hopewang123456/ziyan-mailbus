@@ -21,6 +21,8 @@ def can_deliver_a2a(agent_id: str, agent_cfg: dict, ctx: DispatchContext) -> boo
     a2a_ch = channels.get("a2a") or {}
     if a2a_ch.get("enabled") is False:
         return False
+    if a2a_ch.get("available") is False:
+        return False
     endpoint = (agent_cfg or {}).get("endpoint") or {}
     card = (agent_cfg or {}).get("agent_card") or (agent_cfg or {}).get("wire") or {}
     interfaces = (

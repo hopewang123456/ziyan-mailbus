@@ -271,8 +271,18 @@ def _append_inbox_notice(
     json_write(inbox_file, inbox.to_dict())
 
 
-def _recent_patrol_notice(data_dir: str, agent: str = "lingxun", hours: float = 1.0) -> bool:
+def _patrol_target(data_dir: str) -> str:
+    """巡检通知目标 agent：org_defaults.notify_agent，回落到 demo。"""
+    try:
+        from lib.infra.org_defaults import org_default
+        return org_default(data_dir, "notify_agent") or "agent-a"
+    except Exception:
+        return "agent-a"
+
+
+def _recent_patrol_notice(data_dir: str, agent: str = "", hours: float = 1.0) -> bool:
     """是否已有近期 patrol notice（避免 scheduler 重复写入）。"""
+    agent = agent or _patrol_target(data_dir)
     from datetime import datetime, timezone, timedelta
     from lib.domain.models import Inbox
     from lib.application.orchestration.tracker import _parse_iso_dt
@@ -302,8 +312,9 @@ def _recent_patrol_notice(data_dir: str, agent: str = "lingxun", hours: float = 
     return False
 
 
-def run_lingxun_patrol(data_dir: str) -> int:
-    if _recent_patrol_notice(data_dir, "lingxun", hours=1.0):
+def run_patrol(data_dir: str) -> int:
+    agent = _patrol_target(data_dir)
+    if _recent_patrol_notice(data_dir, agent, hours=1.0):
         mbus_log.info(f"[patrol] skip — recent patrol notice exists {_now_iso()}")
         return 0
     from lib.infra.constants import DEFAULT_API_BASE
@@ -316,11 +327,11 @@ def run_lingxun_patrol(data_dir: str) -> int:
     )
     try:
         _append_inbox_notice(
-            data_dir, "lingxun", content,
+            data_dir, agent, content,
             msg_id=f"patrol-{int(now_ts())}",
             no_llm=True,
         )
-        mbus_log.info(f"[patrol] lingxun notice queued (no-llm) {_now_iso()}")
+        mbus_log.info(f"[patrol] {agent} notice queued (no-llm) {_now_iso()}")
         return 0
     except Exception as exc:
         mbus_log.warn(f"[patrol] error: {exc}")
@@ -548,6 +559,7 @@ def run_daily_report(data_dir: str) -> int:
     from lib.infra.constants import DEFAULT_API_BASE
 
     today = now_dt().strftime("%Y-%m-%d")
+    agent = _patrol_target(data_dir)
     content = (
         f"📊 生成日报提醒（零 LLM）— {today}\n"
         f"Dashboard: {DEFAULT_API_BASE}/\n"
@@ -555,11 +567,11 @@ def run_daily_report(data_dir: str) -> int:
     )
     try:
         _append_inbox_notice(
-            data_dir, "lingxun", content,
+            data_dir, agent, content,
             msg_id=f"patrol-daily-{today.replace('-', '')}",
             no_llm=True,
         )
-        mbus_log.info(f"[daily-report] lingxun notice queued (no-llm) {today}")
+        mbus_log.info(f"[daily-report] {agent} notice queued (no-llm) {today}")
         return 0
     except Exception as exc:
         mbus_log.warn(f"[daily-report] error: {exc}")

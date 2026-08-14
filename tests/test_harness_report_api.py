@@ -38,7 +38,7 @@ def _sample_report(sha: str) -> dict:
         "aggregate_status": "warn",
         "trigger": "post-commit-harness",
         "timestamp": "2026-06-30T12:00:00Z",
-        "author_agent": "dali",
+        "author_agent": "agent-i",
         "blocking": False,
         "layers": {
             "regression": {"status": "pass"},

@@ -14,7 +14,7 @@ def api_get(path):
 
 def main():
     ap = argparse.ArgumentParser(description="Inbox pending dump")
-    ap.add_argument("--agent", default="lingzhao", help="agent name")
+    ap.add_argument("--agent", default="agent-a", help="agent name")
     args = ap.parse_args()
 
     status = api_get("/api/status")

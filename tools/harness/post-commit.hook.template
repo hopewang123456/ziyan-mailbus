@@ -8,7 +8,7 @@ ROOT="$(git rev-parse --show-toplevel)"
 SHA="$(git rev-parse HEAD)"
 REPORT_DIR="${ROOT}/store/reports"
 mkdir -p "${REPORT_DIR}"
-MAILBUS_ROOT="${MAILBUS_ROOT:-/mnt/e/ai_tools/mail}"
+MAILBUS_ROOT="${MAILBUS_ROOT:-<MAILBUS_WSL_ROOT>}"
 
 # 生成 harness 报告（pytest Layer 1；Layer 2 默认关，按需加 --static-analysis --run-ai-review）
 if [ -f "${MAILBUS_ROOT}/tools/harness/generate-report.py" ]; then

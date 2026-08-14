@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""修复 Cline 鉴权（灵霄）— 同步 Hermes API key、重建 lingxiao 容器、cline auth。"""
+"""修复 Cline 鉴权（codex 容器）— 同步 Hermes API key、重建 codex-web 容器、cline auth。"""
 import argparse, os, subprocess, sys
 
 def cmd(cmdline: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -10,7 +10,7 @@ def cmd(cmdline: str, check: bool = True) -> subprocess.CompletedProcess:
     return r
 
 def main():
-    ap = argparse.ArgumentParser(description="Fix Cline auth for lingxiao")
+    ap = argparse.ArgumentParser(description="Fix Cline auth for codex-web")
     ap.add_argument("--all", action="store_true", help="full repair")
     ap.add_argument("--sync-env", action="store_true", help="sync .env only")
     ap.add_argument("--smoke-only", action="store_true", help="smoke test only")
@@ -24,7 +24,7 @@ def main():
             print(f"ERROR: {src} not found")
             return 1
         print(f"  Source: {src}")
-        # 复制 key 到 lingxiao 容器环境
+        # 复制 key 到 codex-web 容器环境
         with open(src) as f:
             for line in f:
                 line = line.strip()
@@ -32,17 +32,17 @@ def main():
                     print(f"  Found: {line[:60]}...")
 
     if args.all:
-        print("\n=== Rebuild lingxiao container ===")
-        cmd("docker compose -f docker-agents/docker-compose.yml up -d --build lingxiao", check=False)
+        print("\n=== Rebuild codex-web container ===")
+        cmd("docker compose -f docker-agents/docker-compose.yml up -d --build codex-web", check=False)
 
     if args.smoke_only:
         print("\n=== Smoke test ===")
-        r = cmd("docker exec docker-agents-lingxiao-1 which codex", check=False)
+        r = cmd("docker exec docker-agents-codex-web-1 which codex", check=False)
         if r.returncode == 0:
             print("  codex binary: OK")
         else:
             print("  codex binary: MISSING")
-        r = cmd("docker logs docker-agents-lingxiao-1 --tail 10", check=False)
+        r = cmd("docker logs docker-agents-codex-web-1 --tail 10", check=False)
 
     return 0
 

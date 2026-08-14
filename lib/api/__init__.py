@@ -1,5 +1,5 @@
 """
-ziyan-mailbus HTTP API 包
+mailbus HTTP API 包
 
 从 api_server.py 拆分而来，保持向后兼容。
 """
@@ -52,6 +52,12 @@ def serve(data_dir: str, agents: dict, agent_types: dict = None,
         resolved = token or ""
     MailbusAPIHandler.auth_token = resolved
     MailbusAPIHandler.require_api_auth = bool((config or {}).get("require_api_auth", False))
+    # 豁免 IP 白名单：config["auth"]["exempt_cidrs"] 或 config["exempt_cidrs"]
+    _auth = (config or {}).get("auth") if isinstance((config or {}).get("auth"), dict) else {}
+    _exempt = _auth.get("exempt_cidrs") or (config or {}).get("exempt_cidrs") or []
+    if isinstance(_exempt, str):
+        _exempt = [_exempt]
+    MailbusAPIHandler.exempt_cidrs = [str(x).strip() for x in _exempt if str(x).strip()]
 
     # 公告板 + 权限文件路径
     paths = __import__("lib.infra.utils", fromlist=["resolve_paths"]).resolve_paths(data_dir)
@@ -61,12 +67,12 @@ def serve(data_dir: str, agents: dict, agent_types: dict = None,
         from lib.infra.utils import json_write, _now_iso
         default_perms = {
             name: {"browser": True, "desktop": True, "cli": True, "mailbox": True,
-                   "bulletin": name in ("lingzhao", "xiaoqi", "lingxiao")}
+                   "bulletin": name in ("agent-a", "agent-m", "agent-g")}
             for name in agents
         }
         json_write(MailbusAPIHandler.permission_file, {
             "permissions": default_perms,
-            "bulletin": ["lingzhao", "xiaoqi"],
+            "bulletin": ["agent-a", "agent-m"],
             "updated_at": _now_iso(),
         })
 
@@ -82,6 +88,18 @@ def serve(data_dir: str, agents: dict, agent_types: dict = None,
     print(f"   📖 文档: http://{host}:{port}/")
     if token:
         print(f"   🔑 认证: Bearer token 已启用")
+
+    # L0 faulthandler + L1 进程内看门狗（纯 Python，跨平台；均可用 env 关闭）
+    try:
+        from lib.application.ops.watchdog import enable_faulthandler, start_self_watchdog
+
+        enable_faulthandler(data_dir)
+        wt = start_self_watchdog(port, data_dir)
+        if wt is not None:
+            print("   🛡️ 自愈看门狗已启用（连续健康检查失败将 dump 现场并自尽，配合外部 watchdog 重启）")
+    except Exception:
+        pass
+
     try:
         server.serve_forever()
     except KeyboardInterrupt:

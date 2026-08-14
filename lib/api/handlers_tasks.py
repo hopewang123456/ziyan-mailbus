@@ -1,5 +1,5 @@
 """
-ziyan-mailbus HTTP API — 任务/公告板/Skill 相关路由处理器
+mailbus HTTP API — 任务/公告板/Skill 相关路由处理器
 
 处理: /api/tasks, /api/bulletin, /api/bulletin/post, /api/bulletin/permit,
       /api/permission, /api/skill-usage, /api/skill-use
@@ -22,7 +22,7 @@ def _is_noise_task_id(task_id: str) -> bool:
     return any(task_id.startswith(p) for p in SKIP_TIMEOUT_PREFIXES)
 
 
-def _normalize_tasks_for_api(tasks: list) -> list:
+def _normalize_tasks_for_api(tasks: list, data_dir: str = "") -> list:
     """API 返回前规范化 chain 格式，并补全 audit_reviewer / needs_audit / fsm。"""
     from lib.application.orchestration.audit_dispatch import task_requires_audit
     from lib.adapters.orchestration.task_fsm import ensure_fsm, fsm_summary
@@ -31,7 +31,8 @@ def _normalize_tasks_for_api(tasks: list) -> list:
         normalize_task_chain(task)
         chain = task.get("chain") or []
         if chain and is_pipeline_step(chain[0]) and not task.get("audit_reviewer"):
-            task["audit_reviewer"] = "lingjian"
+            from lib.infra.org_defaults import org_default
+            task["audit_reviewer"] = org_default(data_dir, "reviewer")
         task["needs_audit"] = task_requires_audit(task)
         if chain and is_pipeline_step(chain[0]):
             ensure_fsm(task)
@@ -44,10 +45,10 @@ def handle_tasks(handler):
 
     查询参数:
         ?status=success          — 按状态过滤
-        ?assignee=lingxiao       — 按负责人过滤
+        ?assignee=agent-a       — 按负责人过滤
         &audit_status=audited    — 审计状态 (audited/pending-audit)
         &audit_status=pending-audit
-        &reviewer=lingjian       — 按审查人过滤
+        &reviewer=agent-c       — 按审查人过滤
         &limit=50                — 每页数量（默认 120）
         &offset=0                — 偏移量（默认 0）
         &exclude_noise=1         — 排除 remind-/tracker-remind- 等系统噪音（默认 1）
@@ -88,7 +89,7 @@ def handle_tasks(handler):
         tasks = result.get("tasks") or []
         if exclude_noise:
             tasks = [t for t in tasks if not _is_noise_task_id(t.get("task_id", ""))]
-        result["tasks"] = _normalize_tasks_for_api(tasks)
+        result["tasks"] = _normalize_tasks_for_api(tasks, handler.data_dir)
         handler._send_json(result)
     else:
         all_tasks = tracker.list_all()
@@ -97,7 +98,7 @@ def handle_tasks(handler):
         total = len(all_tasks)
         page = all_tasks[offset:offset + limit]
         handler._send_json({
-            "tasks": _normalize_tasks_for_api(page),
+            "tasks": _normalize_tasks_for_api(page, handler.data_dir),
             "count": len(page),
             "total": total,
             "limit": limit,
@@ -245,7 +246,7 @@ def handle_task_audit(handler):
     请求体示例:
     {
         "task_id": "xxx",
-        "reviewer": "lingjian",
+        "reviewer": "agent-c",
         "result": "pass|fail|warn",
         "issues": [{"desc": "问题描述", "severity": "high", "file": "path/to/file.py", "line": 42}],
         "summary": "审计摘要",
@@ -275,8 +276,12 @@ def handle_task_audit(handler):
     if result not in ("pass", "fail", "warn"):
         handler._send_json({"error": "result 必须是 pass/fail/warn"}, 400)
         return
-    if reviewer not in ("lingjian", "lingyan"):
-        handler._send_json({"error": "reviewer 不在白名单（lingjian/lingyan）"}, 403)
+    from lib.infra.org_defaults import org_default_list
+    reviewers = org_default_list(handler.data_dir, "audit_reviewers")
+    if reviewer not in reviewers:
+        handler._send_json(
+            {"error": f"reviewer 不在白名单（{'/'.join(reviewers)}）"}, 403
+        )
         return
     if severity not in ("critical", "high", "normal", "low"):
         handler._send_json({"error": "severity 必须是 critical/high/normal/low"}, 400)
@@ -307,7 +312,7 @@ def handle_task_get(handler, task_id: str):
     if not task:
         handler._send_json({"error": "not_found"}, 404)
         return
-    _normalize_tasks_for_api([task])
+    _normalize_tasks_for_api([task], handler.data_dir)
     handler._send_json({"task": task})
 
 
@@ -366,7 +371,7 @@ def handle_task_audit_stats(handler):
         "warn_count": 3,
         "pass_rate": 88.2,
         "total_audit_entries": 68,
-        "by_reviewer": {"lingjian": {"pass": 30, "fail": 2, "warn": 1, "total": 33}, ...},
+        "by_reviewer": {"agent-c": {"pass": 30, "fail": 2, "warn": 1, "total": 33}, ...},
         "by_category": {"code_review": 40, "design": 10, ...},
         "by_severity": {"normal": 50, "high": 10, ...},
         "latest_audits": [...]
@@ -491,12 +496,21 @@ def handle_skill_usage(handler):
     # 1. Hermes usage.json（补充不在 bus 记录中的 skill）
     hermes_base = os.environ.get(
         "HERMES_DATA",
-        "E:/hermes-data" if sys.platform == "win32" else "/mnt/e/hermes-data",
+        "<HERMES_DATA>" if sys.platform == "win32" else "/mnt/<HERMES_DATA>",
     ).replace("\\", "/").rstrip("/")
-    hermes_profiles = {
-        "lingzhao": f"{hermes_base}/.hermes/skills/.usage.json",
-        "lingxi": f"{hermes_base}/.hermes/profiles/lingxi/skills/.usage.json",
-    }
+    cfg = json_read(os.path.join(data_dir, "config.json"), {})
+    agents_cfg = cfg.get("agents") or {}
+    hermes_profiles = {}
+    for agent_id, ac in agents_cfg.items():
+        if (ac or {}).get("type") not in ("hermes", "hermes_profile"):
+            continue
+        profile = (ac or {}).get("profile") or ""
+        if profile:
+            hermes_profiles[agent_id] = (
+                f"{hermes_base}/.hermes/profiles/{profile}/skills/.usage.json"
+            )
+        else:
+            hermes_profiles[agent_id] = f"{hermes_base}/.hermes/skills/.usage.json"
     for agent, path in hermes_profiles.items():
         if os.path.isfile(path):
             try:

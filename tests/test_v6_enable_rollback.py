@@ -78,7 +78,7 @@ class TestV6EnableRollback(unittest.TestCase):
         self.data = Path(self.tmp.name)
         cfg = {
             "frameworks": {},
-            "agents": {"ziyan": {"type": "hermes", "enabled": True}},
+            "agents": {"mailbus": {"type": "hermes", "enabled": True}},
         }
         (self.data / "config.json").write_text(json.dumps(cfg), encoding="utf-8")
 

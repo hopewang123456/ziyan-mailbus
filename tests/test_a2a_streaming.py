@@ -83,7 +83,7 @@ class TestHttpA2AStreamingClient(unittest.TestCase):
 
         with patch("lib.core.a2a.http_a2a.urlrequest.urlopen", fake_urlopen):
             out = client.send_streaming_message({
-                "task_id": "t1", "step_id": "s1", "to_agent": "lingzhao",
+                "task_id": "t1", "step_id": "s1", "to_agent": "agent-a",
                 "role_type": 1, "intent": "hello",
             })
         self.assertEqual(out["task"]["id"], "a2a-stream-1")
@@ -121,7 +121,7 @@ class TestHttpA2AStreamingClient(unittest.TestCase):
 
         with patch("lib.core.a2a.http_a2a.urlrequest.urlopen", fake_urlopen):
             out = client.send_streaming_message({
-                "task_id": "t1", "step_id": "s1", "to_agent": "lingzhao",
+                "task_id": "t1", "step_id": "s1", "to_agent": "agent-a",
                 "role_type": 1, "intent": "hello",
             })
         self.assertEqual(calls, ["SendStreamingMessage", "SendMessage"])
@@ -185,7 +185,7 @@ class TestA2ATransportStreaming(unittest.TestCase):
             rpc=client,
             config={"transport": {"a2a": {"use_streaming": True}}},
         )
-        ctx = DispatchContext("tmp", "t1", "s1", "lingzhao", 1, intent="hello")
+        ctx = DispatchContext("tmp", "t1", "s1", "agent-a", 1, intent="hello")
         out = transport.dispatch_once(ctx, {})
         self.assertTrue(out.get("ok"))
         self.assertEqual(out.get("a2a_task_id"), "stream-task-1")
@@ -198,7 +198,7 @@ class TestA2ATransportStreaming(unittest.TestCase):
             rpc=client,
             config={"transport": {"a2a": {"use_streaming": True}}},
         )
-        ctx = DispatchContext("tmp", "t1", "s1", "lingzhao", 1, intent="hello")
+        ctx = DispatchContext("tmp", "t1", "s1", "agent-a", 1, intent="hello")
         out = transport.dispatch_once(ctx, {})
         self.assertTrue(out.get("ok"))
         self.assertEqual(client.calls[:2], ["send_streaming_message", "send_message"])
@@ -207,7 +207,7 @@ class TestA2ATransportStreaming(unittest.TestCase):
     def test_dispatch_once_default_uses_send_message(self):
         client = MockStreamingClient()
         transport = A2ATransport(rpc=client, config={"transport": {"a2a": {}}})
-        ctx = DispatchContext("tmp", "t1", "s1", "lingzhao", 1, intent="hello")
+        ctx = DispatchContext("tmp", "t1", "s1", "agent-a", 1, intent="hello")
         transport.dispatch_once(ctx, {})
         self.assertEqual(client.calls[0], "send_message")
 
@@ -217,7 +217,7 @@ class TestA2ATransportStreaming(unittest.TestCase):
             rpc=client,
             config={"transport": {"a2a": {"use_streaming": True}}},
         )
-        ctx = DispatchContext("tmp", "t1", "s1", "lingzhao", 1, intent="hello")
+        ctx = DispatchContext("tmp", "t1", "s1", "agent-a", 1, intent="hello")
         out = transport.dispatch_async(ctx, {})
         self.assertTrue(out.get("ok"))
         self.assertEqual(out.get("a2a_task_id"), "stream-task-1")
@@ -229,7 +229,7 @@ class TestA2ATransportStreaming(unittest.TestCase):
             rpc=client,
             config={"transport": {"a2a": {"use_streaming": True}}},
         )
-        ctx = DispatchContext("tmp", "t1", "s1", "lingzhao", 1, intent="hello")
+        ctx = DispatchContext("tmp", "t1", "s1", "agent-a", 1, intent="hello")
         out = transport.dispatch_async(ctx, {})
         self.assertTrue(out.get("ok"))
         self.assertEqual(out.get("a2a_task_id"), "fallback-task-1")
@@ -241,8 +241,8 @@ class TestA2ATransportStreaming(unittest.TestCase):
             rpc=client,
             config={"transport": {"a2a": {"use_streaming": False}}},
         )
-        ctx = DispatchContext("tmp", "t1", "s1", "lingzhao", 1, intent="hello")
-        agents = {"lingzhao": {"channels": {"a2a": {"use_streaming": True}}}}
+        ctx = DispatchContext("tmp", "t1", "s1", "agent-a", 1, intent="hello")
+        agents = {"agent-a": {"channels": {"a2a": {"use_streaming": True}}}}
         transport.dispatch_once(ctx, agents)
         self.assertEqual(client.calls, ["send_streaming_message"])
 
@@ -252,8 +252,8 @@ class TestA2ATransportStreaming(unittest.TestCase):
             rpc=client,
             config={"transport": {"a2a": {"use_streaming": True}}},
         )
-        ctx = DispatchContext("tmp", "t1", "s1", "lingzhao", 1, intent="hello")
-        agents = {"lingzhao": {"channels": {"a2a": {"use_streaming": False}}}}
+        ctx = DispatchContext("tmp", "t1", "s1", "agent-a", 1, intent="hello")
+        agents = {"agent-a": {"channels": {"a2a": {"use_streaming": False}}}}
         transport.dispatch_once(ctx, agents)
         self.assertEqual(client.calls[0], "send_message")
 
@@ -263,8 +263,8 @@ class TestA2ATransportStreaming(unittest.TestCase):
             rpc=client,
             config={"transport": {"a2a": {"use_streaming": False}}},
         )
-        ctx = DispatchContext("tmp", "t1", "s1", "lingzhao", 1, intent="hello")
-        agents = {"lingzhao": {"channels": {"a2a": {"use_streaming": True}}}}
+        ctx = DispatchContext("tmp", "t1", "s1", "agent-a", 1, intent="hello")
+        agents = {"agent-a": {"channels": {"a2a": {"use_streaming": True}}}}
         transport.dispatch_async(ctx, agents)
         self.assertEqual(client.calls, ["send_streaming_message"])
 
@@ -282,16 +282,16 @@ class TestResolveUseStreaming(unittest.TestCase):
 
     def test_merge_agent_transport_config_preserves_use_streaming(self):
         agents = merge_agent_transport_config({
-            "lingzhao": {
+            "agent-a": {
                 "framework": "hermes_profile",
                 "channels": {"a2a": {"use_streaming": True}},
             },
         })
         self.assertTrue(
-            agents["lingzhao"]["channels"]["a2a"]["use_streaming"],
+            agents["agent-a"]["channels"]["a2a"]["use_streaming"],
         )
         self.assertTrue(
-            agents["lingzhao"]["channels"]["a2a"].get("enabled"),
+            agents["agent-a"]["channels"]["a2a"].get("enabled"),
         )
 
 
@@ -368,7 +368,7 @@ class TestInboundSendStreamingMessage(unittest.TestCase):
                 }
             },
         }
-        handle_a2a_rpc(handler, "lingzhao")
+        handle_a2a_rpc(handler, "agent-a")
         mock_create.assert_called_once()
         self.assertTrue(getattr(handler, "_sse", False))
         raw = handler._wfile.getvalue().decode("utf-8")
@@ -416,7 +416,7 @@ class TestInboundSendStreamingMessage(unittest.TestCase):
             "params": {"message": {"parts": [{"text": "x"}]}},
         }
         with patch("lib.core.a2a.a2a_stream.iter_stream_events", side_effect=fake_iter):
-            handle_a2a_rpc(handler, "lingzhao")
+            handle_a2a_rpc(handler, "agent-a")
         events = _parse_sse_jsonrpc_events(handler._wfile.getvalue().decode("utf-8"))
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0]["result"]["status"], "working")
@@ -443,7 +443,7 @@ class TestInboundSendStreamingMessage(unittest.TestCase):
                 }
             },
         }
-        handle_a2a_rpc(handler, "lingzhao")
+        handle_a2a_rpc(handler, "agent-a")
         self.assertIsNotNone(handler._resp_json)
         data, status = handler._resp_json
         self.assertEqual(status, 201)
@@ -608,7 +608,7 @@ class TestIterStreamEvents(unittest.TestCase):
             "method": "SendStreamingMessage",
             "params": {"message": {"parts": [{"text": "hb"}]}},
         }
-        handle_a2a_rpc(handler, "lingzhao")
+        handle_a2a_rpc(handler, "agent-a")
         raw = handler._wfile.getvalue().decode("utf-8")
         self.assertIn(": keepalive\n\n", raw)
         events = _parse_sse_jsonrpc_events(raw)

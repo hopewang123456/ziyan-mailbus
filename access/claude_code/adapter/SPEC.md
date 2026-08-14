@@ -1,6 +1,6 @@
 # L1 — Claude Code Framework Spec
 
-> **Layer**: L1 · **Framework**: claude_code · **Agents**: lingyun, lingyan
+> **Layer**: L1 · **Framework**: claude_code · **Agents**: agent-h, agent-k
 
 ## Runtime 契约
 

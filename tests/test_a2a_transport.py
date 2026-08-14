@@ -27,11 +27,11 @@ class TestA2ATransport(unittest.TestCase):
         cfg_path = os.path.join(self.tmp, "config.json")
         with open(cfg_path, encoding="utf-8") as f:
             cfg = json.load(f)
-        cfg.setdefault("agents", {})["lingzhao"] = {
+        cfg.setdefault("agents", {})["agent-a"] = {
             "type": "hermes_profile",
             "role_types": [1],
             "channels": {"a2a": {"enabled": True}, "file_bus": {"enabled": True}},
-            "endpoint": {"base_url": "https://mailbus.example/api/a2a/rpc/lingzhao"},
+            "endpoint": {"base_url": "https://mailbus.example/api/a2a/rpc/agent-a"},
             "supportedInterfaces": [{"protocolBinding": "JSONRPC", "protocolVersion": "1.0"}],
         }
         cfg["transport"] = {"use_router": True, "a2a": {"retry_backoff_sec": [0, 0, 0]}}
@@ -53,11 +53,11 @@ class TestA2ATransport(unittest.TestCase):
         self.assertIsInstance(router, TransportRouter)
 
     def test_dispatch_once_completed(self):
-        fixture = StubA2AClient.from_name("path-a-lingzhao-s1.json")
+        fixture = StubA2AClient.from_name("path-a-agent-a-s1.json")
         transport = A2ATransport(rpc=fixture)
         ctx = DispatchContext(
-            self.tmp, "feat-auth-001", "s1", "lingzhao", 1,
-            stub_fixture="path-a-lingzhao-s1.json",
+            self.tmp, "feat-auth-001", "s1", "agent-a", 1,
+            stub_fixture="path-a-agent-a-s1.json",
         )
         out = transport.dispatch_once(ctx, {})
         self.assertTrue(out.get("ok"))

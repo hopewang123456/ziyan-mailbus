@@ -86,7 +86,7 @@ export function HumanQueuePage() {
             if (!id) return null;
             const pending = (it.status || "pending") === "pending";
             return (
-              <li key={id} className="rounded-sm border border-rail bg-hull/50 p-4">
+              <li key={id} className="soft-panel">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="font-mono text-xs text-frost">{id}</p>

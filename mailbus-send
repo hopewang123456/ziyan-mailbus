@@ -3,7 +3,7 @@
 mailbus-send — 邮件发送 CLI 工具
 
 用法:
-  mailbus-send --to lingzhao --from lingxi --content "消息内容" [--type notice] [--priority normal] [--subject "标题"]
+  mailbus-send --to agent-a --from agent-b --content "消息内容" [--type notice] [--priority normal] [--subject "标题"]
 
 功能:
   1. 写入收件人的 inbox（触发 daemon 处理）
@@ -134,9 +134,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  mailbus-send --to lingzhao --from lingxi --content "方案已确认"
-  mailbus-send --to dali --from lingxiao --content "请实现这个模块" --type task --priority urgent
-  mailbus-send --to lingzhao --from lingxi --subject "周报" --content "内容..."
+  mailbus-send --to agent-a --from agent-b --content "方案已确认"
+  mailbus-send --to agent-e --from agent-f --content "请实现这个模块" --type task --priority urgent
+  mailbus-send --to agent-a --from agent-b --subject "周报" --content "内容..."
         """
     )
     parser.add_argument("--to", required=True, help="收件人 agent 名称")

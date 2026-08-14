@@ -2,8 +2,8 @@
 """统一 agent 非交互 push（Python subprocess argv，跨 Windows / macOS / Linux）。
 
 用法:
-  python tools/ops/agent-push.py --agent lingyun --data-dir store --prompt "任务正文"
-  python tools/ops/agent-push.py --agent lingxiao --data-dir store --prompt "任务正文"
+  python tools/ops/agent-push.py --agent agent-h --data-dir store --prompt "任务正文"
+  python tools/ops/agent-push.py --agent agent-g --data-dir store --prompt "任务正文"
 """
 from __future__ import annotations
 

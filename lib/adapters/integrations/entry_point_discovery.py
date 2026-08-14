@@ -48,3 +48,9 @@ def discover_and_register_integrations(
 
 def ensure_integration_plugins_loaded(*, data_dir: str = "", config: dict | None = None) -> list[dict[str, Any]]:
     return discover_and_register_integrations(data_dir=data_dir, config=config)
+
+
+def reload_integration_plugins(*, data_dir: str = "", config: dict | None = None) -> list[dict[str, Any]]:
+    """Soft re-discover after config.plugins change (load-time registry)."""
+    _DISCOVERY.reset_for_tests()
+    return discover_and_register_integrations(data_dir=data_dir, config=config)

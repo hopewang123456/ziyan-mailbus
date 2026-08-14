@@ -6,7 +6,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 AI_TOOLS="$(cd "$ROOT/.." && pwd)"
-AGENT="${HERMES_AGENT:-lingzhao}"
+AGENT="${HERMES_AGENT:-agent-a}"
 ADAPTERS_MOUNT="${HERMES_ADAPTERS_DIR:-/mailbus/access}"
 DATA_DIR="${DATA_DIR:-$ROOT/store}"
 TARGET="${HERMES_FRAMEWORK_SKILLS_DIR:-$AI_TOOLS/mail/access/hermes/.sync/$AGENT/skills}"

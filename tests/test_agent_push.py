@@ -13,11 +13,11 @@ class TestAgentPush(unittest.TestCase):
     @patch("lib.adapters.frameworks.direct_push._docker_bin", return_value="docker")
     def test_codex_direct_argv(self, *_m):
         spec = try_build_push_direct(
-            "lingxiao",
+            "agent-g",
             {
                 "type": "codex",
                 "models": ["deepseek-flash"],
-                "docker": {"service": "lingxiao"},
+                "docker": {"service": "agent-g"},
             },
             {
                 "models": {
@@ -44,11 +44,11 @@ class TestAgentPush(unittest.TestCase):
         if sys.platform != "win32":
             self.skipTest("windows claude path")
         spec = try_build_push_direct(
-            "lingyun",
+            "agent-h",
             {
                 "type": "claude_code",
                 "models": ["deepseek-flash"],
-                "push": {"cwd": r"E:\ai_tools"},
+                "push": {"cwd": r"<PROJECT_ROOT>"},
             },
             {"models": {"deepseek-flash": {"claude_code": "--model deepseek-v4-flash"}}},
             data_dir=os.path.join(os.path.dirname(__file__), "..", "store"),

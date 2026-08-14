@@ -67,7 +67,7 @@ def main() -> int:
     import argparse
 
     ap = argparse.ArgumentParser(description="Write mailbus-core/.env for new install prefix")
-    ap.add_argument("--prefix", required=True, help="Install root, e.g. /opt/ziyan or E:/ai_tools")
+    ap.add_argument("--prefix", required=True, help="Install root, e.g. /opt/mailbus or <LOCAL_ROOT>")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
     write_env(Path(args.prefix), dry_run=args.dry_run)

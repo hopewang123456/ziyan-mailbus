@@ -13,8 +13,8 @@ FRAMEWORK_COMPOSE_SERVICES: dict[str, list[str]] = {
     "hermes": ["hermes"],
     "hermes_profile": ["hermes"],
     "openclaw": ["openclaw"],
-    "codex": ["lingxiao", "lingjian"],
-    "opencode": ["dali"],
+    "codex": ["codex-web", "codex-review"],
+    "opencode": ["opencode"],
     "agentmemory": ["iii-engine", "agentmemory"],
 }
 

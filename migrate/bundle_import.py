@@ -34,7 +34,7 @@ def _import_env(prefix: Path, root: Path, env_path: Path) -> dict[str, str]:
     load_mailbus_env_keys()
     env.update({k: v for k, v in os.environ.items() if k.startswith("MAILBUS_") or k in (
         "OPENCLAW_WORKSPACE", "OPENCODE_ROOT", "NODE_MODULES", "HERMES_DATA", "TEAM_PACK_ROOT",
-        "LINGXIAO_WORKSPACE", "COMPOSE_PROJECT_NAME",
+        "CODEX_WORKSPACE", "COMPOSE_PROJECT_NAME",
     )})
     env["MAILBUS_ROOT"] = to_wsl_path(root)
     data = env.get("MAILBUS_DATA") or to_wsl_path(prefix / "mail" / "store")

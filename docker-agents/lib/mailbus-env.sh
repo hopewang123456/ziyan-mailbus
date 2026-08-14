@@ -46,7 +46,7 @@ MAILBUS_API_PORT="${MAILBUS_API_PORT:-9814}"
 MAILBUS_API_BASE="http://127.0.0.1:${MAILBUS_API_PORT}"
 export MAILBUS_ROOT MAILBUS_DATA MAILBUS_API_PORT MAILBUS_API_BASE
 
-# 固定 compose 项目名：脚本/文档均假定 docker-agents-mailbus-1；.env 里 ziyan-team 会与 172.28.0.0/16 撞网
+# 固定 compose 项目名：脚本/文档均假定 docker-agents-mailbus-1
 export COMPOSE_PROJECT_NAME=docker-agents
 
 unset _mailbus_env_script _mailbus_env_dir _load_env_file

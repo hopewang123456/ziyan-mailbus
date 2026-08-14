@@ -83,7 +83,7 @@ def _finance_task(tmp: str) -> dict:
     ensure_fsm(task)
     task["fsm"]["state"] = "executing"
     bind_workflow(task, {"task_type": "finance", "extensions": {}}, data_dir=tmp)
-    task["extensions"]["ziyan"]["workflow"]["phase"] = "setup"
+    task["extensions"]["mailbus"]["workflow"]["phase"] = "setup"
     json_write(os.path.join(tmp, "tasks", f"{tid}.json"), task)
     return task
 
@@ -108,7 +108,7 @@ class TestP3Workflow(unittest.TestCase):
         })
         handle_task_create(h)
         self.assertEqual(h.status, 201, h.payload)
-        wf = h.payload["task"]["extensions"]["ziyan"]["workflow"]
+        wf = h.payload["task"]["extensions"]["mailbus"]["workflow"]
         self.assertEqual(wf["workflow_id"], "bugfix_s")
 
     def test_step_done_blocks_finance_gate(self):
@@ -141,10 +141,10 @@ class TestP3Workflow(unittest.TestCase):
             "attachments": [],
         })
         self.assertTrue(outcome.get("ok"), outcome)
-        inst = next(g for g in task["extensions"]["ziyan"]["workflow"]["gates"] if g["gate_id"] == "remind_approve")
+        inst = next(g for g in task["extensions"]["mailbus"]["workflow"]["gates"] if g["gate_id"] == "remind_approve")
         self.assertEqual(inst["status"], "approved")
         self.assertEqual(task["fsm"]["state"], "executing")
-        self.assertEqual(task["extensions"]["ziyan"]["workflow"].get("phase"), "remind")
+        self.assertEqual(task["extensions"]["mailbus"]["workflow"].get("phase"), "remind")
         self.assertGreaterEqual(len(task["chain"]), 1)
 
 

@@ -97,16 +97,16 @@ def _push_cwd(agent_cfg: dict, default: str = "/mailbus/store") -> str:
 # Cline / OpenCode 与 Hermes / OpenClaw 推送语义不同：
 # - Hermes/OpenClaw: -q/--message 单次查询，notice 可 auto_ack
 # - Cline/OpenCode:  positional prompt + run 子命令，须等 CLI 落盘 msg-results，永不 auto_ack
-# Docker compose 服务名 → 推荐 agent type（lingxiao/lingjian 已迁移 codex）
+# Docker compose 服务名 → 推荐 agent type
 DOCKER_SERVICE_TYPE = {
-    "lingxiao": "codex",
-    "lingjian": "codex",
-    "dali": "opencode",
+    "codex-web": "codex",
+    "codex-review": "codex",
+    "opencode": "opencode",
     "hermes": "hermes_profile",
     "openclaw": "openclaw",
 }
 
-# type=cline 仅保留 WSL 直连场景；Docker 内 lingxiao/lingjian 应使用 codex
+# type=cline 仅保留 WSL 直连场景；Docker 内 codex 服务应使用 codex
 CLINE_LEGACY_AGENTS = frozenset()
 PUSH_TIMEOUT_DEFAULT = 120
 PUSH_TIMEOUT_PIPELINE = 600
@@ -120,6 +120,8 @@ class BaseAdapter:
     container_service: str = ""
     supports_auto_ack: bool = False
     mark_processing_on_task_push: bool = False
+    # 无 CLI 也可投递（file_bus / A2A 降级）——validate_agents 不因空 push CLI 报错
+    allow_no_push_cli: bool = False
 
     def push_timeout_seconds(self, *, pipeline: bool = False, agent_cfg: dict | None = None) -> int:
         if agent_cfg and agent_cfg.get("push_timeout_seconds") is not None:
@@ -211,12 +213,12 @@ class OpenClawAdapter(BaseAdapter):
     supports_auto_ack = True
     # mailbus agent key → OpenClaw 独立 state 目录（同容器多 profile）
     STATE_DIRS = {
-        "xiaoqi": "/workspace/data/.openclaw-xiaoqi",
-        "yige": "/workspace/data/.openclaw-yige",
+        "agent-m": "/workspace/data/.openclaw-agent-m",
+        "agent-l": "/workspace/data/.openclaw-agent-l",
     }
     GATEWAY_PORTS = {
-        "xiaoqi": 18789,
-        "yige": 18790,
+        "agent-m": 18789,
+        "agent-l": 18790,
     }
 
     @classmethod
@@ -290,7 +292,7 @@ class ClineAdapter(BaseAdapter):
     """Cline：positional prompt 非交互 act 模式，独立容器，不走 Hermes profile。"""
 
     type_name = "cline"
-    container_service = "lingxiao"
+    container_service = "codex-web"
     mark_processing_on_task_push = True
 
     def push_timeout_seconds(self, *, pipeline: bool = False, agent_cfg: dict | None = None) -> int:
@@ -361,7 +363,7 @@ class OpenCodeAdapter(BaseAdapter):
     """OpenCode：`opencode run` 非交互，须 --dangerously-skip-permissions，独立容器。"""
 
     type_name = "opencode"
-    container_service = "dali"
+    container_service = "opencode"
     mark_processing_on_task_push = True
 
     def push_timeout_seconds(self, *, pipeline: bool = False, agent_cfg: dict | None = None) -> int:
@@ -391,14 +393,11 @@ class OpenCodeAdapter(BaseAdapter):
 
     def build_interactive_cli(self, agent_name, agent_cfg, agent_types) -> str:
         container = resolve_container(agent_cfg, agent_name, self.container_service)
-        mflag = self._model_flag(agent_cfg, agent_types, None)
         cwd = _push_cwd(agent_cfg, default="/workspace/opencode")
         if cwd == "/mailbus/store":
             cwd = "/workspace/opencode"
-        if mflag.startswith("--model "):
-            model = mflag.split(" ", 1)[1]
-            return f"docker exec -it {container} bash -lc 'cd {cwd} && opencode -m {model.split('/')[-1]}'"
-        return f"docker exec -it {container} bash -lc 'cd {cwd} && opencode'"
+        # 交互 TUI：不要带 -m（易非交互秒退）；默认进 Members 对应的工作区挂载
+        return f"docker exec -it {container} bash -lc 'cd {cwd} && exec opencode'"
 
     def cli_active_in_ps(self, agent_name, agent_cfg, ps_output) -> bool:
         noise = ("grep", "tail -f /dev/null", "node_modules/opencode")
@@ -418,7 +417,7 @@ class CodexAdapter(BaseAdapter):
     """Codex CLI：`codex exec` 非交互，文件任务推送，独立容器。"""
 
     type_name = "codex"
-    container_service = "lingxiao"
+    container_service = "codex-web"
     mark_processing_on_task_push = True
 
     def push_timeout_seconds(self, *, pipeline: bool = False, agent_cfg: dict | None = None) -> int:
@@ -568,6 +567,7 @@ def shlex_quote(s: str) -> str:
 
 class NoneAdapter(BaseAdapter):
     type_name = "none"
+    allow_no_push_cli = True
 
     def build_push_cli(self, agent_name, agent_cfg, agent_types, model_alias=None) -> str:
         return ""
@@ -582,6 +582,7 @@ class A2ARemoteAdapter(BaseAdapter):
     type_name = "a2a_remote"
     supports_auto_ack = False
     mark_processing_on_task_push = False
+    allow_no_push_cli = True
 
     def can_deliver_a2a(self, agent_cfg: dict) -> bool:
         from lib.core.a2a.delivery import can_deliver_a2a
@@ -610,6 +611,7 @@ class CursorAdapter(BaseAdapter):
     type_name = "cursor"
     supports_auto_ack = False
     mark_processing_on_task_push = True
+    allow_no_push_cli = True
 
     def build_push_cli(self, agent_name, agent_cfg, agent_types, model_alias=None, *, data_dir=None) -> str:
         # Prefer Cursor Agent CLI if present on PATH
@@ -826,7 +828,7 @@ def validate_agents(agents: dict, agent_types: dict | None = None) -> list[str]:
                 )
 
         push_cmd = resolve_push_cli(name, cfg, agent_types)
-        if not push_cmd and atype != "none":
+        if not push_cmd and atype != "none" and not getattr(adapter, "allow_no_push_cli", False):
             errors.append(f"{name} ({display}): 适配层无法生成 push CLI")
         elif push_cmd and "--skills" in push_cmd:
             errors.append(f"{name} ({display}): push CLI 含 --skills")

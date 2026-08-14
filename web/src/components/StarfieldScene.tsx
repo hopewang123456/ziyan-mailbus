@@ -38,7 +38,7 @@ function Ring({ speed = 0.4, scale = 1.9 }: { speed?: number; scale?: number }) 
 const COLORS = ["#00d4ff", "#8b5cf6", "#3ecf8e", "#e8a045", "#7ef0ff", "#c4a0ff", "#6dffb0"];
 
 function buildFleet(ids?: string[]) {
-  const list = ids && ids.length ? ids.slice(0, 16) : ["lingyun", "lingzhao", "xiaoqi", "dali"];
+  const list = ids && ids.length ? ids.slice(0, 16) : ["agent-a", "agent-b", "agent-m", "agent-g"];
   const n = list.length;
   return list.map((id, i) => {
     const angle = (i / Math.max(n, 1)) * Math.PI * 2;
@@ -117,7 +117,7 @@ type SceneProps = {
 
 /** Wave8 R3F shell — rings + core; fleet nodes from live agent ids when provided. */
 export function StarfieldScene({ interactive = false, onSelect, selectedId, fleetIds }: SceneProps) {
-  const [localSel, setLocalSel] = useState(fleetIds?.[0] || "lingyun");
+  const [localSel, setLocalSel] = useState(fleetIds?.[0] || "agent-a");
   const sel = selectedId ?? localSel;
   const pick = (id: string) => {
     setLocalSel(id);

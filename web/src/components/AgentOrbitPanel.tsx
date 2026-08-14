@@ -10,7 +10,6 @@ import { HudL3Modal } from "./HudL3Modal";
 import { getLang, t } from "../lib/i18n";
 import { api } from "../lib/api";
 
-const EXPECTED = 13;
 const AGENTS_TTL_MS = 8000;
 const MANIFEST_POLL_MS = 1200;
 const ORBIT_FILTERS: OrbitFilter[] = [
@@ -24,22 +23,7 @@ const ORBIT_FILTERS: OrbitFilter[] = [
 let agentsCache: { at: number; rows: AgentRow[] } | null = null;
 
 function portraitPath(id: string) {
-  return `/avatars/${encodeURIComponent(id)}_portrait.png`;
-}
-function animatedPath(id: string) {
-  return `/avatars/${encodeURIComponent(id)}_animated.webp`;
-}
-
-async function probePair(id: string): Promise<boolean> {
-  try {
-    const [a, b] = await Promise.all([
-      fetch(portraitPath(id), { method: "HEAD" }),
-      fetch(animatedPath(id), { method: "HEAD" }),
-    ]);
-    return a.ok && b.ok;
-  } catch {
-    return false;
-  }
+  return `/api/agent-avatar/${encodeURIComponent(id)}/portrait`;
 }
 
 type AgentsResp = { agents?: Record<string, Partial<AgentRow>> | AgentRow[] };
@@ -76,6 +60,8 @@ export function AgentOrbitPanel() {
   const [manifest, setManifest] = useState<{ complete?: boolean; count?: number } | null>(null);
   const [manifestPending, setManifestPending] = useState(true);
   const [filter, setFilter] = useState<OrbitFilter>("all");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
   const [, langTick] = useState(() => getLang());
   const rosterRef = useRef<AgentRow[]>([]);
   rosterRef.current = roster;
@@ -85,6 +71,24 @@ export function AgentOrbitPanel() {
     window.addEventListener("mailbus:lang", onLang);
     return () => window.removeEventListener("mailbus:lang", onLang);
   }, []);
+
+  useEffect(() => {
+    if (!filterOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!filterRef.current?.contains(e.target as Node)) setFilterOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFilterOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [filterOpen]);
+
+  const filterLabel = filter === "all" ? t("orbitFilterAll") : filter;
 
   const loadRoster = useCallback(async (force = false) => {
     setErr("");
@@ -202,30 +206,13 @@ export function AgentOrbitPanel() {
         }
         return;
       }
-      if (manifestPending) {
-        if (!cancelled) setChecking(true);
-        return;
-      }
-      if (manifest?.complete) {
-        if (!cancelled) {
-          setReady(true);
-          setChecking(false);
-        }
-        return;
-      }
-      const list = roster.slice(0, EXPECTED);
-      if (list.length < EXPECTED) {
-        if (!cancelled) {
-          setReady(false);
-          setChecking(false);
-        }
-        return;
-      }
-      const flags = await Promise.all(list.map((a) => probePair(a.id)));
+      // 有名册即可上环：缺肖像的节点用占位，不再被齐套门禁卡住
       if (!cancelled) {
-        setReady(flags.every(Boolean) && flags.length >= EXPECTED);
+        setReady(true);
         setChecking(false);
       }
+      if (manifestPending) return;
+      void manifest;
     }
     void run();
     return () => {
@@ -299,14 +286,10 @@ export function AgentOrbitPanel() {
           <span className="cp-fleet-loading-ring" />
         </div>
         <p className="cp-fleet-loading-title">
-          {checking || manifestPending
-            ? t("avatarChecking")
-            : loading
-              ? t("rosterLoading")
-              : t("rosterEmpty")}
+          {loading ? t("rosterLoading") : t("rosterEmpty")}
         </p>
         <p className="cp-fleet-loading-hint">
-          {loading || checking || manifestPending ? t("rosterSyncHint") : t("rosterRetryHint")}
+          {loading ? t("rosterSyncHint") : t("rosterRetryHint")}
         </p>
         {err ? <p className="text-xs text-amber-signal">{err}</p> : null}
         {!loading ? (
@@ -318,48 +301,51 @@ export function AgentOrbitPanel() {
     );
   }
 
-  if (!ready) {
-    return (
-      <div className="cp-fleet-loading" data-surface="fleet">
-        <div className="cp-fleet-loading-orbit" aria-hidden>
-          <span className="cp-fleet-loading-star a" />
-          <span className="cp-fleet-loading-star b" />
-          <span className="cp-fleet-loading-ring" />
-        </div>
-        <p className="cp-fleet-loading-title">
-          {manifestPending || checking ? t("avatarChecking") : t("avatarPending")}
-        </p>
-        <p className="cp-fleet-loading-hint">{t("avatarPendingHint")}</p>
-        <p className="text-xs text-mute">
-          agents={roster.length}/{EXPECTED}
-          {manifest ? ` · complete=${String(!!manifest.complete)}` : ""}
-        </p>
-        {err ? <p className="text-xs text-amber-signal">{err}</p> : null}
-        <button type="button" className="hud-btn" onClick={() => void loadRoster(true)}>
-          {t("refresh")}
-        </button>
-      </div>
-    );
-  }
+  // 有名册即展示；不再因头像 manifest / ready 门禁卡住
+  void ready;
+  void checking;
 
   return (
     <div className="cp-orbit-panel" data-surface="fleet">
-      <div className="cp-orbit-filter" role="group" aria-label={t("agents")}>
-        <label className="cp-orbit-filter-label" htmlFor="cp-orbit-fw">
-          {t("agents")}
-        </label>
-        <select
-          id="cp-orbit-fw"
-          className="cp-orbit-filter-select"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value as OrbitFilter)}
-        >
-          {ORBIT_FILTERS.map((f) => (
-            <option key={f} value={f}>
-              {f === "all" ? t("orbitFilterAll") : f}
-            </option>
-          ))}
-        </select>
+      <div className="cp-orbit-filter" ref={filterRef} role="group" aria-label={t("agents")}>
+        <span className="cp-orbit-filter-label">{t("agents")}</span>
+        <div className="cp-orbit-dd">
+          <button
+            type="button"
+            id="cp-orbit-fw"
+            className={`cp-orbit-dd-trigger${filterOpen ? " is-open" : ""}`}
+            aria-haspopup="listbox"
+            aria-expanded={filterOpen}
+            onClick={() => setFilterOpen((v) => !v)}
+          >
+            <span>{filterLabel}</span>
+            <span className="cp-orbit-dd-chev" aria-hidden>
+              ▾
+            </span>
+          </button>
+          {filterOpen ? (
+            <ul className="cp-orbit-dd-menu" role="listbox" aria-labelledby="cp-orbit-fw">
+              {ORBIT_FILTERS.map((f) => {
+                const label = f === "all" ? t("orbitFilterAll") : f;
+                const on = filter === f;
+                return (
+                  <li key={f} role="option" aria-selected={on}>
+                    <button
+                      type="button"
+                      className={`cp-orbit-dd-item${on ? " is-active" : ""}`}
+                      onClick={() => {
+                        setFilter(f);
+                        setFilterOpen(false);
+                      }}
+                    >
+                      {label}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+        </div>
       </div>
       {filtered.length === 0 ? (
         <div className="cp-fleet-loading" style={{ minHeight: 280 }}>
@@ -395,7 +381,22 @@ export function AgentOrbitPanel() {
                   setSelected(ag);
                 }}
               >
-                <img src={portraitPath(ag.id)} alt="" className="cp-orbit-avatar" draggable={false} />
+                <img
+                  src={portraitPath(ag.id)}
+                  alt=""
+                  className="cp-orbit-avatar"
+                  draggable={false}
+                  onError={(e) => {
+                    const el = e.currentTarget;
+                    el.style.display = "none";
+                    const sib = el.nextElementSibling;
+                    if (sib && sib.classList.contains("cp-orbit-avatar-fallback")) return;
+                    const ph = document.createElement("span");
+                    ph.className = "cp-orbit-avatar-fallback";
+                    ph.textContent = (label || ag.id).slice(0, 1);
+                    el.parentElement?.insertBefore(ph, el.nextSibling);
+                  }}
+                />
                 <span>{label}</span>
               </button>
             );

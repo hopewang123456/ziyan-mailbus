@@ -9,7 +9,7 @@ def cmd(cmdline: str) -> subprocess.CompletedProcess:
 
 def main():
     ap = argparse.ArgumentParser(description="Hermes chat probe")
-    ap.add_argument("--profile", default="lingzhao", help="hermes profile")
+    ap.add_argument("--profile", default="agent-a", help="hermes profile")
     ap.add_argument("--message", default="hi", help="test message")
     args = ap.parse_args()
 

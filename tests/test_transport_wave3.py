@@ -29,7 +29,7 @@ class TestFileBusPort(unittest.TestCase):
     def test_send_writes_inbox(self):
         with tempfile.TemporaryDirectory() as tmp:
             msg = OutboundMessage(
-                agent_id="lingzhao",
+                agent_id="agent-a",
                 msg_id="msg-t1-s1",
                 body_path="",
                 headers={"data_dir": tmp, "intent": "hello", "task_id": "t1", "step_id": "s1"},
@@ -37,7 +37,7 @@ class TestFileBusPort(unittest.TestCase):
             r = FileBusMessageTransport().send(msg)
             self.assertTrue(r.accepted)
             self.assertEqual(r.channel, "file_bus")
-            inbox = json.loads(Path(tmp, "inbox", "lingzhao", "inbox.json").read_text(encoding="utf-8"))
+            inbox = json.loads(Path(tmp, "inbox", "agent-a", "inbox.json").read_text(encoding="utf-8"))
             self.assertEqual(inbox["messages"][0]["id"], "msg-t1-s1")
 
 

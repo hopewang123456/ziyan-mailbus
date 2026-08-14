@@ -76,7 +76,7 @@ def write_via_mailbus_container(host_path: str, content: str) -> bool:
         return False
 
 
-def chown_store_path(host_path: str, user: str = "hopewang123456") -> bool:
+def chown_store_path(host_path: str, user: str = "mailbus-user") -> bool:
     wsl_sudo = os.path.join(_repo_root(), "docker-agents", "wsl-sudo.sh")
     if not os.path.isfile(wsl_sudo):
         return False

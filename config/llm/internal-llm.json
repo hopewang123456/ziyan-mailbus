@@ -1,0 +1,35 @@
+{
+  "enabled": true,
+  "provider_priority": ["local", "remote"],
+  "providers": {
+    "local": {
+      "kind": "ollama",
+      "base_url": "http://127.0.0.1:11434",
+      "model": "qwen2.5:3b-instruct-q4_K_M",
+      "timeout_seconds": 60,
+      "temperature": 0.1,
+      "max_tokens": 1024
+    },
+    "remote": {
+      "kind": "openai_compatible",
+      "base_url": "https://api.deepseek.com/v1",
+      "api_key_env": "MAILBUS_INTERNAL_LLM_API_KEY",
+      "model": "deepseek-chat",
+      "timeout_seconds": 90,
+      "temperature": 0.1,
+      "max_tokens": 2048
+    },
+    "stub": {
+      "kind": "stub"
+    }
+  },
+  "triggers": {
+    "plan_task": true
+  },
+  "guardrails": {
+    "max_retries": 1,
+    "reject_unknown_role_types": true,
+    "reject_unknown_agents": true,
+    "require_rag_citations": false
+  }
+}

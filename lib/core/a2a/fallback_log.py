@@ -35,7 +35,7 @@ def log_a2a_fallback(
         "last_error": last_error,
         "fallback_channel": "file_bus",
         "ts": _now_iso(),
-        "notify": ["dashboard", "lingxun_inbox"],
+        "notify": ["dashboard", "ops_inbox"],
         "transport_attempts": attempts,
     }
     jsonl_append(path, line)
@@ -62,7 +62,7 @@ def log_input_required_timeout(
         "hq_type": hq_type,
         "age_sec": age_sec,
         "ts": _now_iso(),
-        "notify": ["dashboard", "lingxun_inbox"],
+        "notify": ["dashboard", "ops_inbox"],
     }
     jsonl_append(path, line)
     return path

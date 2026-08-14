@@ -21,12 +21,12 @@ from lib.infra.utils import _now_iso, json_write
 from tests.test_helpers import seed_a2a_harness
 
 
-def _lingzhao_agent() -> dict:
+def _agent_a_agent() -> dict:
     return {
         "type": "hermes_profile",
         "role_types": [1],
         "channels": {"a2a": {"enabled": True}, "file_bus": {"enabled": True}},
-        "endpoint": {"base_url": "https://mailbus.example/api/a2a/rpc/lingzhao"},
+        "endpoint": {"base_url": "https://mailbus.example/api/a2a/rpc/agent-a"},
         "supportedInterfaces": [{"protocolBinding": "JSONRPC", "protocolVersion": "1.0"}],
     }
 
@@ -43,10 +43,10 @@ class TestInputRequiredTimeout(unittest.TestCase):
                 },
             },
         )
-        os.makedirs(os.path.join(self.tmp, "inbox", "lingxun"), exist_ok=True)
+        os.makedirs(os.path.join(self.tmp, "inbox", "agent-a"), exist_ok=True)
         json_write(
-            os.path.join(self.tmp, "inbox", "lingxun", "inbox.json"),
-            {"agent": "lingxun", "messages": []},
+            os.path.join(self.tmp, "inbox", "agent-a", "inbox.json"),
+            {"agent": "agent-a", "messages": []},
         )
         json_write(
             os.path.join(self.tmp, "tasks", "feat-timeout-001.json"),
@@ -128,7 +128,7 @@ class TestPollPendingA2A(unittest.TestCase):
         cfg_path = os.path.join(self.tmp, "config.json")
         with open(cfg_path, encoding="utf-8") as f:
             cfg = json.load(f)
-        cfg.setdefault("agents", {})["lingzhao"] = _lingzhao_agent()
+        cfg.setdefault("agents", {})["agent-a"] = _agent_a_agent()
         json_write(cfg_path, cfg)
         json_write(
             os.path.join(self.tmp, "tasks", "feat-poll-001.json"),
@@ -138,8 +138,8 @@ class TestPollPendingA2A(unittest.TestCase):
                 "fsm": {"state": "executing"},
                 "chain": [{
                     "step_id": "s1",
-                    "to_agent": "lingzhao",
-                    "to_person": "lingzhao",
+                    "to_agent": "agent-a",
+                    "to_person": "agent-a",
                     "role_type": 1,
                     "a2a_task_id": "a2a-7f3c-9e2a-4b1d-8c6f-2a1e9d4f0b3c",
                     "transport_used": "a2a_standard",
@@ -163,7 +163,7 @@ class TestPollPendingA2A(unittest.TestCase):
         sr = read_step_result_file(self.tmp, "feat-poll-001", "s1")
         self.assertIsNotNone(sr)
         self.assertEqual(sr.get("conclusion"), "done")
-        self.assertEqual(sr.get("agent"), "lingzhao")
+        self.assertEqual(sr.get("agent"), "agent-a")
         self.assertEqual(sr.get("transport_used"), "a2a_standard")
 
 

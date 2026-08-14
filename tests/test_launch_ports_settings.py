@@ -18,8 +18,8 @@ class LaunchPortsSettingsTest(unittest.TestCase):
         os.makedirs(self.data_dir)
         cfg = {
             "agents": {
-                "lingxi": {
-                    "name": "灵犀",
+                "agent-d": {
+                    "name": "Researcher",
                     "type": "hermes_profile",
                     "docker": {"port": 9122},
                     "launch": {"template": "hermes_dashboard", "has_browser": True},
@@ -48,24 +48,24 @@ class LaunchPortsSettingsTest(unittest.TestCase):
         patch_section(
             self.data_dir,
             "launch_ports",
-            {"updates": [{"agent_id": "lingxi", "port": 9999}]},
+            {"updates": [{"agent_id": "agent-d", "port": 9999}]},
         )
         cfg = json.load(open(os.path.join(self.data_dir, "config.json"), encoding="utf-8"))
-        self.assertEqual(cfg["agents"]["lingxi"]["launch"]["browser"]["dashboard_port"], 9999)
+        self.assertEqual(cfg["agents"]["agent-d"]["launch"]["browser"]["dashboard_port"], 9999)
 
     def test_patch_launch_ports_reset(self) -> None:
         patch_section(
             self.data_dir,
             "launch_ports",
-            {"updates": [{"agent_id": "lingxi", "port": 9999}]},
+            {"updates": [{"agent_id": "agent-d", "port": 9999}]},
         )
         patch_section(
             self.data_dir,
             "launch_ports",
-            {"updates": [{"agent_id": "lingxi", "reset": True}]},
+            {"updates": [{"agent_id": "agent-d", "reset": True}]},
         )
         cfg = json.load(open(os.path.join(self.data_dir, "config.json"), encoding="utf-8"))
-        browser = cfg["agents"]["lingxi"]["launch"]["browser"]
+        browser = cfg["agents"]["agent-d"]["launch"]["browser"]
         self.assertNotIn("dashboard_port", browser)
 
 

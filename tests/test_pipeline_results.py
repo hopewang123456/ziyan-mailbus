@@ -22,7 +22,7 @@ class TestPipelineResults(unittest.TestCase):
             step = {"step": 1, "step_id": "s1", "started_at": "2026-06-25T12:00:00+08:00"}
             write_step_result(
                 td, "task-a", step,
-                {"agent": "dali", "conclusion": "done"},
+                {"agent": "agent-i", "conclusion": "done"},
                 immediate_advance=False,
             )
             self.assertTrue(os.path.isfile(step_result_path(td, "task-a", "s1")))

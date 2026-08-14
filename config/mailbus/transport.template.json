@@ -4,7 +4,7 @@
     "use_streaming": "全局 transport.a2a.use_streaming（默认 false）。可被 agent registry/card 中 channels.a2a.use_streaming 按 agent 覆盖（true/false 均生效，未设置则继承全局）。",
     "per_agent_example": {
       "agents": {
-        "lingzhao": {
+        "agent-a": {
           "channels": {
             "a2a": {
               "enabled": true,
@@ -29,7 +29,7 @@
     },
     "fallback_alerts": {
       "enabled": true,
-      "notify_agent": "lingxun",
+      "notify_agent": "agent-a",
       "escalate_per_agent_per_hour": 3
     }
   }

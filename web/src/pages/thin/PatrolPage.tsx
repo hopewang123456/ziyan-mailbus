@@ -53,7 +53,7 @@ export function PatrolPage() {
       </button>
       <ul className="space-y-2">
         {items.map((r) => (
-          <li key={r.file} className="hud-panel p-3">
+          <li key={r.file} className="soft-inset">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setOpen(r)}>
                 <p className="font-mono text-xs text-cyan-signal">{r.file}</p>
@@ -76,7 +76,7 @@ export function PatrolPage() {
         {!items.length && !busy && <li className="text-sm text-mute">暂无巡检报告</li>}
       </ul>
       {open && (
-        <div className="hud-panel p-3">
+        <div className="soft-inset">
           <div className="mb-2 flex justify-between gap-2">
             <p className="font-mono text-xs text-cyan-signal">{open.file}</p>
             <button type="button" className="hud-btn text-xs" onClick={() => setOpen(null)}>

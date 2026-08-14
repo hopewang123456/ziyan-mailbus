@@ -74,6 +74,7 @@ export type AgentProfile = {
     weaknesses?: string;
     abilities?: string;
     catchphrases?: string[];
+    bond?: string;
     ziyan_bond?: string;
     social?: string;
     animated?: string;

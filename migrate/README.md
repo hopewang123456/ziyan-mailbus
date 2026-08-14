@@ -15,7 +15,7 @@
 | 可选 | `NODE_MODULES` | `node_modules/` |
 | 可选 | `HERMES_DATA` | `hermes-data/.hermes/` |
 
-各 agent 工作区（如 `lingxiao/`）按 manifest 的 `framework_workspaces` 或 `access/transport/*/transport.json` 的 `workspace` 字段。
+各 agent 工作区（如 `agent-f/`）按 manifest 的 `framework_workspaces` 或 `access/transport/*/transport.json` 的 `workspace` 字段。
 
 ## 快速用法
 
@@ -24,10 +24,10 @@ cd mail
 pip install -e .
 
 # 源机打包
-mailbus migrate export --output /tmp/mailbus-bundle.tar.gz --prefix /mnt/e/ai_tools
+mailbus migrate export --output /tmp/mailbus-bundle.tar.gz --prefix <OLD_MAILBUS_ROOT>
 
 # 目标机解压 + 配置 + 人物加载
-mailbus migrate import /tmp/mailbus-bundle.tar.gz --prefix /opt/ziyan
+mailbus migrate import /tmp/mailbus-bundle.tar.gz --prefix /opt/mailbus
 
 # 仅查看当前路径对照
 mailbus migrate plan

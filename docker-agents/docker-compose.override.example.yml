@@ -31,8 +31,8 @@ services:
       - /path/to/vault:/path/to/vault
       - /path/to/openclaw_space:/workspace:rw
       - /path/to/vault/skills/library/openclaw:/workspace/skills:ro
-      - /path/to/vault/memories/xiaoqi:/workspace/memory
-  lingxiao:
+      - /path/to/vault/memories/agent-m:/workspace/memory
+  codex-web:
     volumes:
       - /path/to/mail/store:/mailbus/store
       - /path/to/mail/tools:/mailbus/tools:ro
@@ -43,9 +43,9 @@ services:
       - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
       - /path/to/vault:/path/to/vault
       - /path/to/node_modules:/node_modules:ro
-      - /path/to/lingxiao:/workspace/lingxiao:ro
+      - /path/to/codex:/workspace/codex:ro
       - /path/to/vault/skills/02-agent-specific/codex:/home/node/.codex/skills:ro
-  lingjian:
+  codex-review:
     volumes:
       - /path/to/mail/store:/mailbus/store
       - /path/to/mail/tools:/mailbus/tools:ro
@@ -56,9 +56,9 @@ services:
       - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
       - /path/to/vault:/path/to/vault
       - /path/to/node_modules:/node_modules:ro
-      - /path/to/lingjian:/workspace/lingjian:ro
+      - /path/to/codex-review:/workspace/codex-review:ro
       - /path/to/vault/skills/02-agent-specific/codex:/home/node/.codex/skills:ro
-  dali:
+  opencode:
     volumes:
       - /path/to/mail/store:/mailbus/store
       - /path/to/mail/tools:/mailbus/tools:ro
@@ -69,7 +69,7 @@ services:
       - /path/to/vault:/path/to/vault
       - /path/to/opencode:/workspace/opencode:rw
       - /path/to/vault/skills/02-agent-specific/opencode:/workspace/opencode/skills:rw
-      - /path/to/vault/memories/dali:/workspace/opencode/memory
+      - /path/to/vault/memories/agent-i:/workspace/opencode/memory
   mailbus:
     volumes:
       - /path/to/mail:/mailbus

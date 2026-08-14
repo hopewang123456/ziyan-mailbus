@@ -51,8 +51,10 @@ def test_framework_skill_line_budget(fw: str) -> None:
 
 
 def test_agent_universal_exists() -> None:
-    team_skills = Path(__file__).resolve().parents[2] / "team-pack" / "skills"
-    skill = team_skills / "common" / "agent-universal" / "SKILL.md"
+    vault_skill = Path(__file__).resolve().parents[2].parent / "Obsidian" / "Vaults" / "Agent"
+    skill = vault_skill / "02-members" / "021-common" / "0211-rules" / "agent-universal" / "SKILL.md"
+    if not skill.is_file():
+        skill = Path(__file__).resolve().parents[2] / "rules" / "common" / "agent-universal" / "SKILL.md"
     assert skill.is_file()
     assert "layer: L0" in skill.read_text(encoding="utf-8")
 
@@ -69,7 +71,7 @@ def test_shared_protocol_line_budget() -> None:
 
 def test_shared_protocol_no_framework_delivery_table() -> None:
     text = _shared_skill("mailbus-file-protocol").read_text(encoding="utf-8")
-    assert "opencode (dali)" not in text
+    assert "opencode (agent-i)" not in text
 
 
 @pytest.mark.parametrize("fw", FRAMEWORKS)
@@ -123,31 +125,28 @@ def config_agents() -> dict:
 
 
 def _resolve_skill_path(path: str) -> Path:
-    path = path.replace("\\", "/")
-    if not path.startswith("mail/skills/"):
-        raise AssertionError(f"skills-index must use mail/skills/ paths: {path}")
-    return ROOT / path.replace("mail/", "", 1)
+    from lib.adapters.config.agent_registry import resolve_skill_src
+    return resolve_skill_src(path)
 
 
 def test_all_roster_agents_have_layer_skills(skills_index: dict, config_agents: dict) -> None:
     agents = skills_index.get("agents") or {}
-    roster = {
-        "lingzhao", "lingjin", "lingxi", "lingtuo", "lingjian", "lingyan",
-        "lingxun", "lingxiao", "dali", "xiaoqi", "yige", "lingzhang", "lingyun",
-    }
+    roster = set(agents.keys())
+    if not roster:
+        pytest.skip("no roster in skills-index (open-source default)")
     for agent_id in roster:
         assert agent_id in agents, f"missing index entry: {agent_id}"
         skills = agents[agent_id].get("skills") or []
-        assert len(skills) >= 5, f"{agent_id}: need L0-L2 skills"
-        assert skills[0].get("id") == "agent-universal"
-        assert skills[1].get("id") == "mailbus-file-protocol"
-        assert skills[2].get("type") == "framework_skill"
-        assert skills[3].get("type") == "role_archetype"
-        assert skills[4].get("type") == "role_overlay"
-        assert skills[4].get("id") == f"role-overlay-{agent_id}"
+        assert len(skills) >= 4, f"{agent_id}: need L0-L2 skills"
+        # L0 → L1 → L2 顺序
+        assert skills[0].get("id") == "mailbus-file-protocol"
+        assert skills[1].get("type") == "framework_skill"
+        assert skills[2].get("type") == "role_archetype"
+        assert skills[3].get("type") == "role_overlay"
+        assert skills[3].get("id") == f"role-overlay-{agent_id}"
         fw = agents[agent_id].get("framework") or config_agents.get(agent_id, {}).get("type")
-        assert skills[2].get("framework") == fw, f"{agent_id}: framework mismatch"
-        rel = skills[2].get("path", "")
+        assert skills[1].get("framework") == fw, f"{agent_id}: framework mismatch"
+        rel = skills[1].get("path", "")
         assert _resolve_skill_path(rel).is_file(), f"{agent_id}: skill path missing: {rel}"
 
 

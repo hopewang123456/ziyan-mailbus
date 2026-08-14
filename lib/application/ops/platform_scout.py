@@ -202,7 +202,7 @@ def notify_after_scout(data_dir: str, stats: dict) -> None:
         n = int(p.get("new") or 0)
         if n:
             lines.append(f"  · {pid}: +{n} → {p.get('path', '(raw)')}")
-    lines.append("参考: store/rules/order-intake.schema.json · 阈值 pursue≥75 / 通知灵昭≥85")
+    lines.append("参考: store/rules/order-intake.schema.json · 阈值 pursue≥75 / 通知决策官≥85")
     from lib.composition import get_ops
 
     get_ops().append_inbox_task(data_dir, agent, "\n".join(lines), priority="normal")

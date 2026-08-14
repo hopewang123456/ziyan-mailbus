@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Callable, Iterable, Sequence
 
 from lib.infra.env_bootstrap import load_mailbus_env, mailbus_paths
+from lib.infra.runtime_net import resolve_loopback
 from lib.infra.utils import configure_stdio_utf8, to_wsl_path
 
 
@@ -84,10 +85,8 @@ def probe_http(
 ) -> bool:
     """Return True if HTTP status is in ok_codes (or accept_codes if provided)."""
     allowed = accept_codes if accept_codes is not None else ok_codes
-    probed = url
     # Docker 容器内 127.0.0.1 指向本容器自身，需要替换为 host.docker.internal
-    if os.path.exists("/.dockerenv") and "127.0.0.1" in url:
-        probed = url.replace("127.0.0.1", "host.docker.internal")
+    probed = resolve_loopback(url)
     try:
         req = urllib.request.Request(probed, headers=dict(headers or {}))
         with urllib.request.urlopen(req, timeout=timeout) as resp:

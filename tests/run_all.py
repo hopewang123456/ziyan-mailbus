@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ziyan-mailbus 测试套件入口"""
+"""mailbus 测试套件入口"""
 
 import os
 import sys

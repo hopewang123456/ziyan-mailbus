@@ -22,28 +22,28 @@ class TestDeliveryNormalizerOpencode(unittest.TestCase):
         os.makedirs(os.path.join(self.tmp, "replies"), exist_ok=True)
         os.makedirs(os.path.join(self.tmp, "patches"), exist_ok=True)
         os.makedirs(os.path.join(self.tmp, "tasks"), exist_ok=True)
-        os.makedirs(os.path.join(self.tmp, "inbox", "dali"), exist_ok=True)
+        os.makedirs(os.path.join(self.tmp, "inbox", "agent-i"), exist_ok=True)
         self.tid = "game-courier-norm"
         json_write(os.path.join(self.tmp, "config.json"), {
-            "agents": {"dali": {"type": "opencode"}},
+            "agents": {"agent-i": {"type": "opencode"}},
             "framework_delivery": {"opencode": {"enabled": True}},
         })
         task = {
             "task_id": self.tid,
             "status": "running",
-            "assignee": "dali",
+            "assignee": "agent-i",
             "chain": [{
                 "step": 1,
                 "step_id": "s1",
                 "status": "running",
-                "to_agent": "dali",
-                "to_person": "dali",
+                "to_agent": "agent-i",
+                "to_person": "agent-i",
                 "to_role": "编码",
             }],
         }
         json_write(os.path.join(self.tmp, "tasks", f"{self.tid}.json"), task)
-        json_write(os.path.join(self.tmp, "inbox", "dali", "inbox.json"), {
-            "agent": "dali",
+        json_write(os.path.join(self.tmp, "inbox", "agent-i", "inbox.json"), {
+            "agent": "agent-i",
             "messages": [{
                 "id": "msg-norm-1",
                 "task_id": self.tid,
@@ -62,7 +62,7 @@ class TestDeliveryNormalizerOpencode(unittest.TestCase):
 
     def test_reply_to_step_result(self):
         reply = {
-            "agent": "dali",
+            "agent": "agent-i",
             "msg_ids": ["msg-norm-1"],
             "reply": "已完成 courier 模块实现与单测",
             "patch": os.path.join(self.tmp, "patches", "0001-fix.patch"),
@@ -71,7 +71,7 @@ class TestDeliveryNormalizerOpencode(unittest.TestCase):
         patch_path = os.path.join(self.tmp, "patches", "0001-fix.patch")
         with open(patch_path, "w", encoding="utf-8") as f:
             f.write("diff --git a/x b/x\n")
-        n = normalize_from_reply_record(self.tmp, "dali", reply)
+        n = normalize_from_reply_record(self.tmp, "agent-i", reply)
         self.assertEqual(n, 1)
         step = {"step_id": "s1"}
         result = read_step_result(self.tmp, self.tid, step)
@@ -81,13 +81,13 @@ class TestDeliveryNormalizerOpencode(unittest.TestCase):
         self.assertTrue(os.path.isfile(step_result_path(self.tmp, self.tid, "s1")))
 
     def test_normalize_opencode_deliveries_batch(self):
-        json_write(os.path.join(self.tmp, "replies", "dali.json"), {
-            "agent": "dali",
+        json_write(os.path.join(self.tmp, "replies", "agent-i.json"), {
+            "agent": "agent-i",
             "msg_ids": ["msg-norm-1"],
             "reply": "done with patch",
         })
         stats = normalize_opencode_deliveries(
-            self.tmp, {"dali": {"type": "opencode"}},
+            self.tmp, {"agent-i": {"type": "opencode"}},
         )
         self.assertGreaterEqual(stats["total"], 1)
 

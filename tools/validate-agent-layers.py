@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib.infra.constants import MAILBUS_SKILLS_ROOT, TEAM_PACK_SKILLS_ROOT  # noqa: E402
+from lib.infra.constants import AGENT_VAULT_ROOT  # noqa: E402
 from lib.adapters.config.agent_registry import layer_skills_for_agent, load_all_agents  # noqa: E402
 
 
@@ -24,16 +24,14 @@ def _agent_archetypes() -> dict[str, str]:
 
 INDEX = ROOT / "store" / "agents" / "json" / "skills-index.json"
 OPENCODE_AGENTS = ROOT.parent / "opencode" / "AGENTS.md"
-SKILLS_COMMON = MAILBUS_SKILLS_ROOT / "common"
-TEAM_SKILLS = TEAM_PACK_SKILLS_ROOT
 
 
 def _protocol_skill_path() -> Path:
-    return SKILLS_COMMON / "mailbus-file-protocol" / "SKILL.md"
+    return AGENT_VAULT_ROOT / "01-mailbus" / "012-skills" / "0121-common" / "mailbus-file-protocol" / "SKILL.md"
 
 
 def _universal_skill_path() -> Path:
-    return TEAM_SKILLS / "common" / "agent-universal" / "SKILL.md"
+    return AGENT_VAULT_ROOT / "02-members" / "021-common" / "0211-rules" / "agent-universal" / "SKILL.md"
 
 
 MAILBUS_FILE_PROTOCOL = _protocol_skill_path()
@@ -45,7 +43,7 @@ FORBIDDEN_IDENTITY_PATTERNS = [
 ]
 
 DELIVERY_TABLE_IN_L0 = re.compile(
-    r"\|\s*opencode\s*\(dali\)\s*\|",
+    r"\|\s*opencode\s*\(opencode\)\s*\|",
     re.I,
 )
 
@@ -90,7 +88,7 @@ def check_l0_no_delivery_table() -> list[str]:
     if OPENCODE_AGENTS.is_file():
         text = OPENCODE_AGENTS.read_text(encoding="utf-8")
         if "msg-results 为任务完成依据" in text or "msg-results/{msg_id}.json` 为任务完成" in text:
-            errors.append("opencode/AGENTS.md: dali must use patch+replies SoT, not msg-results primary")
+            errors.append("opencode/AGENTS.md: opencode agent must use patch+replies SoT, not msg-results primary")
         if "## 📬 mailbus" in text:
             errors.append("opencode/AGENTS.md: mailbus rules must be in L0/L1 skills only")
     return errors
@@ -99,18 +97,32 @@ def check_l0_no_delivery_table() -> list[str]:
 def check_role_files_exist() -> list[str]:
     errors: list[str] = []
     for agent_id, archetype in _agent_archetypes().items():
-        arch = TEAM_SKILLS / "roles" / "archetypes" / archetype / "SKILL.md"
-        overlay = TEAM_SKILLS / "roles" / "overlays" / agent_id / "SKILL.md"
-        if not arch.is_file():
-            errors.append(f"missing archetype skill: {arch}")
-        if not overlay.is_file():
-            errors.append(f"missing overlay skill: {overlay}")
+        fw = str(load_all_agents().get(agent_id, {}).get("framework") or "")
+        specs = layer_skills_for_agent(agent_id, fw)
+        has_arch = any(s.get("type") == "role_archetype" for s in specs)
+        has_overlay = any(s.get("type") == "role_overlay" for s in specs)
+        if not has_arch:
+            errors.append(f"missing archetype skill for {agent_id} (archetype={archetype})")
+        if not has_overlay:
+            errors.append(f"missing overlay skill for {agent_id}")
+        for spec in specs:
+            rel = spec.get("path") or ""
+            if not rel:
+                continue
+            p = _resolve_spec_path(rel)
+            if not p.is_file():
+                errors.append(f"missing skill file: {p}")
     universal = _universal_skill_path()
     if not universal.is_file():
         errors.append(f"missing L0 agent-universal: {universal}")
     if not MAILBUS_FILE_PROTOCOL.is_file():
         errors.append(f"missing L0 mailbus-file-protocol: {MAILBUS_FILE_PROTOCOL}")
     return errors
+
+
+def _resolve_spec_path(rel: str) -> Path:
+    from lib.adapters.config.agent_registry import resolve_skill_src
+    return resolve_skill_src(rel)
 
 
 def main() -> int:

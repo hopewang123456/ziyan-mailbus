@@ -1,4 +1,4 @@
-"""ziyan-mailbus 心跳检测 & 健康监控
+"""mailbus 心跳检测 & 健康监控
 
 定时对所有 Agent 执行心跳 ping，检测在线状态。
 同时监控 AgentMemory 连接、API Key 有效性、inbox 积压、磁盘空间。
@@ -115,7 +115,7 @@ def check_api_keys(config: dict) -> list:
         Path("/run/hermes/.env"),
         Path("/home/hermes/.hermes/.env"),
         Path("/home/administrator/.hermes/.env"),
-        Path("/mnt/e/hermes-data/.hermes/.env"),
+        Path("/mnt/<HERMES_DATA>/.hermes/.env"),
         Path.home() / ".hermes" / ".env",
     ]
 

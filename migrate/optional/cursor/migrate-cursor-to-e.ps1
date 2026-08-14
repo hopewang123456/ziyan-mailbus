@@ -1,7 +1,7 @@
 # Migrate Cursor chat/memory/data from C: to E: via directory junctions.
 # Optional tool — not part of mailbus startup. MUST close Cursor completely before running.
 param(
-    [string]$TargetRoot = "E:\cursor-data",
+    [string]$TargetRoot = "D:\cursor-data",
     [switch]$Force
 )
 

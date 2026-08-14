@@ -6,7 +6,7 @@
   python tools/mailbus.py start --windows    # Windows 入口（唤醒 WSL + 开浏览器）
   python tools/mailbus.py stop
   python tools/mailbus.py recover quick|full|health
-  python tools/mailbus.py launch lingyun browser
+  python tools/mailbus.py launch agent-h browser
   python tools/mailbus.py proxy setup|ollama start|stop|status
   python tools/mailbus.py watchdog restart
   python tools/mailbus.py smoke
@@ -237,7 +237,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="mailbus", description="Mailbus unified cross-platform CLI")
     sub = ap.add_subparsers(dest="command", required=True)
 
-    p = sub.add_parser("start", help="start ziyan AI team")
+    p = sub.add_parser("start", help="start Mailbus agent stack")
     p.add_argument("--windows", action="store_true", help="Windows entry: wake WSL + portproxy + browser")
     p.add_argument("--open-browser", action="store_true", help="open agent URLs in browser (Windows)")
     p.add_argument("--no-lock", action="store_true", help="skip start-team flock lock")
@@ -277,7 +277,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("portproxy", help="refresh Windows localhost port forwarding")
     p.set_defaults(func=cmd_portproxy)
 
-    p = sub.add_parser("claude", help="ensure/stop Claude ttyd (lingyun/lingyan)")
+    p = sub.add_parser("claude", help="ensure/stop Claude ttyd agents")
     p.add_argument("action", choices=("ensure", "stop"))
     p.set_defaults(func=cmd_claude)
 
@@ -285,7 +285,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("action", choices=("apply",))
     p.set_defaults(func=cmd_codex)
 
-    p = sub.add_parser("openclaw", help="fix OpenClaw gateways (xiaoqi/yige)")
+    p = sub.add_parser("openclaw", help="fix OpenClaw gateways")
     p.add_argument("action", choices=("fix",))
     p.set_defaults(func=cmd_openclaw)
 

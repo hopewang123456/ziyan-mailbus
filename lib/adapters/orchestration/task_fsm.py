@@ -457,9 +457,8 @@ def resolve_transition(
     ):
         return None, None, "terminal"
     if (conclusion or "").lower() in _BLOCKING_CONCLUSIONS:
-        return get_next_role(current_role, conclusion), pick_person_for_role(
-            get_next_role(current_role, conclusion) or "", exclude=None
-        ), "rollback_flow"
+        nxt = get_next_role(current_role, conclusion)
+        return nxt, pick_person_for_role(nxt or "", exclude=None, data_dir=data_dir), "rollback_flow"
     return None, None, "blocked"
 
 
@@ -512,7 +511,7 @@ def apply_submit(
             role_label=current_role or "",
             reason=v_err or "verify_failed",
             attempt=attempt,
-            escalate_cfg=vc.get("escalate_on_attempt") or {"2": "xiaoqi", "3": "lingzhao"},
+            escalate_cfg=vc.get("escalate_on_attempt") or {"2": "agent-m", "3": "agent-a"},
         )
         if verify_fail_auto_retry(task, cfg) and not retry_exceeded(task, cfg, key="verify_fail"):
             _append_history(task, "verify_failed", {

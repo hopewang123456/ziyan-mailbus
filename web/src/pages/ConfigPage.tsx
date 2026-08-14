@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { api, getToken, setToken } from "../lib/api";
 import { DiscoverPage } from "./DiscoverPage";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { ModelConfigPanel } from "../components/ModelConfigPanel";
+import { AgentRuntimePanel } from "../components/AgentInstancePanel";
+import { AssetPathsPanel } from "../components/AssetPathsPanel";
+import { BusExtrasPanel } from "../components/BusExtrasPanel";
+import { SoftFold } from "../components/SoftFold";
 
 type TokenInfo = {
   configured?: boolean;
@@ -13,17 +18,6 @@ type SectionMeta = { id?: string; label?: string; editable?: boolean } | string;
 
 export type ConfigVariant = "agent" | "llm" | "bus" | "gear" | "full";
 
-const AGENT_MODEL_SECTIONS = new Set([
-  "smart_routing",
-  "mailbus_internal_llm",
-  "services",
-]);
-const AGENT_RUNTIME_SECTIONS = new Set([
-  "agents",
-  "frameworks",
-  "mailbus_codex",
-  "mailbus_claude",
-]);
 const BUS_SECTIONS = new Set([
   "launch_ports",
   "mailbus_workflow",
@@ -32,6 +26,7 @@ const BUS_SECTIONS = new Set([
   "scheduler",
   "mailbus_chains",
 ]);
+const AGENT_RUNTIME_OTHER_SECTIONS = new Set(["frameworks", "mailbus_codex", "mailbus_claude"]);
 
 function sectionId(s: SectionMeta): string {
   return typeof s === "string" ? s : String(s.id || "");
@@ -40,6 +35,56 @@ function sectionId(s: SectionMeta): string {
 function sectionLabel(s: SectionMeta): string {
   if (typeof s === "string") return s;
   return String(s.label || s.id || "");
+}
+
+function flattenObj(obj: unknown, prefix = ""): { key: string; value: string }[] {
+  const out: { key: string; value: string }[] = [];
+  if (obj == null || typeof obj !== "object") {
+    if (prefix) out.push({ key: prefix, value: obj == null ? "" : String(obj) });
+    return out;
+  }
+  if (Array.isArray(obj)) {
+    out.push({ key: prefix || "list", value: JSON.stringify(obj) });
+    return out;
+  }
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+    if (k === "status" || k === "error" || k === "section") continue;
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v && typeof v === "object" && !Array.isArray(v)) out.push(...flattenObj(v, key));
+    else if (Array.isArray(v)) out.push({ key, value: JSON.stringify(v) });
+    else out.push({ key, value: v == null ? "" : String(v) });
+  }
+  return out;
+}
+
+function unflattenObj(rows: { key: string; value: string }[]): Record<string, unknown> {
+  const root: Record<string, unknown> = {};
+  for (const { key, value } of rows) {
+    const parts = key.split(".").filter(Boolean);
+    if (!parts.length) continue;
+    let cur: Record<string, unknown> = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const p = parts[i];
+      if (!(p in cur) || typeof cur[p] !== "object" || cur[p] == null || Array.isArray(cur[p])) {
+        cur[p] = {};
+      }
+      cur = cur[p] as Record<string, unknown>;
+    }
+    const leaf = parts[parts.length - 1];
+    const trimmed = value.trim();
+    if (trimmed === "true") cur[leaf] = true;
+    else if (trimmed === "false") cur[leaf] = false;
+    else if (trimmed !== "" && !Number.isNaN(Number(trimmed)) && /^-?\d+(\.\d+)?$/.test(trimmed)) {
+      cur[leaf] = Number(trimmed);
+    } else if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+      try {
+        cur[leaf] = JSON.parse(trimmed);
+      } catch {
+        cur[leaf] = value;
+      }
+    } else cur[leaf] = value;
+  }
+  return root;
 }
 
 function SectionEditor({
@@ -52,7 +97,7 @@ function SectionEditor({
   sections: SectionMeta[];
 }) {
   const [section, setSection] = useState("");
-  const [editor, setEditor] = useState("");
+  const [rows, setRows] = useState<{ key: string; value: string }[]>([]);
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [probeOut, setProbeOut] = useState<unknown>(null);
@@ -68,11 +113,12 @@ function SectionEditor({
     setProbeOut(null);
     const r = await api<Record<string, unknown>>(`/api/settings/section/${encodeURIComponent(name)}`);
     if (r.ok) {
-      const { status: _s, error: _e, ...rest } = r.data;
-      setEditor(JSON.stringify(Object.keys(rest).length ? rest : r.data, null, 2));
+      const { status: _s, error: _e, section: _sec, ...rest } = r.data;
+      const payload = Object.keys(rest).length ? rest : r.data;
+      setRows(flattenObj(payload));
     } else {
       setMsg(r.error);
-      setEditor("");
+      setRows([]);
     }
   }
 
@@ -80,21 +126,10 @@ function SectionEditor({
     if (!section) return;
     setBusy(true);
     setMsg("");
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(editor);
-    } catch {
-      setBusy(false);
-      setMsg("JSON 解析失败");
-      return;
-    }
-    const body =
-      typeof parsed === "object" && parsed && "patch" in (parsed as object)
-        ? parsed
-        : { patch: parsed };
+    const parsed = unflattenObj(rows);
     const r = await api(`/api/settings/section/${encodeURIComponent(section)}`, {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify({ patch: parsed }),
     });
     setBusy(false);
     if (r.ok) {
@@ -114,10 +149,10 @@ function SectionEditor({
   }
 
   return (
-    <div className="space-y-3 rounded-sm border border-rail bg-hull/50 p-4">
-      <p className="hud-label">{title}</p>
-      <ul className="max-h-40 space-y-1 overflow-auto text-sm">
-        {filtered.length === 0 && <li className="text-mute">无匹配 section</li>}
+    <div className="soft-panel space-y-3">
+      <p className="soft-panel-title">{title}</p>
+      <ul className="max-h-48 space-y-1 overflow-auto">
+        {filtered.length === 0 && <li className="px-2 text-sm text-mute">无匹配 section</li>}
         {filtered.map((s) => {
           const id = sectionId(s);
           if (!id) return null;
@@ -125,13 +160,11 @@ function SectionEditor({
             <li key={id}>
               <button
                 type="button"
-                className={`w-full border-b border-rail/60 py-1.5 text-left font-mono text-xs ${
-                  section === id ? "text-frost" : "text-frost/70 hover:text-frost"
-                }`}
+                className={`soft-list-btn ${section === id ? "is-active" : ""}`}
                 onClick={() => void loadSection(id)}
               >
                 {sectionLabel(s)}
-                <span className="ml-2 text-mute">{id}</span>
+                <span className="ml-2 opacity-50">{id}</span>
               </button>
             </li>
           );
@@ -146,18 +179,37 @@ function SectionEditor({
               </button>
             )}
             <button type="button" className="hud-btn-amber" disabled={busy} onClick={() => void saveSection()}>
-              保存 PATCH
+              保存
             </button>
           </div>
-          <textarea
-            className="hud-input mt-2 min-h-[200px] w-full font-mono text-xs"
-            value={editor}
-            onChange={(e) => setEditor(e.target.value)}
-            spellCheck={false}
-          />
+          <div className="max-h-[420px] space-y-2 overflow-auto">
+            {rows.length === 0 ? (
+              <p className="text-sm text-mute">空配置</p>
+            ) : (
+              rows.map((row, idx) => (
+                <label key={`${row.key}-${idx}`} className="block soft-inset">
+                  <span className="font-mono text-[10px] text-mute">{row.key}</span>
+                  <input
+                    className="hud-input mt-1 font-mono text-xs"
+                    value={row.value}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, value: v } : r)));
+                    }}
+                  />
+                </label>
+              ))
+            )}
+          </div>
           {msg && <p className="text-xs text-amber-signal">{msg}</p>}
           {probeOut != null && (
-            <pre className="max-h-32 overflow-auto text-xs text-mute">{JSON.stringify(probeOut, null, 2)}</pre>
+            <div className="soft-inset text-xs text-mute">
+              {flattenObj(probeOut).map((r) => (
+                <p key={r.key}>
+                  <span className="text-frost/70">{r.key}</span>: {r.value}
+                </p>
+              ))}
+            </div>
           )}
         </>
       )}
@@ -197,8 +249,9 @@ function AgentOpsPanel() {
   }
 
   return (
-    <div className="space-y-3 rounded-sm border border-rail bg-hull/50 p-4">
-      <p className="hud-label">运维 · align / transfer</p>
+    <div className="soft-panel space-y-3">
+      <p className="soft-panel-title">运维</p>
+      <p className="soft-panel-sub">align / transfer / 发现</p>
       <div className="flex flex-wrap gap-2">
         <button type="button" className="hud-btn" disabled={busy} onClick={() => void align()}>
           Align store
@@ -239,83 +292,106 @@ function AgentOpsPanel() {
   );
 }
 
-function BusExtras() {
-  const [paths, setPaths] = useState<unknown>(null);
-  const [perm, setPerm] = useState<unknown>(null);
-  const [a2a, setA2a] = useState<unknown>(null);
+function SkillsSourcePanel() {
+  const [idx, setIdx] = useState<{
+    agents?: Record<string, { framework?: string; archetype?: string; skills?: unknown[] }>;
+    reverse?: Record<string, string[]>;
+    orphans?: Array<{ id?: string; name?: string; layer?: string }>;
+    updated_at?: string;
+    source?: string;
+  } | null>(null);
+  const [paths, setPaths] = useState<Record<string, string> | null>(null);
   const [err, setErr] = useState("");
-  const [editor, setEditor] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function load() {
+    setBusy(true);
     setErr("");
-    const [p, pe, a] = await Promise.all([
-      api("/api/settings/paths"),
-      api("/api/permission"),
-      api("/api/a2a/protocol"),
+    const [r1, r2] = await Promise.all([
+      api<{ index?: unknown }>("/api/skills/index"),
+      api<{ paths?: Record<string, string> }>("/api/settings/paths"),
     ]);
-    if (p.ok) setPaths(p.data);
-    else setErr(p.error);
-    if (pe.ok) {
-      setPerm(pe.data);
-      setEditor(JSON.stringify(pe.data, null, 2));
-    }
-    if (a.ok) setA2a(a.data);
+    setBusy(false);
+    if (r1.ok) setIdx((r1.data.index as typeof idx) ?? null);
+    else setErr(r1.error);
+    if (r2.ok) setPaths(r2.data.paths ?? null);
   }
 
   useEffect(() => {
     void load();
   }, []);
 
-  async function savePerm() {
-    setBusy(true);
-    setErr("");
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(editor);
-    } catch {
-      setBusy(false);
-      setErr("permission JSON 无效");
-      return;
-    }
-    const r = await api("/api/permission", { method: "POST", body: JSON.stringify(parsed) });
-    setBusy(false);
-    if (r.ok) {
-      setPerm(r.data);
-      void load();
-    } else setErr(r.error);
-  }
-
   return (
-    <div className="space-y-3">
-      <ErrorAlert message={err} />
-      <div className="rounded-sm border border-rail bg-hull/50 p-4">
-        <p className="hud-label">Vault / Compose 路径（只读）</p>
-        <pre className="mt-2 max-h-48 overflow-auto text-xs text-mute">
-          {paths == null ? "…" : JSON.stringify(paths, null, 2)}
-        </pre>
-      </div>
-      <div className="rounded-sm border border-rail bg-hull/50 p-4">
-        <p className="hud-label">权限 · /api/permission</p>
-        <textarea
-          className="hud-input mt-2 min-h-[160px] w-full font-mono text-xs"
-          value={editor}
-          onChange={(e) => setEditor(e.target.value)}
-          spellCheck={false}
-        />
-        <button type="button" className="hud-btn-amber mt-2" disabled={busy} onClick={() => void savePerm()}>
-          保存权限
+    <div className="soft-panel">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="soft-panel-title">技能源</p>
+          <p className="soft-panel-sub">Obsidian SoT · 资产路径</p>
+        </div>
+        <button type="button" className="hud-btn" disabled={busy} onClick={() => void load()}>
+          重建索引
         </button>
-        {perm != null && (
-          <p className="mt-2 text-xs text-mute">loaded · {Object.keys(perm as object).length} keys</p>
-        )}
       </div>
-      <div className="rounded-sm border border-rail bg-hull/50 p-4">
-        <p className="hud-label">A2A protocol</p>
-        <pre className="mt-2 max-h-40 overflow-auto text-xs text-mute">
-          {a2a == null ? "…" : JSON.stringify(a2a, null, 2)}
-        </pre>
+      <p className="mt-3 text-[13px] leading-relaxed text-mute">
+        技能/规则声明 SoT 在 Obsidian 人物索引 frontmatter。资产根可由 env（MAILBUS_SKILLS_ROOT /
+        MAILBUS_RULES_ROOT / MAILBUS_IDENTITIES_ROOT）覆盖。
+      </p>
+      {err && <ErrorAlert message={err} />}
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <div className="soft-inset min-w-0">
+          <p className="text-[11px] font-medium text-frost/70">资产路径</p>
+          <pre className="mt-2 max-h-40 overflow-auto font-mono text-[10px] text-mute">
+            {paths == null
+              ? "…"
+              : Object.entries(paths)
+                  .filter(([k]) => /root|workspace|_dir/.test(k))
+                  .map(([k, v]) => `${k} = ${v}`)
+                  .join("\n")}
+          </pre>
+        </div>
+        <div className="soft-inset min-w-0">
+          <p className="text-[11px] font-medium text-frost/70">
+            skills-index {idx?.updated_at ? `· ${idx.updated_at}` : ""}
+          </p>
+          <p className="mt-1 text-[10px] text-mute">
+            {idx?.source || "…"} · {Object.keys(idx?.agents || {}).length} agents ·{" "}
+            {Object.keys(idx?.reverse || {}).length} skills · {idx?.orphans?.length || 0} orphans
+          </p>
+        </div>
       </div>
+      {idx && Object.keys(idx.agents || {}).length > 0 && (
+        <div className="mt-3">
+          <details className="soft-details">
+            <summary>人物 → 技能 明细</summary>
+            <div className="mt-2 max-h-72 overflow-auto">
+              {Object.entries(idx.agents || {}).map(([aid, a]) => (
+                <div key={aid} className="border-b border-white/[0.05] py-2 text-[11px]">
+                  <span className="font-mono text-frost">{aid}</span>
+                  <span className="ml-2 text-mute">{a.framework} / {a.archetype}</span>
+                  <ul className="ml-4 mt-1 list-disc pl-4 text-mute">
+                    {(a.skills || []).map((s, i) => {
+                      const spec = s as { type?: string; id?: string; path?: string };
+                      return <li key={i}>{spec.type}:{spec.id} <span className="opacity-50">{spec.path || ""}</span></li>;
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </details>
+        </div>
+      )}
+      {idx && Object.keys(idx.orphans || {}).length > 0 && (
+        <div className="mt-3">
+          <p className="text-[11px] font-medium text-amber-signal">孤儿技能（未被人物引用）</p>
+          <ul className="mt-1 flex flex-wrap gap-2">
+            {(idx.orphans || []).map((o) => (
+              <li key={o.id || o.name} className="agent-chip agent-chip-warn">
+                {o.id || o.name} · {o.layer}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
@@ -354,13 +430,22 @@ function GearPanel() {
   }
 
   return (
-    <div className="space-y-4 rounded-sm border border-rail bg-hull/50 p-4">
-      <p className="hud-label">齿轮 · API / Token</p>
-      <p className="text-sm text-mute">
-        服务端掩码：{info?.token_masked || "—"} · configured={String(!!info?.configured)}
+    <div className="soft-panel space-y-4">
+      <div>
+        <p className="soft-panel-title">API / Token</p>
+        <p className="soft-panel-sub">
+          服务端掩码：{info?.token_masked || "—"} · configured={String(!!info?.configured)}
+        </p>
+      </div>
+      <p className="text-[13px] leading-relaxed text-mute">
+        <span className="text-amber-signal">提示</span>：前端在 Windows 访问 WSL/Docker 后端时，跨机写操作
+        需 Bearer token。Token 存在后端 <code className="font-mono">store/secrets.json</code>（或
+        <code className="font-mono">MAILBUS_API_TOKEN</code> 环境变量）。获取方式：容器内
+        <code className="font-mono">docker exec &lt;容器&gt; cat store/secrets.json</code>，
+        或点下方「轮换 Token」（明文仅返回一次）。填好后保存即可，所有请求自动携带 Bearer。
       </p>
       <label className="block">
-        <span className="hud-label">本机 Bearer</span>
+        <span className="hud-label">Bearer Token</span>
         <input
           className="hud-input mt-1 w-full font-mono text-xs"
           value={tokenInput}
@@ -415,8 +500,11 @@ export function ConfigPage({ variant = "full" }: { variant?: ConfigVariant }) {
         <header>
           <p className="hud-label">Gear</p>
           <h2 className="mt-1 font-display text-2xl tracking-wide">齿轮</h2>
+          <p className="mt-1 text-sm text-mute">点开折叠项编辑，默认收起</p>
         </header>
-        <GearPanel />
+        <SoftFold title="API / Token" hint="mailbus 访问令牌">
+          <GearPanel />
+        </SoftFold>
       </div>
     );
   }
@@ -427,13 +515,31 @@ export function ConfigPage({ variant = "full" }: { variant?: ConfigVariant }) {
         <header>
           <p className="hud-label">Agent</p>
           <h2 className="mt-1 font-display text-2xl tracking-wide">智能体</h2>
-          <p className="mt-1 text-sm text-mute">左：模型配置 · 右：智能体配置 · 下：运维</p>
+          <p className="mt-1 text-sm text-mute">各区块默认收起 · 点标题展开</p>
         </header>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <SectionEditor title="模型配置" allow={AGENT_MODEL_SECTIONS} sections={sections} />
-          <SectionEditor title="智能体配置" allow={AGENT_RUNTIME_SECTIONS} sections={sections} />
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className="space-y-3">
+            <SoftFold title="模型 Provider" hint="API Key / Base URL">
+              <ModelConfigPanel filter="provider" />
+            </SoftFold>
+            <SoftFold title="路由 / 内部 LLM / 服务" hint="smart_routing · internal · services">
+              <ModelConfigPanel filter="routing" />
+              <ModelConfigPanel filter="internal" />
+              <ModelConfigPanel filter="services" />
+            </SoftFold>
+            <SoftFold title="运维" hint="align / transfer / 发现">
+              <AgentOpsPanel />
+            </SoftFold>
+          </div>
+          <div className="space-y-3">
+            <SoftFold title="智能体实例 / 角色" hint="实例卡 · 加载角色 · 配置">
+              <AgentRuntimePanel />
+            </SoftFold>
+            <SoftFold title="其他运行时" hint="frameworks / codex / claude">
+              <SectionEditor title="其他运行时配置" allow={AGENT_RUNTIME_OTHER_SECTIONS} sections={sections} />
+            </SoftFold>
+          </div>
         </div>
-        <AgentOpsPanel />
       </div>
     );
   }
@@ -444,22 +550,45 @@ export function ConfigPage({ variant = "full" }: { variant?: ConfigVariant }) {
         <header>
           <p className="hud-label">Bus</p>
           <h2 className="mt-1 font-display text-2xl tracking-wide">总线</h2>
+          <p className="mt-1 text-sm text-mute">路径 · 权限 · A2A · 调度段 · 默认收起</p>
         </header>
-        <SectionEditor title="总线 sections" allow={BUS_SECTIONS} sections={sections} />
-        <BusExtras />
+        <BusExtrasPanel />
+        <SoftFold title="调度 / 工作流 / 自动化 / 端口" hint="可编辑运行段表单">
+          <SectionEditor title="总线 sections" allow={BUS_SECTIONS} sections={sections} />
+        </SoftFold>
       </div>
     );
   }
 
-  // full / legacy: token + all sections
+  // full / legacy: token + form panels + all sections
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <header>
         <p className="hud-label">Configuration</p>
         <h2 className="mt-1 font-display text-2xl tracking-wide text-frost">配置 / Token</h2>
+        <p className="mt-1 text-sm text-mute">各区块默认收起 · 点标题展开</p>
       </header>
-      <GearPanel />
-      <SectionEditor title="全部 sections" allow={null} sections={sections} />
+      <SoftFold title="API / Token">
+        <GearPanel />
+      </SoftFold>
+      <SoftFold title="技能源">
+        <SkillsSourcePanel />
+      </SoftFold>
+      <SoftFold title="资产路径">
+        <AssetPathsPanel />
+      </SoftFold>
+      <SoftFold title="模型 Provider">
+        <ModelConfigPanel filter="provider" />
+      </SoftFold>
+      <SoftFold title="智能体实例 / 角色">
+        <AgentRuntimePanel />
+      </SoftFold>
+      <SoftFold title="模型路由 / 服务 / 全部 sections" hint="兜底编辑">
+        <ModelConfigPanel filter="routing" />
+        <ModelConfigPanel filter="internal" />
+        <ModelConfigPanel filter="services" />
+        <SectionEditor title="全部 sections" allow={null} sections={sections} />
+      </SoftFold>
     </div>
   );
 }

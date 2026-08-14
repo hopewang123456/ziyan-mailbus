@@ -6,7 +6,7 @@
 
 ```json
 {
-  "agent": "lingxiao",
+  "agent": "agent-f",
   "msg_id": "<id>",
   "status": "done",
   "summary": "≤200字：做了什么、测了什么",

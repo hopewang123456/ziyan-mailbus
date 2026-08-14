@@ -45,7 +45,7 @@ class TestDualWriteBridge(unittest.TestCase):
                 "id": msg_id,
                 "status": status,
                 "content": "hello from test",
-                "from": "lingzhao",
+                "from": "agent-a",
                 "type": "notice",
             }]
         }
@@ -57,7 +57,7 @@ class TestDualWriteBridge(unittest.TestCase):
             os.environ["TEAM_MEMORY_DB"] = db_path
             os.environ["MEMORY_BRIDGE_SQLITE"] = "1"
             os.environ["MEMORY_BRIDGE_AGENTMEMORY"] = "1"
-            self._setup_inbox(td, "dali", "test-msg-001")
+            self._setup_inbox(td, "agent-i", "test-msg-001")
 
             with patch("lib.adapters.integrations.memory_bridge.agentmemory_healthy", return_value=False):
                 stats = run_bridge(td, limit=10, url="http://127.0.0.1:9")
@@ -65,7 +65,7 @@ class TestDualWriteBridge(unittest.TestCase):
             self.assertEqual(stats["sqlite_ok"], 1)
             self.assertEqual(stats["agentmemory_skip"], 1)
 
-            marker = load_sync_marker(Path(td) / "inbox" / "dali" / "sync_to_memory.json")
+            marker = load_sync_marker(Path(td) / "inbox" / "agent-i" / "sync_to_memory.json")
             self.assertIn("test-msg-001", marker["sqlite"])
             self.assertNotIn("test-msg-001", marker["agentmemory"])
 
@@ -83,7 +83,7 @@ class TestDualWriteBridge(unittest.TestCase):
             os.environ["TEAM_MEMORY_DB"] = db_path
             os.environ["MEMORY_BRIDGE_SQLITE"] = "1"
             os.environ["MEMORY_BRIDGE_AGENTMEMORY"] = "1"
-            self._setup_inbox(td, "dali", "test-msg-002")
+            self._setup_inbox(td, "agent-i", "test-msg-002")
 
             def fake_am(*args, **kwargs):
                 return {"success": True}
@@ -94,7 +94,7 @@ class TestDualWriteBridge(unittest.TestCase):
 
             self.assertEqual(stats["sqlite_ok"], 1)
             self.assertEqual(stats["agentmemory_ok"], 1)
-            marker = load_sync_marker(Path(td) / "inbox" / "dali" / "sync_to_memory.json")
+            marker = load_sync_marker(Path(td) / "inbox" / "agent-i" / "sync_to_memory.json")
             self.assertIn("test-msg-002", marker["sqlite"])
             self.assertIn("test-msg-002", marker["agentmemory"])
 
@@ -102,8 +102,8 @@ class TestDualWriteBridge(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             db_path = os.path.join(td, "mem.db")
             os.environ["TEAM_MEMORY_DB"] = db_path
-            ok1 = write_memory_to_sqlite("dali", "same-id", "content v1", "a", "notice")
-            ok2 = write_memory_to_sqlite("dali", "same-id", "content v2", "a", "notice")
+            ok1 = write_memory_to_sqlite("agent-i", "same-id", "content v1", "a", "notice")
+            ok2 = write_memory_to_sqlite("agent-i", "same-id", "content v2", "a", "notice")
             self.assertTrue(ok1 and ok2)
             import sqlite3
             conn = sqlite3.connect(db_path)
@@ -119,10 +119,10 @@ class TestDualWriteBridge(unittest.TestCase):
             os.environ["TEAM_MEMORY_DB"] = db_path
             os.environ["MEMORY_BRIDGE_SQLITE"] = "1"
             os.environ["MEMORY_BRIDGE_AGENTMEMORY"] = "0"
-            agent_dir = Path(td) / "inbox" / "dali"
+            agent_dir = Path(td) / "inbox" / "agent-i"
             agent_dir.mkdir(parents=True)
             (agent_dir / "sync_to_memory.json").write_text(json.dumps(["old-am-only"]), encoding="utf-8")
-            self._setup_inbox(td, "dali", "backfill-001")
+            self._setup_inbox(td, "agent-i", "backfill-001")
 
             stats = run_bridge(td, limit=10)
             self.assertEqual(stats["sqlite_ok"], 1)
@@ -134,7 +134,7 @@ class TestDualWriteBridge(unittest.TestCase):
 class TestCollectPending(unittest.TestCase):
     def test_skips_non_acknowledged(self):
         with tempfile.TemporaryDirectory() as td:
-            inbox_dir = Path(td) / "inbox" / "dali"
+            inbox_dir = Path(td) / "inbox" / "agent-i"
             inbox_dir.mkdir(parents=True)
             (inbox_dir / "inbox.json").write_text(json.dumps({
                 "messages": [{"id": "x", "status": "pending", "content": "hi", "from": "a"}]

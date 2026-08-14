@@ -43,13 +43,13 @@ class TestLifecycle(unittest.TestCase):
         cfg = {
             "frameworks": {"openclaw": {"enabled": True}},
             "agents": {
-                "xiaoqi": {"type": "openclaw", "enabled": True},
-                "yige": {"type": "openclaw", "enabled": False},
+                "agent-m": {"type": "openclaw", "enabled": True},
+                "agent-l": {"type": "openclaw", "enabled": False},
             },
         }
         active = list_active_agents(cfg)
-        self.assertIn("xiaoqi", active)
-        self.assertNotIn("yige", active)
+        self.assertIn("agent-m", active)
+        self.assertNotIn("agent-l", active)
 
     def test_set_role_enabled(self):
         with tempfile.TemporaryDirectory() as td:

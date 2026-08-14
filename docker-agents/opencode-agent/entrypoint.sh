@@ -1,5 +1,5 @@
 #!/bin/bash
-# 大力 OpenCode：加载 Hermes 同源 .env + 等待 AgentMemory
+# OpenCode agent：加载 Hermes 同源 .env + 等待 AgentMemory
 set -euo pipefail
 
 if [ -f /run/hermes/.env ]; then
@@ -19,13 +19,13 @@ fi
 
 if [ "${MEMORY_BRIDGE_AGENTMEMORY:-0}" = "1" ] && [ -f /mailbus/store/config.json ]; then
   if command -v python3 >/dev/null 2>&1 && [ -f /mailbus/tools/mailbus-memory-bridge.py ]; then
-    python3 /mailbus/tools/mailbus-memory-bridge.py sync-claude-agent-context dali \
+    python3 /mailbus/tools/mailbus-memory-bridge.py sync-claude-agent-context agent-i \
       --data-dir /mailbus/store 2>/dev/null || true
   fi
 fi
 
 if [ -x /mailbus/tools/sync-opencode-framework-skill.sh ]; then
-  OPENCODE_AGENT=dali OPENCODE_SKILLS_DIR=/workspace/opencode/skills \
+  OPENCODE_AGENT=agent-i OPENCODE_SKILLS_DIR=/workspace/opencode/skills \
     bash /mailbus/tools/sync-opencode-framework-skill.sh || true
 fi
 

@@ -14,7 +14,7 @@ from lib.application.harness import get_harness
 from lib.adapters.orchestration.task_fsm import apply_submit, read_step_result, write_step_result
 from lib.core.a2a.a2a_mapper import to_a2a_hub_task, to_a2a_message
 from lib.core.a2a.a2a_standard import A2ATransport
-from lib.core.a2a.agent_card_cache import enrich_agent_channels, load_registry
+from lib.core.a2a.agent_card_cache import enrich_agent_channels
 from lib.core.a2a.a2a_mapper import to_agent_card
 from lib.core.a2a.delivery import can_deliver_a2a
 from lib.core.a2a.file_bus import FileBusTransport
@@ -26,16 +26,16 @@ from lib.infra.utils import json_read, json_write
 from tests.test_helpers import load_golden_a2a_path, seed_a2a_harness
 
 
-def _lingzhao_agent() -> dict:
+def _agent_a_agent() -> dict:
     return {
         "type": "hermes_profile",
         "channels": {"a2a": {"enabled": True}, "file_bus": {"enabled": True}},
-        "endpoint": {"base_url": "https://mailbus.example/api/a2a/rpc/lingzhao"},
+        "endpoint": {"base_url": "https://mailbus.example/api/a2a/rpc/agent-a"},
         "supportedInterfaces": [{"protocolBinding": "JSONRPC", "protocolVersion": "1.0"}],
     }
 
 
-def _dali_agent() -> dict:
+def _agent_i_agent() -> dict:
     return {
         "type": "opencode",
         "channels": {"a2a": {"enabled": False}, "file_bus": {"enabled": True}},
@@ -54,11 +54,11 @@ class TestA2AComplianceChecklist(unittest.TestCase):
     def test_01_fsm_reads_canonical_step_result(self):
         """FSM 只读 canonical step-{step_id}.json，legacy 单文件不参与。"""
         os.makedirs(os.path.join(self.tmp, "msg-results", "t1"), exist_ok=True)
-        step = {"step": 1, "step_id": "s1", "to_person": "lingzhao", "to_agent": "lingzhao"}
+        step = {"step": 1, "step_id": "s1", "to_person": "agent-a", "to_agent": "agent-a"}
         canonical = {
             "task_id": "t1",
             "step_id": "s1",
-            "agent": "lingzhao",
+            "agent": "agent-a",
             "pipeline_step": 1,
             "conclusion": "done",
             "summary": "canonical",
@@ -66,7 +66,7 @@ class TestA2AComplianceChecklist(unittest.TestCase):
         write_step_result(self.tmp, "t1", step, canonical)
         json_write(
             os.path.join(self.tmp, "msg-results", "t1.json"),
-            {"task_id": "t1", "agent": "lingzhao", "conclusion": "done", "summary": "legacy-only"},
+            {"task_id": "t1", "agent": "agent-a", "conclusion": "done", "summary": "legacy-only"},
         )
         cfg_path = os.path.join(self.tmp, "config.json")
         json_write(cfg_path, {"mailbus_automation": {"legacy_result_read": False}})
@@ -81,10 +81,10 @@ class TestA2AComplianceChecklist(unittest.TestCase):
                 **step,
                 "status": "running",
                 "fsm_state": "awaiting_result",
-                "planned_agents": ["lingxi"],
+                "planned_agents": ["agent-d"],
             }],
         }
-        out = apply_submit(task, canonical, agents={"lingxi": {}, "lingzhao": {}})
+        out = apply_submit(task, canonical, agents={"agent-d": {}, "agent-a": {}})
         self.assertTrue(out["ok"])
         self.assertEqual(out["action"], "advance")
 
@@ -93,13 +93,13 @@ class TestA2AComplianceChecklist(unittest.TestCase):
         seed_a2a_harness(self.tmp)
         cfg_path = os.path.join(self.tmp, "config.json")
         cfg = json_read(cfg_path, {})
-        cfg.setdefault("agents", {})["lingzhao"] = _lingzhao_agent()
+        cfg.setdefault("agents", {})["agent-a"] = _agent_a_agent()
         cfg["a2a"] = {"max_retries": 3, "retry_backoff_sec": [0, 0, 0]}
         json_write(cfg_path, cfg)
         os.makedirs(os.path.join(self.tmp, "tasks"), exist_ok=True)
         json_write(
             os.path.join(self.tmp, "tasks", "feat-auth-001.json"),
-            {"task_id": "feat-auth-001", "chain": [{"step_id": "s2", "to_agent": "lingzhao"}]},
+            {"task_id": "feat-auth-001", "chain": [{"step_id": "s2", "to_agent": "agent-a"}]},
         )
 
         golden = load_golden_a2a_path("b")
@@ -109,7 +109,7 @@ class TestA2AComplianceChecklist(unittest.TestCase):
         router.config["a2a"]["retry_backoff_sec"] = [0, 0, 0]
         router.a2a = A2ATransport(rpc=StubA2AClient.from_name("path-b-a2a-fail.json"))
         ctx = DispatchContext(
-            self.tmp, "feat-auth-001", "s2", "lingzhao", 1,
+            self.tmp, "feat-auth-001", "s2", "agent-a", 1,
             stub_fixture="path-b-a2a-fail.json",
         )
         result = router.dispatch_step(ctx, cfg["agents"])
@@ -127,19 +127,19 @@ class TestA2AComplianceChecklist(unittest.TestCase):
         seed_a2a_harness(self.tmp)
         cfg_path = os.path.join(self.tmp, "config.json")
         cfg = json_read(cfg_path, {})
-        cfg.setdefault("agents", {})["lingzhao"] = _lingzhao_agent()
+        cfg.setdefault("agents", {})["agent-a"] = _agent_a_agent()
         json_write(cfg_path, cfg)
         os.makedirs(os.path.join(self.tmp, "tasks"), exist_ok=True)
         json_write(
             os.path.join(self.tmp, "tasks", "feat-auth-001.json"),
-            {"task_id": "feat-auth-001", "chain": [{"step_id": "s1", "to_agent": "lingzhao"}]},
+            {"task_id": "feat-auth-001", "chain": [{"step_id": "s1", "to_agent": "agent-a"}]},
         )
 
         router = TransportRouter(data_dir=self.tmp)
-        router.a2a = A2ATransport(rpc=StubA2AClient.from_name("path-a-lingzhao-s1.json"))
+        router.a2a = A2ATransport(rpc=StubA2AClient.from_name("path-a-agent-a-s1.json"))
         ctx = DispatchContext(
-            self.tmp, "feat-auth-001", "s1", "lingzhao", 1,
-            stub_fixture="path-a-lingzhao-s1.json",
+            self.tmp, "feat-auth-001", "s1", "agent-a", 1,
+            stub_fixture="path-a-agent-a-s1.json",
         )
         router.dispatch_step(ctx, cfg["agents"])
 
@@ -150,25 +150,24 @@ class TestA2AComplianceChecklist(unittest.TestCase):
         self.assertGreaterEqual(len(step["transport_attempts"]), 1)
 
     def test_04_cli_agent_card_visible_a2a_disabled(self):
-        """CLI agent（dali）Card 可见但 channels.a2a.enabled=false，can_deliver 为 false。"""
-        registry = load_registry()
-        entry = enrich_agent_channels("dali", dict(registry.get("dali") or {}))
+        """CLI agent（opencode）Card 可见但 channels.a2a.enabled=false，can_deliver 为 false。"""
+        entry = enrich_agent_channels("agent-i", {"framework": "opencode"})
         self.assertFalse((entry.get("channels") or {}).get("a2a", {}).get("enabled", True))
 
-        card = to_agent_card("dali", entry, display_name="大力")
-        self.assertEqual(card["metadata"]["mailbus"]["agent_id"], "dali")
+        card = to_agent_card("agent-i", entry, display_name="Demo CLI Agent")
+        self.assertEqual(card["metadata"]["mailbus"]["agent_id"], "agent-i")
         self.assertEqual(card["metadata"]["mailbus"]["transport_default"], "file_bus")
         self.assertEqual(card.get("supportedInterfaces"), [])
 
-        ctx = DispatchContext(self.tmp, "t1", "s1", "dali", 8)
-        self.assertFalse(can_deliver_a2a("dali", entry, ctx))
+        ctx = DispatchContext(self.tmp, "t1", "s1", "agent-i", 8)
+        self.assertFalse(can_deliver_a2a("agent-i", entry, ctx))
 
-    def test_05_dali_normalize_before_pipeline(self):
-        """dali file_bus 交付经 normalize 再写入 canonical step-result。"""
+    def test_05_agent_i_normalize_before_pipeline(self):
+        """agent-i file_bus 交付经 normalize 再写入 canonical step-result。"""
         seed_a2a_harness(self.tmp)
         ctx = DispatchContext(
-            self.tmp, "feat-auth-001", "s3", "dali", 8,
-            stub_fixture="path-d-dali-opencode.json",
+            self.tmp, "feat-auth-001", "s3", "agent-i", 8,
+            stub_fixture="path-d-agent-i-opencode.json",
         )
         result = FileBusTransport(mode="stub").dispatch(ctx, {})
         self.assertTrue(result.ok)
@@ -200,7 +199,7 @@ class TestA2AComplianceChecklist(unittest.TestCase):
         golden_c = load_golden_a2a_path("c")
         msg = golden_c["wire"]["resolve_send_message"]["params"]["message"]
         self.assertEqual(msg["role"], "ROLE_AGENT")
-        self.assertEqual(msg["metadata"]["mailbus"]["agentId"], "lingzhao")
+        self.assertEqual(msg["metadata"]["mailbus"]["agentId"], "agent-a")
 
         golden_a = load_golden_a2a_path("a")
         user_msg = to_a2a_message(golden_a["canonical_dispatch"])
@@ -220,14 +219,14 @@ class TestHarnessRecordReplay(unittest.TestCase):
         harness = get_harness(cfg)
         self.assertEqual(type(harness).__name__, "ReplayHarness")
         session = harness.spawn(
-            "dali",
+            "agent-i",
             {"task_id": "feat-auth-001", "step_id": "s3"},
         )
         outcome = harness.wait_completion(session)
         self.assertTrue(outcome.ok)
         self.assertTrue(outcome.ack_received)
         self.assertIsNotNone(outcome.step_result)
-        self.assertEqual(outcome.step_result.get("agent"), "dali")
+        self.assertEqual(outcome.step_result.get("agent"), "agent-i")
         self.assertEqual(outcome.step_result.get("conclusion"), "done")
         self.assertEqual(outcome.step_result.get("normalized_from"), "opencode_replies")
 

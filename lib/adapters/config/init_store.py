@@ -128,9 +128,25 @@ def load_config_fragments(mail_root: Path | None = None) -> dict[str, Any]:
         _deep_merge(merged.setdefault("agent_types", {}), _read_json(agent_types_path, {}))
 
     llm_root = merged.setdefault("mailbus_internal_llm", {})
+    # 完整 SoT：enabled + providers + provider_priority + triggers/guardrails
+    internal = cfg_dir / "llm" / "internal-llm.json"
+    if internal.is_file():
+        _deep_merge(llm_root, _read_json(internal, {}))
+    # 向后兼容：legacy ollama seed 仍可注入 providers.local（仅在缺省时）
     ollama = cfg_dir / "llm" / "ollama.json"
     if ollama.is_file():
-        llm_root["ollama"] = _read_json(ollama, {})
+        legacy_ollama = _read_json(ollama, {})
+        llm_root.setdefault("ollama", legacy_ollama)
+        providers = llm_root.setdefault("providers", {})
+        if not providers.get("local"):
+            providers["local"] = {
+                "kind": "ollama",
+                "base_url": legacy_ollama.get("base_url") or "http://127.0.0.1:11434",
+                "model": legacy_ollama.get("model") or legacy_ollama.get("default_model") or "qwen2.5:3b-instruct-q4_K_M",
+                "timeout_seconds": legacy_ollama.get("timeout_seconds") or 60,
+                "temperature": legacy_ollama.get("temperature") or 0.1,
+                "max_tokens": legacy_ollama.get("max_tokens") or 1024,
+            }
     routing = cfg_dir / "llm" / "routing.json"
     if routing.is_file():
         llm_root["routing"] = _read_json(routing, {})
@@ -331,7 +347,7 @@ def build_agent_entry(
             "template": "opencode_cli",
             "has_browser": False,
         }
-        identity = f"mail/skills/roles/overlays/{agent_id}/SKILL.md"
+        identity = f"01-mailbus/018-identities/{agent_id}/overlay.md"
         entry["profile_paths"] = {"identity": identity}
 
     if override:
@@ -376,7 +392,7 @@ def build_store_config(
     overrides = fragments.pop("_agent_overrides", {}) or {}
 
     config: dict[str, Any] = {
-        "project": "ziyan-mailbus",
+        "project": "mailbus",
         "version": MAILBUS_VERSION,
         "data_dir": data_dir.replace("\\", "/"),
         "ack_timeout": DEFAULT_ACK_TIMEOUT,
@@ -405,6 +421,16 @@ def build_store_config(
         mail_root=root,
         overrides=overrides,
     )
+    if not config["agents"]:
+        # 可复现安装：无 access/transport 与 team-pack 名册时，seed 最小示例角色
+        example_path = root / "config" / "mailbus" / "example-agents.json"
+        example = _read_json(example_path, {})
+        for aid, rec in (example.get("agents") or {}).items():
+            if isinstance(rec, dict):
+                rec = dict(rec)
+                rec.setdefault("inbox", os.path.join(data_dir, "inbox", aid, "inbox.json").replace("\\", "/"))
+                rec.setdefault("available", True)
+                config["agents"][aid] = rec
     return config
 
 
@@ -539,13 +565,13 @@ def write_runtime_seed_files(data_dir: str | Path, agents: dict[str, Any]) -> No
             "browser": True,
             "cli": True,
             "mailbox": True,
-            "bulletin": name in ("lingzhao", "xiaoqi", "lingxiao"),
+            "bulletin": False,
         }
     json_write(
         str(root / "permission.json"),
         {
             "permissions": default_perms,
-            "bulletin": ["lingzhao", "xiaoqi"],
+            "bulletin": [],
             "updated_at": _now_iso(),
         },
     )

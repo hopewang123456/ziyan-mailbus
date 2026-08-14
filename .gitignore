@@ -16,10 +16,11 @@ logs/
 *.tmp
 deliverables/
 
-# IDE / Cursor
+# IDE / Cursor / Codex
 .vscode/
 .idea/
 .cursor/
+.codex/
 *.swp
 *.swo
 
@@ -92,19 +93,19 @@ external-tools/
 # Per-agent transport + overrides stay on disk for local use only
 access/transport/*/
 !access/transport/README.md
-access/transport/lingzhao/
-access/transport/lingjin/
-access/transport/lingxi/
-access/transport/lingtuo/
-access/transport/lingjian/
-access/transport/lingyan/
-access/transport/lingxun/
-access/transport/lingxiao/
-access/transport/dali/
-access/transport/lingyun/
-access/transport/xiaoqi/
-access/transport/yige/
-access/transport/lingzhang/
+access/transport/agent-a/
+access/transport/agent-c/
+access/transport/agent-d/
+access/transport/agent-j/
+access/transport/agent-e/
+access/transport/agent-f/
+access/transport/agent-l/
+access/transport/agent-g/
+access/transport/agent-i/
+access/transport/agent-h/
+access/transport/agent-m/
+access/transport/agent-n/
+access/transport/agent-k/
 config/agents/*.override.json
 !config/agents/*.override.example.json
 !config/agents/*.example.json
@@ -124,3 +125,16 @@ tests/_tmp_codex_home/
 tools/tmp-launch-resp.json
 tools/tmp-*.json
 .pytest_cache/
+
+# Local-only diagnostic / migration scripts (contain machine paths or team roster)
+tools/_*.py
+tools/_*.sh
+tools/smoke_*.py
+tools/smoke-*.py
+tools/health-overview.py
+tools/ops0_provision_browser_auth.py
+docker-agents/migrate-hermes-home-to-e.sh
+/_*.txt
+/_*.ps1
+/_*.sh
+/_*.json

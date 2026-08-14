@@ -159,7 +159,7 @@ class TestDeployHooks(unittest.TestCase):
         template = TEMPLATE.read_text(encoding="utf-8")
         self.assertIn("generate-report.py", hook_text)
         self.assertIn("publish-report.py", hook_text)
-        self.assertNotIn("/mnt/e/ai_tools/mail", hook_text)
+        self.assertNotIn("<MAILBUS_WSL_ROOT>", hook_text)
         self.assertIn(str(ROOT.resolve()).replace("\\", "/"), hook_text)
         self.assertIn("Quality Harness", template)
         self.assertIn("generate-report.py", template)

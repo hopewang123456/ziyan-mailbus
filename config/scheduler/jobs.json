@@ -13,7 +13,7 @@
     {"id": "triage-inbox", "enabled": true, "interval_seconds": 900, "lock": "mailbus-triage-inbox"},
     {"id": "pipeline_watchdog", "enabled": true, "interval_seconds": 300, "lock": "mailbus-watchdog"},
     {"id": "pipeline-repair", "enabled": true, "interval_seconds": 600, "lock": "mailbus-pipeline-repair"},
-    {"id": "lingxun_patrol", "enabled": true, "interval_seconds": 3600},
+    {"id": "agent-a_patrol", "enabled": true, "interval_seconds": 3600},
     {"id": "daily_report", "enabled": true, "cron": "30 23 * * *"},
     {"id": "log_rotate", "enabled": true, "cron": "0 3 * * *"},
     {"id": "agent_cli_version_check", "enabled": true, "interval_seconds": 86400, "lock": "mailbus-agent-versions"},

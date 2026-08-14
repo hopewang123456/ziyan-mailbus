@@ -1,12 +1,12 @@
 # Claude Code — 能力边界
 
-## lingyun（pro 编码）
+## Pro 编码
 
 - permission_mode: `acceptEdits`
 - 跨文件 refactor、长工单、复杂测试+代码
-- 与 dali 分工：flash 日常 → dali；pro → lingyun
+- 与日常编码 agent 分工：日常 → 常规；pro → agent-h
 
-## lingyan（测试）
+## 测试
 
 - permission_mode: `dontAsk`
 - allowedTools: **Bash, Read, Glob, Grep** only

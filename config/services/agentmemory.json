@@ -17,5 +17,6 @@
   },
   "bridge": {
     "pending_dir": "store/agentmemory-pending"
-  }
+  },
+  "team_memory_db": "store/team-memory.db"
 }

@@ -44,9 +44,26 @@ def list_ollama_models(base_url: str = "") -> list[str]:
 
 
 def resolve_ollama_model(cfg: dict) -> str | None:
-    ollama = ((cfg.get("mailbus_internal_llm") or {}).get("ollama") or {})
-    configured = (ollama.get("default_model") or ollama.get("model") or os.environ.get("MAILBUS_OLLAMA_MODEL") or "").strip()
-    models = list_ollama_models(ollama.get("base_url") or os.environ.get("MAILBUS_OLLAMA_BASE_URL") or "")
+    llm = cfg.get("mailbus_internal_llm") or {}
+    ollama = llm.get("ollama") or {}
+    local = (llm.get("providers") or {}).get("local") or {}
+    svc = (cfg.get("services") or {}).get("ollama") or {}
+    base_url = (
+        ollama.get("base_url")
+        or local.get("base_url")
+        or svc.get("base_url")
+        or os.environ.get("MAILBUS_OLLAMA_BASE_URL")
+        or ""
+    )
+    configured = (
+        ollama.get("default_model")
+        or ollama.get("model")
+        or local.get("model")
+        or svc.get("model")
+        or os.environ.get("MAILBUS_OLLAMA_MODEL")
+        or ""
+    ).strip()
+    models = list_ollama_models(base_url)
     if configured and (not models or configured in models or any(configured.split(":")[0] in m for m in models)):
         return configured
     if models:

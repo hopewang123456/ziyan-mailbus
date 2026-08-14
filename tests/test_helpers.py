@@ -23,11 +23,11 @@ def seed_runtime_from_sot(tmp: str, *, extra_config: dict | None = None) -> None
     mirror_rule_schemas_to_store(tmp, mail_root=MAILBUS_ROOT)
     mirror_dispatch_seed(tmp, mail_root=MAILBUS_ROOT)
 
-    for sub in ("inbox/dali", "inbox/lingxiao", "msg-files", "tasks", "leads"):
+    for sub in ("inbox/agent-i", "inbox/agent-g", "msg-files", "tasks", "leads"):
         os.makedirs(os.path.join(tmp, sub), exist_ok=True)
 
-    json_write(os.path.join(tmp, "inbox", "dali", "inbox.json"), {"agent": "dali", "messages": []})
-    json_write(os.path.join(tmp, "inbox", "lingxiao", "inbox.json"), {"agent": "lingxiao", "messages": []})
+    json_write(os.path.join(tmp, "inbox", "agent-i", "inbox.json"), {"agent": "agent-i", "messages": []})
+    json_write(os.path.join(tmp, "inbox", "agent-g", "inbox.json"), {"agent": "agent-g", "messages": []})
     json_write(
         os.path.join(tmp, "human-queue.json"),
         {"version": "1.0.0", "updated_at": "2026-06-18T00:00:00+08:00", "items": []},

@@ -159,7 +159,8 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
 
     action = outcome.get("action")
     if action == "terminal":
-        t["audit_reviewer"] = t.get("audit_reviewer") or "lingjian"
+        from lib.infra.org_defaults import org_default
+        t["audit_reviewer"] = t.get("audit_reviewer") or org_default(data_dir, "reviewer")
         json_write(task_file, t)
         from lib.application.orchestration.audit_dispatch import backfill_audit_from_chain
         backfill_audit_from_chain(data_dir)
@@ -168,7 +169,8 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
         return {"ok": True, "action": "terminal"}
 
     if action == "accepting":
-        t["audit_reviewer"] = t.get("audit_reviewer") or "lingjian"
+        from lib.infra.org_defaults import org_default
+        t["audit_reviewer"] = t.get("audit_reviewer") or org_default(data_dir, "reviewer")
         json_write(task_file, t)
         info(f"[fsm] awaiting acceptance {task_id[:30]}")
         return {"ok": True, "action": "accepting"}

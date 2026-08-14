@@ -36,13 +36,13 @@ class ApiStallDetectTests(unittest.TestCase):
 class ApiStallRecoveryTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
-        os.makedirs(os.path.join(self.tmp, "inbox", "lingjian"), exist_ok=True)
+        os.makedirs(os.path.join(self.tmp, "inbox", "agent-e"), exist_ok=True)
         json_write(os.path.join(self.tmp, "config.json"), {
-            "agents": {"lingjian": {"type": "codex"}, "lingzhao": {"type": "hermes"}},
+            "agents": {"agent-e": {"type": "codex"}, "agent-a": {"type": "hermes"}},
             "pipeline_ops": {"api_stall": {"repush_wait_minutes": 3}},
         })
         inbox = {
-            "agent": "lingjian",
+            "agent": "agent-e",
             "has_unread": False,
             "messages": [{
                 "id": "msg-test-1",
@@ -53,22 +53,22 @@ class ApiStallRecoveryTests(unittest.TestCase):
                 "pushed_count": 1,
             }],
         }
-        json_write(os.path.join(self.tmp, "inbox", "lingjian", "inbox.json"), inbox)
-        json_write(os.path.join(self.tmp, "replies", "lingjian.json"), {
+        json_write(os.path.join(self.tmp, "inbox", "agent-e", "inbox.json"), inbox)
+        json_write(os.path.join(self.tmp, "replies", "agent-e.json"), {
             "msg_ids": ["msg-test-1"],
             "reply": "fetch failed: connection refused",
         })
 
     def test_schedule_sets_repush_after_and_alert(self):
         ok = schedule_api_stall_recovery(
-            self.tmp, "lingjian", "msg-test-1",
+            self.tmp, "agent-e", "msg-test-1",
             reason="api_network:econnrefused",
             task_id="game-courier",
         )
         self.assertTrue(ok)
         ib = Inbox.from_dict(
             __import__("lib.infra.utils", fromlist=["json_read"]).json_read(
-                os.path.join(self.tmp, "inbox", "lingjian", "inbox.json"), {},
+                os.path.join(self.tmp, "inbox", "agent-e", "inbox.json"), {},
             )
         )
         m = ib.messages[0]
@@ -85,10 +85,10 @@ class ApiStallRecoveryTests(unittest.TestCase):
 
     def test_maybe_release_after_cooldown(self):
         schedule_api_stall_recovery(
-            self.tmp, "lingjian", "msg-test-1",
+            self.tmp, "agent-e", "msg-test-1",
             reason="api_network:timeout", task_id="game-courier",
         )
-        ib_path = os.path.join(self.tmp, "inbox", "lingjian", "inbox.json")
+        ib_path = os.path.join(self.tmp, "inbox", "agent-e", "inbox.json")
         ib = Inbox.from_dict(__import__("lib.infra.utils", fromlist=["json_read"]).json_read(ib_path, {}))
         m = ib.messages[0]
         if isinstance(m, dict):
@@ -96,7 +96,7 @@ class ApiStallRecoveryTests(unittest.TestCase):
         json_write(ib_path, ib.to_dict())
         ib2 = Inbox.from_dict(__import__("lib.infra.utils", fromlist=["json_read"]).json_read(ib_path, {}))
         changed = maybe_release_api_stall_for_repush(
-            self.tmp, "lingjian", ib2.messages[0], ib2, agents={"lingjian": {"type": "codex"}},
+            self.tmp, "agent-e", ib2.messages[0], ib2, agents={"agent-e": {"type": "codex"}},
         )
         self.assertTrue(changed)
         ib3 = Inbox.from_dict(__import__("lib.infra.utils", fromlist=["json_read"]).json_read(ib_path, {}))

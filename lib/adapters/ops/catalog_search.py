@@ -230,7 +230,7 @@ def search_catalog(
 
     if query_str:
         conditions.append("catalog MATCH ?")
-        params.append(query_str)
+        params.append(f'"{query_str.replace(chr(34), "")}"')
 
     if kind:
         conditions.append("kind = ?")

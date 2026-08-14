@@ -33,9 +33,17 @@ else
   CODEXAPP_BIN=(npx -y codexapp)
 fi
 
+# 浏览器入口鉴权：去掉 --no-password 启用密码（cookie codex_web_local_token 记住免密）。
+# mailbus 生成固定密码注入 CODEX_UI_PASSWORD（跨重启不变）；未注入时 codexapp 自生成随机密码存
+# $CODEX_HOME/codexui-password（CODEX_HOME 卷持久化则跨重启保持）。
+PASSWORD_ARGS=()
+if [ -n "${CODEX_UI_PASSWORD:-}" ]; then
+  PASSWORD_ARGS=(--password "${CODEX_UI_PASSWORD}")
+fi
+
 nohup "${CODEXAPP_BIN[@]}" \
   --no-login \
-  --no-password \
+  "${PASSWORD_ARGS[@]}" \
   --no-tunnel \
   --no-open \
   --port "${UI_INTERNAL_PORT}" \

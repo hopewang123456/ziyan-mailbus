@@ -90,7 +90,7 @@ class TestSpawnRules(unittest.TestCase):
         cfg = load_bridge_config(self.tmp)
         intake = self._intake()
         for g in intake.get("commercial_gates") or []:
-            if g.get("gate_id") == "req_to_lingzhao":
+            if g.get("gate_id") == "req_to_solution":
                 g["status"] = "approved"
             if g.get("gate_id") == "content_start":
                 g["status"] = "approved"

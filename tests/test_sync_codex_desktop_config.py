@@ -16,14 +16,14 @@ agent_reasoning_profile = _mod.agent_reasoning_profile
 
 
 class TestSyncCodexDesktopConfig(unittest.TestCase):
-    def test_lingjian_reasoner_defaults(self):
-        profile = agent_reasoning_profile("lingjian", {"model": "deepseek-reasoner"})
+    def test_agent_e_reasoner_defaults(self):
+        profile = agent_reasoning_profile("agent-e", {"model": "deepseek-reasoner"})
         self.assertEqual(profile["model"], "deepseek-reasoner")
         self.assertTrue(profile["supports_reasoning_summaries"])
         self.assertEqual(profile["reasoning_summary"], "auto")
 
-    def test_lingxiao_flash_defaults(self):
-        profile = agent_reasoning_profile("lingxiao", {"model": "deepseek-v4-flash"})
+    def test_agent_g_flash_defaults(self):
+        profile = agent_reasoning_profile("agent-g", {"model": "deepseek-v4-flash"})
         self.assertEqual(profile["model"], "deepseek-v4-flash")
         self.assertFalse(profile["supports_reasoning_summaries"])
 

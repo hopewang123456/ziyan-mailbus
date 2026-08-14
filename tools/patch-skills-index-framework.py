@@ -23,7 +23,8 @@ def _load_json(path: Path) -> dict:
 
 
 def patch_index(*, check_only: bool = False, data_dir: str | None = None) -> tuple[list[str], list[str]]:
-    existing = _load_json(INDEX)
+    index_path = Path(data_dir) / "agents" / "json" / "skills-index.json" if data_dir else INDEX
+    existing = _load_json(index_path)
     registry = load_all_agents(refresh=True)
     if not registry:
         return [], ["no agents in access/transport/**/transport.json"]
@@ -48,9 +49,17 @@ def patch_index(*, check_only: bool = False, data_dir: str | None = None) -> tup
         if old_fw != new_fw and f"{agent_id}: refresh" not in changes:
             changes.append(f"{agent_id}: framework {old_fw!r} → {new_fw!r}")
 
+    # reverse / orphans 为派生字段，始终跟随 agents{} 重算并同步
+    meta_fields = ("reverse", "orphans")
+    for field in meta_fields:
+        old_val = existing.get(field)
+        new_val = new_index.get(field)
+        if old_val != new_val:
+            changes.append(f"{field}: refresh derived index")
+
     if not check_only and changes:
-        INDEX.parent.mkdir(parents=True, exist_ok=True)
-        INDEX.write_text(json.dumps(new_index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        index_path.parent.mkdir(parents=True, exist_ok=True)
+        index_path.write_text(json.dumps(new_index, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     return changes, errors
 
@@ -60,7 +69,7 @@ def main() -> int:
     p.add_argument("--check", action="store_true", help="只检查，不写文件")
     p.add_argument("--data-dir", default=str(ROOT / "store"), help="runtime store (for future use)")
     args = p.parse_args()
-    changes, errors = patch_index(check_only=args.check)
+    changes, errors = patch_index(check_only=args.check, data_dir=args.data_dir)
     for c in changes:
         print(("NEED " if args.check else "OK ") + c)
     for e in errors:

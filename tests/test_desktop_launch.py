@@ -13,35 +13,39 @@ from lib.adapters.frameworks.desktop_launch import (
 
 
 class TestDesktopLaunch(unittest.TestCase):
-    def test_lingxiao_desktop_disabled_in_config(self):
+    def _agents(self):
         from lib.infra.utils import json_read
 
         cfg = json_read(os.path.join(os.path.dirname(__file__), "..", "store", "config.json"), {})
-        agents = cfg.get("agents") or {}
-        types = cfg.get("agent_types") or {}
-        self.assertIn("lingxiao", agents)
-        self.assertFalse(agent_has_desktop(agents["lingxiao"], types))
-        self.assertFalse(agent_has_desktop(agents.get("lingjian", {}), types))
-        self.assertFalse(agent_has_desktop(agents.get("dali", {}), types))
+        return cfg.get("agents") or {}, cfg.get("agent_types") or {}
 
-    def test_lingyun_lingyan_desktop_disabled(self):
-        from lib.infra.utils import json_read
+    def test_desktop_disabled_for_non_desktop_frameworks(self):
+        agents, types = self._agents()
+        codex = next((a for a, c in agents.items() if (c.get("type") or "").startswith("codex")), None)
+        opencode = next((a for a, c in agents.items() if c.get("type") == "opencode"), None)
+        if codex is None and opencode is None:
+            self.skipTest("no codex/opencode agent in store config")
+        for name in (codex, opencode):
+            if name:
+                self.assertFalse(agent_has_desktop(agents[name], types))
 
-        cfg = json_read(os.path.join(os.path.dirname(__file__), "..", "store", "config.json"), {})
-        agents = cfg.get("agents") or {}
-        types = cfg.get("agent_types") or {}
-        for name in ("lingyun", "lingyan"):
-            self.assertIn(name, agents)
+    def test_claude_desktop_disabled(self):
+        agents, types = self._agents()
+        claude = [a for a, c in agents.items() if c.get("type") == "claude_code"]
+        if not claude:
+            self.skipTest("no claude_code agent in store config")
+        for name in claude[:2]:
             self.assertFalse(agent_has_desktop(agents[name], types))
 
-    def test_lingyun_has_browser_config(self):
-        from lib.infra.utils import json_read
+    def test_claude_has_browser_config(self):
         from lib.adapters.frameworks.claude_browser_launch import agent_has_claude_browser
 
-        cfg = json_read(os.path.join(os.path.dirname(__file__), "..", "store", "config.json"), {})
-        agents = cfg.get("agents") or {}
-        types = cfg.get("agent_types") or {}
-        self.assertTrue(agent_has_claude_browser(agents["lingyun"], types))
+        agents, types = self._agents()
+        claude = [a for a, c in agents.items() if c.get("type") == "claude_code"]
+        if not claude:
+            self.skipTest("no claude_code agent in store config")
+        name = claude[0]
+        self.assertTrue(agent_has_claude_browser(agents[name], types))
 
     def test_merge_launch_desktop_agent_override(self):
         agent_types = {"launch_templates": {"codex_docker": {"desktop": {"kind": "codex_desktop"}}}}

@@ -64,7 +64,7 @@ class TestQualityHarnessPipeline(unittest.TestCase):
                 "schema": "code-review-report-v1",
                 "commit_sha": "c" * 40,
                 "aggregate_status": "warn",
-                "author_agent": "lingxiao",
+                "author_agent": "agent-g",
                 "trigger": "post-commit-harness",
                 "timestamp": "2026-06-30T12:00:00Z",
                 "layers": {"regression": {"status": "pass"}, "static_analysis": {"status": "warn"}},

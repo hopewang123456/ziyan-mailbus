@@ -106,7 +106,7 @@ export function TasksPage() {
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="hud-label">Mission board</p>
-          <h2 className="mt-1 font-display text-2xl tracking-wide">任务</h2>
+          <h2 className="mt-1 font-display text-2xl tracking-[-0.02em]">任务</h2>
         </div>
         <button type="button" className="hud-btn" onClick={() => void load()}>
           刷新
@@ -116,7 +116,7 @@ export function TasksPage() {
       {msg && <p className="text-xs text-amber-signal">{msg}</p>}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="hud-panel p-4">
+        <div className="soft-panel">
           <p className="hud-label">/api/tasks</p>
           <ul className="mt-3 max-h-[60vh] space-y-1 overflow-auto">
             {tasks.length === 0 && <li className="text-sm text-mute">无任务</li>}
@@ -128,7 +128,7 @@ export function TasksPage() {
                 <li key={id}>
                   <button
                     type="button"
-                    className={`w-full border-b border-rail/50 px-1 py-2 text-left text-sm transition-colors ${
+                    className={`w-full soft-list-btn !w-full text-left text-sm transition-colors ${
                       active ? "bg-[rgba(61,224,255,0.1)] text-frost" : "text-mute hover:text-frost"
                     }`}
                     onClick={() => void selectTask(id)}
@@ -146,7 +146,7 @@ export function TasksPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="hud-panel p-4">
+          <div className="soft-panel">
             <p className="hud-label">FSM 操作</p>
             {!selected ? (
               <p className="mt-2 text-sm text-mute">点左侧任务加载详情</p>
@@ -188,14 +188,14 @@ export function TasksPage() {
             )}
           </div>
 
-          <div className="hud-panel p-4">
+          <div className="soft-panel">
             <p className="hud-label">/fsm</p>
             <pre className="mt-2 max-h-40 overflow-auto text-xs text-mute">
               {fsm ? JSON.stringify(fsm, null, 2) : "—"}
             </pre>
           </div>
 
-          <div className="hud-panel p-4">
+          <div className="soft-panel">
             <p className="hud-label">task detail</p>
             <pre className="mt-2 max-h-48 overflow-auto text-xs text-mute">
               {detail ? JSON.stringify(detail, null, 2) : "—"}

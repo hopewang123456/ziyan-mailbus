@@ -1,4 +1,4 @@
-/** 子言·佳琦 双子星标准版 — 规范见 twin-star-logo-spec / docs HUD */
+/** TwinStars 双子星标准版 — 规范见 twin-star-logo-spec / docs HUD */
 
 type Props = {
   size?: number;
@@ -6,7 +6,7 @@ type Props = {
   title?: string;
 };
 
-export function TwinStarsLogo({ size = 40, className = "", title = "子言·佳琦 双子星" }: Props) {
+export function TwinStarsLogo({ size = 40, className = "", title = "TwinStars" }: Props) {
   return (
     <svg
       viewBox="0 0 100 100"
@@ -17,7 +17,7 @@ export function TwinStarsLogo({ size = 40, className = "", title = "子言·佳�
       aria-label={title}
     >
       <title>{title}</title>
-      {/* 子言星 · cyan */}
+      {/* 星 A · cyan */}
       <circle cx="35" cy="35" r="14" fill="none" stroke="#00d4ff" strokeWidth="2.5" opacity="0.95" />
       <circle cx="35" cy="35" r="4" fill="#00d4ff" opacity="0.9" />
       <circle cx="35" cy="35" r="20" fill="none" stroke="#00d4ff" strokeWidth="0.5" opacity="0.25">
@@ -28,7 +28,7 @@ export function TwinStarsLogo({ size = 40, className = "", title = "子言·佳�
         <animate attributeName="r" values="28;36;28" dur="3.5s" repeatCount="indefinite" />
         <animate attributeName="opacity" values="0.15;0;0.15" dur="3.5s" repeatCount="indefinite" />
       </circle>
-      {/* 佳琦星 · purple */}
+      {/* 星 B · purple */}
       <circle cx="65" cy="65" r="11" fill="none" stroke="#8b5cf6" strokeWidth="2" opacity="0.95" />
       <circle cx="65" cy="65" r="3" fill="#8b5cf6" opacity="0.9" />
       <circle cx="65" cy="65" r="15" fill="none" stroke="#8b5cf6" strokeWidth="0.5" opacity="0.2">

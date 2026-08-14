@@ -1,5 +1,5 @@
 """
-ziyan-mailbus 测试 — scanner 模块
+mailbus-mailbus 测试 — scanner 模块
 """
 
 import os

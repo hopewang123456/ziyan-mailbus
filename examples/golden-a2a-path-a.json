@@ -1,0 +1,48 @@
+{
+  "schema": "mailbus-golden-a2a-path-v1",
+  "path": "a",
+  "scenario": {
+    "can_deliver_a2a": true,
+    "label": "happy-path"
+  },
+  "canonical_dispatch": {
+    "task_id": "feat-auth-001",
+    "step_id": "s1",
+    "role_type": 1,
+    "to_agent": "agent-a",
+    "intent": "Implement auth middleware",
+    "message_id": "msg-a-001",
+    "msg_file": "inbox/agent-a/msg-a-001.md"
+  },
+  "wire": {
+    "get_task_terminal": {
+      "id": "a2a-task-a-001",
+      "status": "completed",
+      "statusMessage": "Auth middleware landed",
+      "lastModified": "2026-01-01T00:00:00Z",
+      "artifacts": [
+        {
+          "name": "diff.patch",
+          "artifactId": "art-1",
+          "parts": [
+            {
+              "text": "Auth middleware landed"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "canonical_step_result": {
+    "task_id": "feat-auth-001",
+    "step_id": "s1",
+    "agent": "agent-a",
+    "role_type": 1,
+    "conclusion": "done",
+    "summary": "Auth middleware landed",
+    "source": "a2a_standard",
+    "transport_used": "a2a_standard",
+    "a2a_task_id": "a2a-task-a-001",
+    "timestamp": "2026-01-01T00:00:00Z"
+  }
+}

@@ -1,10 +1,11 @@
-"""子言 AI 团队 Docker 生命周期 — Python 版 start-team / stop-team / wsl-recover。"""
+"""Mailbus 团队 Docker 生命周期 — Python 版 start-team / stop-team / wsl-recover。"""
 
 from __future__ import annotations
 
 from lib.infra.clock import now_dt, now_ts, now_utc_dt
 import contextlib
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -44,6 +45,24 @@ from .post_start import (
     stop_claude_agents,
     uninstall_mailbus_cron,
 )
+
+
+def _proxy_sensitive_services(data_dir: str) -> list[str]:
+    """从 config.json agents 的 docker.compose_service 推导代理敏感容器。"""
+    import json
+
+    services: list[str] = []
+    cfg_path = os.path.join(data_dir, "config.json")
+    try:
+        if os.path.isfile(cfg_path):
+            cfg = json.load(open(cfg_path, encoding="utf-8"))
+            for ac in (cfg.get("agents") or {}).values():
+                svc = (ac.get("docker") or {}).get("compose_service")
+                if svc and str(svc).strip() not in services:
+                    services.append(str(svc).strip())
+    except (OSError, json.JSONDecodeError):
+        pass
+    return services or ["hermes", "openclaw"]
 
 
 def _api_base(port: str | None = None) -> str:
@@ -475,12 +494,39 @@ def _start_team_locked(log: LogFn, paths: dict[str, str]) -> int:
         return _start_team_body(log, paths)
 
 
+def _ensure_team_pack(log: LogFn, paths: dict[str, str]) -> None:
+    """确保 team-pack/rules、team-pack/skills 存在，供 compose 挂载。
+
+    本地已用 symlink 指向 Vault（或目录已存在）时跳过；否则从
+    ``examples/team-pack`` seed 一份 example，保证新克隆者开箱能启动。
+    """
+    root = Path(paths["root"])
+    tp = root / "team-pack"
+    examples = root / "examples" / "team-pack"
+    for sub in ("rules", "skills"):
+        target = tp / sub
+        if target.exists() or target.is_symlink():
+            continue
+        src = examples / sub
+        try:
+            if src.is_dir():
+                shutil.copytree(src, target)
+                log(f"Seeded team-pack/{sub} from examples/team-pack/{sub}")
+            else:
+                target.mkdir(parents=True, exist_ok=True)
+                log(f"Created empty team-pack/{sub} (no examples found)")
+        except OSError as exc:
+            log(f"WARNING: seed team-pack/{sub} failed: {exc}")
+
+
 def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
         log("Waiting for Docker daemon...")
         if not ensure_docker(90, log):
             log("ERROR: Docker not running after 90s")
             print("[ERROR] Docker 未就绪。请在 WSL 执行: sudo service docker start")
             return 1
+
+        _ensure_team_pack(log, paths)
 
         if docker_container_running("docker-agents-mailbus-1"):
             log("Syncing team rules (pre-start, quick)...")
@@ -538,6 +584,19 @@ def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
         log("Configuring container proxy (Clash on/off)...")
         new_proxy = setup_container_proxy(log)
 
+        log("Pre-generating browser credentials (ttyd -c / Hermes session token)...")
+        try:
+            from lib.adapters.config.browser_auth import ensure_all_browser_credentials
+            from lib.adapters.runtime.cred_delivery import sync_browser_credentials_to_env
+
+            creds = ensure_all_browser_credentials(paths["data_dir"])
+            log(f"Browser credentials ensured: {creds or 'none (no browser agents)'}")
+            synced = sync_browser_credentials_to_env(paths["data_dir"])
+            if synced:
+                log(f"CredDelivery synced env keys: {sorted(synced.keys())}")
+        except Exception as exc:
+            log(f"WARNING: pre-generate browser credentials skipped: {exc}")
+
         log(f"Ensuring Docker containers are up (project={paths['compose_project']})...")
         compose_dir = paths["compose_dir"]
         up = compose_cmd("up", "-d", "--remove-orphans")
@@ -567,7 +626,7 @@ def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
         if new_proxy != old_proxy:
             log(f"Proxy changed [{old_proxy}] -> [{new_proxy}], recreating proxy-sensitive containers...")
             run_stream(
-                compose_cmd("up", "-d", "--force-recreate", "hermes", "openclaw", "dali", "lingxiao", "lingjian"),
+                compose_cmd("up", "-d", "--force-recreate", *_proxy_sensitive_services(paths["data_dir"])),
                 cwd=compose_dir,
                 timeout=600,
             )
@@ -634,15 +693,15 @@ def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
             time.sleep(1)
         log("AgentMemory ready" if am_ready else "WARNING: AgentMemory not ready after 45s")
 
-        log("Bootstrapping Codex Web UI (lingxiao + lingjian)...")
+        log("Bootstrapping Codex Web UI (codex agents)...")
         run_legacy_bash("apply-codex-ui.sh", log=log)
 
-        log("Fixing OpenClaw gateways (xiaoqi/yige)...")
+        log("Fixing OpenClaw gateways...")
         oc_rc = run_legacy_bash("fix-openclaw-gateways.sh", log=log)
         if oc_rc != 0:
             log("WARNING: OpenClaw gateways not healthy after fix")
 
-        log("Starting Claude Code agents (lingyun/lingyan ttyd)...")
+        log("Starting Claude Code agents (ttyd)...")
         run_legacy_bash("ensure-claude-agents.sh", paths["data_dir"], "/tmp/start-team.log", log=log)
 
         log("Starting mailbus CLI watchdog...")
@@ -777,7 +836,7 @@ def start_from_windows(*, open_browser: bool = False, fast: bool = False) -> int
     paths = mailbus_paths()
     port = paths["api_port"]
     print("==========================================")
-    print("  ziyan AI team - Docker Agent Starter")
+    print("  mailbus - Docker Agent Starter")
     if fast:
         print("  mode: FAST (skip smoke)")
     print("==========================================")
@@ -830,23 +889,28 @@ def start_from_windows(*, open_browser: bool = False, fast: bool = False) -> int
         print("        4) recover: python tools/mailbus.py recover health")
         return 1
 
-    # 桌面常用入口：小七 OpenClaw；mailbus 好但 gateway 挂了时必须明示
+    # 桌面常用入口：OpenClaw gateway；mailbus 好但 gateway 挂了时必须明示
     oc_ok = probe_http("http://127.0.0.1:18789/", timeout=5, ok_codes=frozenset({200, 401, 403, 404}))
     if not oc_ok:
-        print("[WARN] OpenClaw 小七 :18789 未就绪（聊天页会打不开）")
+        print("[WARN] OpenClaw gateway :18789 未就绪（聊天页会打不开）")
         print("       修复: python tools/mailbus.py openclaw fix")
         print("       日志: wsl -d Ubuntu -e docker exec docker-agents-openclaw-1 tail -40 /tmp/openclaw-gw-18789.log")
 
     print("==========================================")
     print(f"  mailbus:  http://localhost:{port}/")
     print("  Hermes:  9120-9122,9125-9127")
-    print("  OpenClaw: 18789 xiaoqi", "OK" if oc_ok else "FAIL", ", 18790 yige")
-    print("  Codex:   9240 lingxiao, 9241 lingjian")
-    print("  Claude:  9260 lingyun, 9261 lingyan")
+    print("  OpenClaw: 18789 agent-m", "OK" if oc_ok else "FAIL", ", 18790 agent-l")
+    print("  Codex:   9240 agent-g, 9241 agent-e")
+    print("  Claude:  9260 agent-h, 9261 agent-f")
     print("==========================================")
 
     if open_browser and win_ok:
-        token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "ziyan-team")
+        from lib.adapters.runtime.cred_delivery import resolve_openclaw_token, sync_browser_credentials_to_env
+
+        sync_browser_credentials_to_env(paths.get("data_dir") or os.environ.get("MAILBUS_DATA") or "store")
+        token = resolve_openclaw_token(paths.get("data_dir") or "store") or os.environ.get(
+            "OPENCLAW_GATEWAY_TOKEN", "change-me"
+        )
         open_windows_urls(
             [
                 f"http://localhost:{port}/",

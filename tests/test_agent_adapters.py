@@ -36,7 +36,7 @@ TYPES = {
 
 class TestAgentAdapters(unittest.TestCase):
     def test_hermes_profiles_same_structure(self):
-        profiles = ["lingzhao", "lingjin", "lingxi", "lingjian", "lingyan", "lingxun", "lingtuo", "lingzhang"]
+        profiles = ["agent-a", "agent-b", "agent-c", "agent-e", "agent-h", "agent-d", "agent-j", "agent-k"]
         cmds = []
         for p in profiles:
             cfg = {"type": "hermes_profile", "profile": p, "models": ["deepseek-flash"]}
@@ -58,16 +58,16 @@ class TestAgentAdapters(unittest.TestCase):
         self.assertEqual(len(set(normalized)), 1)
 
     def test_openclaw_push_uses_agent_id(self):
-        cfg = {"type": "openclaw", "agent": "xiaoqi", "models": ["deepseek-flash"]}
-        cmd = resolve_push_cli("xiaoqi", cfg, TYPES)
+        cfg = {"type": "openclaw", "agent": "agent-m", "models": ["deepseek-flash"]}
+        cmd = resolve_push_cli("agent-m", cfg, TYPES)
         self.assertIn("docker-agents-openclaw-1", cmd)
-        self.assertIn("--agent xiaoqi", cmd)
-        self.assertIn("OPENCLAW_STATE_DIR=/workspace/data/.openclaw-xiaoqi", cmd)
+        self.assertIn("--agent agent-m", cmd)
+        self.assertIn("OPENCLAW_STATE_DIR=/workspace/data/.openclaw-agent-m", cmd)
 
     def test_opencode_push(self):
         cfg = {"type": "opencode", "models": ["deepseek-flash"]}
-        cmd = resolve_push_cli("dali", cfg, TYPES, "deepseek-flash")
-        self.assertIn("docker-agents-dali-1", cmd)
+        cmd = resolve_push_cli("agent-i", cfg, TYPES, "deepseek-flash")
+        self.assertIn("docker-agents-opencode-1", cmd)
         self.assertIn("opencode run", cmd)
         self.assertIn("--dangerously-skip-permissions", cmd)
         self.assertIn("--dir /mailbus/store", cmd)
@@ -79,8 +79,8 @@ class TestAgentAdapters(unittest.TestCase):
             "provider": "--provider openai-compatible",
             "models": ["deepseek-flash"],
         }
-        cmd = resolve_push_cli("lingxiao", cfg, TYPES, "deepseek-flash")
-        self.assertIn("docker-agents-lingxiao-1", cmd)
+        cmd = resolve_push_cli("agent-g", cfg, TYPES, "deepseek-flash")
+        self.assertIn("docker-agents-codex-web-1", cmd)
         self.assertIn("bash -lc", cmd)
         self.assertIn("cline", cmd)
         self.assertIn("-P openai-compatible", cmd)
@@ -95,59 +95,59 @@ class TestAgentAdapters(unittest.TestCase):
             "root 55 cline-hub-daemon\n"
             "root 99 /usr/local/bin/cline 'mailbus task' -P openai-compatible -m deepseek-chat -t 300\n"
         )
-        self.assertTrue(adapter.cli_active_in_ps("lingxiao", {}, ps))
-        self.assertFalse(adapter.cli_active_in_ps("lingxiao", {}, "root 55 cline-hub-daemon\n"))
+        self.assertTrue(adapter.cli_active_in_ps("agent-g", {}, ps))
+        self.assertFalse(adapter.cli_active_in_ps("agent-g", {}, "root 55 cline-hub-daemon\n"))
 
     def test_opencode_cli_active_detects_run(self):
         adapter = get_adapter("opencode")
         ps = "root 88 opencode run 'MSG' --dangerously-skip-permissions\n"
-        self.assertTrue(adapter.cli_active_in_ps("dali", {}, ps))
-        self.assertFalse(adapter.cli_active_in_ps("dali", {}, "root 1 tail -f /dev/null\n"))
+        self.assertTrue(adapter.cli_active_in_ps("agent-i", {}, ps))
+        self.assertFalse(adapter.cli_active_in_ps("agent-i", {}, "root 1 tail -f /dev/null\n"))
 
     def test_legacy_cline_override_no_hermes_q(self):
         cfg = {
             "type": "cline",
-            "launch": {"cli": {"command": "docker exec docker-agents-lingxiao-1 cline -P openai-compatible"}},
+            "launch": {"cli": {"command": "docker exec docker-agents-codex-web-1 cline -P openai-compatible"}},
         }
-        cmd = resolve_push_cli("lingxiao", cfg, TYPES)
+        cmd = resolve_push_cli("agent-g", cfg, TYPES)
         self.assertIn("'MSG'", cmd)
         self.assertNotIn("-q 'MSG'", cmd)
 
     def test_interactive_has_tty(self):
-        cfg = {"type": "hermes_profile", "profile": "lingxi"}
-        cmd = resolve_interactive_cli("lingxi", cfg, TYPES)
+        cfg = {"type": "hermes_profile", "profile": "agent-a"}
+        cmd = resolve_interactive_cli("agent-a", cfg, TYPES)
         self.assertIn("-it", cmd)
-        self.assertIn("--profile lingxi", cmd)
+        self.assertIn("--profile agent-a", cmd)
 
     def test_codex_interactive_cli(self):
         cfg = {
             "type": "codex",
             "model": "deepseek-v4-flash",
-            "docker": {"service": "lingxiao"},
+            "docker": {"service": "codex-agent"},
             "push": {"cwd": "/mailbus/store"},
         }
-        cmd = resolve_interactive_cli("lingxiao", cfg, TYPES)
+        cmd = resolve_interactive_cli("agent-g", cfg, TYPES)
         self.assertIn("-it", cmd)
-        self.assertIn("docker-agents-lingxiao-1", cmd)
+        self.assertIn("docker-agents-codex-web-1", cmd)
         self.assertIn("codex", cmd)
         self.assertIn("deepseek-v4-flash", cmd)
 
-    def test_codex_lingjian_interactive_cli(self):
+    def test_codex_review_interactive_cli(self):
         cfg = {
             "type": "codex",
             "model": "deepseek-v4-flash",
-            "docker": {"service": "lingjian"},
+            "docker": {"service": "codex-review-agent"},
             "push": {"cwd": "/mailbus/store"},
         }
-        cmd = resolve_interactive_cli("lingjian", cfg, TYPES)
-        self.assertIn("docker-agents-lingjian-1", cmd)
+        cmd = resolve_interactive_cli("agent-e", cfg, TYPES)
+        self.assertIn("docker-agents-codex-review-1", cmd)
         self.assertIn("codex", cmd)
 
     def test_claude_code_push_windows(self):
         cfg = {
             "type": "claude_code",
             "models": ["minimax-m2"],
-            "push": {"cwd": r"E:\ai_tools"},
+            "push": {"cwd": r"<PROJECT_ROOT>"},
         }
         types = {
             **TYPES,
@@ -157,7 +157,7 @@ class TestAgentAdapters(unittest.TestCase):
             },
         }
         with patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="windows"):
-            cmd = resolve_push_cli("lingyun", cfg, types, "minimax-m2")
+            cmd = resolve_push_cli("agent-h", cfg, types, "minimax-m2")
         self.assertIn("claude", cmd)
         self.assertIn("-p", cmd)
         self.assertIn("'MSG'", cmd)
@@ -168,16 +168,16 @@ class TestAgentAdapters(unittest.TestCase):
     def test_claude_code_cli_active(self):
         adapter = get_adapter("claude_code")
         ps = "user 42 claude -p 'task' --permission-mode acceptEdits\n"
-        self.assertTrue(adapter.cli_active_in_ps("lingyun", {}, ps))
-        self.assertFalse(adapter.cli_active_in_ps("lingyun", {}, "user 1 bash\n"))
+        self.assertTrue(adapter.cli_active_in_ps("agent-h", {}, ps))
+        self.assertFalse(adapter.cli_active_in_ps("agent-h", {}, "user 1 bash\n"))
 
     def test_legacy_override_still_works(self):
         cfg = {
             "type": "hermes_profile",
-            "profile": "lingxi",
-            "launch": {"cli": {"command": "docker exec docker-agents-hermes-1 hermes chat --profile lingxi --yolo"}},
+            "profile": "agent-a",
+            "launch": {"cli": {"command": "docker exec docker-agents-hermes-1 hermes chat --profile agent-a --yolo"}},
         }
-        cmd = resolve_push_cli("lingxi", cfg, TYPES)
+        cmd = resolve_push_cli("agent-a", cfg, TYPES)
         self.assertIn("-q 'MSG'", cmd)
 
     def test_store_config_valid(self):
@@ -189,9 +189,9 @@ class TestAgentAdapters(unittest.TestCase):
         self.assertEqual(errors, [])
 
     def test_resolve_cli_wrapper(self):
-        cfg = {"type": "hermes_profile", "profile": "lingxi"}
-        cmd = resolve_cli(cfg, TYPES, agent_name="lingxi")
-        self.assertIn("--profile lingxi", cmd)
+        cfg = {"type": "hermes_profile", "profile": "agent-a"}
+        cmd = resolve_cli(cfg, TYPES, agent_name="agent-a")
+        self.assertIn("--profile agent-a", cmd)
 
     def test_all_types_have_adapter(self):
         for t in ("hermes_profile", "openclaw", "cline", "opencode", "codex", "claude_code", "none"):

@@ -48,6 +48,26 @@ _FALLBACK = {
             "docker": {"base_url": "http://iii-engine:3111"},
         },
     },
+    "n8n": {
+        "id": "n8n",
+        "health_path": "/healthz",
+        "env_base_url": "N8N_BASE_URL",
+        "profiles": {
+            "windows": {"base_url": "http://127.0.0.1:5678"},
+            "wsl": {"base_url": "http://127.0.0.1:5678"},
+            "docker": {"base_url": "http://n8n:5678"},
+        },
+    },
+    "comfyui": {
+        "id": "comfyui",
+        "health_path": "/system_stats",
+        "env_base_url": "COMFYUI_BASE_URL",
+        "profiles": {
+            "windows": {"base_url": "http://127.0.0.1:8188"},
+            "wsl": {"base_url": "http://127.0.0.1:8188"},
+            "docker": {"base_url": "http://comfyui:8188"},
+        },
+    },
 }
 
 
@@ -80,22 +100,25 @@ def detect_runtime() -> RuntimeName:
 
 @lru_cache(maxsize=4)
 def load_services_seed(mail_root_s: str = "") -> dict[str, Any]:
+    """遍历 config/services/*.json（排除 registry.json）作为 seed，_FALLBACK 兜底。"""
     root = Path(mail_root_s) if mail_root_s else MAILBUS_ROOT
     services_dir = root / "config" / "services"
     out: dict[str, Any] = {}
-    if not services_dir.is_dir():
-        return {k: dict(v) for k, v in _FALLBACK.items()}
-    for name in ("ollama", "agentmemory"):
-        path = services_dir / f"{name}.json"
-        if path.is_file():
+    if services_dir.is_dir():
+        for path in sorted(services_dir.glob("*.json")):
+            name = path.stem
+            if name == "registry":
+                continue
+            data: dict[str, Any] | None = None
             try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
-                    out[name] = data
-                    continue
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    data = loaded
             except (OSError, json.JSONDecodeError):
-                pass
-        out[name] = dict(_FALLBACK.get(name) or {})
+                data = None
+            out[name] = data if data else dict(_FALLBACK.get(name) or {})
+    for name, fb in _FALLBACK.items():
+        out.setdefault(name, dict(fb))
     return out
 
 

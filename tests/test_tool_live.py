@@ -39,7 +39,7 @@ class TestToolLive(unittest.TestCase):
         self.task = {
             "task_id": "vid-tool-live",
             "intent": "发布测试",
-            "extensions": {"ziyan": {"workflow": {"workflow_id": "video_publish", "gates": []}}},
+            "extensions": {"mailbus": {"workflow": {"workflow_id": "video_publish", "gates": []}}},
         }
 
     def tearDown(self):
@@ -54,7 +54,7 @@ class TestToolLive(unittest.TestCase):
     def test_gate_def_on_approve_tool_live(self):
         gate_def = {"on_approve": {"action": "spawn_phase", "tool_live": True}}
         mark_tool_live_after_gate(self.task, {}, gate_def)
-        self.assertTrue(self.task["extensions"]["ziyan"]["workflow"]["tool_live"])
+        self.assertTrue(self.task["extensions"]["mailbus"]["workflow"]["tool_live"])
 
     @patch("lib.application.workflow.tool_exec.get_integrations")
     def test_run_tool_step_respects_dry_run(self, mock_get):
@@ -69,7 +69,7 @@ class TestToolLive(unittest.TestCase):
         mock_port = MagicMock()
         mock_port.invoke_tool.return_value = {"ok": True}
         mock_get.return_value = mock_port
-        self.task["extensions"]["ziyan"]["workflow"]["tool_live"] = True
+        self.task["extensions"]["mailbus"]["workflow"]["tool_live"] = True
         run_tool_step(self.tmp, self.task, "webhook-multi-publish", dry_run=False)
         self.assertFalse(mock_port.invoke_tool.call_args.kwargs.get("dry_run"))
 

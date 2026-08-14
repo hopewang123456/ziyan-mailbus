@@ -161,8 +161,8 @@
           "on_approve": { "set_stage": "qualified" }
         },
         {
-          "gate_id": "req_to_lingzhao",
-          "display": { "zh": "需求转灵昭", "en": "Req to lingzhao" },
+          "gate_id": "req_to_solution",
+          "display": { "zh": "需求转方案设计", "en": "Req to solution design" },
           "actor": "human",
           "required_attachments_min": 0,
           "require_brief": false,
@@ -195,7 +195,7 @@
       "display": { "zh": "双开发并行", "en": "Dual coding" },
       "mode": "fixed_phases",
       "task_types": [],
-      "description": "constraints.dispatch.dual_coding 时灵云+大力并行首步",
+      "description": "constraints.dispatch.dual_coding 时双开发 agent 并行首步",
       "phases": [
         {
           "id": "dual_dev",

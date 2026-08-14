@@ -5,83 +5,83 @@
   "source": "comfy_sd15_liveportrait",
   "pairs": [
     {
-      "id": "lingzhao",
+      "id": "agent-a",
       "portrait": true,
       "animated": true,
       "ready": true
     },
     {
-      "id": "lingjin",
+      "id": "agent-b",
       "portrait": true,
       "animated": true,
       "ready": true
     },
     {
-      "id": "lingxi",
+      "id": "agent-c",
       "portrait": true,
       "animated": true,
       "ready": true
     },
     {
-      "id": "xiaoqi",
+      "id": "agent-d",
       "portrait": true,
       "animated": true,
       "ready": true
     },
     {
-      "id": "yige",
+      "id": "agent-e",
       "portrait": true,
       "animated": true,
       "ready": true
     },
     {
-      "id": "lingxiao",
+      "id": "agent-f",
       "portrait": true,
       "animated": true,
       "ready": true
     },
     {
-      "id": "dali",
+      "id": "agent-g",
       "portrait": true,
       "animated": true,
       "ready": true
     },
     {
-      "id": "lingjian",
+      "id": "agent-h",
       "portrait": true,
       "animated": true,
       "ready": true
     },
     {
-      "id": "lingyan",
+      "id": "agent-i",
       "portrait": true,
       "animated": true,
       "ready": true
     },
     {
-      "id": "lingxun",
+      "id": "agent-j",
       "portrait": true,
       "animated": true,
       "ready": true
     },
     {
-      "id": "lingzhang",
+      "id": "agent-k",
       "portrait": true,
       "animated": true,
       "ready": true
     },
     {
-      "id": "lingtuo",
+      "id": "agent-l",
       "portrait": true,
       "animated": true,
       "ready": true
     },
     {
-      "id": "lingyun",
+      "id": "agent-m",
       "portrait": true,
       "animated": true,
       "ready": true
     }
   ],
-  "comfy_root": "E:\\ai_tools\\ComfyUI-win"
+  "comfy_root": ""
 }
