@@ -758,13 +758,26 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
             if key in patch:
                 next_cfg[key] = patch[key]
         if "devices" in patch and isinstance(patch["devices"], list):
+            prev_by_id = {
+                str(x.get("id") or "").strip(): x
+                for x in (current.get("devices") or [])
+                if isinstance(x, dict) and str(x.get("id") or "").strip()
+            }
             cleaned = []
             for d in patch["devices"]:
                 if not isinstance(d, dict):
                     continue
                 item = {k: v for k, v in d.items() if k != "token_configured"}
-                if not (item.get("id") or "").strip():
+                did = str(item.get("id") or "").strip()
+                if not did:
                     continue
+                # UI 脱敏后可能不回传 token：空串则保留旧值，避免误清空
+                if not str(item.get("token") or "").strip():
+                    old_dev = prev_by_id.get(did) or {}
+                    if str(old_dev.get("token") or "").strip():
+                        item["token"] = old_dev["token"]
+                    else:
+                        item.pop("token", None)
                 cleaned.append(item)
             next_cfg["devices"] = cleaned
         cfg[section] = next_cfg

@@ -68,6 +68,26 @@ def _resolve_authenticated_device(handler) -> dict:
     return device
 
 
+def _live_agents(handler) -> dict:
+    """每次从 config.json 读花名册，避免 UI 新增 agent 后须整进程重启才生效。"""
+    from lib.infra.utils import json_read
+
+    cfg = json_read(f"{handler.data_dir}/config.json", {})
+    live = cfg.get("agents") if isinstance(cfg.get("agents"), dict) else None
+    if live:
+        # 同步到 handler，减少其它路径读到陈旧花名册
+        try:
+            handler.agents = live
+        except Exception:
+            pass
+        return live
+    return getattr(handler, "agents", None) or {}
+
+
+def _live_agent_types(handler) -> dict:
+    return getattr(handler, "agent_types", None) or {}
+
+
 def handle_device_chat(handler):
     try:
         device = _resolve_authenticated_device(handler)
@@ -100,8 +120,8 @@ def handle_device_chat(handler):
     try:
         result = deliver_and_wait(
             handler.data_dir,
-            handler.agents,
-            handler.agent_types,
+            _live_agents(handler),
+            _live_agent_types(handler),
             device,
             text,
             session_id,

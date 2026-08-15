@@ -412,6 +412,8 @@ mailbus 无论跑在 **Windows / WSL / Linux native / Docker**，都能统一探
 
 Section 名 `mailbus_device_bridge`，种子 [`config/edge/device-bridge.json`](config/edge/device-bridge.json)，init 后合并进 `store/config.json`。
 
+公开测试角色 **`test`**（`type=none`）种子见 [`config/edge/test-agent.json`](config/edge/test-agent.json)；`mailbus init` / align 会写入花名册。本地验通请绑 `agent_id=test`，不要绑真人设。
+
 ```json
 {
   "enabled": true,
@@ -419,11 +421,10 @@ Section 名 `mailbus_device_bridge`，种子 [`config/edge/device-bridge.json`](
   "write_memory": true,
   "devices": [
     {
-      "id": "phone-hope",
-      "label": "希望的 iPhone",
-      "token_env": "MAILBUS_DEVICE_TOKEN_PHONE_HOPE",
-      "tailscale_ips": ["100.x.y.z"],
-      "agent_id": "lingzhao",
+      "id": "zm3a7f9c2e",
+      "label": "测试机",
+      "token": "（驾驶舱点生成）",
+      "agent_id": "test",
       "enabled": true
     }
   ]
@@ -433,6 +434,16 @@ Section 名 `mailbus_device_bridge`，种子 [`config/edge/device-bridge.json`](
 - **鉴权主键**：每设备独立 token（存 `token_env` 指向的环境变量，或内联 `token`），权限远窄于驾驶舱 `MAILBUS_API_TOKEN`。
 - **可选 IP 白名单**：配 `tailscale_ips` 后，只有该 Tailscale IP 的请求才放行。
 - **绑定**：一设备（token）只绑一个 `agent_id`；多个设备可绑多个 Agent。
+
+### 本地模拟回复（推荐先测通）
+
+`test` 没有真实框架 CLI。另开终端跑模拟器，盯 inbox 并写 `replies/test.json`：
+
+```bash
+python tools/device_bridge_mock_agent.py --data-dir ./store
+```
+
+（默认 `--agent test`。）然后再 curl / 快捷指令打 `POST /api/device/chat`，即可拿到 `status=ok` + `reply`。
 
 ### 协议（手机 / 眼镜上游共用）
 

@@ -438,7 +438,52 @@ def build_store_config(
                 rec.setdefault("inbox", os.path.join(data_dir, "inbox", aid, "inbox.json").replace("\\", "/"))
                 rec.setdefault("available", True)
                 config["agents"][aid] = rec
+    ensure_device_bridge_test_agent(config, data_dir, mail_root=root)
     return config
+
+
+def ensure_device_bridge_test_agent(
+    config: dict[str, Any],
+    data_dir: str | Path,
+    *,
+    mail_root: Path | str | None = None,
+) -> bool:
+    """Ensure public Device Bridge mock agent ``test`` exists (from config/edge/test-agent.json).
+
+    Idempotent: does not overwrite a user-customized ``agents.test`` entry.
+    Returns True if config was mutated.
+    """
+    agents = config.setdefault("agents", {})
+    if not isinstance(agents, dict):
+        return False
+    if isinstance(agents.get("test"), dict) and (agents["test"].get("type") or agents["test"].get("agent_id")):
+        # already present — still ensure inbox path default
+        rec = agents["test"]
+        if not (rec.get("inbox") or "").strip():
+            rec["inbox"] = os.path.join(str(data_dir), "inbox", "test", "inbox.json").replace("\\", "/")
+            return True
+        return False
+
+    root = mailbus_root(mail_root)
+    seed = _read_json(root / "config" / "edge" / "test-agent.json", {})
+    rec = (seed.get("agents") or {}).get("test") if isinstance(seed, dict) else None
+    if not isinstance(rec, dict):
+        rec = {
+            "name": "test",
+            "role": "Device Bridge mock target",
+            "type": "none",
+            "agent_id": "test",
+            "agent": "test",
+            "enabled": True,
+            "available": True,
+        }
+    else:
+        rec = dict(rec)
+    rec.setdefault("inbox", os.path.join(str(data_dir), "inbox", "test", "inbox.json").replace("\\", "/"))
+    rec.setdefault("available", True)
+    rec.setdefault("enabled", True)
+    agents["test"] = rec
+    return True
 
 
 def ensure_ollama_local_model_alias(
@@ -635,6 +680,7 @@ def run_merge_store_config(
     merged["data_dir"] = data_dir.replace("\\", "/")
     merged["version"] = fresh.get("version") or merged.get("version")
     merged["agents"] = fresh.get("agents") or merged.get("agents") or {}
+    ensure_device_bridge_test_agent(merged, data_dir, mail_root=mail_root)
     json_write(config_path, merged)
 
     if not quiet:

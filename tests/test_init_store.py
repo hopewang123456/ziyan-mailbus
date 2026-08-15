@@ -56,6 +56,10 @@ class TestInitStore(unittest.TestCase):
             self.assertIn("mailbus_internal_llm", cfg)
             po = cfg.get("pipeline_ops") or {}
             self.assertIn("role_failover", po)
+            # Device Bridge 公开测试角色
+            self.assertIn("test", cfg["agents"])
+            self.assertEqual(cfg["agents"]["test"].get("type"), "none")
+            self.assertIn("mailbus_device_bridge", cfg)
 
     def test_run_init_store_fresh(self):
         with tempfile.TemporaryDirectory() as tmp:
