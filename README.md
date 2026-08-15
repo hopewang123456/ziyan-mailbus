@@ -399,10 +399,84 @@ mailbus 无论跑在 **Windows / WSL / Linux native / Docker**，都能统一探
 
 **Core 绿即可跑通最小闭环**（示例角色 + 统一信封 + file_bus 投递）。Host/Integrations 项按需在宿主机或配置后重跑。
 
+## 设备转发控制（Device Bridge）
+
+外部设备（手机 / 眼镜上游）经 **Tailscale** 把一句话安全投到电脑上**已绑定的 Agent**，并在同一次（或短轮询）HTTP 中拿到回复。手机是**纯管道**，不是 Agent；通讯式**一轮一答**，不是邮件分发。
+
+- **与 Intake Bridge 分离**：`mailbus_intake_bridge` 管模型/商机自动 spawn；`mailbus_device_bridge` 管外部设备会话入口，互不干扰。
+- **每请求新 `session_id`**（UUID，用完即弃），禁止长会话粘连、防上下文挤压。
+- **每轮落 memory**：问 + 答各写一条（SQLite 同步 + AgentMemory 后台降级），防绑定 Agent「失忆」。
+- **MVP 不建工单**：`action` 仅支持 `chat`；建工单属 Phase 2。
+
+### 配置（驾驶舱「总线」→ 设备桥）
+
+Section 名 `mailbus_device_bridge`，种子 [`config/edge/device-bridge.json`](config/edge/device-bridge.json)，init 后合并进 `store/config.json`。
+
+```json
+{
+  "enabled": true,
+  "default_wait_ms": 45000,
+  "write_memory": true,
+  "devices": [
+    {
+      "id": "phone-hope",
+      "label": "希望的 iPhone",
+      "token_env": "MAILBUS_DEVICE_TOKEN_PHONE_HOPE",
+      "tailscale_ips": ["100.x.y.z"],
+      "agent_id": "lingzhao",
+      "enabled": true
+    }
+  ]
+}
+```
+
+- **鉴权主键**：每设备独立 token（存 `token_env` 指向的环境变量，或内联 `token`），权限远窄于驾驶舱 `MAILBUS_API_TOKEN`。
+- **可选 IP 白名单**：配 `tailscale_ips` 后，只有该 Tailscale IP 的请求才放行。
+- **绑定**：一设备（token）只绑一个 `agent_id`；多个设备可绑多个 Agent。
+
+### 协议（手机 / 眼镜上游共用）
+
+基址：`http://<电脑 MagicDNS 或 100.x>:9814`（仅 tailnet）。
+
+| 方法 | 路径 | 作用 |
+|------|------|------|
+| POST | `/api/device/chat` | 发一轮会话，尽量同步返回 `reply` |
+| GET | `/api/device/chat/{ticket_id}` | 超时后轮询取结果 |
+
+请求体（`session_id` 可省略，服务端每请求 new UUID；`source.upstream` 标记来源）：
+
+```json
+{
+  "text": "用户或眼镜提取后的文本",
+  "session_id": "可选",
+  "source": { "channel": "shortcuts", "device": "phone", "upstream": "manual" },
+  "action": "chat"
+}
+```
+
+鉴权：`Authorization: Bearer <设备 token>`（或 `X-Mailbus-Device-Token`）。
+
+响应：完成 `{ "status": "ok", "reply": "...", "msg_id": "...", "agent_id": "..." }`；未完成 `{ "status": "pending", "ticket_id": "...", "poll_after_ms": 2000 }`。
+
+### 手机怎么测（仅 Tailscale + 快捷指令，不装自定义 App）
+
+**前置**：电脑/手机同 tailnet、Tailscale 在线；`mailbus serve`（`:9814`）在跑；目标 Agent 已注册；驾驶舱已配好该设备绑定与 token。
+
+1. **探活**：手机 Safari 打开 `http://<电脑.ts.net>:9814/api/health` → 出 JSON 即网络层通（不通先查 Tailscale 同网 / 防火墙放行 9814，仅对 tailnet 勿对公网）。
+2. **快捷指令**（名 `Mailbus 说一句`）：`询问文本` → `获取 URL 内容`（URL=`/api/device/chat`，方法 POST，Header `Authorization: Bearer <token>`，Body JSON）→ `显示结果`（解析 `reply`）。
+3. **pending 分支**：若 `status`==`pending`，等待 `poll_after_ms` 后 `GET /api/device/chat/<ticket_id>`（同 token）取 `reply`，可循环 2~5 次。
+
+**免费工具足够**：Safari 探活 + 快捷指令打 POST，无需 Postman（iOS 无好用的免费 Postman；电脑端可用 curl 先验接口，验收以手机快捷指令为准）。
+
+**建议用例**：T1 探活 → T2 错 token 401 → T3 正常一轮（说「回我：pong」）→ T4 绑定生效（只进绑定 Agent inbox）→ T5 换绑 → T6 配错 `tailscale_ips` 被拒 → T7 多设备互不串话 → T8 慢回复走 pending→poll → T9 不建工单 → T10 蜂窝网 + Tailscale 仍通。
+
+**排障**：401 查 token/Header；200 无 reply 查目标 Agent 是否在线、日志、`default_wait_ms` 是否过短；进错 Agent 查绑定是否保存；快捷指令超时走 ticket 轮询。
+
 ## 本版不做（防预期膨胀）
 
 - A2A **streaming**（stub 保留，债务）
 - **工单**字段 / 状态机 / 流转细则（下一 session）
+- Device Bridge **建工单**（`/api/device/task`，待 tasks 稳定后 Phase 2；当前仅 chat）
 - n8n / ComfyUI **编排 UI**（workflow CRUD）
 - Hermes identities **自动同步**验收
 - sqlite_fts / 向量 RAG 升级

@@ -234,6 +234,40 @@ def validate_config(config: dict, config_path: str = "") -> list:
                         if tier not in valid:
                             errors.append(f"smart_routing.tier_map: 未知 tier {tier!r}")
 
+    # ── mailbus_device_bridge 校验 ──
+    dbr = config.get("mailbus_device_bridge")
+    if dbr is not None:
+        if not isinstance(dbr, dict):
+            errors.append("mailbus_device_bridge: 期望 object 类型")
+        else:
+            for field in ("enabled", "write_memory"):
+                if field in dbr and not isinstance(dbr[field], bool):
+                    errors.append(f"mailbus_device_bridge.{field}: 期望 boolean 类型")
+            if "default_wait_ms" in dbr and (
+                not isinstance(dbr["default_wait_ms"], int) or not (1000 <= dbr["default_wait_ms"] <= 600000)
+            ):
+                errors.append("mailbus_device_bridge.default_wait_ms: 值超出范围 [1000, 600000]")
+            devices = dbr.get("devices")
+            if devices is not None:
+                if not isinstance(devices, list):
+                    errors.append("mailbus_device_bridge.devices: 期望 array 类型")
+                else:
+                    seen_ids = set()
+                    for i, d in enumerate(devices):
+                        if not isinstance(d, dict):
+                            errors.append(f"mailbus_device_bridge.devices[{i}]: 期望 object 类型")
+                            continue
+                        did = (d.get("id") or "").strip()
+                        if not did:
+                            errors.append(f"mailbus_device_bridge.devices[{i}]: 缺少 id")
+                        elif did in seen_ids:
+                            errors.append(f"mailbus_device_bridge.devices[{i}]: 重复 id {did!r}")
+                        seen_ids.add(did)
+                        if not (d.get("agent_id") or "").strip():
+                            errors.append(f"mailbus_device_bridge.devices[{i}]: 缺少 agent_id")
+                        if not (d.get("token_env") or "").strip() and not (d.get("token") or "").strip():
+                            errors.append(f"mailbus_device_bridge.devices[{i}]: 缺少 token_env 或 token")
+
     return errors
 
 

@@ -60,6 +60,7 @@ def _get_handlers():
             "lifecycle": _load_handler_module("handlers_lifecycle"),
             "drill": _load_handler_module("handlers_drill"),
             "a2a": _load_handler_module("handlers_a2a"),
+            "device": _load_handler_module("handlers_device"),
         }
     return _handlers
 
@@ -294,7 +295,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self._read_path()
         # SPA/static boot without token; API still authenticated when token configured
-        needs_api_auth = path.startswith("/api/") or path.startswith("/a2a/")
+        is_device_route = path == "/api/device/chat" or path.startswith("/api/device/chat/")
+        needs_api_auth = (path.startswith("/api/") or path.startswith("/a2a/")) and not is_device_route
         if needs_api_auth and not self._check_auth():
             return
         h = _get_handlers()
@@ -416,6 +418,12 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             else:
                 h["tasks"].handle_tasks(self)
         
+        elif path.startswith("/api/device/chat/"):
+            ticket_id = path[len("/api/device/chat/"):].strip("/")
+            if ticket_id:
+                h["device"].handle_device_ticket(self, ticket_id)
+            else:
+                self._send_json({"error": "not_found"}, 404)
         elif path.startswith("/api/inbox/"):
             h["inbox"].handle_inbox(self, path[len("/api/inbox/"):])
         elif path.startswith("/api/agent-profile/"):
@@ -463,9 +471,14 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     # ── HTTP POST 路由 ─────────────────────────────────────────────────
 
     def do_POST(self):
+        path = self._read_path()
+        if path == "/api/device/chat":
+            # 设备桥走独立设备 token 鉴权，不经 mailbus API token
+            h = _get_handlers()
+            h["device"].handle_device_chat(self)
+            return
         if not self._check_auth(write=True):
             return
-        path = self._read_path()
         h = _get_handlers()
 
         if path == "/api/launch":
@@ -610,6 +623,6 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Mailbus-Device-Token")
         self.end_headers()
 

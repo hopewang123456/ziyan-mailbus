@@ -162,6 +162,13 @@ def load_config_fragments(mail_root: Path | None = None) -> dict[str, Any]:
             _read_json(intake_bridge, {}),
         )
 
+    device_bridge = cfg_dir / "edge" / "device-bridge.json"
+    if device_bridge.is_file():
+        merged["mailbus_device_bridge"] = _deep_merge(
+            merged.get("mailbus_device_bridge") or {},
+            _read_json(device_bridge, {}),
+        )
+
     launch_watchdog = cfg_dir / "launch" / "watchdog.json"
     if launch_watchdog.is_file():
         merged["mailbus_launch_watchdog"] = _read_json(launch_watchdog, {})

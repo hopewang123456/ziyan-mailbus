@@ -23,6 +23,7 @@ const BUS_SECTIONS = new Set([
   "mailbus_workflow",
   "mailbus_automation",
   "mailbus_intake_bridge",
+  "mailbus_device_bridge",
   "scheduler",
   "mailbus_chains",
 ]);
@@ -213,6 +214,237 @@ function SectionEditor({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function DeviceBridgePanel() {
+  type Device = {
+    id: string;
+    label: string;
+    token_env: string;
+    token_configured?: boolean;
+    tailscale_ips: string[];
+    agent_id: string;
+    enabled: boolean;
+  };
+  const [data, setData] = useState<{
+    enabled: boolean;
+    default_wait_ms: number;
+    write_memory: boolean;
+    devices: Device[];
+  } | null>(null);
+  const [agents, setAgents] = useState<string[]>([]);
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    setMsg("");
+    const r = await api<{
+      data: { enabled: boolean; default_wait_ms: number; write_memory: boolean; devices: Device[] };
+      agents: string[];
+    }>("/api/settings/section/mailbus_device_bridge");
+    if (r.ok) {
+      setData(r.data.data);
+      setAgents(r.data.agents || []);
+    } else setMsg(r.error);
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  function patchDevice(idx: number, patch: Partial<Device>) {
+    setData((prev) => {
+      if (!prev) return prev;
+      const devices = prev.devices.map((d, i) => (i === idx ? { ...d, ...patch } : d));
+      return { ...prev, devices };
+    });
+  }
+
+  async function save() {
+    if (!data) return;
+    setBusy(true);
+    setMsg("");
+    const r = await api(`/api/settings/section/mailbus_device_bridge`, {
+      method: "POST",
+      body: JSON.stringify({ patch: data }),
+    });
+    setBusy(false);
+    setMsg(r.ok ? "已保存" : r.error);
+    if (r.ok) void load();
+  }
+
+  if (!data) {
+    return (
+      <div className="soft-panel space-y-2">
+        <p className="soft-panel-title">设备桥</p>
+        <p className="text-xs text-mute">加载中…</p>
+        {msg && <p className="text-xs text-amber-signal">{msg}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="soft-panel space-y-4">
+      <div className="space-y-1">
+        <p className="soft-panel-title">设备桥 · Device Bridge</p>
+        <p className="text-xs text-mute">
+          外部设备（手机 / 眼镜上游）经 Tailscale 安全投递到绑定 Agent，一轮一答。token 存于环境变量。
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-4">
+        <label className="flex items-center gap-2 text-sm text-frost">
+          <input
+            type="checkbox"
+            checked={data.enabled}
+            onChange={(e) => setData({ ...data, enabled: e.target.checked })}
+          />
+          启用
+        </label>
+        <label className="flex items-center gap-2 text-sm text-frost">
+          <input
+            type="checkbox"
+            checked={data.write_memory}
+            onChange={(e) => setData({ ...data, write_memory: e.target.checked })}
+          />
+          每轮写入 memory
+        </label>
+        <label className="block">
+          <span className="hud-label">default_wait_ms（同步等待，超出走 ticket）</span>
+          <input
+            className="hud-input mt-1 w-40 font-mono text-xs"
+            type="number"
+            value={data.default_wait_ms}
+            onChange={(e) => setData({ ...data, default_wait_ms: Number(e.target.value) || 45000 })}
+          />
+        </label>
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-frost">绑定设备</p>
+          <button
+            type="button"
+            className="hud-btn"
+            onClick={() =>
+              setData({
+                ...data,
+                devices: [
+                  ...data.devices,
+                  { id: "", label: "", token_env: "", tailscale_ips: [], agent_id: agents[0] || "", enabled: true },
+                ],
+              })
+            }
+          >
+            + 添加设备
+          </button>
+        </div>
+
+        {data.devices.length === 0 && <p className="text-xs text-mute">尚未配置设备</p>}
+
+        {data.devices.map((d, idx) => (
+          <div key={idx} className="soft-inset space-y-2 p-2">
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+              <label className="block">
+                <span className="hud-label">id（唯一）</span>
+                <input
+                  className="hud-input mt-1 w-full font-mono text-xs"
+                  value={d.id}
+                  placeholder="phone-hope"
+                  onChange={(e) => patchDevice(idx, { id: e.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="hud-label">label</span>
+                <input
+                  className="hud-input mt-1 w-full font-mono text-xs"
+                  value={d.label}
+                  placeholder="希望的 iPhone"
+                  onChange={(e) => patchDevice(idx, { label: e.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="hud-label">agent_id（绑定目标）</span>
+                <select
+                  className="hud-input mt-1 w-full font-mono text-xs"
+                  value={d.agent_id}
+                  onChange={(e) => patchDevice(idx, { agent_id: e.target.value })}
+                >
+                  <option value="">选择 Agent</option>
+                  {agents.map((a) => (
+                    <option key={a} value={a}>
+                      {a}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="hud-label">token_env（环境变量名）</span>
+                <input
+                  className="hud-input mt-1 w-full font-mono text-xs"
+                  value={d.token_env}
+                  placeholder="MAILBUS_DEVICE_TOKEN_PHONE_HOPE"
+                  onChange={(e) => patchDevice(idx, { token_env: e.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="hud-label">tailscale_ips（逗号分隔，可选）</span>
+                <input
+                  className="hud-input mt-1 w-full font-mono text-xs"
+                  value={d.tailscale_ips.join(", ")}
+                  placeholder="100.x.y.z"
+                  onChange={(e) =>
+                    patchDevice(idx, {
+                      tailscale_ips: e.target.value
+                        .split(",")
+                        .map((s) => s.trim())
+                        .filter(Boolean),
+                    })
+                  }
+                />
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-xs text-mute">
+                <input
+                  type="checkbox"
+                  checked={d.enabled !== false}
+                  onChange={(e) => patchDevice(idx, { enabled: e.target.checked })}
+                />
+                启用
+              </label>
+              <span className={`text-xs ${d.token_configured ? "text-mint" : "text-amber-signal"}`}>
+                {d.token_configured ? "token 已配置" : "token 未配置（需在 .env 写入 token_env）"}
+              </span>
+              <button
+                type="button"
+                className="hud-btn-amber"
+                onClick={() => setData({ ...data, devices: data.devices.filter((_, i) => i !== idx) })}
+              >
+                删除
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="soft-inset p-2 text-xs text-mute">
+        <p className="text-frost/70">快捷指令 URL 模板（手机侧）</p>
+        <p className="font-mono">http://&lt;电脑 MagicDNS 或 100.x&gt;:9814/api/device/chat</p>
+        <p className="mt-1">
+          鉴权：请求头 <span className="font-mono">Authorization: Bearer &lt;设备token&gt;</span>；请求体{" "}
+          <span className="font-mono">{`{"text":"...","source":{"channel":"shortcuts","device":"phone","upstream":"manual"}}`}</span>
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button type="button" className="hud-btn" disabled={busy} onClick={() => void save()}>
+          保存
+        </button>
+        {msg && <p className="text-xs text-amber-signal">{msg}</p>}
+      </div>
     </div>
   );
 }
@@ -553,6 +785,7 @@ export function ConfigPage({ variant = "full" }: { variant?: ConfigVariant }) {
           <p className="mt-1 text-sm text-mute">路径 · 权限 · A2A · 调度段 · 默认收起</p>
         </header>
         <BusExtrasPanel />
+        <DeviceBridgePanel />
         <SoftFold title="调度 / 工作流 / 自动化 / 端口" hint="可编辑运行段表单">
           <SectionEditor title="总线 sections" allow={BUS_SECTIONS} sections={sections} />
         </SoftFold>

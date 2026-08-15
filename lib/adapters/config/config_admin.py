@@ -81,6 +81,7 @@ EDITABLE_SECTIONS = frozenset({
     "mailbus_workflow",
     "mailbus_automation",
     "mailbus_intake_bridge",
+    "mailbus_device_bridge",
     "mailbus_codex",
     "mailbus_claude",
     "mailbus_chains",
@@ -192,6 +193,7 @@ SECTION_LABELS = {
     "mailbus_workflow": "Workflow & tool_live",
     "mailbus_automation": "自动化边界",
     "mailbus_intake_bridge": "Intake Bridge",
+    "mailbus_device_bridge": "Device Bridge / 设备桥",
     "mailbus_codex": "Codex / Desktop 启动",
     "mailbus_claude": "Claude Code / Desktop 启动",
     "mailbus_chains": "工单链路模板 / 日预算",
@@ -420,6 +422,30 @@ def get_section(data_dir: str, section: str) -> dict:
         }
     if section == "mailbus_intake_bridge":
         return {"section": section, "data": cfg.get(section) or {}}
+    if section == "mailbus_device_bridge":
+        data = cfg.get(section) or {}
+        # 脱敏：设备 token 不直接回传明文；仅回传是否已配置 + env 键名
+        devices = []
+        for d in data.get("devices") or []:
+            if not isinstance(d, dict):
+                continue
+            item = dict(d)
+            token_env = str(item.get("token_env") or "").strip()
+            item["token_configured"] = bool(token_env and os.environ.get(token_env)) or bool(
+                (item.get("token") or "").strip()
+            )
+            item.pop("token", None)
+            devices.append(item)
+        return {
+            "section": section,
+            "data": {
+                "enabled": data.get("enabled", True),
+                "default_wait_ms": data.get("default_wait_ms", 45000),
+                "write_memory": data.get("write_memory", True),
+                "devices": devices,
+            },
+            "agents": sorted((cfg.get("agents") or {}).keys()),
+        }
     if section == "mailbus_codex":
         return {"section": section, "data": cfg.get("mailbus_codex") or {}}
     if section == "mailbus_claude":
@@ -725,6 +751,24 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
             "warnings": [],
             "updated": updated,
         }, ["env"]
+    elif section == "mailbus_device_bridge":
+        current = cfg.get(section) or {}
+        next_cfg = dict(current)
+        for key in ("enabled", "default_wait_ms", "write_memory"):
+            if key in patch:
+                next_cfg[key] = patch[key]
+        if "devices" in patch and isinstance(patch["devices"], list):
+            cleaned = []
+            for d in patch["devices"]:
+                if not isinstance(d, dict):
+                    continue
+                item = {k: v for k, v in d.items() if k != "token_configured"}
+                if not (item.get("id") or "").strip():
+                    continue
+                cleaned.append(item)
+            next_cfg["devices"] = cleaned
+        cfg[section] = next_cfg
+        requires_restart.append(section)
     else:
         current = cfg.get(section) or {}
         if section == "mailbus_internal_llm":
