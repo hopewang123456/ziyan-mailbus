@@ -8,7 +8,7 @@ type DiscoverReport = {
   [k: string]: unknown;
 };
 
-export function DiscoverPage() {
+export function DiscoverPage({ compact = false }: { compact?: boolean }) {
   const [report, setReport] = useState<DiscoverReport | null>(null);
   const [active, setActive] = useState<unknown>(null);
   const [msg, setMsg] = useState("");
@@ -48,10 +48,12 @@ export function DiscoverPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <p className="hud-label">Fleet</p>
-        <h2 className="mt-1 font-display text-2xl tracking-[-0.02em]">发现 / Enable</h2>
-      </header>
+      {!compact && (
+        <header>
+          <p className="hud-label">Fleet</p>
+          <h2 className="mt-1 font-display text-2xl tracking-[-0.02em]">发现 / Enable</h2>
+        </header>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <button type="button" className="hud-btn" disabled={busy} onClick={() => void discover()}>

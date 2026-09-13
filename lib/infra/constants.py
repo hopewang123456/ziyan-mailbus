@@ -4,12 +4,11 @@ mailbus 全局常量与路径
 所有硬编码路径统一收口到这里。
 
 本地（本机开发）：
-  mail/skills|rules|plans|docs 等应为 junction → Obsidian Vault（见 Agent/_architecture）。
-  默认 MAILBUS_*_ROOT = 仓库内相对路径即可，经 junction 读到 Vault 真源。
-  不要用 .env 把知识根指到 Vault（避免与 junction 双源）。
+  默认 MAILBUS_*_ROOT = 仓库内 skills|rules|identities|…（公开 example 可提交）。
+  自定义路径请走设置页 asset_paths（写入 config）；勿依赖目录联接作为产品配置面。
 
 GitHub / CI：
-  未设 env 时默认仓库内 demo 路径；需要时用 MAILBUS_*_ROOT / TEAM_PACK_*_ROOT 覆盖到仓库相对根。
+  未设 env 时默认仓库内 demo 路径；需要时用 MAILBUS_*_ROOT 覆盖到仓库相对根。
 """
 
 import json
@@ -29,8 +28,7 @@ PROJECT_ROOT_STR = str(PROJECT_ROOT)
 MAILBUS_ROOT = _env_path("MAILBUS_ROOT", PROJECT_ROOT)
 MAILBUS_ROOT_STR = str(MAILBUS_ROOT)
 
-_REPO_PARENT = MAILBUS_ROOT.parent
-TEAM_PACK_ROOT = _env_path("TEAM_PACK_ROOT", _REPO_PARENT / "team-pack")
+TEAM_PACK_ROOT = _env_path("TEAM_PACK_ROOT", MAILBUS_ROOT / "team-pack")
 TEAM_PACK_ROOT_STR = str(TEAM_PACK_ROOT)
 
 # ── 知识库根目录（默认 = 仓库内路径；本地靠 junction 进 Vault）──────────
@@ -41,9 +39,6 @@ MAILBUS_RULES_ROOT = _env_path("MAILBUS_RULES_ROOT", MAILBUS_ROOT / "rules")
 MAILBUS_PLANS_ROOT = _env_path("MAILBUS_PLANS_ROOT", MAILBUS_ROOT / "plans")
 MAILBUS_DOCS_ROOT = _env_path("MAILBUS_DOCS_ROOT", MAILBUS_ROOT / "docs")
 MAILBUS_IDENTITIES_ROOT = _env_path("MAILBUS_IDENTITIES_ROOT", MAILBUS_ROOT / "identities")
-
-TEAM_PACK_SKILLS_ROOT = _env_path("TEAM_PACK_SKILLS_ROOT", TEAM_PACK_ROOT / "skills")
-TEAM_PACK_RULES_ROOT = _env_path("TEAM_PACK_RULES_ROOT", TEAM_PACK_ROOT / "rules")
 
 # 技能共享组（skillgroup）根：一级子目录 = 一个组；跨框架可复用同一组。
 # 默认仓库 skills/skillgroup/ 开箱；本机 SoT 在 Vault 时用 MAILBUS_SKILLGROUP_ROOT 指过去。
@@ -81,8 +76,6 @@ MAILBUS_RULES_ROOT_STR = str(MAILBUS_RULES_ROOT)
 MAILBUS_PLANS_ROOT_STR = str(MAILBUS_PLANS_ROOT)
 MAILBUS_DOCS_ROOT_STR = str(MAILBUS_DOCS_ROOT)
 MAILBUS_IDENTITIES_ROOT_STR = str(MAILBUS_IDENTITIES_ROOT)
-TEAM_PACK_SKILLS_ROOT_STR = str(TEAM_PACK_SKILLS_ROOT)
-TEAM_PACK_RULES_ROOT_STR = str(TEAM_PACK_RULES_ROOT)
 MAILBUS_SKILLGROUP_ROOT_STR = str(MAILBUS_SKILLGROUP_ROOT)
 
 # ── 数据目录 ─────────────────────────────────────────────────────────────

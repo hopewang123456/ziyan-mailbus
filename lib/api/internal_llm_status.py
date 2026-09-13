@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from lib.adapters.internal_llm.probe import probe_all
-
 
 def llm_status(data_dir: str) -> dict:
     """Return enabled/providers/rag readiness for /api/internal-llm/status."""
-    return probe_all(data_dir)
+    # 跨层解耦：api→adapter 通过 composition 拿服务（2026-09 治理）
+    from lib.composition import probe_all_internal_llm
+    return probe_all_internal_llm(data_dir)

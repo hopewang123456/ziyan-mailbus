@@ -216,7 +216,21 @@ def fix_openclaw_gateways(data_dir: str | None = None, log: LogFn | None = None)
     paths = mailbus_paths()
     data = data_dir or paths["data_dir"]
     container = f"{paths['compose_project']}-openclaw-1"
-    token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "change-me")
+    token = (os.environ.get("OPENCLAW_GATEWAY_TOKEN") or "").strip()
+    if token == "change-me":
+        token = ""
+    if not token:
+        try:
+            from lib.adapters.runtime.cred_delivery import resolve_openclaw_token
+
+            token = (resolve_openclaw_token(data) or "").strip()
+            if token == "change-me":
+                token = ""
+        except Exception:
+            token = ""
+    if not token:
+        _log_line(log, "[fix-openclaw] OPENCLAW_GATEWAY_TOKEN unset — skip gateway restart (set token in settings)")
+        return 0
     profiles = _first_agents_of_type(data, "openclaw") or ["agent-b", "agent-c"]
     port_map = {aid: 18789 + i for i, aid in enumerate(profiles)}
 

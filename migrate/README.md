@@ -8,19 +8,19 @@
 
 | 层级 | 变量 | 典型目录 |
 |------|------|----------|
-| 必拷 | `MAILBUS_ROOT` | `mail/` |
-| 必拷 | `MAILBUS_DATA` | `mail/store/`（含 `run/` 若分离） |
-| 可选 | `OPENCLAW_WORKSPACE` | `openclaw_space/` |
+| 必拷 | `MAILBUS_ROOT` | `mailbus/` |
+| 必拷 | `MAILBUS_DATA` | `mailbus/store/`（含 `run/` 若分离） |
+| 可选 | `OPENCLAW_WORKSPACE` | `openclaw_space/` 或 `docker-agents/workspaces/` |
 | 可选 | `OPENCODE_ROOT` | `opencode/` |
 | 可选 | `NODE_MODULES` | `node_modules/` |
-| 可选 | `HERMES_DATA` | `hermes-data/.hermes/` |
+| 可选 | `HERMES_DATA` | `hermes-data/`（或 compose `workspaces/hermes-data`） |
 
 各 agent 工作区（如 `agent-f/`）按 manifest 的 `framework_workspaces` 或 `access/transport/*/transport.json` 的 `workspace` 字段。
 
 ## 快速用法
 
 ```bash
-cd mail
+cd mailbus
 pip install -e .
 
 # 源机打包
@@ -35,7 +35,7 @@ mailbus migrate plan
 
 ## import 后自动执行
 
-1. 写 `mail/.env`
+1. 写 `mailbus/.env`（以及可选 `docker-agents/.env` 的 `MAILBUS_HOST_ROOT`）
 2. `rewrite_paths` — 替换 store/transport 旧前缀
 3. `init-store` + `sync-all-agent-layers` — 生成 config.json 与人物/skills
 4. `mailbus compose sync` — 从 transport 生成 compose override 挂载

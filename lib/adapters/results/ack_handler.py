@@ -215,52 +215,6 @@ def scan_ack_files(data_dir: str, agents: dict) -> int:
     return total_processed
 
 
-def scan_error_reports(data_dir: str, agents: dict) -> list:
-    """
-    扫描所有 inbox 中的 error_report 类型消息，更新任务状态。
-
-    返回处理的错误回执列表 [{task_id, error_code, reason}]
-    """
-    paths = resolve_paths(data_dir)
-    reports = []
-
-    for name in agents:
-        inbox_file = f"{paths['inbox']}/{name}/inbox.json"
-        inbox_data = json_read(inbox_file, {})
-        if not inbox_data:
-            continue
-
-        inbox = Inbox.from_dict(inbox_data)
-        for m in inbox.messages:
-            msg_type = inbox.msg_field(m, 'type', '')
-            task_id = inbox.msg_field(m, 'task_id', '')
-            error = inbox.msg_field(m, 'error', {})
-
-            if msg_type == "error_report" and error and task_id:
-                # 更新 tracker 任务状态为 failed
-                try:
-                    from lib.application.orchestration.tracker import TaskTracker, TaskStatus
-                    tracker = TaskTracker(data_dir)
-                    tracker.update_status(task_id, TaskStatus.FAILED, error={
-                        "code": error.get("code", "UNKNOWN"),
-                        "reason": error.get("reason", ""),
-                        "detail": error.get("trace", ""),
-                        "agent": name,
-                        "reported_at": _now_iso(),
-                    })
-                except Exception as e:
-                    from lib.infra.mbus_log import warn
-                    warn(f"[ack_handler] tracker update failed: {e}")
-                reports.append({
-                    "task_id": task_id,
-                    "agent": name,
-                    "error_code": error.get("code", "UNKNOWN"),
-                    "reason": error.get("reason", ""),
-                })
-
-    return reports
-
-
 def scan_forward_files(data_dir: str, agents: dict) -> int:
     """
     扫描所有 agent 的 forward.json，处理转发请求。

@@ -28,8 +28,20 @@ class TaskFsmAdapter:
     def get_active_step(self, task: dict) -> Optional[dict]:
         return fsm.get_active_step(task)
 
+    def resolve_step_for_agent(self, task: dict, agent: Optional[str] = None) -> Optional[dict]:
+        return fsm.resolve_step_for_agent(task, agent)
+
     def mark_step_dispatched(self, step: dict) -> None:
         fsm.mark_step_dispatched(step)
+
+    def apply_approve_join(
+        self,
+        task: dict,
+        body: Optional[dict] = None,
+        *,
+        data_dir: str = "",
+    ) -> dict:
+        return fsm.apply_approve_join(task, body, data_dir=data_dir)
 
     def apply_submit(
         self,

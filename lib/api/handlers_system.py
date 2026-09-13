@@ -16,9 +16,7 @@ from lib.infra.constants import MAILBUS_ROOT
 from lib.infra.runtime_net import rewrite_browser_host
 from lib.domain.models import Inbox
 from lib.infra.utils import json_read, json_write, resolve_paths, resolve_mailbus_path, identity_candidates, _now_iso
-from lib.adapters.ops.heartbeat import load_status as load_heartbeat
-from lib.adapters.ops.alerter import get_recent_alerts
-from lib.adapters.ops.scheduler import get_scheduler_status
+from lib import composition
 from lib.infra.clock import now_dt, now_iso, now_ts, now_utc_dt
 
 
@@ -43,9 +41,7 @@ def _launch_script_timeout(mode: str) -> int:
 
 
 def _running_in_mailbus_container() -> bool:
-    from lib.adapters.plane.platform_runner import running_in_mailbus_docker
-
-    return running_in_mailbus_docker()
+    return composition.running_in_mailbus_docker()
 
 
 def _resolve_launch_script_path() -> str:
@@ -120,7 +116,7 @@ def handle_status(handler):
         "total_messages": total,
         "unread_messages": unread,
         "agent_statuses": agent_statuses,
-        "scheduler": get_scheduler_status(),
+        "scheduler": composition.get_scheduler_status_sys(),
         "round1_gate": json_read(
             os.path.join(handler.data_dir, "iterations", "round-1-gate.json"), {}
         ),
@@ -141,41 +137,34 @@ def _parse_launch_stdout_url(stdout: str) -> str:
 
 def _resolve_agent_browser_url(handler, agent_name: str) -> str:
     """解析 agent 浏览器 URL；Claude 补鉴权注入；实例 host/port 覆盖。"""
-    from lib.adapters.runtime.cred_delivery import apply_instance_endpoint
-
     cfg = handler.agents.get(agent_name, {}) or {}
     atype = cfg.get("type", "")
     if atype == "claude_code":
         url = ""
         try:
-            from lib.adapters.frameworks.claude_browser_launch import resolve_browser_url
-
-            url = resolve_browser_url(agent_name, handler.data_dir)
+            url = composition.resolve_browser_url(agent_name, handler.data_dir)
         except Exception:
             url = ""
         if not url:
             url = _get_launch_url(handler, agent_name)
         else:
-            from lib.adapters.config.browser_auth import build_authed_url, resolve_agent_auth
             from lib.infra.runtime_net import rewrite_browser_host
 
-            url = apply_instance_endpoint(cfg, url)
-            auth = resolve_agent_auth(cfg, agent_name, getattr(handler, "data_dir", "") or "")
-            url = build_authed_url(url, auth)
+            url = composition.apply_instance_endpoint(cfg, url)
+            auth = composition.resolve_agent_auth(cfg, agent_name, getattr(handler, "data_dir", "") or "")
+            url = composition.build_authed_url(url, auth)
             return rewrite_browser_host(url, authed=bool(auth.get("authed")))
-        return apply_instance_endpoint(cfg, url) if url else ""
+        return composition.apply_instance_endpoint(cfg, url) if url else ""
     url = _get_launch_url(handler, agent_name)
-    return apply_instance_endpoint(cfg, url) if url else ""
+    return composition.apply_instance_endpoint(cfg, url) if url else ""
 
 
 
 def _agent_launch_meta(handler, name: str, cfg: dict) -> dict:
-    from lib.adapters.frameworks.desktop_launch import agent_has_desktop
-
     launch = cfg.get("launch") or {}
     atype = cfg.get("type", "?")
     launch_via_api = atype in ("codex", "claude_code") or bool(launch.get("launch_via_api"))
-    has_desktop = agent_has_desktop(cfg, handler.agent_types)
+    has_desktop = composition.agent_has_desktop(cfg, handler.agent_types)
     if atype in ("codex", "claude_code"):
         has_desktop = False
 
@@ -206,14 +195,12 @@ def _agent_launch_meta(handler, name: str, cfg: dict) -> dict:
 
 def handle_agents(handler):
     """GET /api/agents — 获取 agent 列表和配置（含 access/agent.json registry）。"""
-    from lib.adapters.config.agent_registry import get_agent, mailbus_root
-
     agents, _ = _reload_store_config(handler)
-    canonical = str(mailbus_root()).replace("\\", "/")
+    canonical = str(composition.mailbus_root_sys()).replace("\\", "/")
     result = {}
     for name, cfg in agents.items():
         meta = _agent_launch_meta(handler, name, cfg)
-        reg = get_agent(name) or {}
+        reg = composition.get_agent(name) or {}
         entry = {
             "name": cfg.get("name", name),
             "role": cfg.get("role", ""),
@@ -232,12 +219,10 @@ def handle_agents(handler):
 
 def handle_frameworks(handler):
     """GET /api/frameworks — framework discovery 状态（Dashboard 配置中心）。"""
-    from lib.adapters.frameworks.framework_discovery import framework_status, scan_framework_agents
-
     out: dict = {}
-    for fw, st in framework_status().items():
+    for fw, st in composition.framework_status().items():
         entry = dict(st)
-        entry["agents"] = scan_framework_agents(fw)
+        entry["agents"] = composition.scan_framework_agents(fw)
         out[fw] = entry
     handler._send_json({"frameworks": out})
 
@@ -282,23 +267,21 @@ def handle_workload(handler):
 
 def handle_heartbeat(handler):
     """GET /api/heartbeat — 心跳状态"""
-    hb_data = load_heartbeat(handler.data_dir)
+    hb_data = composition.load_heartbeat(handler.data_dir)
     handler._send_json(hb_data if hb_data else {"status": "unknown"})
 
 
 def handle_alerts(handler):
     """GET /api/alerts — 告警信息"""
-    alerts = get_recent_alerts(handler.data_dir, limit=50)
+    alerts = composition.get_recent_alerts(handler.data_dir, limit=50)
     handler._send_json({"alerts": alerts})
 
 
 def handle_config(handler):
     """GET /api/config — 查看总线配置（脱敏）"""
-    from lib.adapters.config.config_admin import _redact_api_token
-
     config_path = f"{handler.data_dir}/config.json"
     config = json_read(config_path, {})
-    safe = _redact_api_token({k: v for k, v in config.items() if k != "token"})
+    safe = composition.redact_api_token({k: v for k, v in config.items() if k != "token"})
     handler._send_json(safe)
 
 
@@ -619,8 +602,6 @@ def handle_stats(handler):
 def handle_search(handler):
     """GET /api/search — 消息 + 目录（外部工具）检索"""
     from urllib.parse import urlparse, parse_qs
-    from lib.adapters.ops.search import search
-    from lib.adapters.ops.catalog_search import search_catalog, search_all, index_catalog
 
     qs = parse_qs(urlparse(handler.path).query)
     query = qs.get("q", qs.get("query", [""]))[0]
@@ -635,11 +616,11 @@ def handle_search(handler):
         limit = 20
 
     if scope in ("all", "catalog"):
-        index_catalog(handler.data_dir, handler.agents)
+        composition.index_catalog(handler.data_dir, handler.agents)
 
     if scope == "all":
         if query:
-            bundle = search_all(handler.data_dir, query_str=query, limit=limit, agents=handler.agents)
+            bundle = composition.search_all(handler.data_dir, query_str=query, limit=limit, agents=handler.agents)
             handler._send_json({
                 "query": query,
                 "scope": "all",
@@ -649,11 +630,11 @@ def handle_search(handler):
                 "results": bundle["messages"],
             })
         else:
-            msgs = search(
+            msgs = composition.search(
                 handler.data_dir, query_str="", from_agent=from_agent,
                 to_agent=to_agent, msg_type=msg_type, status=status, limit=limit,
             )
-            cats = search_catalog(handler.data_dir, query_str="", limit=limit)
+            cats = composition.search_catalog(handler.data_dir, query_str="", limit=limit)
             handler._send_json({
                 "query": query,
                 "scope": "all",
@@ -665,7 +646,7 @@ def handle_search(handler):
         return
 
     if scope == "catalog":
-        results = search_catalog(handler.data_dir, query_str=query, limit=limit)
+        results = composition.search_catalog(handler.data_dir, query_str=query, limit=limit)
         handler._send_json({
             "query": query,
             "scope": "catalog",
@@ -675,7 +656,7 @@ def handle_search(handler):
         })
         return
 
-    results = search(
+    results = composition.search(
         handler.data_dir, query_str=query, from_agent=from_agent,
         to_agent=to_agent, msg_type=msg_type, status=status, limit=limit,
     )
@@ -684,8 +665,7 @@ def handle_search(handler):
 
 def handle_external_tools(handler):
     """GET /api/external-tools — 外部工具注册表与 agent 配对"""
-    from lib.adapters.ops.catalog_search import list_external_tools_summary
-    handler._send_json(list_external_tools_summary(handler.data_dir))
+    handler._send_json(composition.list_external_tools_summary(handler.data_dir))
 
 
 def handle_templates(handler):
@@ -777,13 +757,11 @@ def handle_agent_profile(handler, agent: str):
                 profile["unread"] += 1
 
     # 心跳
-    hb_data = load_heartbeat(handler.data_dir)
+    hb_data = composition.load_heartbeat(handler.data_dir)
     profile["heartbeat"] = (hb_data.get("agents", {}) or {}).get(agent, {}) if hb_data else {}
 
     # 头像：Agent 卡 paths.portrait / avatar_animated → 否则 web/public/avatars 约定
-    from lib.adapters.config.avatar_paths import resolve_avatar_urls
-
-    av = resolve_avatar_urls(agent, cfg)
+    av = composition.resolve_avatar_urls(agent, cfg)
     profile["avatar_url"] = av["avatar_url"]
     profile["avatar_animated"] = av["avatar_animated"]
     profile["portrait_path"] = av.get("portrait_path")
@@ -839,15 +817,13 @@ def _probe_http_url(url: str, timeout: float = 2.0) -> dict:
 
 def handle_ping(handler, agent: str):
     """GET /api/ping/<agent> — 在线状态 + 浏览器/终端访问校验。"""
-    from lib.adapters.ops.heartbeat import is_online
-
     if agent not in handler.agents:
         handler._send_json({"error": "not found", "agent": agent}, 404)
         return
 
     cfg = handler.agents.get(agent) or {}
     meta = _agent_launch_meta(handler, agent, cfg)
-    online = is_online(handler.data_dir, agent)
+    online = composition.is_online(handler.data_dir, agent)
 
     browser = {
         "configured": bool(meta.get("has_browser")),
@@ -904,14 +880,12 @@ def handle_ping(handler, agent: str):
 
 def handle_avatars_manifest(handler):
     """GET /api/avatars/manifest — agent 静态/动态头像门禁状态。"""
-    from lib.adapters.config.avatar_paths import resolve_avatar_urls
-
     cfg = json_read(os.path.join(handler.data_dir, "config.json"), {})
     roster = list((cfg.get("agents") or {}).keys()) or list(handler.agents.keys())
     pairs = []
     for aid in roster:
         ac = (cfg.get("agents") or {}).get(aid) or handler.agents.get(aid) or {}
-        av = resolve_avatar_urls(aid, ac if isinstance(ac, dict) else {})
+        av = composition.resolve_avatar_urls(aid, ac if isinstance(ac, dict) else {})
         pairs.append({
             "id": aid,
             "portrait": bool(av.get("portrait_exists")),
@@ -933,15 +907,13 @@ def handle_avatars_manifest(handler):
 
 def handle_agent_avatar(handler, agent: str, kind: str):
     """GET /api/agent-avatar/<agent>/<portrait|animated> — 按卡片路径供图。"""
-    from lib.adapters.config.avatar_paths import resolve_animated_file, resolve_portrait_file
-
     agents, _ = _reload_store_config(handler)
     cfg = agents.get(agent) or {}
     kind_l = (kind or "portrait").strip().lower()
     path = (
-        resolve_animated_file(agent, cfg)
+        composition.resolve_animated_file(agent, cfg)
         if kind_l in ("animated", "motion", "webp")
-        else resolve_portrait_file(agent, cfg)
+        else composition.resolve_portrait_file(agent, cfg)
     )
     if not path or not os.path.isfile(path):
         handler._send_json({"error": "avatar not found", "agent": agent, "kind": kind_l}, 404)
@@ -1062,18 +1034,14 @@ def handle_agent_recruit(handler):
 
 def _get_gateway_token() -> str:
     """读取 OpenClaw gateway token（委托统一组件，与 Docker entrypoint 保持一致）"""
-    from lib.adapters.config.browser_auth import openclaw_gateway_token
-
-    return openclaw_gateway_token()
+    return composition.openclaw_gateway_token()
 
 
 def _with_gateway_token(url: str, token: str) -> str:
     """把 URL 里的 token 参数统一替换成当前 gateway token（收编自统一组件）。"""
     if not url or not token:
         return url
-    from lib.adapters.config.browser_auth import build_authed_url
-
-    return build_authed_url(url, {"mode": "token", "token": token})
+    return composition.build_authed_url(url, {"mode": "token", "token": token})
 
 
 def _get_launch_url(handler, agent_name: str) -> str:
@@ -1089,13 +1057,10 @@ def _get_launch_url(handler, agent_name: str) -> str:
     browser_cfg.update(launch.get("browser", {}))
     url = browser_cfg.get("url", "")
     if tmpl_name == "openclaw_gateway" or cfg.get("type") == "openclaw":
-        from lib.adapters.frameworks import OpenClawAdapter
-
+        OpenClawAdapter = composition.openclaw_adapter_class()
         port = OpenClawAdapter.resolve_gateway_port(agent_name, browser_cfg)
     else:
-        from lib.adapters.config.launch_ports import resolve_port
-
-        port = resolve_port(agent_name, cfg, browser_cfg)
+        port = composition.resolve_port(agent_name, cfg, browser_cfg)
     if url and port is not None:
         url = url.replace("{port}", str(port))
     elif url and "{port}" in url:
@@ -1104,11 +1069,9 @@ def _get_launch_url(handler, agent_name: str) -> str:
         url = url.replace("{agent}", agent_name)
 
     # 统一鉴权注入 + 白名单门槛（token→?token=、basic→userinfo、session/password 不注入）
-    from lib.adapters.config.browser_auth import build_authed_url, resolve_agent_auth
-
     data_dir = getattr(handler, "data_dir", "") or ""
-    auth = resolve_agent_auth(cfg, agent_name, data_dir)
-    url = build_authed_url(url, auth)
+    auth = composition.resolve_agent_auth(cfg, agent_name, data_dir)
+    url = composition.build_authed_url(url, auth)
     return rewrite_browser_host(url, authed=bool(auth.get("authed")))
 
 
@@ -1173,49 +1136,25 @@ def handle_launch(handler):
     # ── 容器内：Docker 类 agent CLI 直接 docker exec（docker.sock 已挂载，不用走 WSL）──
     if in_container and mode == "cli":
         atype = agents[agent].get("type", "")
-        if atype in ("opencode", "codex", "openclaw", "hermes", "hermes_profile"):
-            from lib.adapters.frameworks.registry import resolve_container, get_adapter
-
-            adapter = get_adapter(atype)
-            container = resolve_container(agents[agent], agent,
+        if composition.supports_interactive_cli(atype):
+            adapter = composition.framework_get_adapter(atype)
+            container = composition.resolve_container(agents[agent], agent,
                                           adapter.container_service if adapter else "") if adapter else ""
             if container:
                 # 构建交互 CLI 命令，入队给 watchdog 在 WSL 弹出终端
                 profile = agents[agent].get("profile", agent)
-                if atype == "hermes_profile":
-                    cmd = f'docker exec -it {container} hermes -p {profile} chat --yolo'
-                elif atype == "hermes":
-                    cmd = f'docker exec -it {container} hermes -p {profile} chat'
-                elif atype == "openclaw":
-                    cmd = f'docker exec -it {container} openclaw tui'
-                elif atype == "codex":
-                    cmd = f'docker exec -it {container} codex'
-                elif atype in ("opencode",):
-                    cmd = f'docker exec -it {container} bash -c "cd /workspace/opencode && opencode"'
-                else:
-                    # opencode / codex: 仅验证容器可达
-                    check = subprocess.run(
-                        ["docker", "exec", container, "echo", "ok"],
-                        capture_output=True, text=True, timeout=10,
-                    )
-                    if check.returncode == 0:
-                        handler._send_json({
-                            "status": "ok",
-                            "agent": agent,
-                            "message": f"Launched {agent} (cli · container ready)",
-                        })
-                        return
-                    err_detail = (check.stderr or check.stdout or f"exit {check.returncode}").strip()
+                try:
+                    cmd = composition.build_interactive_cli_command(atype, container, profile)
+                except ValueError as exc:
                     handler._send_json({
                         "status": "error",
                         "agent": agent,
-                        "error": err_detail,
-                    }, 500)
+                        "error": str(exc),
+                    }, 400)
                     return
 
-                # hermes_profile / hermes / openclaw：入队到 watchdog
-                from lib.adapters.frameworks.claude_launch import enqueue_launch_queue
-                if enqueue_launch_queue(cmd, agent, mode="interactive"):
+                # hermes_profile / hermes / openclaw / codex / opencode：入队到 watchdog
+                if composition.enqueue_launch_queue(cmd, agent, mode="interactive"):
                     handler._send_json({
                         "status": "ok",
                         "agent": agent,
@@ -1233,14 +1172,12 @@ def handle_launch(handler):
     script_path = _resolve_launch_script_path()
 
     if mode == "desktop" and not in_container:
-        from lib.adapters.frameworks.desktop_launch import agent_has_desktop, launch_desktop
-
-        if not agent_has_desktop(agents[agent], handler.agent_types):
+        if not composition.agent_has_desktop(agents[agent], handler.agent_types):
             handler._send_json({"error": f"agent '{agent}' has no desktop launch configured"}, 400)
             return
         if sys.platform == "win32":
             try:
-                info = launch_desktop(agent, handler.data_dir)
+                info = composition.launch_desktop(agent, handler.data_dir)
                 handler._send_json({
                     "status": "ok",
                     "agent": agent,
@@ -1254,10 +1191,8 @@ def handle_launch(handler):
 
     if not in_container and agent_type == "claude_code":
         if mode == "browser":
-            from lib.adapters.frameworks.claude_browser_launch import launch_claude_browser
-
             try:
-                info = launch_claude_browser(agent, handler.data_dir)
+                info = composition.launch_claude_browser(agent, handler.data_dir)
                 handler._send_json({
                     "status": "ok",
                     "agent": agent,
@@ -1270,10 +1205,8 @@ def handle_launch(handler):
                 return
 
         if mode == "cli":
-            from lib.adapters.frameworks.claude_launch import launch_claude_cli
-
             try:
-                info = launch_claude_cli(agent, handler.data_dir)
+                info = composition.launch_claude_cli(agent, handler.data_dir)
                 handler._send_json({
                     "status": "ok",
                     "agent": agent,
@@ -1375,23 +1308,18 @@ def _check_agentmemory():
 
 def handle_clinic_tools(handler):
     """GET /api/clinic/tools — mailbus 诊所工具列表"""
-    from lib.adapters.ops.clinic_tools import list_clinic_tools
-    handler._send_json({"tools": list_clinic_tools()})
+    handler._send_json({"tools": composition.list_clinic_tools()})
 
 
 def handle_clinic_jobs(handler):
     """GET /api/clinic/jobs — 调度任务状态（Dashboard 诊所）。"""
-    from lib.adapters.ops.scheduler import get_scheduler_status
-
-    handler._send_json(get_scheduler_status())
+    handler._send_json(composition.get_scheduler_status_sys())
 
 
 def handle_doctor(handler):
     """GET /api/doctor — 结构化诊断（Dashboard 诊所健康区）。"""
-    from lib.adapters.ops.doctor_checks import run_doctor_checks
-
     try:
-        handler._send_json(run_doctor_checks())
+        handler._send_json(composition.run_doctor_checks())
     except Exception as exc:
         handler._send_json({"ok": False, "error": str(exc)}, 500)
 
@@ -1399,20 +1327,18 @@ def handle_doctor(handler):
 def handle_locale_errors(handler):
     """GET /api/locale/errors — W7e D21 驾驶舱错误码中文目录。"""
     from lib.domain.error_codes import ALL_STABLE_CODES
-    from lib.adapters.locale.errors_zh import locale_catalog, stable_codes_covered
 
-    catalog = locale_catalog()
+    catalog = composition.locale_catalog()
     handler._send_json({
         "ok": True,
         "errors": catalog,
         "stable_codes": list(ALL_STABLE_CODES),
-        "covered": stable_codes_covered(),
+        "covered": composition.stable_codes_covered(),
     })
 
 
 def handle_clinic_run(handler):
     """POST /api/clinic/run — 执行诊所工具"""
-    from lib.adapters.ops.clinic_tools import run_clinic_tool
     body = handler._read_post_body()
     tool_id = (body.get("tool_id") or "").strip()
     if not tool_id:
@@ -1420,7 +1346,7 @@ def handle_clinic_run(handler):
         return
     preset_index = int(body.get("preset_index") or 0)
     params = body.get("params") if isinstance(body.get("params"), dict) else {}
-    result = run_clinic_tool(
+    result = composition.run_clinic_tool(
         tool_id,
         preset_index=preset_index,
         params=params,
@@ -1435,18 +1361,16 @@ def handle_clinic_run(handler):
 
 
 def handle_dev_reload(handler):
-    """POST /api/dev/reload — soft plugin reload + optional module reload."""
+    """POST /api/dev/reload — soft plugin reload + optional module reload。"""
     body = handler._read_post_body() if handler.command == "POST" else {}
     want_modules = bool(body.get("modules")) or os.environ.get("MAILBUS_DEV_MODULE_RELOAD", "0") == "1"
     out: dict = {"status": "ok"}
     try:
-        from lib.adapters.frameworks.entry_point_discovery import reload_framework_plugins
-        from lib.adapters.integrations.entry_point_discovery import reload_integration_plugins
         from lib.infra.utils import json_read
 
         cfg = json_read(os.path.join(handler.data_dir, "config.json"), {})
-        out["frameworks"] = reload_framework_plugins(data_dir=handler.data_dir, config=cfg)
-        out["integrations"] = reload_integration_plugins(data_dir=handler.data_dir, config=cfg)
+        out["frameworks"] = composition.reload_framework_plugins(data_dir=handler.data_dir, config=cfg)
+        out["integrations"] = composition.reload_integration_plugins(data_dir=handler.data_dir, config=cfg)
     except Exception as exc:
         out["plugins_error"] = str(exc)
     if want_modules:

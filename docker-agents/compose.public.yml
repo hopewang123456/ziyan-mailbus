@@ -111,7 +111,7 @@ services:
       - ../lib:/mailbus/lib:ro
     environment:
       - TZ=UTC
-      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-change-me}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
     depends_on:
       - mailbus
       - iii-engine

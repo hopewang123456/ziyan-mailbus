@@ -5,6 +5,7 @@ mailbus pusher
 """
 
 import os
+import re
 import subprocess
 import sys
 import time
@@ -136,6 +137,24 @@ def _truncate_cli_text(text: str, max_chars: int = DEFAULT_CLI_MSG_MAX_CHARS) ->
     if not text or len(text) <= max_chars:
         return text or ""
     return text[:max_chars] + "\n...(内容已截断，完整见 inbox / msg-files)"
+
+
+# openclaw CLI 会把日志噪音（tool-policy / run ended）写进 stdout/stderr，
+# 混入正文回复。按行过滤已知噪音前缀，只保留真实回复文本。
+_OPENCLAW_NOISE_RES = (
+    re.compile(r"^\[agents/tool-policy\]"),
+    re.compile(r"^\[agent\] run .* ended with stopReason="),
+)
+
+
+def _clean_openclaw_reply(text: str) -> str:
+    if not text:
+        return text
+    kept = [
+        ln for ln in text.splitlines()
+        if not any(r.match(ln.strip()) for r in _OPENCLAW_NOISE_RES)
+    ]
+    return "\n".join(kept).strip()
 
 
 def _wrap_docker_cmd(cmd: str) -> str:
@@ -665,6 +684,13 @@ def _invoke_cli(
                         reply_text = stdout.decode("utf-8", errors="replace").strip()
                     else:
                         reply_text = (stdout or "").strip()
+                    # openclaw 输出混有日志噪音，过滤只留正文
+                    try:
+                        _agents0 = json_read(os.path.join(dd, "config.json"), {}).get("agents", {})
+                        if (_agents0.get(a_name) or {}).get("type") == "openclaw":
+                            reply_text = _clean_openclaw_reply(reply_text)
+                    except Exception:
+                        pass
                     if reply_text and len(reply_text) > 5:
                         from datetime import datetime, timezone, timedelta
                         ts = now_dt().strftime("%Y-%m-%dT%H:%M:%S+0800")

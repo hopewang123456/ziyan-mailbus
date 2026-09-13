@@ -9,8 +9,6 @@ from typing import Any, Iterator
 from lib.infra.constants import (
     AGENT_VAULT_ROOT,
     MAILBUS_ROOT,
-    MAILBUS_SKILLS_ROOT,
-    TEAM_PACK_SKILLS_ROOT,
 )
 from . import profile_registry as profiles
 
@@ -151,7 +149,11 @@ def _skill_id_from_rel(rel: str) -> str:
         return f"role-overlay-{Path(rel).name.replace('overlay-', '')}"
     if "0121-common/" in rel or "mailbus-file-protocol" in rel:
         return "mailbus-file-protocol"
-    if "0211-rules/agent-universal" in rel or rel.endswith("agent-universal"):
+    if (
+        "0111-common/agent-universal" in rel
+        or "0211-rules/agent-universal" in rel
+        or rel.rstrip("/").endswith("agent-universal")
+    ):
         return "agent-universal"
     name = Path(rel).name
     if name == "SKILL.md":
@@ -161,7 +163,11 @@ def _skill_id_from_rel(rel: str) -> str:
 
 def _skill_layer(rel: str) -> str:
     rel = rel.replace("\\", "/")
-    if "0211-rules/agent-universal" in rel or rel.endswith("agent-universal"):
+    if (
+        "0111-common/agent-universal" in rel
+        or "0211-rules/agent-universal" in rel
+        or rel.rstrip("/").endswith("agent-universal")
+    ):
         return "L0"
     if "0121-common/" in rel:
         return "L0"
@@ -182,6 +188,8 @@ def _skill_type(rel: str) -> str:
         return "framework_skill"
     if "0121-common/" in rel:
         return "shared_skill"
+    if "0111-common/agent-universal" in rel or "0211-rules/agent-universal" in rel:
+        return "shared_rule"
     return "skill"
 
 
@@ -261,29 +269,25 @@ def layer_skills_for_agent(agent_id: str, framework: str | None = None, *, mail_
 
 
 def resolve_skill_src(rel: str, *, mail_root: Path | str | None = None) -> Path:
-    """Resolve mail/skills/, team-pack/skills/, or Obsidian Vault relative paths.
+    """Resolve mail/skills/ or Obsidian Vault relative paths.
 
-    物理根由 MAILBUS_SKILLS_ROOT / TEAM_PACK_SKILLS_ROOT / AGENT_VAULT_ROOT 决定。
+    物理根由 MAILBUS_SKILLS_ROOT / AGENT_VAULT_ROOT 决定。
     新 frontmatter path（如 `01-mailbus/012-skills/...`、`02-members/...`、`03-shared/...`）
     为相对 Vault Agent 根的路径，直接拼 AGENT_VAULT_ROOT。
     """
     root = mailbus_root(mail_root)
-    skills = MAILBUS_SKILLS_ROOT
-    pack_skills = TEAM_PACK_SKILLS_ROOT
     vault = AGENT_VAULT_ROOT
-    ai_tools = root.parent
     rel = (rel or "").replace("\\", "/").rstrip("/")
-    if rel.startswith("mailbus-core/skills/") or rel.startswith("mail/skills/"):
-        prefix = "mailbus-core/skills/" if rel.startswith("mailbus-core/skills/") else "mail/skills/"
-        tail = rel[len(prefix):]
-        if tail.startswith("common/agent-universal") or tail.startswith("roles/"):
-            p = pack_skills / tail
+    if rel.startswith("mailbus-core/skills/") or rel.startswith("mailbus/skills/") or rel.startswith("mail/skills/"):
+        if rel.startswith("mailbus-core/skills/"):
+            prefix = "mailbus-core/skills/"
+        elif rel.startswith("mailbus/skills/"):
+            prefix = "mailbus/skills/"
         else:
-            p = skills / tail
-        return (p / "SKILL.md") if p.is_dir() else p
-    if rel.startswith("team-pack/skills/"):
-        tail = rel[len("team-pack/skills/"):]
-        p = pack_skills / tail
+            prefix = "mail/skills/"
+        tail = rel[len(prefix):]
+        # mailbus/ / mailbus-core/ / 旧名 mail/ 均指仓库内 skills（repo fallback），非知识库根。
+        p = (root / "skills") / tail
         return (p / "SKILL.md") if p.is_dir() else p
     if rel.startswith("01-mailbus/") or rel.startswith("02-members/") or rel.startswith("03-shared/"):
         base = rel[: -len("/SKILL.md")] if rel.endswith("/SKILL.md") else rel
@@ -305,7 +309,7 @@ def resolve_skill_src(rel: str, *, mail_root: Path | str | None = None) -> Path:
         return p
     if rel.endswith("/SKILL.md"):
         return resolve_skill_src(rel[: -len("/SKILL.md")], mail_root=root)
-    return ai_tools / rel
+    return root / rel
 
 
 def agent_config_type(agent_id: str, *, mail_root: Path | str | None = None) -> str:

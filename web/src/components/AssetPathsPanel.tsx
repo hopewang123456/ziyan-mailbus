@@ -83,7 +83,7 @@ export function AssetPathsPanel() {
         </button>
       </div>
       <p className="mt-3 text-[13px] leading-relaxed text-mute">
-        默认 = 仓库内 junction；自定义 = Obsidian Vault 目录，写入 .env。
+        默认 = 仓库内 `skills/` `rules/` `identities/`；自定义 = 本机绝对路径，写入配置（及可选 `.env`）。
         <span className="text-amber-signal"> 需重启 mailbus 生效。</span>
       </p>
       {err && <ErrorAlert message={err} />}

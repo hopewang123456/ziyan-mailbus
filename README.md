@@ -84,13 +84,16 @@ mailbus search --data-dir ./store --query order-intake
 
 自动业务中转（工作流未指定下一棒时，由 Planner 选下一个 agent）需要**至少一家可用 LLM**：
 
-| 选项 | 配置方式 | 说明 |
-|------|----------|------|
-| 本地 Ollama | 默认 `http://127.0.0.1:11434`，模型 `qwen2.5:3b-instruct-q4_K_M` | `providers.local` |
-| 远程 OpenAI-compatible | 设 `MAILBUS_INTERNAL_LLM_API_KEY`（或改 `providers.remote.api_key_env`） | `providers.remote`（默认 DeepSeek 兼容端点） |
-| 测试 stub | 无需配置 | 无网络 CI 用，返回确定性计划 |
+| 选项 | 协议 | 配置方式 | 说明 |
+|------|------|----------|------|
+| 本地 Ollama | `ollama` | 默认 `http://127.0.0.1:11434`，模型 `qwen2.5:3b-instruct-q4_K_M` | `providers.local` |
+| 远程 OpenAI 兼容 | `openai` | 设 `DEEPSEEK_API_KEY`（或改 `providers.remote.api_key_env`） | `providers.remote`（默认 DeepSeek 兼容端点） |
+| Anthropic 原生 | `anthropic` | 设 `ANTHROPIC_API_KEY`，`base_url` 留空=默认端点 | `providers.claude`（`/v1/messages` + `x-api-key`） |
+| 测试 stub | `stub` | 无需配置 | 无网络 CI 用，返回确定性计划 |
 
 - 配置集中在 `store/config.json` 的 `mailbus_internal_llm` 段：`enabled` / `providers` / `provider_priority`（默认 `["local", "remote"]`，本地优先）。Dashboard「模型配置」页可编辑；seed 见 [`config/llm/internal-llm.json`](config/llm/internal-llm.json)。
+- **Provider 字段（对齐 Cursor 配置第三方模型的范式）**：每个 provider 需 `protocol`（`openai` / `anthropic` / `ollama`）、`base_url`、`model`、`api_key_env`，可选 `api_key`、`context_window`、`supports_function_calling`、`supports_vision`、`temperature`、`max_tokens`、`timeout_seconds`。`api_key` 保存后掩码为 `***`、留空表示不更新；`api_key_configured` 为只读派生状态（由 env 或已持有 key 决定）。
+- **Anthropic 与 OpenAI 是两套协议**：`openai` 走 `/chat/completions` + `Authorization: Bearer`（同 Cursor 的 Override OpenAI Base URL）；`anthropic` 走 `/v1/messages` + `x-api-key`，`base_url` 留空即默认 `https://api.anthropic.com`（同 Cursor 的 Anthropic 原生模板）。
 - **Ollama 是可选**：无 Ollama 时用远程 LLM 做路由建议中转。
 - **只做人工指定下一棒或写死工作流时可不配 LLM**：把 `mailbus_internal_llm.enabled` 置 `false` 即可，此时自动中转不可用。
 - 诊所会探测 provider 链是否至少一家可达（`/api/llm/probe`），不可达标黄不标红。
@@ -355,21 +358,21 @@ mailbus 无论跑在 **Windows / WSL / Linux native / Docker**，都能统一探
 
 | 代号 | 名称 | 框架 | 浏览器端口 | 认证 |
 |------|------|------|-----------|------|
-| `agent-a` | Agent A | Hermes | `:9120` | admin / change-me |
-| `agent-c` | Agent C | Hermes | `:9121` | admin / change-me |
-| `agent-d` | Agent D | Hermes | `:9122` | admin / change-me |
-| `agent-l` | Agent L | Hermes | `:9125` | admin / change-me |
-| `agent-j` | Agent J | Hermes | `:9126` | admin / change-me |
-| `agent-k` | Agent K | Hermes | `:9127` | admin / change-me |
+| `agent-a` | Agent A | Hermes | `:9120` | Basic Auth → `secrets` / 设置页 |
+| `agent-c` | Agent C | Hermes | `:9121` | Basic Auth → `secrets` / 设置页 |
+| `agent-d` | Agent D | Hermes | `:9122` | Basic Auth → `secrets` / 设置页 |
+| `agent-l` | Agent L | Hermes | `:9125` | Basic Auth → `secrets` / 设置页 |
+| `agent-j` | Agent J | Hermes | `:9126` | Basic Auth → `secrets` / 设置页 |
+| `agent-k` | Agent K | Hermes | `:9127` | Basic Auth → `secrets` / 设置页 |
 | `agent-g` | Agent G | Codex | `:9240` | Web UI |
 | `agent-e` | Agent E | Codex | `:9241` | Web UI |
 | `agent-h` | Agent H | Claude Code | — | 终端 (WSL) |
 | `agent-f` | Agent F | Claude Code | — | 终端 (WSL) |
 | `agent-i` | Agent I | OpenCode | — | 终端 |
-| `agent-m` | Agent M | OpenClaw | `:18789` | token=change-me |
-| `agent-n` | Agent N | OpenClaw | `:18790` | token=change-me |
+| `agent-m` | Agent M | OpenClaw | `:18789` | `OPENCLAW_GATEWAY_TOKEN`（勿用伪默认） |
+| `agent-n` | Agent N | OpenClaw | `:18790` | `OPENCLAW_GATEWAY_TOKEN`（勿用伪默认） |
 
-> 上表为**示例名册**（demo ids）。实际名册以 `store/config.json` 的 `agents` 段为准；凭据通过 `.env` / `store/secrets.json` 配置，**不要提交真实凭据**。
+> 上表为**示例名册**（demo ids）。实际名册以 `store/config.json` 的 `agents` 段为准；凭据通过 `.env` / `store/secrets.json` 配置，**不要提交真实凭据**；`change-me` 会被 doctor 判红。
 
 ### 集成（可发现 · 可探针 · 可跳过）
 
@@ -417,7 +420,7 @@ Section 名 `mailbus_device_bridge`，种子 [`config/edge/device-bridge.json`](
 ```json
 {
   "enabled": true,
-  "default_wait_ms": 45000,
+  "default_wait_ms": 8000,
   "write_memory": true,
   "devices": [
     {
@@ -452,6 +455,7 @@ python tools/device_bridge_mock_agent.py --data-dir ./store
 | 方法 | 路径 | 作用 |
 |------|------|------|
 | POST | `/api/device/chat` | 发一轮会话，尽量同步返回 `reply` |
+| POST | `/api/device/chat` + `stream=true` 或 `Accept: text/event-stream` | SSE：`accepted` → `waiting`* → `ok` / `pending` |
 | GET | `/api/device/chat/{ticket_id}` | 超时后轮询取结果 |
 
 请求体（`session_id` 可省略，服务端每请求 new UUID；`source.upstream` 标记来源）：
@@ -460,6 +464,7 @@ python tools/device_bridge_mock_agent.py --data-dir ./store
 {
   "text": "用户或眼镜提取后的文本",
   "session_id": "可选",
+  "stream": false,
   "source": { "channel": "shortcuts", "device": "phone", "upstream": "manual" },
   "action": "chat"
 }
@@ -467,7 +472,18 @@ python tools/device_bridge_mock_agent.py --data-dir ./store
 
 鉴权：`Authorization: Bearer <设备 token>`（或 `X-Mailbus-Device-Token`）。
 
-响应：完成 `{ "status": "ok", "reply": "...", "msg_id": "...", "agent_id": "..." }`；未完成 `{ "status": "pending", "ticket_id": "...", "poll_after_ms": 2000 }`。
+响应：完成 `{ "status": "ok", "reply": "...", "msg_id": "...", "agent_id": "..." }`；未完成 `{ "status": "pending", "ticket_id": "...", "poll_after_ms": 2000, "hint": "...", "inbox_status": "failed|…" }`。
+
+SSE 示例（电脑）：
+
+```bash
+curl.exe -N -X POST http://127.0.0.1:9814/api/device/chat ^
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" ^
+  -H "Accept: text/event-stream" ^
+  --data-binary "{\"text\":\"ping\",\"stream\":true}"
+```
+
+默认同步等待 `default_wait_ms=8000`（种子可改）。若绑 Hermes 角色但本机 Docker/`hermes` 容器不可用，inbox 会 `failed`，`pending.hint` 会提示；验通请绑 `test` + mock。
 
 ### 手机怎么测（仅 Tailscale + 快捷指令，不装自定义 App）
 
@@ -481,7 +497,7 @@ python tools/device_bridge_mock_agent.py --data-dir ./store
 
 **建议用例**：T1 探活 → T2 错 token 401 → T3 正常一轮（说「回我：pong」）→ T4 绑定生效（只进绑定 Agent inbox）→ T5 换绑 → T6 配错 `tailscale_ips` 被拒 → T7 多设备互不串话 → T8 慢回复走 pending→poll → T9 不建工单 → T10 蜂窝网 + Tailscale 仍通。
 
-**排障**：401 查 token/Header；200 无 reply 查目标 Agent 是否在线、日志、`default_wait_ms` 是否过短；进错 Agent 查绑定是否保存；快捷指令超时走 ticket 轮询。
+**排障**：401 查 token/Header；`pending`+`inbox_status=failed` 查绑定 Agent 的 CLI/Docker（灵昭 Hermes 需容器在线）；200 无 reply 查日志与 `default_wait_ms`；进错 Agent 查绑定；快捷指令超时走 ticket 或 SSE。
 
 ## 本版不做（防预期膨胀）
 

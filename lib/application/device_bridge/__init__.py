@@ -16,11 +16,12 @@ import uuid
 from typing import Optional
 
 from lib.domain.models import Inbox, MsgType, Priority
+from lib.infra.clock import now_ts
 from lib.infra.utils import _now_iso, build_message, json_read, json_write, resolve_paths
 
 _DEFAULTS = {
     "enabled": True,
-    "default_wait_ms": 45000,
+    "default_wait_ms": 8000,
     "write_memory": True,
     "devices": [],
 }
@@ -188,6 +189,81 @@ def _load_ticket(ticket_id: str) -> Optional[dict]:
         return _TICKETS.get(ticket_id)
 
 
+def _inbox_msg_meta(data_dir: str, agent_id: str, msg_id: str) -> dict:
+    """读取 inbox 中该 msg 的 status / pushed 信息，供 pending 诊断。"""
+    paths = resolve_paths(data_dir)
+    inbox_file = f"{paths['inbox']}/{agent_id}/inbox.json"
+    data = json_read(inbox_file, {})
+    msgs = data.get("messages") if isinstance(data, dict) else data
+    if not isinstance(msgs, list):
+        return {}
+    for m in msgs:
+        if isinstance(m, dict) and m.get("id") == msg_id:
+            return {
+                "inbox_status": m.get("status") or m.get("state") or "",
+                "pushed_count": m.get("pushed_count") or 0,
+                "api_stall_reason": m.get("api_stall_reason") or "",
+            }
+    return {}
+
+
+def _pending_payload(
+    data_dir: str,
+    *,
+    ticket_id: str,
+    msg_id: str,
+    agent_id: str,
+    session_id: str,
+) -> dict:
+    meta = _inbox_msg_meta(data_dir, agent_id, msg_id)
+    out = {
+        "status": "pending",
+        "ticket_id": ticket_id,
+        "poll_after_ms": 2000,
+        "msg_id": msg_id,
+        "agent_id": agent_id,
+        "session_id": session_id,
+        **meta,
+    }
+    st = str(meta.get("inbox_status") or "").lower()
+    if st == "failed":
+        out["hint"] = (
+            f"绑定 Agent「{agent_id}」CLI 推送失败（常见：Docker/Hermes 未就绪）。"
+            "可改绑公开测试角色 test，并运行 tools/device_bridge_mock_agent.py；"
+            "或修好 Agent 运行时后用 ticket 轮询 / SSE 等待。"
+        )
+    elif st in ("pending", "") and int(meta.get("pushed_count") or 0) == 0:
+        out["hint"] = f"消息已入队，等待 Agent「{agent_id}」消费；也可用 GET /api/device/chat/{{ticket_id}} 轮询。"
+    else:
+        out["hint"] = f"等待 Agent「{agent_id}」回复超时；可用 ticket 继续轮询，或改用 stream=true SSE。"
+    return out
+
+
+def _emit_streaming_reply(on_event, reply: str, result: dict, *, step: int = 2, delay: float = 0.025) -> None:
+    """SSE 流式：把完整回复按字符分片推 delta（打字机效果），最后推 ok。
+
+    agent runtime（hermes/openclaw）CLI 是「跑完才吐完整回复」，本身非流式；
+    这里在拿到全文后分片推送，给手机端逐字出现的体验，无需改 agent 侧。
+    客户端断开时（on_event 抛 BrokenPipeError）直接终止分片。
+    """
+    try:
+        on_event("reply_start", {
+            "msg_id": result.get("msg_id"),
+            "agent_id": result.get("agent_id"),
+            "session_id": result.get("session_id"),
+        })
+        i = 0
+        n = len(reply)
+        while i < n:
+            on_event("delta", {"delta": reply[i:i + step]})
+            i += step
+            if delay > 0 and i < n:
+                time.sleep(delay)
+        on_event("ok", result)
+    except Exception:
+        pass  # 客户端断开 / 写失败：终止流式
+
+
 def deliver_and_wait(
     data_dir: str,
     agents: dict,
@@ -197,8 +273,12 @@ def deliver_and_wait(
     session_id: str,
     wait_ms: int,
     source: Optional[dict],
+    on_event=None,
 ) -> dict:
-    """通讯式一轮：投递 → push → 等回复。同步拿到则 ok，超时转 pending ticket。"""
+    """通讯式一轮：投递 → push → 等回复。同步拿到则 ok，超时转 pending ticket。
+
+    on_event: 可选回调 fn(event: str, data: dict)，供 SSE 推送（accepted / waiting / ok / pending）。
+    """
     agent_id = str(device.get("agent_id") or "").strip()
     device_id = str(device.get("id") or "").strip()
     if agent_id not in agents:
@@ -208,20 +288,47 @@ def deliver_and_wait(
 
     msg_id = _deliver_message(data_dir, agents, agent_types, device_id, agent_id, text, session_id, source)
     record_device_memory(data_dir, agent_id, device_id, text, msg_id, "user")
+    if on_event:
+        try:
+            on_event("accepted", {
+                "msg_id": msg_id,
+                "agent_id": agent_id,
+                "session_id": session_id,
+                **_inbox_msg_meta(data_dir, agent_id, msg_id),
+            })
+        except Exception:
+            pass
 
-    deadline = time.time() + max(0, int(wait_ms)) / 1000.0
-    while time.time() < deadline:
+    deadline = now_ts() + max(0, int(wait_ms)) / 1000.0
+    last_beat = 0.0
+    while now_ts() < deadline:
         reply = _read_reply(data_dir, agent_id, msg_id)
         if reply:
             record_device_memory(data_dir, agent_id, device_id, reply, msg_id, "assistant")
-            return {
+            result = {
                 "status": "ok",
                 "reply": reply,
                 "msg_id": msg_id,
                 "agent_id": agent_id,
                 "session_id": session_id,
             }
-        time.sleep(0.5)
+            if on_event:
+                _emit_streaming_reply(on_event, reply, result)
+            return result
+        now = now_ts()
+        if on_event and (now - last_beat) >= 1.5:
+            last_beat = now
+            try:
+                on_event("waiting", {
+                    "msg_id": msg_id,
+                    "agent_id": agent_id,
+                    "elapsed_ms": int((now - (deadline - max(0, int(wait_ms)) / 1000.0)) * 1000),
+                    "remain_ms": max(0, int((deadline - now) * 1000)),
+                    **_inbox_msg_meta(data_dir, agent_id, msg_id),
+                })
+            except Exception:
+                pass
+        time.sleep(0.4)
 
     ticket_id = uuid.uuid4().hex
     _store_ticket(data_dir, ticket_id, {
@@ -232,14 +339,19 @@ def deliver_and_wait(
         "text": text,
         "source": source or {},
     })
-    return {
-        "status": "pending",
-        "ticket_id": ticket_id,
-        "poll_after_ms": 2000,
-        "msg_id": msg_id,
-        "agent_id": agent_id,
-        "session_id": session_id,
-    }
+    result = _pending_payload(
+        data_dir,
+        ticket_id=ticket_id,
+        msg_id=msg_id,
+        agent_id=agent_id,
+        session_id=session_id,
+    )
+    if on_event:
+        try:
+            on_event("pending", result)
+        except Exception:
+            pass
+    return result
 
 
 def resolve_ticket(data_dir: str, ticket_id: str) -> dict:
@@ -257,10 +369,10 @@ def resolve_ticket(data_dir: str, ticket_id: str) -> dict:
             "agent_id": rec["agent_id"],
             "session_id": rec["session_id"],
         }
-    return {
-        "status": "pending",
-        "ticket_id": ticket_id,
-        "poll_after_ms": 2000,
-        "msg_id": rec["msg_id"],
-        "agent_id": rec["agent_id"],
-    }
+    return _pending_payload(
+        data_dir,
+        ticket_id=ticket_id,
+        msg_id=rec["msg_id"],
+        agent_id=rec["agent_id"],
+        session_id=rec["session_id"],
+    )

@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from typing import Any, Optional
 
-from lib.application.orchestration.pipeline.results import step_result_path
+from lib.infra.pipeline_results import step_result_path  # 2026-09 治理下沉
 from lib.infra.utils import _now_iso, json_read, json_write
 
 

@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { HudCardGrid } from "./HudCardGrid";
 import { HudL3Modal } from "./HudL3Modal";
 import { AgentOrbitPanel } from "./AgentOrbitPanel";
 import { TasksPage } from "../pages/TasksPage";
 import { AuditPage } from "../pages/AuditPage";
 import { HumanGatePage } from "../pages/HumanGatePage";
+import { ManagerDeskPage } from "../pages/ManagerDeskPage";
 import { ConfigPage } from "../pages/ConfigPage";
 import { IntegrationsPage } from "../pages/IntegrationsPage";
 import { ClinicPage } from "../pages/ClinicPage";
@@ -12,6 +13,7 @@ import { InboxPage } from "../pages/InboxPage";
 import { CommandBriefPage } from "../pages/CommandBriefPage";
 import { ApiListPage } from "../pages/thin/ApiListPage";
 import { WorkflowBoardPage } from "../pages/thin/WorkflowBoardPage";
+import { getManagerPending } from "../lib/api";
 import { t, type I18nKey } from "../lib/i18n";
 
 export type HudPanelId =
@@ -29,10 +31,12 @@ function CardLauncher({
   cards,
   render,
   surface = "form",
+  badges,
 }: {
   cards: { id: string; titleKey: I18nKey; blurb?: string }[];
   render: (id: string) => ReactNode;
   surface?: "fleet" | "form";
+  badges?: Record<string, number>;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const title = cards.find((c) => c.id === openId)?.titleKey;
@@ -42,6 +46,7 @@ function CardLauncher({
         surface={surface}
         cards={cards.map((c) => ({ id: c.id, title: t(c.titleKey), blurb: c.blurb }))}
         onOpen={setOpenId}
+        badges={badges}
       />
       <HudL3Modal title={title ? t(title) : ""} open={!!openId} onClose={() => setOpenId(null)}>
         {openId ? render(openId) : null}
@@ -50,18 +55,50 @@ function CardLauncher({
   );
 }
 
+/** 「待我处理」：总数 + 并行汇合待审数；失败静默降级为 0 */
+function useManagerPendingMeta(): { total: number; joinReview: number } {
+  const [meta, setMeta] = useState({ total: 0, joinReview: 0 });
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      const r = await getManagerPending();
+      if (!alive || !r.ok || !r.data) return;
+      const items = Array.isArray(r.data.items) ? r.data.items : [];
+      const joinReview = items.filter(
+        (it) => it.fsm_substate === "await_join_review" || it.fsm_reason === "join_gate_review",
+      ).length;
+      setMeta({ total: r.data.total ?? items.length, joinReview });
+    };
+    void tick();
+    const timer = window.setInterval(tick, 30000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+  return meta;
+}
+
 function WorkCards() {
+  const { total: managerTotal, joinReview } = useManagerPendingMeta();
+  const managerBlurb =
+    joinReview > 0
+      ? `${t("managerBlurb")} · ${joinReview} 汇合待审`
+      : t("managerBlurb");
   return (
     <CardLauncher
       surface="form"
+      badges={{ manager: managerTotal }}
       cards={[
         { id: "tasks", titleKey: "tasks", blurb: "FSM / 工单" },
         { id: "audit", titleKey: "audit", blurb: "统计与异常" },
         { id: "human", titleKey: "human", blurb: "队列 + Reviews" },
+        { id: "manager", titleKey: "manager", blurb: managerBlurb },
       ]}
       render={(id) => {
         if (id === "tasks") return <TasksPage />;
         if (id === "audit") return <AuditPage />;
+        if (id === "manager") return <ManagerDeskPage />;
         return <HumanGatePage />;
       }}
     />

@@ -37,11 +37,15 @@ def check_phantom_completion(
     reply_text: str = "",
     agent_type: str = "",
 ) -> Tuple[bool, str]:
-    """返回 (is_phantom, reason)。pipeline / 文件任务无 msg-results 或空回执视为 phantom。"""
-    from lib.application.orchestration.task_completion import is_task_complete
+    """返回 (is_phantom, reason)。pipeline / 文件任务无 msg-results 或空回执视为 phantom。
 
+    通过 composition.is_task_complete 拿到 application 服务 — adapter→application
+    跨层违规修复（composition 是 Composition Root，允许 import application）。
+    """
     if not isinstance(msg_entry, dict):
         return False, ""
+
+    from lib.composition import is_task_complete
 
     complete, reason = is_task_complete(
         data_dir, agent_name, msg_entry, agent_type=agent_type, reply_text=reply_text,

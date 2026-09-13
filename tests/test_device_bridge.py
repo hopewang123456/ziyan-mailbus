@@ -159,6 +159,7 @@ class TestDeliverAndWait(unittest.TestCase):
             )
         self.assertEqual(result["status"], "pending")
         self.assertIn("ticket_id", result)
+        self.assertIn("hint", result)
 
         # 第二段：回复到达 → 轮询 ok
         with mock.patch(
@@ -167,6 +168,23 @@ class TestDeliverAndWait(unittest.TestCase):
             resolved = resolve_ticket(self.tmp, result["ticket_id"])
         self.assertEqual(resolved["status"], "ok")
         self.assertEqual(resolved["reply"], "late-pong")
+
+    def test_stream_events_callback(self):
+        events = []
+
+        def on_event(name, data):
+            events.append(name)
+
+        with mock.patch(
+            "lib.application.device_bridge._read_reply", return_value="pong",
+        ), mock.patch("lib.application.device_bridge.record_device_memory"):
+            result = deliver_and_wait(
+                self.tmp, self.agents, self.agent_types, self.device, "ping", "s1", 1000, {},
+                on_event=on_event,
+            )
+        self.assertEqual(result["status"], "ok")
+        self.assertIn("accepted", events)
+        self.assertIn("ok", events)
 
     def test_resolve_unknown_ticket(self):
         with self.assertRaises(DeviceBridgeError):

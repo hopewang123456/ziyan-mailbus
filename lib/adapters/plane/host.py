@@ -7,7 +7,7 @@ import subprocess
 import time
 from typing import Any
 
-from lib.adapters.frameworks.support import assert_spawn_argv_allowed
+from lib.domain.spawn_guard import assert_spawn_argv_allowed
 from lib.domain.types import PlaneActionResult, ProbeResult
 from lib.infra.utils import json_read
 

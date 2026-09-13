@@ -103,13 +103,13 @@ class TestSyncLayers(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             skills_root = Path(tmp) / "skills"
-            src_skill = Path(__file__).resolve().parents[2] / "team-pack" / "skills" / "common" / "agent-universal" / "SKILL.md"
-            if not src_skill.is_file():
-                self.skipTest("agent-universal SKILL.md missing")
+            src_dir = Path(tmp) / "agent-universal"
+            src_dir.mkdir()
+            (src_dir / "SKILL.md").write_text("# agent-universal\n", encoding="utf-8")
             spec = {
                 "id": "agent-universal",
                 "type": "shared_skill",
-                "path": "team-pack/skills/common/agent-universal/SKILL.md",
+                "path": str(src_dir / "SKILL.md"),
             }
             ok = install_skill_spec(spec, skills_root, mail_root=MAILBUS_ROOT, use_symlink=False)
             self.assertTrue(ok)

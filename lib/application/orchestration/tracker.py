@@ -9,7 +9,7 @@ from typing import Optional
 from pathlib import Path
 
 from lib.domain.models import MsgStatus, _now_iso
-from lib.infra.utils import json_read, json_write, jsonl_append, resolve_paths, log_error
+from lib.infra.utils import json_read, json_write, jsonl_append, resolve_paths, log_error, parse_iso_dt
 from lib.infra.clock import now_dt
 from lib.application.orchestration.pipeline.chain import (
     init_pipeline_chain,
@@ -57,32 +57,44 @@ class ChainStatus:
 
 
 def _parse_iso_dt(s: str) -> datetime:
-    """安全解析 ISO 时间字符串（带或不带时区），返回 timezone-aware datetime。
+    """兼容 shim：实际实现已下沉到 lib.infra.utils.parse_iso_dt。
+    保留旧导入路径 `from lib.application.orchestration.tracker import _parse_iso_dt`
+    不破坏，下一次重构可一并清理。"""
+    return parse_iso_dt(s)
 
-    支持格式：
-      - 2026-06-03T15:12:58+0800
-      - 2026-06-03T15:12:58
-    解析失败时返回 epoch (UTC) 作为 fallback，确保排序不崩溃。
+
+# ── 工单事件时间线（全程有底）───────────────────────────────────────────
+
+MAX_TASK_EVENTS = 800
+
+
+def append_task_event(
+    task: dict,
+    action: str,
+    *,
+    actor: str = "system",
+    note: str = "",
+    data: Optional[dict] = None,
+) -> None:
+    """向任务追加一条 append-only 事件（task['events']）。
+
+    - 就地修改 task dict，由调用方负责落盘（与既有 mutation 写路径一致）；
+    - events 只增不删、保留顺序，超 MAX_TASK_EVENTS 时截断最旧记录；
+    - actor 约定：human/manager 来自 API 侧，system 为自动流转，agent 为员工回执。
     """
-    if not s:
-        return datetime(1970, 1, 1, tzinfo=timezone.utc)
-    try:
-        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt
-    except ValueError:
-        pass
-    try:
-        return datetime.strptime(s, "%Y-%m-%dT%H:%M:%S%z")
-    except ValueError:
-        pass
-    try:
-        # 无时区 → 视为 UTC
-        dt = datetime.strptime(s, "%Y-%m-%dT%H:%M:%S")
-        return dt.replace(tzinfo=timezone.utc)
-    except ValueError:
-        return datetime(1970, 1, 1, tzinfo=timezone.utc)
+    events = task.setdefault("events", [])
+    if not isinstance(events, list):
+        events = []
+        task["events"] = events
+    events.append({
+        "ts": _now_iso(),
+        "action": action,
+        "actor": actor or "system",
+        "note": note or "",
+        "data": data or {},
+    })
+    if len(events) > MAX_TASK_EVENTS:
+        del events[: len(events) - MAX_TASK_EVENTS]
 
 
 class TaskTracker:
@@ -200,6 +212,20 @@ class TaskTracker:
             task["status"] = "running"
         elif fsm.get("state") == TaskFsmState.CREATED.value:
             task["status"] = "pending"
+
+        append_task_event(
+            task,
+            "task_created",
+            actor=task.get("initiator") or "human",
+            note=(task.get("summary") or "")[:120],
+            data={
+                "mode": task.get("mode"),
+                "task_type": task.get("task_type"),
+                "method": (plan_meta or {}).get("method"),
+                "role_types": [s.get("role_type") for s in pipeline_chain],
+                "first_agent": first_agent,
+            },
+        )
 
         json_write(self._task_path(task_id), task)
         return task

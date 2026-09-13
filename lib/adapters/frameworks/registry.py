@@ -36,7 +36,7 @@ def model_flag(
     agent_models = agent_cfg.get("models", [])
     if model_alias == "ollama-local":
         from lib.adapters.integrations.ollama_routing import ollama_model_flag
-        from lib.application.push.push_context import get_push_context
+        from lib.infra.push_context import get_push_context
 
         ctx = get_push_context()
         flag = ollama_model_flag(
@@ -105,6 +105,7 @@ DOCKER_SERVICE_TYPE = {
     "opencode": "opencode",
     "hermes": "hermes_profile",
     "openclaw": "openclaw",
+    "dsh": "dsh",
 }
 
 # type=cline 仅保留 WSL 直连场景；Docker 内 codex 服务应使用 codex
@@ -635,6 +636,55 @@ class CursorAdapter(BaseAdapter):
         return []
 
 
+class DshAdapter(BaseAdapter):
+    """DeepSeek Harness (dsh)：`docker exec <container> dsh --profile headless 'MSG'`。
+
+    非交互单次 headless 执行，完成任务后由 dsh 侧写 D1 step-result；
+    mailbus 复用 ack + step-result 验收，不在此新造验收。
+    """
+
+    type_name = "dsh"
+    container_service = "dsh"
+    mark_processing_on_task_push = True
+
+    def push_timeout_seconds(self, *, pipeline: bool = False, agent_cfg: dict | None = None) -> int:
+        if agent_cfg and agent_cfg.get("push_timeout_seconds") is not None:
+            return int(agent_cfg["push_timeout_seconds"])
+        return 900 if pipeline else 300
+
+    def _profile(self, agent_name: str, agent_cfg: dict) -> str:
+        return agent_cfg.get("profile") or "headless"
+
+    def build_push_cli(self, agent_name, agent_cfg, agent_types, model_alias=None) -> str:
+        container = resolve_container(agent_cfg, agent_name, self.container_service)
+        profile = self._profile(agent_name, agent_cfg)
+        mflag = model_flag(agent_cfg, agent_types, self.type_name, model_alias)
+        return _join(
+            f"docker exec {container} dsh --profile {profile}",
+            mflag,
+            "'MSG'",
+        )
+
+    def build_interactive_cli(self, agent_name, agent_cfg, agent_types) -> str:
+        container = resolve_container(agent_cfg, agent_name, self.container_service)
+        profile = self._profile(agent_name, agent_cfg)
+        return f"docker exec -it {container} dsh --profile {profile}"
+
+    def cli_active_in_ps(self, agent_name, agent_cfg, ps_output) -> bool:
+        # 常驻 web 进程为 `dsh web`；push 为 `dsh --profile ...`，据此区分
+        noise = ("grep", "tail -f /dev/null", " dsh web", "dsh web")
+        for line in ps_output.splitlines():
+            low = line.lower()
+            if any(n in low for n in noise):
+                continue
+            if re.search(r"\bdsh\b", line) and "--profile" in line:
+                return True
+        return False
+
+    def validate(self, agent_name, agent_cfg) -> list[str]:
+        return []
+
+
 ADAPTERS: dict[str, BaseAdapter] = {
     "hermes": HermesAdapter(),
     "hermes_profile": HermesProfileAdapter(),
@@ -645,6 +695,7 @@ ADAPTERS: dict[str, BaseAdapter] = {
     "claude_code": ClaudeCodeAdapter(),
     "a2a_remote": A2ARemoteAdapter(),
     "cursor": CursorAdapter(),
+    "dsh": DshAdapter(),
     "none": NoneAdapter(),
 }
 
@@ -872,3 +923,39 @@ def should_mark_processing_on_push(agent_cfg: dict, msg_entry: dict) -> bool:
 def type_supports_auto_ack(agent_type: str) -> bool:
     adapter = get_adapter(agent_type or "")
     return bool(adapter and adapter.supports_auto_ack)
+
+
+# 支持直接 docker exec 弹交互终端的 agent atype 集合
+_INTERACTIVE_CLI_TYPES = frozenset({
+    "opencode", "codex", "openclaw", "hermes", "hermes_profile",
+})
+
+
+def supports_interactive_cli(atype: str) -> bool:
+    """该 atype 是否支持 `docker exec -it <container> <cli>` 直弹。"""
+    return (atype or "") in _INTERACTIVE_CLI_TYPES
+
+
+def build_interactive_cli_command(atype: str, container: str, profile: str) -> str:
+    """组装 `docker exec -it <container> <agent-cli>` 命令字符串。
+
+    由 API 层（handlers_system.py）在已解析 container 名后调用；
+    registry 负责把 atype→CLI 字符串的 if/elif 链收敛到这里，handler 只剩调度。
+
+    返回字符串用于 `enqueue_launch_queue` 入队到 watchdog 弹出终端；
+    不返回 None — 调用方应在 container 非空时再调。
+    """
+    if not container:
+        raise ValueError("container is required")
+    profile = profile or ""
+    if atype == "hermes_profile":
+        return f"docker exec -it {container} hermes -p {profile} chat --yolo"
+    if atype == "hermes":
+        return f"docker exec -it {container} hermes -p {profile} chat"
+    if atype == "openclaw":
+        return f"docker exec -it {container} openclaw tui"
+    if atype == "codex":
+        return f"docker exec -it {container} codex"
+    if atype == "opencode":
+        return f'docker exec -it {container} bash -c "cd /workspace/opencode && opencode"'
+    raise ValueError(f"unsupported interactive-cli atype: {atype!r}")

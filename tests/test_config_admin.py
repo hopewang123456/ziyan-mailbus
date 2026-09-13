@@ -11,22 +11,39 @@ from lib.adapters.config.config_admin import env_status, get_section, patch_env,
 from lib.infra.utils import json_write
 
 
+def _seed_config() -> dict:
+    """合成最小合法配置 — 不读开发者本地 store/config.json，测试可复现。"""
+    return {
+        "project": "mailbus-test",
+        "version": "0.2.0",
+        "data_dir": "",
+        "ack_timeout": 30,
+        "max_retries": 3,
+        "archive_days": 3,
+        "archive_max_messages": 300,
+        "agents": {
+            "agent-a": {"type": "none", "name": "Agent A", "role": "测试角色", "enabled": True},
+        },
+        "mailbus_internal_llm": {"enabled": True, "providers": {}},
+        "smart_routing": {"enabled": True, "use_ollama": True},
+        "mailbus_claude": {
+            "platform": "windows",
+            "windows": {"enabled": True, "claude_bin": "claude"},
+            "linux": {"enabled": False},
+        },
+        "mailbus_codex": {"windows": {"sync_on_launch": True, "ensure_gateway_container": True}},
+        "mailbus_workflow": {},
+        "scheduler": {"enabled": True, "jobs": []},
+        "mailbus_intake_bridge": {},
+    }
+
+
 def _seed(tmp: str) -> None:
-    root = os.path.join(os.path.dirname(__file__), "..", "store")
-    shutil.copytree(
-        os.path.join(root, "roles"),
-        os.path.join(tmp, "roles"),
-        dirs_exist_ok=True,
-    )
-    shutil.copytree(
-        os.path.join(root, "workflows"),
-        os.path.join(tmp, "workflows"),
-        dirs_exist_ok=True,
-    )
-    cfg_path = os.path.join(root, "config.json")
-    import json
-    with open(cfg_path, encoding="utf-8") as f:
-        cfg = json.load(f)
+    """写入合成配置与空运行目录 — 完全离线可复现。"""
+    os.makedirs(os.path.join(tmp, "roles"), exist_ok=True)
+    os.makedirs(os.path.join(tmp, "workflows"), exist_ok=True)
+    cfg = _seed_config()
+    cfg["data_dir"] = tmp
     json_write(os.path.join(tmp, "config.json"), cfg)
 
 
@@ -42,6 +59,20 @@ class TestConfigAdmin(unittest.TestCase):
         out = get_section(self.tmp, "mailbus_internal_llm")
         self.assertEqual(out["section"], "mailbus_internal_llm")
         self.assertIn("enabled", out["data"])
+
+    def test_patch_llm_provider_delete(self):
+        # 新增 provider → patch null 删除 → 确认 null 项被清理、不再残留空对象
+        patch_section(
+            self.tmp,
+            "mailbus_internal_llm",
+            {"providers": {"zzz-test": {"protocol": "openai", "model": "x"}}},
+        )
+        out = get_section(self.tmp, "mailbus_internal_llm")
+        self.assertIn("zzz-test", out["data"]["providers"])
+
+        patch_section(self.tmp, "mailbus_internal_llm", {"providers": {"zzz-test": None}})
+        out = get_section(self.tmp, "mailbus_internal_llm")
+        self.assertNotIn("zzz-test", out["data"]["providers"])
 
     def test_get_agents_section(self):
         out = get_section(self.tmp, "agents")
@@ -182,7 +213,8 @@ class TestConfigAdmin(unittest.TestCase):
             self.assertIn("mode", it)
             self.assertIn("env", it)
             self.assertIn("default", it)
-            self.assertIn("vault", it)
+            self.assertIn("hint", it)
+            self.assertIn(it["mode"], ("default", "custom"))
 
     def test_patch_asset_paths_custom_and_default(self):
         # 模拟 store 在 mail 根下：data_dir = {base}/store → .env 在 {base}/.env
@@ -190,11 +222,9 @@ class TestConfigAdmin(unittest.TestCase):
         try:
             data_dir = os.path.join(base, "store")
             os.makedirs(data_dir)
-            import json as _json
-            _json.dump(
-                _json.load(open(os.path.join(os.path.dirname(__file__), "..", "store", "config.json"), encoding="utf-8")),
-                open(os.path.join(data_dir, "config.json"), "w", encoding="utf-8"),
-            )
+            cfg = _seed_config()
+            cfg["data_dir"] = data_dir
+            json_write(os.path.join(data_dir, "config.json"), cfg)
             env_file = os.path.join(base, ".env")
             # 1) 切到 custom：写 .env 键
             result, restart = patch_section(
@@ -234,11 +264,9 @@ class TestConfigAdmin(unittest.TestCase):
         try:
             data_dir = os.path.join(base, "store")
             os.makedirs(data_dir)
-            import json as _json
-            _json.dump(
-                _json.load(open(os.path.join(os.path.dirname(__file__), "..", "store", "config.json"), encoding="utf-8")),
-                open(os.path.join(data_dir, "config.json"), "w", encoding="utf-8"),
-            )
+            cfg = _seed_config()
+            cfg["data_dir"] = data_dir
+            json_write(os.path.join(data_dir, "config.json"), cfg)
             env_file = os.path.join(base, ".env")
             result, _ = patch_section(
                 data_dir,

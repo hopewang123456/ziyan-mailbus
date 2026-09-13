@@ -5,15 +5,32 @@
       "profile_paths.memory_dir: optional host memory root (OpenClaw/OpenCode/Hermes profile).",
       "Omit skills_dirs / memory_dir, or set skills_dirs to [] — mailbus does NOT inject paths;",
       "each runtime then uses its own default skills/ and memory/ under the agent home/workspace.",
-      "Local setup: do NOT put Obsidian Vault absolute paths in committed config;",
-      "use host junctions (setup-windows.ps1) + docker-compose.override.yml (see override.example.yml).",
+      "Asset roots (skills/rules/identities): default = in-repo dirs; override via settings asset_paths or MAILBUS_*_ROOT.",
+      "Do NOT commit personal Vault absolute paths; use settings UI custom paths on the host.",
       "frameworks.plugins: optional list of module specs (module or module:callable) loaded at serve start via register_framework; also MAILBUS_FRAMEWORK_PLUGINS env and pkg entry-points group mailbus.frameworks (no hot-reload).",
       "integrations.plugins: same for register_integration; MAILBUS_INTEGRATION_PLUGINS / mailbus.integrations."
+    ],
+    "auth": [
+      "Default: all write APIs require a valid Mailbus Token (including localhost).",
+      "allow_write_without_token: opt-in; when true, only IPs in write_without_token_cidrs (or legacy exempt_cidrs) may write without token.",
+      "Empty CIDR list + flag on ⇒ loopback defaults 127.0.0.1/32 and ::1/128.",
+      "cors_origins: explicit Origin whitelist; empty = no Access-Control-Allow-Origin: *."
     ]
   },
   "project": "mailbus-mailbus",
   "version": "1.1.0",
   "data_dir": "/path/to/your/store",
+  "auth": {
+    "allow_write_without_token": false,
+    "write_without_token_cidrs": [
+      "127.0.0.1/32",
+      "::1/128"
+    ],
+    "cors_origins": [
+      "http://127.0.0.1:9814",
+      "http://localhost:9814"
+    ]
+  },
   "ack_timeout": 30,
   "max_retries": 3,
   "archive_days": 3,

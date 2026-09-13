@@ -33,6 +33,7 @@ _ENV_TO_PATHS_KEY = {
     "OPENCODE_ROOT": "opencode_root",
     "OPENCLAW_WORKSPACE": "openclaw_workspace",
     "CODEX_WORKSPACE": "codex_workspace",
+    "DSH_WORKSPACE": "dsh_workspace",
     "NODE_MODULES": "node_modules",
     "TEAM_PACK_ROOT": "team_pack_root",
 }
@@ -48,6 +49,7 @@ FRAMEWORK_RUN_TARGETS: dict[str, list[str]] = {
     "claude_code": ["windows", "wsl", "linux"],
     "cursor": ["windows"],
     "cline": ["windows", "wsl", "linux"],
+    "dsh": ["docker"],
 }
 
 RUN_TARGET_LABELS: dict[str, str] = {
@@ -66,6 +68,7 @@ CONTAINER_INSTALL_ROOTS: dict[str, str] = {
     "openclaw": "/workspace",
     "codex": "/workspace/codex",
     "opencode": "/workspace/opencode",
+    "dsh": "/home/dsh/.dsh",
 }
 
 

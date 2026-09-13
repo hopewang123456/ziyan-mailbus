@@ -24,6 +24,11 @@
       "enabled": true,
       "path_env": "CODEX_WORKSPACE",
       "probe": "dir"
+    },
+    "dsh": {
+      "enabled": true,
+      "path_env": "DSH_WORKSPACE",
+      "probe": "dir"
     }
   }
 }

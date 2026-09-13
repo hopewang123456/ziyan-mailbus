@@ -1,6 +1,6 @@
 {
   "enabled": true,
-  "default_wait_ms": 45000,
+  "default_wait_ms": 8000,
   "write_memory": true,
   "devices": []
 }

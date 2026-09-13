@@ -114,7 +114,7 @@ def load_roster(mail_root: Path | None = None) -> dict[str, Any]:
 
 
 def load_config_fragments(mail_root: Path | None = None) -> dict[str, Any]:
-    """Merge mail/config/**/*.json into a store config fragment (no agents)."""
+    """Merge mailbus/config/**/*.json into a store config fragment (no agents)."""
     root = mailbus_root(mail_root)
     cfg_dir = root / "config"
     merged: dict[str, Any] = {}
@@ -521,7 +521,7 @@ def ensure_runtime_dirs(data_dir: str | Path) -> None:
 
 
 def mirror_workflows_to_store(data_dir: str | Path, *, mail_root: Path | None = None) -> list[str]:
-    """Copy mail/config/workflows/* → store/workflows/ (registry SoT)."""
+    """Copy mailbus/config/workflows/* → store/workflows/ (registry SoT)."""
     root = mailbus_root(mail_root)
     src_dir = root / "config" / "workflows"
     if not src_dir.is_dir():
@@ -555,7 +555,7 @@ def mirror_rule_schemas_to_store(data_dir: str | Path, *, mail_root: Path | None
 
 
 def mirror_dispatch_seed(data_dir: str | Path, *, mail_root: Path | None = None) -> list[str]:
-    """Copy mail/config/dispatch/* → store/dispatch/."""
+    """Copy mailbus/config/dispatch/* → store/dispatch/."""
     root = mailbus_root(mail_root)
     src_dir = root / "config" / "dispatch"
     if not src_dir.is_dir():
@@ -600,7 +600,7 @@ def mirror_org_json(data_dir: str | Path, *, mail_root: Path | None = None) -> l
 
 
 def write_runtime_seed_files(data_dir: str | Path, agents: dict[str, Any]) -> None:
-    from lib.application.commands.commands import get_system_message
+    from lib.composition import get_system_message
 
     root = Path(data_dir)
     json_write(str(root / "sent.json"), {})

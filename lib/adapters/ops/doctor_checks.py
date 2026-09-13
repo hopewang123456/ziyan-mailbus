@@ -94,7 +94,271 @@ CATEGORY_LAYERS = {
     "comfyui": "integrations",
     "ollama": "integrations",
     "integrations": "integrations",
+    "auth": "core",
+    "config": "core",
 }
+
+
+def _cidr_is_overbroad(cidr: str) -> bool:
+    """0.0.0.0/0、::/0 或任何 prefixlen==0 的网段视为过宽。"""
+    import ipaddress
+
+    text = (cidr or "").strip()
+    if not text:
+        return False
+    if text in ("0.0.0.0/0", "::/0"):
+        return True
+    try:
+        return ipaddress.ip_network(text, strict=False).prefixlen == 0
+    except ValueError:
+        return False
+
+
+def check_auth_hardening(config: dict | None = None, *, data_dir: str = "") -> list[DoctorItem]:
+    """鉴权硬化：过宽无 Token 写 CIDR、OpenClaw 默认 change-me。"""
+    items: list[DoctorItem] = []
+    cfg = config if isinstance(config, dict) else {}
+    auth = cfg.get("auth") if isinstance(cfg.get("auth"), dict) else {}
+
+    cidrs: list[str] = []
+    for key in ("write_without_token_cidrs", "exempt_cidrs"):
+        raw = auth.get(key)
+        if raw is None and key == "exempt_cidrs":
+            raw = cfg.get("exempt_cidrs")
+        if isinstance(raw, str):
+            raw = [x.strip() for x in raw.replace(";", "\n").splitlines() if x.strip()]
+        if isinstance(raw, list):
+            cidrs.extend(str(x).strip() for x in raw if str(x).strip())
+
+    bad = sorted({c for c in cidrs if _cidr_is_overbroad(c)})
+    if bad:
+        items.append(
+            DoctorItem(
+                "fail",
+                "auth",
+                "无 Token 写 CIDR 过宽（公网级）",
+                f"拒绝: {', '.join(bad)}；请在设置→鉴权收窄网段",
+            )
+        )
+    elif auth.get("allow_write_without_token"):
+        items.append(
+            DoctorItem(
+                "ok",
+                "auth",
+                "无 Token 写已开启且 CIDR 未过宽",
+                f"{len(cidrs)} 条 CIDR" if cidrs else "空列表=仅 loopback 默认",
+            )
+        )
+    else:
+        items.append(DoctorItem("ok", "auth", "写 API 默认要求 Token", "allow_write_without_token=false"))
+
+    agents = cfg.get("agents") if isinstance(cfg.get("agents"), dict) else {}
+    openclaw_ids = [
+        aid
+        for aid, ac in agents.items()
+        if isinstance(ac, dict)
+        and (ac.get("type") or "").strip() == "openclaw"
+        and ac.get("enabled", True) is not False
+    ]
+    env_tok = (os.environ.get("OPENCLAW_GATEWAY_TOKEN") or "").strip()
+    if openclaw_ids:
+        try:
+            from lib.adapters.config.browser_auth import openclaw_gateway_token
+
+            resolved = (openclaw_gateway_token() or "").strip()
+        except Exception:
+            resolved = env_tok
+        if not resolved or resolved == "change-me":
+            items.append(
+                DoctorItem(
+                    "fail",
+                    "auth",
+                    "OpenClaw Gateway Token 未配置或仍为无效默认",
+                    f"agents={', '.join(openclaw_ids[:6])}；请在设置/密钥配置 OPENCLAW_GATEWAY_TOKEN",
+                )
+            )
+        else:
+            items.append(
+                DoctorItem(
+                    "ok",
+                    "auth",
+                    "OpenClaw Gateway Token 已配置",
+                    f"agents={len(openclaw_ids)}",
+                )
+            )
+    elif env_tok == "change-me":
+        items.append(
+            DoctorItem(
+                "warn",
+                "auth",
+                "OPENCLAW_GATEWAY_TOKEN=change-me（当前无启用的 openclaw agent）",
+                "上线前请轮换真实 token",
+            )
+        )
+
+    cors_raw = auth.get("cors_origins") or cfg.get("cors_origins") or []
+    if isinstance(cors_raw, str):
+        cors_list = [x.strip() for x in cors_raw.replace(";", ",").split(",") if x.strip()]
+    elif isinstance(cors_raw, list):
+        cors_list = [str(x).strip() for x in cors_raw if str(x).strip()]
+    else:
+        cors_list = []
+    if "*" in cors_list:
+        items.append(
+            DoctorItem(
+                "warn",
+                "auth",
+                "CORS 白名单含 *（反射任意 Origin）",
+                "设置→鉴权改为显式 Origin；空列表=不跨域放行",
+            )
+        )
+    elif cors_list:
+        items.append(
+            DoctorItem(
+                "ok",
+                "auth",
+                f"CORS 白名单 {len(cors_list)} 条",
+                "",
+            )
+        )
+    else:
+        items.append(DoctorItem("ok", "auth", "CORS 未开放跨域（无 *）", "cors_origins 为空"))
+
+    return items
+
+
+def check_config_hygiene(config: dict | None = None) -> list[DoctorItem]:
+    """配置卫生：空链路模板等（warn，不阻断 doctor ok）。"""
+    items: list[DoctorItem] = []
+    cfg = config if isinstance(config, dict) else {}
+    chains = cfg.get("mailbus_chains") if isinstance(cfg.get("mailbus_chains"), dict) else {}
+    templates = chains.get("templates") if isinstance(chains.get("templates"), list) else []
+    valid = [t for t in templates if isinstance(t, dict) and str(t.get("id") or "").strip()]
+    if not valid:
+        items.append(
+            DoctorItem(
+                "warn",
+                "config",
+                "mailbus_chains 无有效链路模板",
+                "设置→总线→路由/端口→链路 添加模板，或参考 config/mailbus/chains.template.json",
+            )
+        )
+    else:
+        items.append(
+            DoctorItem(
+                "ok",
+                "config",
+                f"mailbus_chains 模板 {len(valid)} 个",
+                f"daily_budget_cny={chains.get('daily_budget_cny', '—')}",
+            )
+        )
+    return items
+
+
+_COMPOSE_COUPLING_MARKERS = (
+    "ai_tools/Agent",
+    "ai_tools\\Agent",
+    "../../Agent/docker",
+    "..\\..\\Agent\\docker",
+    "/mnt/e/ai_tools/Agent",
+    ":-change-me",
+    "OPENCLAW_GATEWAY_TOKEN:-change-me",
+)
+
+
+def check_compose_coupling(*, mail_root: Path | None = None) -> list[DoctorItem]:
+    """compose / entrypoint 不得再默认兄弟仓路径或 change-me。"""
+    items: list[DoctorItem] = []
+    root = Path(mail_root) if mail_root else Path(MAILBUS_ROOT)
+    targets = [
+        root / "docker-agents" / "docker-compose.yml",
+        root / "docker-agents" / "compose.public.yml",
+        root / "docker-agents" / "openclaw-agent" / "entrypoint.sh",
+    ]
+    any_file = False
+    for path in targets:
+        if not path.is_file():
+            continue
+        any_file = True
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            items.append(DoctorItem("warn", "compose", f"无法读取 {path.name}", str(exc)[:120]))
+            continue
+        hits = [m for m in _COMPOSE_COUPLING_MARKERS if m in text]
+        # entrypoint 里「change-me」作为拒绝分支字符串可保留；仅拦默认赋值
+        if path.name == "entrypoint.sh":
+            hits = [m for m in hits if m != ":-change-me"]
+            if 'OPENCLAW_GATEWAY_TOKEN:-change-me' in text or '${OPENCLAW_GATEWAY_TOKEN:-change-me}' in text:
+                hits.append("OPENCLAW_GATEWAY_TOKEN:-change-me")
+            # 显式默认：TOKEN="${...:-change-me}"
+            if ':-change-me}"' in text or ":-change-me}'" in text:
+                if "OPENCLAW_GATEWAY_TOKEN:-change-me" not in hits:
+                    hits.append("default-change-me")
+        rel = path.relative_to(root).as_posix() if path.is_relative_to(root) else path.name
+        if hits:
+            items.append(
+                DoctorItem(
+                    "fail",
+                    "config",
+                    f"{rel} 仍含耦合默认",
+                    f"命中: {', '.join(hits[:4])}",
+                )
+            )
+        else:
+            items.append(
+                DoctorItem(
+                    "ok",
+                    "compose",
+                    f"{rel} 无 ai_tools/Agent / change-me 硬默认",
+                    "",
+                )
+            )
+    if not any_file:
+        items.append(DoctorItem("warn", "compose", "未找到 docker-compose.yml", str(root / "docker-agents")))
+
+    override = root / "docker-agents" / "docker-compose.override.yml"
+    if override.is_file():
+        try:
+            ot = override.read_text(encoding="utf-8")
+        except OSError:
+            ot = ""
+        if any(m in ot for m in _COMPOSE_COUPLING_MARKERS):
+            items.append(
+                DoctorItem(
+                    "warn",
+                    "compose",
+                    "本机 override.yml 含 ai_tools/Agent 绝对路径",
+                    "改用 docker-agents/.env（MAILBUS_HOST_ROOT / *_WORKSPACE）+ override.example 变量挂卷",
+                )
+            )
+
+    env_file = root / "docker-agents" / ".env"
+    if env_file.is_file():
+        try:
+            et = env_file.read_text(encoding="utf-8")
+        except OSError:
+            et = ""
+        env_hits = [m for m in _COMPOSE_COUPLING_MARKERS if m in et]
+        if env_hits:
+            items.append(
+                DoctorItem(
+                    "warn",
+                    "compose",
+                    "docker-agents/.env 工作区仍指向 ai_tools/Agent",
+                    "运行: python tools/ops/migrate_compose_workspaces.py --link --update-env",
+                )
+            )
+        else:
+            items.append(
+                DoctorItem(
+                    "ok",
+                    "compose",
+                    "docker-agents/.env 未硬绑 Agent/docker",
+                    "",
+                )
+            )
+    return items
 
 
 def docker_ready_wsl(distro: str = "Ubuntu") -> tuple[bool, str]:
@@ -479,9 +743,9 @@ def run_doctor_checks(*, mail_root: Path | None = None, wsl_distro: str = "Ubunt
             from lib.adapters.config.init_store import ensure_ollama_local_model_alias
 
             if ensure_ollama_local_model_alias(store_cfg, mail_root=root):
-                from lib.application.commands.commands import save_config
+                from lib.infra.utils import json_write as _save_config
 
-                save_config(str(store_cfg_path), store_cfg)
+                _save_config(str(store_cfg_path), store_cfg)
                 items.append(DoctorItem(
                     "warn",
                     "routing",
@@ -497,6 +761,14 @@ def run_doctor_checks(*, mail_root: Path | None = None, wsl_distro: str = "Ubunt
                 ))
         elif use_ollama and has_alias:
             items.append(DoctorItem("ok", "routing", "agent_types.models.ollama-local 已配置", ""))
+
+        items.extend(check_auth_hardening(store_cfg, data_dir=str(paths["data_dir"])))
+        items.extend(check_config_hygiene(store_cfg))
+        items.extend(check_compose_coupling(mail_root=root))
+    else:
+        items.extend(check_auth_hardening({}, data_dir=str(paths.get("data_dir") or "")))
+        items.extend(check_config_hygiene({}))
+        items.extend(check_compose_coupling(mail_root=root))
 
     if plat == "win32":
         if probe_http(api_url, headers=api_headers) or probe_http(

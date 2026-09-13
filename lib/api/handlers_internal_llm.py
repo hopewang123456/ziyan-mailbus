@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from lib.application.internal_llm.planner import dry_run
-from lib.adapters.internal_llm.probe import load_llm_config, probe_all
+# 跨层解耦：api→adapter 通过 composition 拿服务（2026-09 治理）
+from lib.composition import load_llm_config_internal, probe_all_internal_llm
 from lib.api.internal_llm_status import llm_status
 
 
@@ -13,7 +14,7 @@ def handle_internal_llm_status(handler):
 
 def handle_internal_llm_health(handler):
     # Health uses the same provider/rag probe payload as status.
-    handler._send_json(probe_all(handler.data_dir))
+    handler._send_json(probe_all_internal_llm(handler.data_dir))
 
 
 def handle_internal_llm_dry_run(handler):
@@ -32,11 +33,12 @@ def handle_internal_llm_dry_run(handler):
 
 
 def handle_internal_llm_rebuild_rag(handler):
-    cfg = load_llm_config(handler.data_dir)
+    cfg = load_llm_config_internal(handler.data_dir)
     try:
-        from lib.adapters.internal_llm.index import rebuild_index
+        # 跨层解耦：api→adapter 通过 composition 拿服务
+        from lib.composition import rebuild_internal_llm_index
 
-        n = rebuild_index(handler.data_dir, cfg)
+        n = rebuild_internal_llm_index(handler.data_dir, cfg)
     except Exception as exc:
         handler._send_json(
             {"status": "error", "error": "rebuild_failed", "message": str(exc)},

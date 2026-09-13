@@ -179,7 +179,7 @@ def validate_config(config: dict, config_path: str = "") -> list:
                 continue
             if "type" not in cfg:
                 errors.append(f"agents.{name}: 缺少必需字段 type")
-            elif cfg["type"] not in ("hermes", "hermes_profile", "openclaw", "cline", "opencode", "codex", "claude_code", "cursor", "none"):
+            elif cfg["type"] not in ("hermes", "hermes_profile", "openclaw", "cline", "opencode", "codex", "claude_code", "cursor", "dsh", "none"):
                 errors.append(f"agents.{name}.type: 不支持的 agent 类型 ({cfg['type']})")
             # 检查未知字段
             allowed = {"type", "role", "profile", "agent", "agent_id", "archetype", "provider",
@@ -233,6 +233,27 @@ def validate_config(config: dict, config_path: str = "") -> list:
                     for tier in tier_map:
                         if tier not in valid:
                             errors.append(f"smart_routing.tier_map: 未知 tier {tier!r}")
+
+    # ── mailbus_internal_llm.providers protocol 校验 ──
+    illm = config.get("mailbus_internal_llm")
+    if illm is not None:
+        if not isinstance(illm, dict):
+            errors.append("mailbus_internal_llm: 期望 object 类型")
+        else:
+            providers = illm.get("providers")
+            if providers is not None:
+                if not isinstance(providers, dict):
+                    errors.append("mailbus_internal_llm.providers: 期望 object 类型")
+                else:
+                    valid_proto = ("ollama", "openai", "openai_compatible", "anthropic", "stub")
+                    for pname, pc in providers.items():
+                        if not isinstance(pc, dict):
+                            continue
+                        proto = (pc.get("protocol") or pc.get("kind") or "").strip().lower()
+                        if proto and proto not in valid_proto:
+                            errors.append(
+                                f"mailbus_internal_llm.providers.{pname}.protocol: 未知协议 {proto!r}"
+                            )
 
     # ── mailbus_device_bridge 校验 ──
     dbr = config.get("mailbus_device_bridge")

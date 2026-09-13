@@ -5,7 +5,6 @@ from __future__ import annotations
 from lib.infra.clock import now_dt, now_ts, now_utc_dt
 import contextlib
 import os
-import shutil
 import signal
 import subprocess
 import sys
@@ -504,39 +503,12 @@ def _start_team_locked(log: LogFn, paths: dict[str, str]) -> int:
         return _start_team_body(log, paths)
 
 
-def _ensure_team_pack(log: LogFn, paths: dict[str, str]) -> None:
-    """确保 team-pack/rules、team-pack/skills 存在，供 compose 挂载。
-
-    本地已用 symlink 指向 Vault（或目录已存在）时跳过；否则从
-    ``examples/team-pack`` seed 一份 example，保证新克隆者开箱能启动。
-    """
-    root = Path(paths["root"])
-    tp = root / "team-pack"
-    examples = root / "examples" / "team-pack"
-    for sub in ("rules", "skills"):
-        target = tp / sub
-        if target.exists() or target.is_symlink():
-            continue
-        src = examples / sub
-        try:
-            if src.is_dir():
-                shutil.copytree(src, target)
-                log(f"Seeded team-pack/{sub} from examples/team-pack/{sub}")
-            else:
-                target.mkdir(parents=True, exist_ok=True)
-                log(f"Created empty team-pack/{sub} (no examples found)")
-        except OSError as exc:
-            log(f"WARNING: seed team-pack/{sub} failed: {exc}")
-
-
 def _start_team_body(log: LogFn, paths: dict[str, str]) -> int:
         log("Waiting for Docker daemon...")
         if not ensure_docker(90, log):
             log("ERROR: Docker not running after 90s")
             print("[ERROR] Docker 未就绪。请在 WSL 执行: sudo service docker start")
             return 1
-
-        _ensure_team_pack(log, paths)
 
         if docker_container_running("docker-agents-mailbus-1"):
             log("Syncing team rules (pre-start, quick)...")
@@ -921,15 +893,17 @@ def start_from_windows(*, open_browser: bool = False, fast: bool = False) -> int
         from lib.adapters.runtime.cred_delivery import resolve_openclaw_token, sync_browser_credentials_to_env
 
         sync_browser_credentials_to_env(paths.get("data_dir") or os.environ.get("MAILBUS_DATA") or "store")
-        token = resolve_openclaw_token(paths.get("data_dir") or "store") or os.environ.get(
-            "OPENCLAW_GATEWAY_TOKEN", "change-me"
-        )
+        token = (resolve_openclaw_token(paths.get("data_dir") or "store") or "").strip()
+        if token == "change-me":
+            token = ""
+        oc_chat = "http://localhost:18789/chat" + (f"?token={token}" if token else "")
+        oc_chat2 = "http://localhost:18790/chat" + (f"?token={token}" if token else "")
         open_windows_urls(
             [
                 f"http://localhost:{port}/",
                 "http://localhost:9120/chat",
-                f"http://localhost:18789/chat?token={token}",
-                f"http://localhost:18790/chat?token={token}",
+                oc_chat,
+                oc_chat2,
                 "http://localhost:9240/",
                 "http://localhost:9260/",
                 "http://localhost:9261/",

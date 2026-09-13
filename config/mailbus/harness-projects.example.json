@@ -3,18 +3,13 @@
   "publish": false,
   "projects": [
     {
-      "name": "mail",
+      "name": "mailbus",
       "repo": "../.."
     },
     {
-      "name": "mail",
-      "repo": "../../../mail"
-    },
-    {
       "name": "opencode",
-      "repo": "../../../opencode",
+      "repo": "/path/to/opencode",
       "publish": false
-    },
-    "../../../Agent-Reach"
+    }
   ]
 }

@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Tuple, Optional
 
 from lib.infra.clock import now_dt, now_iso, now_ts, now_utc_dt
-from lib.domain.models import Message, MsgStatus, Priority, Inbox
+from lib.domain.models import Message, MsgStatus, Priority, Inbox, get_msg_state  # noqa: F401
 from lib.infra.utils import json_read, json_write, resolve_paths, _now_iso
 from lib.infra.constants import DEFAULT_ACK_TIMEOUT, DEFAULT_PUSH_COOLDOWN_MINUTES, DEFAULT_MAX_PUSHES_PER_MESSAGE
 from lib.infra.mbus_log import debug, warn
@@ -51,11 +51,12 @@ def invalidate_tasks_cache() -> None:
 
 
 def get_msg_state(msg):
-    """统一读取消息状态：先读 state，回退读 status"""
-    state = msg.get('state', '') if isinstance(msg, dict) else getattr(msg, 'state', '')
-    if not state:
-        state = msg.get('status', '') if isinstance(msg, dict) else getattr(msg, 'status', '')
-    return state
+    """Compat shim — 实际实现已下沉到 `lib.domain.models.get_msg_state`。
+
+    原实现（53-58 行）已删除，application 层只剩转发，新代码请直接 import domain。
+    """
+    from lib.domain.models import get_msg_state as _impl
+    return _impl(msg)
 
 
 def _push_cooldown_minutes(data_dir: str, msg, config: dict) -> float:

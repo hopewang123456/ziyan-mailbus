@@ -17,11 +17,40 @@ class TestMailbusToken(unittest.TestCase):
             self.assertEqual(t1, t2)
             self.assertTrue((Path(td) / "secrets.json").is_file())
 
-    def test_loopback_write_without_token(self):
+    def test_loopback_write_requires_token_by_default(self):
+        with tempfile.TemporaryDirectory() as td:
+            tok = ensure_token(td)
+            ctx = ClientContext(remote_addr="127.0.0.1")
+            self.assertEqual(authorize_write(td, ctx), AuthDecision.DENY)
+            ok = ClientContext(remote_addr="127.0.0.1", authorization=f"Bearer {tok}")
+            self.assertEqual(authorize_write(td, ok), AuthDecision.ALLOW)
+
+    def test_loopback_free_when_flag_and_default_cidrs(self):
         with tempfile.TemporaryDirectory() as td:
             ensure_token(td)
-            ctx = ClientContext(remote_addr="127.0.0.1")
-            self.assertEqual(authorize_write(td, ctx), AuthDecision.ALLOW)
+            cfg = {"auth": {"allow_write_without_token": True}}
+            self.assertEqual(
+                authorize_write(td, ClientContext(remote_addr="127.0.0.1"), config=cfg),
+                AuthDecision.ALLOW,
+            )
+
+    def test_wsl_cidr_when_enabled(self):
+        with tempfile.TemporaryDirectory() as td:
+            ensure_token(td)
+            cfg = {
+                "auth": {
+                    "allow_write_without_token": True,
+                    "write_without_token_cidrs": ["172.16.0.0/12", "127.0.0.1/32"],
+                }
+            }
+            self.assertEqual(
+                authorize_write(td, ClientContext(remote_addr="172.20.5.1"), config=cfg),
+                AuthDecision.ALLOW,
+            )
+            self.assertEqual(
+                authorize_write(td, ClientContext(remote_addr="10.0.0.2"), config=cfg),
+                AuthDecision.DENY,
+            )
 
     def test_remote_requires_token(self):
         with tempfile.TemporaryDirectory() as td:
@@ -41,37 +70,31 @@ class TestMailbusToken(unittest.TestCase):
             self.assertTrue(ok.get("ok"))
             self.assertNotEqual(ok.get("token"), old)
 
-    def test_exempt_cidrs_whitelist_allows_remote(self):
-        """config["auth"]["exempt_cidrs"] 白名单网段免 token。"""
+    def test_exempt_cidrs_alias_requires_flag(self):
+        """legacy exempt_cidrs 并入白名单，但仍需 allow_write_without_token。"""
         with tempfile.TemporaryDirectory() as td:
             ensure_token(td)
-            cfg = {"auth": {"exempt_cidrs": ["10.0.0.0/8"]}}
+            cfg_off = {"auth": {"exempt_cidrs": ["10.0.0.0/8"]}}
             self.assertEqual(
-                authorize_write(td, ClientContext(remote_addr="10.0.0.2"), config=cfg),
+                authorize_write(td, ClientContext(remote_addr="10.0.0.2"), config=cfg_off),
+                AuthDecision.DENY,
+            )
+            cfg_on = {"auth": {"allow_write_without_token": True, "exempt_cidrs": ["10.0.0.0/8"]}}
+            self.assertEqual(
+                authorize_write(td, ClientContext(remote_addr="10.0.0.2"), config=cfg_on),
                 AuthDecision.ALLOW,
             )
 
-    def test_exempt_cidrs_top_level_and_single_ip(self):
-        """顶层 exempt_cidrs + 单 IP 白名单。"""
+    def test_exempt_cidrs_top_level_with_flag(self):
         with tempfile.TemporaryDirectory() as td:
             ensure_token(td)
-            cfg = {"exempt_cidrs": "192.168.50.10"}
+            cfg = {"auth": {"allow_write_without_token": True}, "exempt_cidrs": "192.168.50.10"}
             self.assertEqual(
                 authorize_write(td, ClientContext(remote_addr="192.168.50.10"), config=cfg),
                 AuthDecision.ALLOW,
             )
-            # 非白名单 IP 仍被拒
             self.assertEqual(
                 authorize_write(td, ClientContext(remote_addr="192.168.50.11"), config=cfg),
-                AuthDecision.DENY,
-            )
-
-    def test_exempt_cidrs_not_applied_without_config(self):
-        """无白名单时 10.x 仍是跨机需 token。"""
-        with tempfile.TemporaryDirectory() as td:
-            ensure_token(td)
-            self.assertEqual(
-                authorize_write(td, ClientContext(remote_addr="10.0.0.2")),
                 AuthDecision.DENY,
             )
 

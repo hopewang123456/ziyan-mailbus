@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, getToken, setToken } from "../lib/api";
 import { DiscoverPage } from "./DiscoverPage";
 import { ErrorAlert } from "../components/ErrorAlert";
@@ -7,216 +7,18 @@ import { AgentRuntimePanel } from "../components/AgentInstancePanel";
 import { AssetPathsPanel } from "../components/AssetPathsPanel";
 import { BusExtrasPanel } from "../components/BusExtrasPanel";
 import { SoftFold } from "../components/SoftFold";
+import { ComposeFilesPanel } from "../components/ComposeFilesPanel";
+import { AuthSecurityPanel } from "../components/AuthSecurityPanel";
+import { RuntimeFrameworkPanel } from "../components/RuntimeFrameworkPanel";
+import { BusOpsPanel } from "../components/BusOpsPanel";
+import { BusRoutesPanel } from "../components/BusRoutesPanel";
+import { WorkflowBoardPage } from "./thin/WorkflowBoardPage";
 
 type TokenInfo = {
   configured?: boolean;
   token_masked?: string;
   hint?: string;
 };
-
-type SectionMeta = { id?: string; label?: string; editable?: boolean } | string;
-
-export type ConfigVariant = "agent" | "llm" | "bus" | "gear" | "full";
-
-const BUS_SECTIONS = new Set([
-  "launch_ports",
-  "mailbus_workflow",
-  "mailbus_automation",
-  "mailbus_intake_bridge",
-  "mailbus_device_bridge",
-  "scheduler",
-  "mailbus_chains",
-]);
-const AGENT_RUNTIME_OTHER_SECTIONS = new Set(["frameworks", "mailbus_codex", "mailbus_claude"]);
-
-function sectionId(s: SectionMeta): string {
-  return typeof s === "string" ? s : String(s.id || "");
-}
-
-function sectionLabel(s: SectionMeta): string {
-  if (typeof s === "string") return s;
-  return String(s.label || s.id || "");
-}
-
-function flattenObj(obj: unknown, prefix = ""): { key: string; value: string }[] {
-  const out: { key: string; value: string }[] = [];
-  if (obj == null || typeof obj !== "object") {
-    if (prefix) out.push({ key: prefix, value: obj == null ? "" : String(obj) });
-    return out;
-  }
-  if (Array.isArray(obj)) {
-    out.push({ key: prefix || "list", value: JSON.stringify(obj) });
-    return out;
-  }
-  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-    if (k === "status" || k === "error" || k === "section") continue;
-    const key = prefix ? `${prefix}.${k}` : k;
-    if (v && typeof v === "object" && !Array.isArray(v)) out.push(...flattenObj(v, key));
-    else if (Array.isArray(v)) out.push({ key, value: JSON.stringify(v) });
-    else out.push({ key, value: v == null ? "" : String(v) });
-  }
-  return out;
-}
-
-function unflattenObj(rows: { key: string; value: string }[]): Record<string, unknown> {
-  const root: Record<string, unknown> = {};
-  for (const { key, value } of rows) {
-    const parts = key.split(".").filter(Boolean);
-    if (!parts.length) continue;
-    let cur: Record<string, unknown> = root;
-    for (let i = 0; i < parts.length - 1; i++) {
-      const p = parts[i];
-      if (!(p in cur) || typeof cur[p] !== "object" || cur[p] == null || Array.isArray(cur[p])) {
-        cur[p] = {};
-      }
-      cur = cur[p] as Record<string, unknown>;
-    }
-    const leaf = parts[parts.length - 1];
-    const trimmed = value.trim();
-    if (trimmed === "true") cur[leaf] = true;
-    else if (trimmed === "false") cur[leaf] = false;
-    else if (trimmed !== "" && !Number.isNaN(Number(trimmed)) && /^-?\d+(\.\d+)?$/.test(trimmed)) {
-      cur[leaf] = Number(trimmed);
-    } else if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
-      try {
-        cur[leaf] = JSON.parse(trimmed);
-      } catch {
-        cur[leaf] = value;
-      }
-    } else cur[leaf] = value;
-  }
-  return root;
-}
-
-function SectionEditor({
-  title,
-  allow,
-  sections,
-}: {
-  title: string;
-  allow: Set<string> | null;
-  sections: SectionMeta[];
-}) {
-  const [section, setSection] = useState("");
-  const [rows, setRows] = useState<{ key: string; value: string }[]>([]);
-  const [msg, setMsg] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [probeOut, setProbeOut] = useState<unknown>(null);
-
-  const filtered = useMemo(() => {
-    if (!allow) return sections;
-    return sections.filter((s) => allow.has(sectionId(s)));
-  }, [allow, sections]);
-
-  async function loadSection(name: string) {
-    setSection(name);
-    setMsg("");
-    setProbeOut(null);
-    const r = await api<Record<string, unknown>>(`/api/settings/section/${encodeURIComponent(name)}`);
-    if (r.ok) {
-      const { status: _s, error: _e, section: _sec, ...rest } = r.data;
-      const payload = Object.keys(rest).length ? rest : r.data;
-      setRows(flattenObj(payload));
-    } else {
-      setMsg(r.error);
-      setRows([]);
-    }
-  }
-
-  async function saveSection() {
-    if (!section) return;
-    setBusy(true);
-    setMsg("");
-    const parsed = unflattenObj(rows);
-    const r = await api(`/api/settings/section/${encodeURIComponent(section)}`, {
-      method: "POST",
-      body: JSON.stringify({ patch: parsed }),
-    });
-    setBusy(false);
-    if (r.ok) {
-      setMsg(`已保存 section=${section}`);
-      void loadSection(section);
-    } else setMsg(r.error);
-  }
-
-  async function probeServices() {
-    setBusy(true);
-    const r = await api("/api/settings/section/services/probe", { method: "POST", body: "{}" });
-    setBusy(false);
-    if (r.ok) {
-      setProbeOut(r.data);
-      setMsg("probe ok");
-    } else setMsg(r.error);
-  }
-
-  return (
-    <div className="soft-panel space-y-3">
-      <p className="soft-panel-title">{title}</p>
-      <ul className="max-h-48 space-y-1 overflow-auto">
-        {filtered.length === 0 && <li className="px-2 text-sm text-mute">无匹配 section</li>}
-        {filtered.map((s) => {
-          const id = sectionId(s);
-          if (!id) return null;
-          return (
-            <li key={id}>
-              <button
-                type="button"
-                className={`soft-list-btn ${section === id ? "is-active" : ""}`}
-                onClick={() => void loadSection(id)}
-              >
-                {sectionLabel(s)}
-                <span className="ml-2 opacity-50">{id}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      {section && (
-        <>
-          <div className="flex flex-wrap gap-2">
-            {section === "services" && (
-              <button type="button" className="hud-btn" disabled={busy} onClick={() => void probeServices()}>
-                Probe
-              </button>
-            )}
-            <button type="button" className="hud-btn-amber" disabled={busy} onClick={() => void saveSection()}>
-              保存
-            </button>
-          </div>
-          <div className="max-h-[420px] space-y-2 overflow-auto">
-            {rows.length === 0 ? (
-              <p className="text-sm text-mute">空配置</p>
-            ) : (
-              rows.map((row, idx) => (
-                <label key={`${row.key}-${idx}`} className="block soft-inset">
-                  <span className="font-mono text-[10px] text-mute">{row.key}</span>
-                  <input
-                    className="hud-input mt-1 font-mono text-xs"
-                    value={row.value}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, value: v } : r)));
-                    }}
-                  />
-                </label>
-              ))
-            )}
-          </div>
-          {msg && <p className="text-xs text-amber-signal">{msg}</p>}
-          {probeOut != null && (
-            <div className="soft-inset text-xs text-mute">
-              {flattenObj(probeOut).map((r) => (
-                <p key={r.key}>
-                  <span className="text-frost/70">{r.key}</span>: {r.value}
-                </p>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
 
 function genDeviceToken(): string {
   const arr = new Uint8Array(16);
@@ -641,7 +443,7 @@ function DeviceBridgePanel() {
               className="hud-input mt-1 w-40 font-mono text-xs"
               type="number"
               value={data.default_wait_ms}
-              onChange={(e) => setData({ ...data, default_wait_ms: Number(e.target.value) || 45000 })}
+              onChange={(e) => setData({ ...data, default_wait_ms: Number(e.target.value) || 8000 })}
             />
           </label>
         </div>
@@ -1004,16 +806,10 @@ function GearPanel() {
   );
 }
 
-/** Settings surface for cockpit knobs + gear. Same APIs as legacy ConfigPage. */
+/** Settings surface for cockpit knobs + gear. `full` = hub composing the same panels. */
 export function ConfigPage({ variant = "full" }: { variant?: ConfigVariant }) {
-  const [sections, setSections] = useState<SectionMeta[]>([]);
+  // llm 历史别名 → agent（舰桥模型旋钮）
   const v: ConfigVariant = variant === "llm" ? "agent" : variant;
-
-  useEffect(() => {
-    void api<{ sections?: SectionMeta[] }>("/api/settings/sections").then((s) => {
-      if (s.ok) setSections(s.data.sections || []);
-    });
-  }, []);
 
   if (v === "gear") {
     return (
@@ -1025,6 +821,9 @@ export function ConfigPage({ variant = "full" }: { variant?: ConfigVariant }) {
         </header>
         <SoftFold title="API / Token" hint="mailbus 访问令牌">
           <GearPanel />
+        </SoftFold>
+        <SoftFold title="无 Token 写白名单" hint="默认关闭 · CIDR 可含 WSL/虚拟机 · CORS">
+          <AuthSecurityPanel />
         </SoftFold>
       </div>
     );
@@ -1056,8 +855,8 @@ export function ConfigPage({ variant = "full" }: { variant?: ConfigVariant }) {
             <SoftFold title="智能体实例 / 角色" hint="实例卡 · 加载角色 · 配置">
               <AgentRuntimePanel />
             </SoftFold>
-            <SoftFold title="其他运行时" hint="frameworks / codex / claude">
-              <SectionEditor title="其他运行时配置" allow={AGENT_RUNTIME_OTHER_SECTIONS} sections={sections} />
+            <SoftFold title="框架运行时" hint="frameworks · Codex · Claude">
+              <RuntimeFrameworkPanel />
             </SoftFold>
           </div>
         </div>
@@ -1074,44 +873,82 @@ export function ConfigPage({ variant = "full" }: { variant?: ConfigVariant }) {
           <p className="mt-1 text-sm text-mute">路径 · 权限 · A2A · 调度段 · 默认收起</p>
         </header>
         <BusExtrasPanel />
+        <SoftFold title="调度 / Intake / 自动化" hint="scheduler · intake_bridge · verify">
+          <BusOpsPanel />
+        </SoftFold>
+        <SoftFold title="路由 / 端口" hint="workflow · chains · launch_ports">
+          <BusRoutesPanel />
+        </SoftFold>
+        <SoftFold title="工作流注册表" hint="只读浏览 / 轻量编辑 · /api/workflows">
+          <WorkflowBoardPage />
+        </SoftFold>
+        <SoftFold title="Compose YAML" hint="加载/编辑/保存 · 不含启停">
+          <ComposeFilesPanel />
+        </SoftFold>
         <SoftFold title="外接设备桥" hint="设备 token 鉴权 · 一轮一答 · 与工单隔离">
           <DeviceBridgePanel />
-        </SoftFold>
-        <SoftFold title="调度 / 工作流 / 自动化 / 端口" hint="可编辑运行段表单">
-          <SectionEditor title="总线 sections" allow={BUS_SECTIONS} sections={sections} />
         </SoftFold>
       </div>
     );
   }
 
-  // full / legacy: token + form panels + all sections
+  // full = 驾驶舱三旋钮合页（agent + bus + gear），不再另起「全部 sections」心智
   return (
     <div className="space-y-4">
       <header>
-        <p className="hud-label">Configuration</p>
-        <h2 className="mt-1 font-display text-2xl tracking-wide text-frost">配置 / Token</h2>
-        <p className="mt-1 text-sm text-mute">各区块默认收起 · 点标题展开</p>
+        <p className="hud-label">Settings hub</p>
+        <h2 className="mt-1 font-display text-2xl tracking-wide text-frost">配置合页</h2>
+        <p className="mt-1 text-sm text-mute">
+          与舰桥「智能体 / 总线 / 齿轮」同面板；旧路由 <code className="font-mono">/config</code> 保留
+        </p>
       </header>
-      <SoftFold title="API / Token">
+      <SoftFold title="齿轮 · API / Token / 鉴权" hint="与舰桥 Gear 一致" defaultOpen>
         <GearPanel />
+        <div className="mt-3">
+          <AuthSecurityPanel />
+        </div>
       </SoftFold>
-      <SoftFold title="技能源">
-        <SkillsSourcePanel />
-      </SoftFold>
-      <SoftFold title="资产路径">
-        <AssetPathsPanel />
-      </SoftFold>
-      <SoftFold title="模型 Provider">
+      <SoftFold title="智能体 · 模型 / 实例 / 框架运行时" hint="与舰桥 Agent 一致">
         <ModelConfigPanel filter="provider" />
-      </SoftFold>
-      <SoftFold title="智能体实例 / 角色">
-        <AgentRuntimePanel />
-      </SoftFold>
-      <SoftFold title="模型路由 / 服务 / 全部 sections" hint="兜底编辑">
         <ModelConfigPanel filter="routing" />
         <ModelConfigPanel filter="internal" />
         <ModelConfigPanel filter="services" />
-        <SectionEditor title="全部 sections" allow={null} sections={sections} />
+        <div className="mt-3">
+          <AgentRuntimePanel />
+        </div>
+        <div className="mt-3">
+          <RuntimeFrameworkPanel />
+        </div>
+        <div className="mt-3">
+          <AgentOpsPanel />
+        </div>
+      </SoftFold>
+      <SoftFold title="总线 · 资产 / Compose / 设备 / 调度" hint="与舰桥 Bus 一致">
+        <AssetPathsPanel />
+        <div className="mt-3">
+          <BusExtrasPanel />
+        </div>
+        <SoftFold title="调度 / Intake / 自动化">
+          <BusOpsPanel />
+        </SoftFold>
+        <SoftFold title="路由 / 端口">
+          <BusRoutesPanel />
+        </SoftFold>
+        <SoftFold title="工作流注册表" hint="只读浏览 / 轻量编辑">
+          <WorkflowBoardPage />
+        </SoftFold>
+        <SoftFold title="Compose YAML" hint="加载/编辑/保存 · 不含启停">
+          <ComposeFilesPanel />
+        </SoftFold>
+        <SoftFold title="外接设备桥">
+          <DeviceBridgePanel />
+        </SoftFold>
+      </SoftFold>
+      <SoftFold title="技能源 / 发现" hint="legacy 合页附加">
+        <SkillsSourceView />
+        <div className="mt-3">
+          <DiscoverPage />
+        </div>
       </SoftFold>
     </div>
   );

@@ -33,14 +33,15 @@ def resolve_hub_wire(
     mailbus_task_id: str,
     a2a_task_id: str,
 ) -> Optional[dict[str, Any]]:
-    from lib.adapters.orchestration.human_queue import load_queue
-    from lib.application.orchestration.tracker import TaskTracker
+    # 跨层解耦：core→adapter/application 通过 composition 拿服务（2026-09 治理）
+    from lib.composition import load_human_queue, task_tracker_factory
     from .a2a_mapper import to_a2a_hub_task
 
+    TaskTracker = task_tracker_factory()
     task_doc = TaskTracker(data_dir).get(mailbus_task_id)
     if not task_doc:
         return None
-    hq_items = load_queue(data_dir).get("items") or []
+    hq_items = load_human_queue(data_dir).get("items") or []
     return to_a2a_hub_task(task_doc, a2a_task_id, human_queue=hq_items)
 
 
@@ -61,7 +62,8 @@ def _maybe_advance_a2a(data_dir: str, agents: dict, paths: Optional[dict]) -> No
     if not paths:
         return
     try:
-        from lib.application.orchestration.a2a_poll import poll_pending_a2a_tasks
+        # 跨层解耦：core→application 通过 composition 拿服务
+        from lib.composition import poll_pending_a2a_tasks
 
         poll_pending_a2a_tasks(data_dir, agents or {}, paths)
     except Exception:

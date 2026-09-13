@@ -7,7 +7,7 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from lib.application.commands.commands import save_config
+from lib.infra.utils import json_read, json_write
 from .config_schema import validate_config
 from lib.infra.env_bootstrap import load_mailbus_env
 from lib.adapters.integrations.model_router import TIER_OLLAMA
@@ -94,6 +94,7 @@ EDITABLE_SECTIONS = frozenset({
     "harness",
     "asset_paths",
     "browser_hosts",
+    "auth",
 })
 
 AGENT_PATCH_KEYS = frozenset({
@@ -203,8 +204,10 @@ SECTION_LABELS = {
     "launch_ports": "Launch 端口",
     "smart_routing": "智能路由 / L0–L3",
     "services": "外部服务 / 接线",
-    "asset_paths": "资产路径（skill/rule/identity · 默认/自定义）",
+    "asset_paths": "资产路径（skill/rule/identity · 仓内默认/自定义）",
     "harness": "Harness / 规则路径",
+    "browser_hosts": "浏览器 Host 白名单",
+    "auth": "API 鉴权 / 无 Token 写白名单",
 }
 
 
@@ -440,7 +443,7 @@ def get_section(data_dir: str, section: str) -> dict:
             "section": section,
             "data": {
                 "enabled": data.get("enabled", True),
-                "default_wait_ms": data.get("default_wait_ms", 45000),
+                "default_wait_ms": data.get("default_wait_ms", 8000),
                 "write_memory": data.get("write_memory", True),
                 "devices": devices,
             },
@@ -452,15 +455,10 @@ def get_section(data_dir: str, section: str) -> dict:
         return {"section": section, "data": cfg.get("mailbus_claude") or {}}
     data = cfg.get(section) or {}
     if section == "mailbus_internal_llm":
-        data = _sanitize_llm_section(copy.deepcopy(data))
+        from lib.adapters.internal_llm.config_resolve import provider_view
+
+        data = provider_view(data, data_dir)
     return {"section": section, "data": data}
-
-
-def _sanitize_llm_section(data: dict) -> dict:
-    for name, pc in (data.get("providers") or {}).items():
-        if isinstance(pc, dict) and pc.get("api_key"):
-            pc["api_key"] = "***"
-    return data
 
 
 def _get_services_section(cfg: dict, data_dir: str) -> dict:
@@ -514,72 +512,79 @@ def _get_services_section(cfg: dict, data_dir: str) -> dict:
     }
 
 
-# 资产路径段（28b）：skill/rule/identity 三项，默认=仓库内 junction 路径，自定义=Obsidian Vault 目录
+# 资产路径段：仓库内 skills/rules/identities 为出厂默认（可提交 example）；自定义写 config.asset_paths
 ASSET_PATH_SPECS = [
     {
         "key": "skills",
         "env": "MAILBUS_SKILLS_ROOT",
         "default": "skills",
-        "vault": "Agent/01-mailbus/012-skills",
         "label": "技能",
-        "hint": "默认=仓库 skills/（junction→Vault）；自定义=Obsidian 01-mailbus/012-skills",
+        "hint": "默认=仓库 skills/（公开 example）；自定义=本机绝对路径（如 Vault）",
     },
     {
         "key": "rules",
         "env": "MAILBUS_RULES_ROOT",
         "default": "rules",
-        "vault": "Agent/01-mailbus/011-rule",
         "label": "规则",
-        "hint": "默认=仓库 rules/（junction→Vault）；自定义=Obsidian 01-mailbus/011-rule",
+        "hint": "默认=仓库 rules/（公开 example）；自定义=本机绝对路径",
     },
     {
         "key": "identity",
         "env": "MAILBUS_IDENTITIES_ROOT",
         "default": "identities",
-        "vault": "Agent/01-mailbus/018-identities",
         "label": "身份",
-        "hint": "默认=仓库 identities/（junction→Vault）；自定义=Obsidian 01-mailbus/018-identities",
+        "hint": "默认=仓库 identities/（仅示例人设）；自定义=本机绝对路径",
     },
 ]
 
 
 def _get_asset_paths_section(cfg: dict, data_dir: str) -> dict:
-    """skill/rule/identity 三资产当前生效路径 + env 覆盖状态（只读）。"""
-    from lib.infra.constants import (
-        MAILBUS_IDENTITIES_ROOT,
-        MAILBUS_RULES_ROOT,
-        MAILBUS_SKILLS_ROOT,
-        PROJECT_ROOT,
-    )
+    """skill/rule/identity：config.asset_paths 为 SoT；默认=仓库内目录；自定义覆盖。"""
+    from lib.infra.constants import PROJECT_ROOT
 
     load_mailbus_env()
     root = PROJECT_ROOT
-    defaults = {
-        "skills": str(MAILBUS_SKILLS_ROOT),
-        "rules": str(MAILBUS_RULES_ROOT),
-        "identity": str(MAILBUS_IDENTITIES_ROOT),
-    }
+    stored = cfg.get("asset_paths") if isinstance(cfg.get("asset_paths"), dict) else {}
     items = []
     for spec in ASSET_PATH_SPECS:
+        key = spec["key"]
+        default_path = str(root / spec["default"])
+        entry = stored.get(key) if isinstance(stored.get(key), dict) else {}
+        mode = str(entry.get("mode") or "").strip() or None
+        custom = str(entry.get("path") or entry.get("custom") or "").strip()
         env_val = os.environ.get(spec["env"], "").strip()
-        effective = env_val or defaults[spec["key"]]
-        mode = "custom" if env_val else "default"
+        # 优先级：config 自定义 > env 遗留 > 仓库默认
+        if mode == "custom" and custom:
+            effective = custom
+            mode = "custom"
+        elif mode == "default" or (not mode and not env_val):
+            effective = default_path
+            mode = "default"
+            custom = ""
+        elif env_val:
+            # 兼容旧 .env：视为自定义，直到用户在设置页显式选默认
+            effective = env_val
+            mode = "custom"
+            custom = env_val
+        else:
+            effective = default_path
+            mode = "default"
+            custom = ""
         items.append({
-            "key": spec["key"],
+            "key": key,
             "label": spec["label"],
             "env": spec["env"],
-            "default": str(root / spec["default"]),
+            "default": default_path,
             "effective": effective,
             "mode": mode,
-            "custom": env_val,
-            "vault": spec["vault"],
+            "custom": custom,
             "hint": spec["hint"],
             "exists": os.path.isdir(effective),
         })
     return {
         "section": "asset_paths",
-        "data": {"items": items},
-        "note": "两态原则：项目内只允许冻结最小版（默认）或 example；自定义指向 Obsidian Vault 时避免双源。保存即写 .env（patch_env）。",
+        "data": {"items": items, "asset_paths": stored},
+        "note": "出厂默认=仓库 skills/rules/identities（example 可提交 GitHub）。自定义路径写入 config.asset_paths，覆盖默认。",
     }
 
 
@@ -715,8 +720,8 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
             cfg["browser_hosts"] = [str(h).strip() for h in hosts if str(h).strip()]
         requires_restart.append("browser_hosts")
     elif section == "asset_paths":
-        # 资产路径：自定义 → 写对应 env；默认 → 删除 env 键（回落到仓库 junction 默认）
-        allowed_env = {s["env"] for s in ASSET_PATH_SPECS}
+        # 资产路径：写入 config.asset_paths；自定义同步 .env，默认清除对应 env（避免双源）
+        allowed_env = {s["env"]: s for s in ASSET_PATH_SPECS}
         items = patch.get("items")
         if not isinstance(items, list) or not items:
             raise ValueError("asset_paths patch requires items[]")
@@ -724,33 +729,63 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
         env_path = os.path.join(root, ".env")
         updated: List[str] = []
         pending: List[Tuple[str, str | None]] = []
+        stored = dict(cfg.get("asset_paths") or {}) if isinstance(cfg.get("asset_paths"), dict) else {}
         for it in items:
             if not isinstance(it, dict):
                 continue
             env_key = it.get("env") or ""
-            if env_key not in allowed_env:
+            spec = allowed_env.get(env_key)
+            if not spec:
                 continue
             mode = it.get("mode", "default")
+            key = spec["key"]
             if mode == "custom" and it.get("custom"):
-                pending.append((env_key, str(it["custom"])))
+                custom = str(it["custom"]).strip()
+                pending.append((env_key, custom))
+                stored[key] = {"mode": "custom", "path": custom}
             elif mode == "default":
                 pending.append((env_key, None))
+                stored[key] = {"mode": "default", "path": ""}
+            updated.append(env_key)
+        cfg["asset_paths"] = stored
         if pending and not os.path.isfile(env_path):
             os.makedirs(root, exist_ok=True)
             open(env_path, "a", encoding="utf-8").close()
         for env_key, val in pending:
             if val is None:
                 _unset_env_key(env_path, env_key)
+                os.environ.pop(env_key, None)
             else:
                 _set_env_key(env_path, env_key, val)
-            updated.append(env_key)
-        load_mailbus_env()
+                os.environ[env_key] = val
+        json_write(path, cfg)
         return {
             "section": "asset_paths",
             "requires_restart": ["env"],
             "warnings": [],
             "updated": updated,
+            "data": _get_asset_paths_section(cfg, data_dir).get("data"),
         }, ["env"]
+    elif section == "auth":
+        body = patch.get("data") if isinstance(patch.get("data"), dict) else patch
+        current = cfg.get("auth") if isinstance(cfg.get("auth"), dict) else {}
+        next_auth = dict(current)
+        if "allow_write_without_token" in body:
+            next_auth["allow_write_without_token"] = bool(body["allow_write_without_token"])
+        for cidr_key in ("write_without_token_cidrs", "exempt_cidrs", "cors_origins"):
+            if cidr_key in body:
+                raw = body[cidr_key]
+                if isinstance(raw, str):
+                    raw = [x.strip() for x in raw.replace(";", "\n").splitlines() if x.strip()]
+                if not isinstance(raw, list):
+                    raise ValueError(f"{cidr_key} must be list or multiline string")
+                next_auth[cidr_key] = [str(x).strip() for x in raw if str(x).strip()]
+                if cidr_key != "cors_origins" and (
+                    "0.0.0.0/0" in next_auth[cidr_key] or "::/0" in next_auth[cidr_key]
+                ):
+                    raise ValueError("拒绝过宽网段 0.0.0.0/0 或 ::/0")
+        cfg["auth"] = next_auth
+        requires_restart.append("auth")
     elif section == "mailbus_device_bridge":
         current = cfg.get(section) or {}
         next_cfg = dict(current)
@@ -773,9 +808,9 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
                     continue
                 # UI 脱敏后可能不回传 token：空串则保留旧值，避免误清空
                 if not str(item.get("token") or "").strip():
-                    old_dev = prev_by_id.get(did) or {}
-                    if str(old_dev.get("token") or "").strip():
-                        item["token"] = old_dev["token"]
+                    old = prev_by_id.get(did) or {}
+                    if str(old.get("token") or "").strip():
+                        item["token"] = old["token"]
                     else:
                         item.pop("token", None)
                 cleaned.append(item)
@@ -787,6 +822,12 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
         if section == "mailbus_internal_llm":
             patch = _strip_llm_secrets_from_patch(patch)
         cfg[section] = _deep_merge(current, patch)
+        if section == "mailbus_internal_llm":
+            # 删除 provider 用 patch.providers.<name> = null；此处清理 null 项，避免残留空对象
+            provs = (cfg[section] or {}).get("providers")
+            if isinstance(provs, dict):
+                for name in [n for n, v in provs.items() if v is None]:
+                    provs.pop(name, None)
         if section in ("scheduler", "mailbus_internal_llm", "mailbus_intake_bridge", "smart_routing"):
             requires_restart.append(section)
         if section == "smart_routing":
@@ -795,16 +836,29 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
             invalidate_ollama_probe_cache()
 
     errors = validate_config(cfg)
-    blocking = [e for e in errors if e.startswith("agents.") and "未知字段" in e]
+    # 阻断项：agents 未知字段 + 任意「缺少必需字段」类错误一律不落盘
+    blocking = [
+        e for e in errors
+        if (e.startswith("agents.") and "未知字段" in e)
+        or e.startswith("缺少必需字段")
+        or ": 期望 " in e
+    ]
     if blocking:
-        raise ValueError("; ".join(blocking[:3]))
+        raise ValueError("; ".join(blocking[:5]))
 
-    save_config(path, cfg)
-    result: dict = {"section": section, "requires_restart": requires_restart, "warnings": errors[:5]}
+    json_write(path, cfg)
+    result: dict = {
+        "section": section,
+        "requires_restart": requires_restart,
+        "warnings": [e for e in errors if e not in blocking][:5],
+        "effects": [],
+    }
     if section == "services":
         result.update(_get_services_section(cfg, data_dir))
         if persist_seed:
             result["persist_seed"] = True
+    if section == "auth":
+        result["data"] = cfg.get("auth") or {}
     return result, requires_restart
 
 

@@ -32,8 +32,16 @@ class TestRulesRegistry(unittest.TestCase):
 
     def test_default_derivation(self):
         rels = default_rule_paths("spec-designer", "hermes_profile")
+        self.assertIn("01-mailbus/011-rule/0111-common/agent-universal", rels)
+        self.assertIn("01-mailbus/011-rule/0111-common/memory-routing", rels)
         self.assertIn("01-mailbus/011-rule/0112-frameworks/hermes_profile/delivery", rels)
         self.assertIn("01-mailbus/014-team/0141-positions/spec-designer/boundaries", rels)
+
+    def test_resolve_agent_universal_skill_md(self):
+        p = resolve_rule_path("01-mailbus/011-rule/0111-common/agent-universal")
+        self.assertEqual(p.name, "SKILL.md")
+        self.assertTrue(p.is_file(), msg=str(p))
+        self.assertIn("0111-common", str(p).replace("\\", "/"))
 
     def test_resolved_paths_exist(self):
         from lib.adapters.config.agent_registry import load_all_agents

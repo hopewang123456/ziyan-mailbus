@@ -10,6 +10,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+# 必须先加载 .env 再 import 会触发 constants 的模块（AGENT_VAULT_ROOT 等在 import 时固化）
+from lib.infra.env_bootstrap import load_mailbus_env  # noqa: E402
+
+load_mailbus_env()
+
 from lib.adapters.config.agent_registry import load_all_agents  # noqa: E402
 from lib.adapters.config.sync_layers import build_skills_index_from_registry  # noqa: E402
 

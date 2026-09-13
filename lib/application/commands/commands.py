@@ -36,6 +36,7 @@ from lib.domain.models import (
     Message, MsgStatus, Priority, MsgType, Inbox, AgentConfig, BusConfig,
 )
 from lib.infra import mbus_log
+from lib.infra.constants import PROJECT_ROOT_STR
 from lib.infra.utils import (
     json_read, json_write, jsonl_append, log_error, resolve_paths,
     build_message, _now_iso, _ensure_dir, file_lock,
@@ -1486,7 +1487,7 @@ def cmd_review(args) -> int:
     if not review_script:
         review_script = os.environ.get("MAILBUS_REVIEW_SCRIPT", "")
     if not review_script:
-        mail_home = os.environ.get("MAIL_HOME", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        mail_home = os.environ.get("MAIL_HOME", PROJECT_ROOT_STR)
         review_script = os.path.join(mail_home, "..", "pr-agent", "review.py")
     review_script = os.path.normpath(review_script)
     if os.path.isfile(review_script):

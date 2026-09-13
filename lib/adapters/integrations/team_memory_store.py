@@ -1,4 +1,4 @@
-"""team-memory.db 写入 — schema 与 hermes-data/.hermes/scripts/memory.py 对齐。"""
+"""team-memory.db 写入 — schema 与 mailbus-hermes/.hermes/scripts/memory.py 对齐。"""
 
 from __future__ import annotations
 
