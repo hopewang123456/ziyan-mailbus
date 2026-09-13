@@ -6,7 +6,7 @@
 
 - Push: `docker exec mailbus-dsh dsh --profile headless 'MSG'`
 - 非交互单次 headless 执行；**永不 auto_ack**
-- 常驻 web（实例控制台）映射 `3080`，人看轨迹 / 试装 preset
+- 常驻 web（实例控制台）仅容器内 `127.0.0.1:3080`（不映射宿主机；主链路 headless push）
 
 ## 交付 SoT
 
