@@ -1,6 +1,6 @@
 """Canonical ↔ Google A2A wire 映射。
 
-规范：mail/docs/a2a-field-mapping.md
+规范：access 适配层 / A2A 字段映射（见仓库 docs 或 Vault 知识库；仓内以 adapter SPEC 为准）
 金样例：store/examples/golden-a2a-path-*.json
 """
 from __future__ import annotations

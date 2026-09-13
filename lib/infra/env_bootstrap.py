@@ -1,7 +1,10 @@
 """启动时加载 mailbus 环境变量（.env）。
 
-加载链：`migrate/env.template` 或 `config/env.template` → 复制为 `mailbus-core/.env`
+加载链：`migrate/env.template` 或 `config/env.template` → 复制为项目根 `.env`
 → 本模块读 `.env` + `docker-agents/.env`。
+
+框架工作区路径（Hermes/OpenClaw/Codex/DSH 等）**不再**默认猜
+`MAILBUS_ROOT.parent/Agent/docker/...`；未在 .env / 设置页配置则为空，由 doctor 提示。
 """
 
 from __future__ import annotations
@@ -13,16 +16,8 @@ _LOADED = False
 
 
 def default_hermes_data_dir(repo_parent: Path) -> str:
-    """Hermes 运行时默认：<PROJECT_ROOT>/mailbus-hermes/.hermes（与 mail 同盘；旧 hermes-data/.hermes 仅作回退）。"""
-    candidates = (
-        repo_parent / "mailbus-hermes" / ".hermes",
-        repo_parent.parent / "hermes-data" / ".hermes",
-        repo_parent / "hermes-data" / ".hermes",
-    )
-    for path in candidates:
-        if path.is_dir():
-            return str(path)
-    return str(candidates[0])
+    """兼容旧调用：仅当显式需要默认值时返回空串（不再猜 Agent/docker）。"""
+    return ""
 
 
 def _parse_env_file(path: Path) -> None:
@@ -75,76 +70,43 @@ def load_mailbus_env() -> None:
     )
     os.environ.setdefault("MAILBUS_DATA", data)
     os.environ.setdefault("MAILBUS_API_PORT", os.environ.get("MAILBUS_API_PORT") or "9814")
-
-    parent = Path(os.environ["MAILBUS_ROOT"]).resolve().parent
-    os.environ.setdefault(
-        "OPENCLAW_WORKSPACE",
-        os.environ.get("OPENCLAW_WORKSPACE") or str(parent / "openclaw_space"),
-    )
-    os.environ.setdefault(
-        "OPENCODE_ROOT",
-        os.environ.get("OPENCODE_ROOT") or str(parent / "opencode"),
-    )
-    os.environ.setdefault(
-        "NODE_MODULES",
-        os.environ.get("NODE_MODULES") or str(parent / "node_modules"),
-    )
-    if not os.environ.get("HERMES_DATA"):
-        os.environ["HERMES_DATA"] = default_hermes_data_dir(parent)
     os.environ.setdefault(
         "TEAM_PACK_ROOT",
-        os.environ.get("TEAM_PACK_ROOT") or str(parent / "team-pack"),
+        os.environ.get("TEAM_PACK_ROOT") or str(root / "team-pack"),
     )
-    os.environ.setdefault(
-        "CODEX_WORKSPACE",
-        os.environ.get("CODEX_WORKSPACE") or str(parent / "codex"),
-    )
-    # 知识库根：未设置时不 setdefault，由 constants 回落到仓库内 demo 路径。
-    # 本机开发：靠 junction（mail/skills → Vault）+ docker-compose.override.yml；
-    # 不要用 .env 把 MAILBUS_*_ROOT 指到 Vault（避免与 junction 双源）。
-    # CI/publish：可用 MAILBUS_*_ROOT / TEAM_PACK_*_ROOT 覆盖到仓库相对路径。
+    # 知识库根 / 框架工作区：仅尊重已有 env 或设置页写入；不 setdefault 到兄弟仓。
 
 
 def mailbus_paths() -> dict[str, str]:
-    """返回常用路径（需先 load_mailbus_env）。"""
+    """返回常用路径（需先 load_mailbus_env）。未配置的框架路径为空串。"""
     load_mailbus_env()
     root = Path(os.environ["MAILBUS_ROOT"]).resolve()
-    repo_parent = root.parent
     compose = root / "docker-agents"
-    scripts = repo_parent / "scripts"
-    hermes_data = os.environ.get("HERMES_DATA") or default_hermes_data_dir(repo_parent)
     return {
         "root": str(root),
         "mail_dir": os.environ.get("MAIL_DIR", str(root)),
         "data_dir": os.environ["MAILBUS_DATA"],
         "compose_dir": str(compose),
-        "scripts_dir": str(scripts),
-        "team_pack_root": os.environ.get("TEAM_PACK_ROOT", str(repo_parent / "team-pack")),
-        "openclaw_workspace": os.environ.get("OPENCLAW_WORKSPACE", str(repo_parent / "openclaw_space")),
-        "opencode_root": os.environ.get("OPENCODE_ROOT", str(repo_parent / "opencode")),
-        "node_modules": os.environ.get("NODE_MODULES", str(repo_parent / "node_modules")),
-        "hermes_data": hermes_data,
-        "codex_workspace": os.environ.get("CODEX_WORKSPACE", str(repo_parent / "codex")),
+        "scripts_dir": str(root / "scripts"),
+        "team_pack_root": os.environ.get("TEAM_PACK_ROOT", str(root / "team-pack")),
+        "openclaw_workspace": os.environ.get("OPENCLAW_WORKSPACE", ""),
+        "opencode_root": os.environ.get("OPENCODE_ROOT", ""),
+        "node_modules": os.environ.get("NODE_MODULES", ""),
+        "hermes_data": os.environ.get("HERMES_DATA", ""),
+        "codex_workspace": os.environ.get("CODEX_WORKSPACE", ""),
+        "codex_home": os.environ.get("CODEX_HOME", ""),
+        "dsh_workspace": os.environ.get("DSH_WORKSPACE", ""),
         "skills_root": os.environ.get("MAILBUS_SKILLS_ROOT", str(root / "skills")),
         "rules_root": os.environ.get("MAILBUS_RULES_ROOT", str(root / "rules")),
         "plans_root": os.environ.get("MAILBUS_PLANS_ROOT", str(root / "plans")),
         "docs_root": os.environ.get("MAILBUS_DOCS_ROOT", str(root / "docs")),
         "identities_root": os.environ.get("MAILBUS_IDENTITIES_ROOT", str(root / "identities")),
-        "team_pack_skills_root": os.environ.get(
-            "TEAM_PACK_SKILLS_ROOT",
-            str(Path(os.environ.get("TEAM_PACK_ROOT", str(repo_parent / "team-pack"))) / "skills"),
-        ),
-        "team_pack_rules_root": os.environ.get(
-            "TEAM_PACK_RULES_ROOT",
-            str(Path(os.environ.get("TEAM_PACK_ROOT", str(repo_parent / "team-pack"))) / "rules"),
-        ),
         "api_port": os.environ["MAILBUS_API_PORT"],
         "compose_project": os.environ["COMPOSE_PROJECT_NAME"],
-        # Prefer in-repo windows/; fall back to legacy sibling scripts/ for older layouts
         "fix_portproxy_ps1": str(
             (root / "windows" / "fix-wsl-localhost.ps1")
             if (root / "windows" / "fix-wsl-localhost.ps1").is_file()
-            else (scripts / "fix-wsl-localhost.ps1")
+            else ""
         ),
         "windows_dir": str(root / "windows"),
         "ensure_ollama_ps1": str(root / "tools" / "ensure-ollama.py"),

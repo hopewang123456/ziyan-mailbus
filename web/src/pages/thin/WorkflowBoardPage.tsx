@@ -66,6 +66,57 @@ function gateLabel(g: Gate, i: number): string {
   return labelOf(g.display, g.gate_id || g.id || `gate-${i + 1}`);
 }
 
+/** 轻量阶段流图（非通用 DAG 引擎；按 phases 顺序 + gates 挂点） */
+function PhaseFlowDiagram({ phases, gates }: { phases: Phase[]; gates: Gate[] }) {
+  const n = Math.max(phases.length, 1);
+  const w = Math.max(320, n * 120);
+  const h = 88;
+  const nodes = phases.map((ph, i) => ({
+    x: 40 + (i * (w - 80)) / Math.max(n - 1, 1),
+    y: 36,
+    label: phaseLabel(ph, i),
+    id: ph.id || `p${i}`,
+  }));
+  return (
+    <div className="soft-inset overflow-x-auto">
+      <p className="mb-2 text-[11px] text-mute">阶段流（顺序）· gates 标注在末段附近</p>
+      <svg width={w} height={h} className="max-w-none text-frost" role="img" aria-label="workflow phases">
+        {nodes.slice(0, -1).map((a, i) => {
+          const b = nodes[i + 1];
+          return (
+            <line
+              key={`e-${i}`}
+              x1={a.x + 28}
+              y1={a.y}
+              x2={b.x - 28}
+              y2={b.y}
+              stroke="currentColor"
+              strokeOpacity={0.35}
+              strokeWidth={2}
+            />
+          );
+        })}
+        {nodes.map((node) => (
+          <g key={node.id} transform={`translate(${node.x}, ${node.y})`}>
+            <circle r={14} fill="var(--color-rail, #1e293b)" stroke="currentColor" strokeOpacity={0.5} />
+            <text textAnchor="middle" y={4} fontSize={9} fill="currentColor">
+              {String(node.label).slice(0, 4)}
+            </text>
+            <text textAnchor="middle" y={32} fontSize={10} fill="currentColor" opacity={0.7}>
+              {String(node.label).slice(0, 12)}
+            </text>
+          </g>
+        ))}
+        {gates.slice(0, 4).map((g, i) => (
+          <text key={String(g.gate_id || g.id || i)} x={w - 8} y={14 + i * 12} textAnchor="end" fontSize={9} fill="currentColor" opacity={0.55}>
+            gate:{gateLabel(g, i).slice(0, 16)}
+          </text>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 function cloneWf(w: WfDetail): WfDetail {
   return JSON.parse(JSON.stringify(w)) as WfDetail;
 }
@@ -369,6 +420,11 @@ export function WorkflowBoardPage() {
                       </div>
 
                       <div>
+                        {(draft.phases || []).length > 0 ? (
+                          <div className="mb-3">
+                            <PhaseFlowDiagram phases={draft.phases || []} gates={draft.gates || []} />
+                          </div>
+                        ) : null}
                         <div className="mb-2 flex items-center justify-between">
                           <p className="text-[11px] font-medium text-frost/80">阶段 phases</p>
                           <button type="button" className="hud-btn" onClick={addPhase}>

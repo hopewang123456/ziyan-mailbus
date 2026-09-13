@@ -2,7 +2,7 @@
  * 总线扩展：路径 / 权限 / A2A — 表单展示（非裸 JSON）
  */
 import { useEffect, useMemo, useState } from "react";
-import { api } from "../lib/api";
+import { api, formatSettingsEffects } from "../lib/api";
 import { ErrorAlert } from "./ErrorAlert";
 import { SoftFold } from "./SoftFold";
 
@@ -90,7 +90,7 @@ export function BusExtrasPanel() {
     });
     setBusy(false);
     if (r.ok) {
-      setMsg("权限已保存");
+      setMsg(formatSettingsEffects(r.data, "权限已保存"));
       void load();
     } else setErr(r.error);
   }

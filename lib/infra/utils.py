@@ -30,7 +30,6 @@ from .constants import (
     MAILBUS_SKILLS_ROOT_STR,
     MAILBUS_IDENTITIES_ROOT_STR,
     TEAM_PACK_ROOT_STR,
-    TEAM_PACK_SKILLS_ROOT_STR,
 )
 
 # Store-relative path markers for to_container_store_path (§10 #40).
@@ -61,6 +60,40 @@ def configure_stdio_utf8() -> None:
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, OSError, ValueError):
             pass
+
+
+def parse_iso_dt(s: str) -> datetime:
+    """安全解析 ISO 时间字符串（带或不带时区），返回 timezone-aware datetime。
+
+    支持格式：
+      - 2026-06-03T15:12:58+0800
+      - 2026-06-03T15:12:58
+    解析失败时返回 epoch (UTC) 作为 fallback，确保排序不崩溃。
+
+    SoT moved here (2026-09): adapters 层也需此工具（task_fsm/jobs），
+    不再允许 adapters → application 反向引用；
+    `lib/application/orchestration/tracker._parse_iso_dt` 为兼容别名。
+    """
+    if not s:
+        return datetime(1970, 1, 1, tzinfo=timezone.utc)
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except ValueError:
+        pass
+    try:
+        return datetime.strptime(s, "%Y-%m-%dT%H:%M:%S%z")
+    except ValueError:
+        pass
+    try:
+        # 无时区 → 视为 UTC
+        dt = datetime.strptime(s, "%Y-%m-%dT%H:%M:%S")
+        return dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        pass
+    return datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 # ── 路径常量 ──────────────────────────────────────────────────────────
@@ -149,8 +182,12 @@ def resolve_mailbus_path(data_dir: str, ref: str) -> str:
         win = "E:" + ref[7:].replace("/", os.sep)
         if os.path.isfile(win):
             return win
-        # mail 仓库内 identities 回退
-        tail = ref.split("/ai_tools/mail/", 1)[-1] if "/ai_tools/mail/" in ref else ref.split("/mailbus/", 1)[-1] if "/mailbus/" in ref else ""
+        # 仓库内 identities 回退（mailbus 优先，兼容旧 mail 路径）
+        tail = ""
+        for marker in ("/ai_tools/mailbus/", "/ai_tools/mail/", "/mailbus/", "/mail/"):
+            if marker in ref:
+                tail = ref.split(marker, 1)[-1]
+                break
         if tail:
             cand = os.path.join(root, tail.replace("/", os.sep))
             if os.path.isfile(cand):
@@ -159,16 +196,13 @@ def resolve_mailbus_path(data_dir: str, ref: str) -> str:
         cand = os.path.join(TEAM_PACK_ROOT_STR, ref[len("team-pack/"):].replace("/", os.sep))
         if os.path.isfile(cand):
             return cand
-        # team-pack 知识子树可单独改根
-        if ref.startswith("team-pack/skills/"):
-            cand = os.path.join(
-                TEAM_PACK_SKILLS_ROOT_STR,
-                ref[len("team-pack/skills/"):].replace("/", os.sep),
-            )
-            if os.path.isfile(cand):
-                return cand
-    if ref.startswith("mailbus-core/") or ref.startswith("mail/"):
-        prefix = "mailbus-core/" if ref.startswith("mailbus-core/") else "mail/"
+    if ref.startswith("mailbus-core/") or ref.startswith("mailbus/") or ref.startswith("mail/"):
+        if ref.startswith("mailbus-core/"):
+            prefix = "mailbus-core/"
+        elif ref.startswith("mailbus/"):
+            prefix = "mailbus/"
+        else:
+            prefix = "mail/"
         tail = ref[len(prefix):]
         cand = os.path.join(MAILBUS_ROOT_STR, tail.replace("/", os.sep))
         if os.path.isfile(cand):

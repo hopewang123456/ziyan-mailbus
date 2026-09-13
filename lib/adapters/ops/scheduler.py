@@ -236,10 +236,9 @@ def _scheduler_loop(data_dir: str, config: dict, sched_cfg: dict, stop: threadin
         scan_interval = None
         activity = {}
         try:
-            from lib.application.integrations.token_budget import (
-                effective_scan_interval_seconds,
-                measure_mailbus_activity,
-            )
+            # adapter→application 跨层违规修掉：走 composition。
+            from lib.composition import effective_scan_interval_seconds, measure_mailbus_activity
+
             activity = measure_mailbus_activity(data_dir, agents, config)
             scan_interval = effective_scan_interval_seconds(config, activity)
             with _state_lock:

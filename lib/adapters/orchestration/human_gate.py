@@ -11,7 +11,8 @@ from lib.adapters.orchestration.human_queue import enqueue_plan_approval as hq_e
 from lib.adapters.orchestration.human_queue import find_by_task_gate as hq_find_gate
 from lib.adapters.orchestration.human_queue import list_items as hq_list_items
 from lib.adapters.orchestration.human_queue import load_queue as hq_load
-from lib.application.orchestration.human_queue_resolve import resolve_human_queue_item
+# resolve_human_queue_item 改走 composition（adapter→application 跨层违规修掉）
+from lib.composition import resolve_human_queue_item
 from lib.interfaces.gates import AuditPort
 
 

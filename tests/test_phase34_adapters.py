@@ -22,7 +22,7 @@ from lib.infra.constants import MAILBUS_ROOT
 from lib.infra.utils import to_wsl_path
 from lib.adapters.config.init_store import build_agent_entry, run_init_store
 from lib.adapters.container.privilege import _host_path_under_mailbus, _to_container_mailbus_path
-from lib.adapters.config.sync_layers import dashboard_skills_dirs
+from lib.adapters.config.sync_layers import dashboard_skills_dirs, host_skills_dir_for_agent
 
 
 class TestAccessAdapters(unittest.TestCase):
@@ -125,7 +125,13 @@ class TestDashboardSkillsDirs(unittest.TestCase):
         agents = sorted(_registry().keys())
         if not agents:
             self.skipTest("no agents configured (open-source default)")
-        for aid in agents[:4]:
+        # dsh 等框架经 prompt 契约桥注入 skills，无宿主 skills 目录，不在此校验范围
+        syncable = [
+            aid for aid in agents
+            if host_skills_dir_for_agent(aid, mail_root=MAILBUS_ROOT) is not None
+        ]
+        checked = syncable[:4] or agents[:4]
+        for aid in checked:
             self.assertIn(aid, dirs, msg=f"missing skills dir for {aid}")
 
 

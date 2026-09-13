@@ -62,8 +62,15 @@ class TestAgentRegistry(unittest.TestCase):
         self.assertTrue(any(sid.startswith("role-overlay-") for sid in ids))
 
     def test_resolve_skill_src_v3_path(self):
-        src = resolve_skill_src("02-members/021-common/0211-rules/agent-universal")
-        expected = AGENT_VAULT_ROOT / "02-members" / "021-common" / "0211-rules" / "agent-universal" / "SKILL.md"
+        src = resolve_skill_src("01-mailbus/011-rule/0111-common/agent-universal")
+        expected = (
+            AGENT_VAULT_ROOT
+            / "01-mailbus"
+            / "011-rule"
+            / "0111-common"
+            / "agent-universal"
+            / "SKILL.md"
+        )
         self.assertEqual(src.resolve(), expected.resolve())
         self.assertTrue(src.is_file(), msg=str(src))
 

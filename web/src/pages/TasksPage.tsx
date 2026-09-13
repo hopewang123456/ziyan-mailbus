@@ -21,6 +21,7 @@ const FSM_ACTIONS = [
   "pause",
   "priority",
   "approve-plan",
+  "approve-join",
   "accept",
   "continue",
 ] as const;
@@ -84,6 +85,8 @@ export function TasksPage() {
       }
       body.priority = p;
     }
+    if (action === "approve-plan") body.decision = "approved";
+    if (action === "approve-join") body.reviewer = "tasks_page";
     const r = await api(`/api/tasks/${encodeURIComponent(selected)}/fsm/${action}`, {
       method: "POST",
       body: JSON.stringify(body),

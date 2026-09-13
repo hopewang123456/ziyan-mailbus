@@ -3,7 +3,7 @@
   "provider_priority": ["local", "remote"],
   "providers": {
     "local": {
-      "kind": "ollama",
+      "protocol": "ollama",
       "base_url": "http://127.0.0.1:11434",
       "model": "qwen2.5:3b-instruct-q4_K_M",
       "timeout_seconds": 60,
@@ -11,16 +11,29 @@
       "max_tokens": 1024
     },
     "remote": {
-      "kind": "openai_compatible",
+      "protocol": "openai",
       "base_url": "https://api.deepseek.com/v1",
-      "api_key_env": "MAILBUS_INTERNAL_LLM_API_KEY",
+      "api_key_env": "DEEPSEEK_API_KEY",
       "model": "deepseek-chat",
+      "context_window": 65536,
+      "supports_function_calling": true,
+      "supports_vision": false,
       "timeout_seconds": 90,
       "temperature": 0.1,
       "max_tokens": 2048
     },
+    "claude": {
+      "protocol": "anthropic",
+      "base_url": "",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "model": "claude-sonnet-4-5",
+      "context_window": 200000,
+      "temperature": 0.1,
+      "max_tokens": 4096,
+      "timeout_seconds": 120
+    },
     "stub": {
-      "kind": "stub"
+      "protocol": "stub"
     }
   },
   "triggers": {

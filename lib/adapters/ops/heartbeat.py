@@ -221,8 +221,7 @@ def check_agentmemory(url: str = "") -> dict:
 
 def check_inbox_size(data_dir: str, agents: dict, warn_limit: int = DEFAULT_INBOX_WARN_LIMIT) -> list:
     """检查各 Agent inbox 活跃消息数量（不含 done/archived/closed）"""
-    from lib.application.scan import get_msg_state
-    from lib.domain.models import MsgStatus
+    from lib.domain.models import get_msg_state, MsgStatus
 
     terminal = {
         MsgStatus.DONE, MsgStatus.CLOSED, MsgStatus.ARCHIVED,

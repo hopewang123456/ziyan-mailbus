@@ -66,7 +66,7 @@ After `mailbus serve`, open `http://127.0.0.1:9814/`:
 - **Fleet / inbox** — live agent status, unread messages, send & ack
 - **Tasks** — pipeline / FSM state, assign, audit (`?reviewer=`), recover
 - **Settings** — form-based **agent config** and **model config** (agent-type / internal LLM / external services); every field is edited as a form and saved back to JSON; legacy JSON editors remain for `frameworks / mailbus_codex / mailbus_claude`
-- **Settings / Asset paths** — skills / rules / identities roots as "default / custom": default uses in-repo junction dirs (`skills/` `rules/` `identities/`, SoT in the Obsidian Vault); custom writes `.env` (`MAILBUS_SKILLS_ROOT` / `MAILBUS_RULES_ROOT` / `MAILBUS_IDENTITIES_ROOT`), restart required
+- **Settings / Asset paths** — skills / rules / identities: **default** = in-repo `skills/` `rules/` `identities/` examples; **custom** = absolute paths via settings (or `.env` escape hatch). No junction-as-product.
 - **Clinic / doctor** — one-click health checks (Hermes readiness, compose drift, token budget, …)
 
 ### Sending an A2A message
@@ -84,13 +84,16 @@ mailbus search --data-dir ./store --query order-intake
 
 自动业务中转（工作流未指定下一棒时，由 Planner 选下一个 agent）需要**至少一家可用 LLM**：
 
-| 选项 | 配置方式 | 说明 |
-|------|----------|------|
-| 本地 Ollama | 默认 `http://127.0.0.1:11434`，模型 `qwen2.5:3b-instruct-q4_K_M` | `providers.local` |
-| 远程 OpenAI-compatible | 设 `MAILBUS_INTERNAL_LLM_API_KEY`（或改 `providers.remote.api_key_env`） | `providers.remote`（默认 DeepSeek 兼容端点） |
-| 测试 stub | 无需配置 | 无网络 CI 用，返回确定性计划 |
+| 选项 | 协议 | 配置方式 | 说明 |
+|------|------|----------|------|
+| 本地 Ollama | `ollama` | 默认 `http://127.0.0.1:11434`，模型 `qwen2.5:3b-instruct-q4_K_M` | `providers.local` |
+| 远程 OpenAI 兼容 | `openai` | 设 `DEEPSEEK_API_KEY`（或改 `providers.remote.api_key_env`） | `providers.remote`（默认 DeepSeek 兼容端点） |
+| Anthropic 原生 | `anthropic` | 设 `ANTHROPIC_API_KEY`，`base_url` 留空=默认端点 | `providers.claude`（`/v1/messages` + `x-api-key`） |
+| 测试 stub | `stub` | 无需配置 | 无网络 CI 用，返回确定性计划 |
 
 - 配置集中在 `store/config.json` 的 `mailbus_internal_llm` 段：`enabled` / `providers` / `provider_priority`（默认 `["local", "remote"]`，本地优先）。Dashboard「模型配置」页可编辑；seed 见 [`config/llm/internal-llm.json`](config/llm/internal-llm.json)。
+- **Provider 字段（对齐 Cursor 配置第三方模型的范式）**：每个 provider 需 `protocol`（`openai` / `anthropic` / `ollama`）、`base_url`、`model`、`api_key_env`，可选 `api_key`、`context_window`、`supports_function_calling`、`supports_vision`、`temperature`、`max_tokens`、`timeout_seconds`。`api_key` 保存后掩码为 `***`、留空表示不更新；`api_key_configured` 为只读派生状态（由 env 或已持有 key 决定）。
+- **Anthropic 与 OpenAI 是两套协议**：`openai` 走 `/chat/completions` + `Authorization: Bearer`（同 Cursor 的 Override OpenAI Base URL）；`anthropic` 走 `/v1/messages` + `x-api-key`，`base_url` 留空即默认 `https://api.anthropic.com`（同 Cursor 的 Anthropic 原生模板）。
 - **Ollama 是可选**：无 Ollama 时用远程 LLM 做路由建议中转。
 - **只做人工指定下一棒或写死工作流时可不配 LLM**：把 `mailbus_internal_llm.enabled` 置 `false` 即可，此时自动中转不可用。
 - 诊所会探测 provider 链是否至少一家可达（`/api/llm/probe`），不可达标黄不标红。
@@ -355,21 +358,21 @@ mailbus 无论跑在 **Windows / WSL / Linux native / Docker**，都能统一探
 
 | 代号 | 名称 | 框架 | 浏览器端口 | 认证 |
 |------|------|------|-----------|------|
-| `agent-a` | Agent A | Hermes | `:9120` | admin / change-me |
-| `agent-c` | Agent C | Hermes | `:9121` | admin / change-me |
-| `agent-d` | Agent D | Hermes | `:9122` | admin / change-me |
-| `agent-l` | Agent L | Hermes | `:9125` | admin / change-me |
-| `agent-j` | Agent J | Hermes | `:9126` | admin / change-me |
-| `agent-k` | Agent K | Hermes | `:9127` | admin / change-me |
+| `agent-a` | Agent A | Hermes | `:9120` | Basic Auth → `secrets` / 设置页 |
+| `agent-c` | Agent C | Hermes | `:9121` | Basic Auth → `secrets` / 设置页 |
+| `agent-d` | Agent D | Hermes | `:9122` | Basic Auth → `secrets` / 设置页 |
+| `agent-l` | Agent L | Hermes | `:9125` | Basic Auth → `secrets` / 设置页 |
+| `agent-j` | Agent J | Hermes | `:9126` | Basic Auth → `secrets` / 设置页 |
+| `agent-k` | Agent K | Hermes | `:9127` | Basic Auth → `secrets` / 设置页 |
 | `agent-g` | Agent G | Codex | `:9240` | Web UI |
 | `agent-e` | Agent E | Codex | `:9241` | Web UI |
 | `agent-h` | Agent H | Claude Code | — | 终端 (WSL) |
 | `agent-f` | Agent F | Claude Code | — | 终端 (WSL) |
 | `agent-i` | Agent I | OpenCode | — | 终端 |
-| `agent-m` | Agent M | OpenClaw | `:18789` | token=change-me |
-| `agent-n` | Agent N | OpenClaw | `:18790` | token=change-me |
+| `agent-m` | Agent M | OpenClaw | `:18789` | `OPENCLAW_GATEWAY_TOKEN`（勿用伪默认） |
+| `agent-n` | Agent N | OpenClaw | `:18790` | `OPENCLAW_GATEWAY_TOKEN`（勿用伪默认） |
 
-> 上表为**示例名册**（demo ids）。实际名册以 `store/config.json` 的 `agents` 段为准；凭据通过 `.env` / `store/secrets.json` 配置，**不要提交真实凭据**。
+> 上表为**示例名册**（demo ids）。实际名册以 `store/config.json` 的 `agents` 段为准；凭据通过 `.env` / `store/secrets.json` 配置，**不要提交真实凭据**；`change-me` 会被 doctor 判红。
 
 ### 集成（可发现 · 可探针 · 可跳过）
 
@@ -399,10 +402,108 @@ mailbus 无论跑在 **Windows / WSL / Linux native / Docker**，都能统一探
 
 **Core 绿即可跑通最小闭环**（示例角色 + 统一信封 + file_bus 投递）。Host/Integrations 项按需在宿主机或配置后重跑。
 
+## 设备转发控制（Device Bridge）
+
+外部设备（手机 / 眼镜上游）经 **Tailscale** 把一句话安全投到电脑上**已绑定的 Agent**，并在同一次（或短轮询）HTTP 中拿到回复。手机是**纯管道**，不是 Agent；通讯式**一轮一答**，不是邮件分发。
+
+- **与 Intake Bridge 分离**：`mailbus_intake_bridge` 管模型/商机自动 spawn；`mailbus_device_bridge` 管外部设备会话入口，互不干扰。
+- **每请求新 `session_id`**（UUID，用完即弃），禁止长会话粘连、防上下文挤压。
+- **每轮落 memory**：问 + 答各写一条（SQLite 同步 + AgentMemory 后台降级），防绑定 Agent「失忆」。
+- **MVP 不建工单**：`action` 仅支持 `chat`；建工单属 Phase 2。
+
+### 配置（驾驶舱「总线」→ 设备桥）
+
+Section 名 `mailbus_device_bridge`，种子 [`config/edge/device-bridge.json`](config/edge/device-bridge.json)，init 后合并进 `store/config.json`。
+
+公开测试角色 **`test`**（`type=none`）种子见 [`config/edge/test-agent.json`](config/edge/test-agent.json)；`mailbus init` / align 会写入花名册。本地验通请绑 `agent_id=test`，不要绑真人设。
+
+```json
+{
+  "enabled": true,
+  "default_wait_ms": 8000,
+  "write_memory": true,
+  "devices": [
+    {
+      "id": "zm3a7f9c2e",
+      "label": "测试机",
+      "token": "（驾驶舱点生成）",
+      "agent_id": "test",
+      "enabled": true
+    }
+  ]
+}
+```
+
+- **鉴权主键**：每设备独立 token（存 `token_env` 指向的环境变量，或内联 `token`），权限远窄于驾驶舱 `MAILBUS_API_TOKEN`。
+- **可选 IP 白名单**：配 `tailscale_ips` 后，只有该 Tailscale IP 的请求才放行。
+- **绑定**：一设备（token）只绑一个 `agent_id`；多个设备可绑多个 Agent。
+
+### 本地模拟回复（推荐先测通）
+
+`test` 没有真实框架 CLI。另开终端跑模拟器，盯 inbox 并写 `replies/test.json`：
+
+```bash
+python tools/device_bridge_mock_agent.py --data-dir ./store
+```
+
+（默认 `--agent test`。）然后再 curl / 快捷指令打 `POST /api/device/chat`，即可拿到 `status=ok` + `reply`。
+
+### 协议（手机 / 眼镜上游共用）
+
+基址：`http://<电脑 MagicDNS 或 100.x>:9814`（仅 tailnet）。
+
+| 方法 | 路径 | 作用 |
+|------|------|------|
+| POST | `/api/device/chat` | 发一轮会话，尽量同步返回 `reply` |
+| POST | `/api/device/chat` + `stream=true` 或 `Accept: text/event-stream` | SSE：`accepted` → `waiting`* → `ok` / `pending` |
+| GET | `/api/device/chat/{ticket_id}` | 超时后轮询取结果 |
+
+请求体（`session_id` 可省略，服务端每请求 new UUID；`source.upstream` 标记来源）：
+
+```json
+{
+  "text": "用户或眼镜提取后的文本",
+  "session_id": "可选",
+  "stream": false,
+  "source": { "channel": "shortcuts", "device": "phone", "upstream": "manual" },
+  "action": "chat"
+}
+```
+
+鉴权：`Authorization: Bearer <设备 token>`（或 `X-Mailbus-Device-Token`）。
+
+响应：完成 `{ "status": "ok", "reply": "...", "msg_id": "...", "agent_id": "..." }`；未完成 `{ "status": "pending", "ticket_id": "...", "poll_after_ms": 2000, "hint": "...", "inbox_status": "failed|…" }`。
+
+SSE 示例（电脑）：
+
+```bash
+curl.exe -N -X POST http://127.0.0.1:9814/api/device/chat ^
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" ^
+  -H "Accept: text/event-stream" ^
+  --data-binary "{\"text\":\"ping\",\"stream\":true}"
+```
+
+默认同步等待 `default_wait_ms=8000`（种子可改）。若绑 Hermes 角色但本机 Docker/`hermes` 容器不可用，inbox 会 `failed`，`pending.hint` 会提示；验通请绑 `test` + mock。
+
+### 手机怎么测（仅 Tailscale + 快捷指令，不装自定义 App）
+
+**前置**：电脑/手机同 tailnet、Tailscale 在线；`mailbus serve`（`:9814`）在跑；目标 Agent 已注册；驾驶舱已配好该设备绑定与 token。
+
+1. **探活**：手机 Safari 打开 `http://<电脑.ts.net>:9814/api/health` → 出 JSON 即网络层通（不通先查 Tailscale 同网 / 防火墙放行 9814，仅对 tailnet 勿对公网）。
+2. **快捷指令**（名 `Mailbus 说一句`）：`询问文本` → `获取 URL 内容`（URL=`/api/device/chat`，方法 POST，Header `Authorization: Bearer <token>`，Body JSON）→ `显示结果`（解析 `reply`）。
+3. **pending 分支**：若 `status`==`pending`，等待 `poll_after_ms` 后 `GET /api/device/chat/<ticket_id>`（同 token）取 `reply`，可循环 2~5 次。
+
+**免费工具足够**：Safari 探活 + 快捷指令打 POST，无需 Postman（iOS 无好用的免费 Postman；电脑端可用 curl 先验接口，验收以手机快捷指令为准）。
+
+**建议用例**：T1 探活 → T2 错 token 401 → T3 正常一轮（说「回我：pong」）→ T4 绑定生效（只进绑定 Agent inbox）→ T5 换绑 → T6 配错 `tailscale_ips` 被拒 → T7 多设备互不串话 → T8 慢回复走 pending→poll → T9 不建工单 → T10 蜂窝网 + Tailscale 仍通。
+
+**排障**：401 查 token/Header；`pending`+`inbox_status=failed` 查绑定 Agent 的 CLI/Docker（灵昭 Hermes 需容器在线）；200 无 reply 查日志与 `default_wait_ms`；进错 Agent 查绑定；快捷指令超时走 ticket 或 SSE。
+
 ## 本版不做（防预期膨胀）
 
 - A2A **streaming**（stub 保留，债务）
 - **工单**字段 / 状态机 / 流转细则（下一 session）
+- Device Bridge **建工单**（`/api/device/task`，待 tasks 稳定后 Phase 2；当前仅 chat）
 - n8n / ComfyUI **编排 UI**（workflow CRUD）
 - Hermes identities **自动同步**验收
 - sqlite_fts / 向量 RAG 升级
@@ -461,18 +562,17 @@ tools/ · lib/api/ → lib/application/ → lib/interfaces/ ← lib/adapters/
 | `lib/infra/` | clock, paths, `mbus_log`, internal LLM bootstrap |
 
 Composition root: `lib/composition.py` only (`build_a2a_transport`, `build_transport_bundle`, `build_config_repo`, …).  
-Each package ships an `Overview.md` map. Path migration: [`docs/migration-guide.md`](docs/migration-guide.md).  
+Each package ships an `Overview.md` map. Install / path migrate: [`migrate/README.md`](migrate/README.md).  
 Harness rules: `config.harness.rules_path`; chain templates: `config/mailbus/chains.template.json`.
 
 ## Docs
 
 - Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - Agent entry: [`AGENTS.md`](AGENTS.md)
-- Migration (ports → interfaces, transport → core/a2a): [`docs/migration-guide.md`](docs/migration-guide.md)
-- Legacy bash eval: [`docs/legacy-bash-eval.md`](docs/legacy-bash-eval.md)
-- Adapter layer: [`docs/agent-adapter-layer.md`](docs/agent-adapter-layer.md)
-- Harness: [`docs/harness-runtime-spec.md`](docs/harness-runtime-spec.md)
-- Env template: `migrate/env.template`
+- Migration tooling: [`migrate/README.md`](migrate/README.md)
+- Adapter layer: `access/<framework>/adapter/SPEC.md`
+- Harness notes: `tools/harness/` (published git does not ship `/docs/` — often a local/Vault mount)
+- Env templates: `migrate/env.template`, `docker-agents/.env.example`
 
 ## License
 

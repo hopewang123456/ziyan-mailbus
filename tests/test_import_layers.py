@@ -97,22 +97,7 @@ class TestImportLayers(unittest.TestCase):
         ad_dir = ROOT / "adapters"
         if not ad_dir.is_dir():
             self.skipTest("no adapters yet")
-        allow = {
-            "task_fsm.py",
-            # Wave-2 relocated former lib-root modules (temporary debt)
-            "config_admin.py",
-            "init_store.py",
-            "doctor_checks.py",
-            "heartbeat.py",
-            "jobs.py",
-            "scheduler.py",
-            "human_gate.py",
-            "phantom_detect.py",
-            "ack_handler.py",
-            "webhook.py",
-            "registry.py",
-            "support.py",
-        }
+        allow: set[str] = set()  # 2026-09 治理完成：白名单清零
         # Wave-1: harness now under application; file_bus/results still call it
         allow_mods_prefix = ("lib.application.harness",)
         offenders: list[str] = []
@@ -125,6 +110,40 @@ class TestImportLayers(unittest.TestCase):
                 if any(mod == p or mod.startswith(p + ".") for p in allow_mods_prefix):
                     continue
                 offenders.append(f"{path.relative_to(ROOT)}:{mod}")
+        self.assertEqual(offenders, [], msg=f"layer violation: {offenders}")
+
+    def test_api_does_not_import_adapters(self):
+        """Guard: api → application only; adapters belong behind ports/composition.
+
+        allow 清零（2026-09 治理完成）：所有原列入白名单的 handler 文件已通过
+        composition root 解耦，从 api 层不再直接 import lib.adapters。
+        """
+        api_dir = ROOT / "api"
+        allow: set[str] = set()  # 2026-09 治理完成：api 白名单清零
+        offenders: list[str] = []
+        for path in api_dir.rglob("*.py"):
+            if path.name in allow:
+                continue
+            for mod in _imports_of(path):
+                if mod == "lib.adapters" or mod.startswith("lib.adapters."):
+                    offenders.append(f"{path.relative_to(ROOT)}:{mod}")
+        self.assertEqual(offenders, [], msg=f"layer violation: {offenders}")
+
+    def test_core_does_not_import_upper_layers(self):
+        """Guard: domain/core sit below application/adapters — no reverse deps.
+
+        allow = documented debt (2026-09 audit, all under core/a2a).
+        """
+        core_dir = ROOT / "core"
+        allow: set[str] = set()  # 2026-09 治理完成：core 白名单清零
+        bad_prefixes = ("lib.application", "lib.adapters", "lib.api")
+        offenders: list[str] = []
+        for path in core_dir.rglob("*.py"):
+            if path.name in allow:
+                continue
+            for mod in _imports_of(path):
+                if any(mod == p or mod.startswith(p + ".") for p in bad_prefixes):
+                    offenders.append(f"{path.relative_to(ROOT)}:{mod}")
         self.assertEqual(offenders, [], msg=f"layer violation: {offenders}")
 
 

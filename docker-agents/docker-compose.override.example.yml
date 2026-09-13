@@ -1,83 +1,60 @@
-# EXAMPLE — local-only override for Vault / machine absolute paths
-# Copy to docker-compose.override.yml (gitignored).
+# EXAMPLE — local-only volume overrides via env (no hardcoded sibling paths).
+#   cp docker-compose.override.example.yml docker-compose.override.yml
+#   cp .env.example .env   # fill MAILBUS_HOST_ROOT + workspace vars
 #
-# Replace /path/to/... with your host paths (WSL Docker: use /mnt/<drive>/...).
-# Do not commit override.yml — it is machine-private.
+# docker compose reads docker-agents/.env for ${VAR} substitution.
+# Do not commit override.yml or .env — machine-private.
 #
-# Regenerate from transport (optional): mailbus compose sync
+# Optional: mailbus compose sync
 
 services:
   hermes:
     volumes:
-      - /path/to/mail/store:/mailbus/store
-      - /path/to/mail/tools:/mailbus/tools:ro
-      - /path/to/vault/skills/mailbus:/mailbus/skills:ro
-      - /path/to/vault/rules/mailbus:/mailbus/rules:ro
-      - /path/to/mail/access:/mailbus/access:ro
-      - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
-      - /path/to/vault:/path/to/vault
-      - /path/to/mail/access/hermes/.sync:/mailbus/access/hermes/.sync
-      - /path/to/mail/store/inbox:/home/hermes/inbox:ro
-      - /path/to/hermes-data/.hermes:/home/hermes/.hermes:rw
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/tools:/mailbus/tools:ro
+      - ${MAILBUS_HOST_ROOT}/lib:/mailbus/lib:ro
+      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
+      - ${MAILBUS_HOST_ROOT}/access/external-tools:/mailbus/external-tools:ro
+      - ${HERMES_DATA}/.hermes:/home/hermes/.hermes:rw
   openclaw:
     volumes:
-      - /path/to/mail/store:/mailbus/store
-      - /path/to/mail/tools:/mailbus/tools:ro
-      - /path/to/mail/lib:/mailbus/lib:ro
-      - /path/to/vault/skills/mailbus:/mailbus/skills:ro
-      - /path/to/vault/rules/mailbus:/mailbus/rules:ro
-      - /path/to/mail/access:/mailbus/access:ro
-      - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
-      - /path/to/vault:/path/to/vault
-      - /path/to/openclaw_space:/workspace:rw
-      - /path/to/vault/skills/library/openclaw:/workspace/skills:ro
-      - /path/to/vault/memories/agent-m:/workspace/memory
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/tools:/mailbus/tools:ro
+      - ${MAILBUS_HOST_ROOT}/lib:/mailbus/lib:ro
+      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
+      - ${OPENCLAW_WORKSPACE}:/workspace:rw
   codex-web:
     volumes:
-      - /path/to/mail/store:/mailbus/store
-      - /path/to/mail/tools:/mailbus/tools:ro
-      - /path/to/mail/lib:/mailbus/lib:ro
-      - /path/to/vault/skills/mailbus:/mailbus/skills:ro
-      - /path/to/vault/rules/mailbus:/mailbus/rules:ro
-      - /path/to/mail/access:/mailbus/access:ro
-      - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
-      - /path/to/vault:/path/to/vault
-      - /path/to/node_modules:/node_modules:ro
-      - /path/to/codex:/workspace/codex:ro
-      - /path/to/vault/skills/02-agent-specific/codex:/home/node/.codex/skills:ro
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/tools:/mailbus/tools:ro
+      - ${MAILBUS_HOST_ROOT}/lib:/mailbus/lib:ro
+      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
+      - ${CODEX_WORKSPACE}:/workspace/codex:ro
   codex-review:
     volumes:
-      - /path/to/mail/store:/mailbus/store
-      - /path/to/mail/tools:/mailbus/tools:ro
-      - /path/to/mail/lib:/mailbus/lib:ro
-      - /path/to/vault/skills/mailbus:/mailbus/skills:ro
-      - /path/to/vault/rules/mailbus:/mailbus/rules:ro
-      - /path/to/mail/access:/mailbus/access:ro
-      - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
-      - /path/to/vault:/path/to/vault
-      - /path/to/node_modules:/node_modules:ro
-      - /path/to/codex-review:/workspace/codex-review:ro
-      - /path/to/vault/skills/02-agent-specific/codex:/home/node/.codex/skills:ro
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/tools:/mailbus/tools:ro
+      - ${MAILBUS_HOST_ROOT}/lib:/mailbus/lib:ro
+      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
+      - ${CODEX_REVIEW_WORKSPACE}:/workspace/codex-review:ro
   opencode:
     volumes:
-      - /path/to/mail/store:/mailbus/store
-      - /path/to/mail/tools:/mailbus/tools:ro
-      - /path/to/vault/skills/mailbus:/mailbus/skills:ro
-      - /path/to/vault/rules/mailbus:/mailbus/rules:ro
-      - /path/to/mail/access:/mailbus/access:ro
-      - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
-      - /path/to/vault:/path/to/vault
-      - /path/to/opencode:/workspace/opencode:rw
-      - /path/to/vault/skills/02-agent-specific/opencode:/workspace/opencode/skills:rw
-      - /path/to/vault/memories/agent-i:/workspace/opencode/memory
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/tools:/mailbus/tools:ro
+      - ${MAILBUS_HOST_ROOT}/lib:/mailbus/lib:ro
+      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
+      - ${OPENCODE_ROOT}:/workspace/opencode:rw
+  dsh:
+    volumes:
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
+      - ${DSH_WORKSPACE}:/home/dsh/.dsh
   mailbus:
     volumes:
-      - /path/to/mail:/mailbus
-      - /path/to/mail/store:/mailbus/store
-      - /path/to/mail/run:/mailbus/run
-      - /path/to/mail/tools:/mailbus/tools:ro
-      - /path/to/vault/skills/mailbus:/mailbus/skills:ro
-      - /path/to/vault/rules/mailbus:/mailbus/rules:ro
-      - /path/to/mail/access:/mailbus/access:ro
-      - /path/to/mail/access/external-tools:/mailbus/external-tools:ro
-      - /path/to/vault:/path/to/vault
+      - ${MAILBUS_HOST_ROOT}:/mailbus
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/run:/mailbus/run
+      - ${MAILBUS_HOST_ROOT}/tools:/mailbus/tools:ro
+      - ${MAILBUS_HOST_ROOT}/lib:/mailbus/lib:ro
+      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
+      - ${MAILBUS_HOST_ROOT}/access/external-tools:/mailbus/external-tools:ro

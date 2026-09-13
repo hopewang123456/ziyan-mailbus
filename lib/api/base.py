@@ -60,6 +60,7 @@ def _get_handlers():
             "lifecycle": _load_handler_module("handlers_lifecycle"),
             "drill": _load_handler_module("handlers_drill"),
             "a2a": _load_handler_module("handlers_a2a"),
+            "device": _load_handler_module("handlers_device"),
         }
     return _handlers
 
@@ -94,7 +95,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         """Read: token optional unless require_api_auth; presented token must match.
         Write: localhost free; remote requires token.
         """
-        from lib.adapters.locale.errors_zh import message_zh
+        # 跨层解耦：api→adapter 通过 composition 拿服务（2026-09 治理）
+        from lib.composition import message_zh
 
         if not write:
             if not self.auth_token:
@@ -137,6 +139,24 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
 
     # ── 公共工具 ────────────────────────────────────────────────────────
 
+    def _cors_origin(self) -> Optional[str]:
+        from lib.infra.cors import pick_cors_origin
+        from lib.infra.utils import json_read
+
+        cfg = {}
+        try:
+            cfg = json_read(os.path.join(self.data_dir or "", "config.json"), {})
+        except Exception:
+            cfg = {}
+        return pick_cors_origin(self.headers.get("Origin", ""), cfg)
+
+    def _apply_cors_headers(self) -> None:
+        origin = self._cors_origin()
+        if origin:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Credentials", "true")
+
     def _send_json(self, data: dict, status: int = 200):
         # Wave4: error responses always carry error_code + message_zh
         if status >= 400 and isinstance(data, dict):
@@ -145,7 +165,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                 raw = payload.get("error") or payload.get("status") or "fatal"
                 payload["error_code"] = str(raw)
             if "message_zh" not in payload:
-                from lib.adapters.locale.errors_zh import message_zh
+                # 跨层解耦：api→adapter 通过 composition 拿服务
+                from lib.composition import message_zh
 
                 code = str(payload.get("error_code") or "fatal")
                 detail = str(payload.get("error") or payload.get("detail") or code)
@@ -153,7 +174,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             data = payload
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self._apply_cors_headers()
         self.end_headers()
         self.wfile.write(json.dumps(data, ensure_ascii=False).encode("utf-8"))
 
@@ -166,7 +187,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         **extra: Any,
     ) -> None:
         """Prefer structured error_code + message_zh (Wave4)."""
-        from lib.adapters.locale.errors_zh import message_zh
+        # 跨层解耦：api→adapter 通过 composition 拿服务（2026-09 治理）
+        from lib.composition import message_zh
 
         payload = {
             "error": detail or code,
@@ -182,7 +204,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self._apply_cors_headers()
         self.end_headers()
 
     def _send_sse_jsonrpc(self, rpc_id, result: dict, *, error: Optional[dict] = None):
@@ -244,7 +266,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                     content = f.read()
                 self.send_response(200)
                 self.send_header("Content-Type", self._guess_mime(filename))
-                self.send_header("Access-Control-Allow-Origin", "*")
+                self._apply_cors_headers()
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
                 self.wfile.write(content)
@@ -259,7 +281,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                     content = f.read()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Access-Control-Allow-Origin", "*")
+                self._apply_cors_headers()
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
                 self.wfile.write(content)
@@ -294,7 +316,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self._read_path()
         # SPA/static boot without token; API still authenticated when token configured
-        needs_api_auth = path.startswith("/api/") or path.startswith("/a2a/")
+        is_device_route = path == "/api/device/chat" or path.startswith("/api/device/chat/")
+        needs_api_auth = (path.startswith("/api/") or path.startswith("/a2a/")) and not is_device_route
         if needs_api_auth and not self._check_auth():
             return
         h = _get_handlers()
@@ -329,6 +352,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/clinic/jobs": lambda: h["system"].handle_clinic_jobs(self),
             "/api/test-agents": lambda: h["system"].handle_test_agents(self),
             "/api/doctor": lambda: h["system"].handle_doctor(self),
+            "/api/failover/metrics": lambda: h["system"].handle_failover_metrics(self),
             "/api/locale/errors": lambda: h["system"].handle_locale_errors(self),
             "/api/workload": lambda: h["system"].handle_workload(self),
             "/api/send-msg": lambda: h["inbox"].handle_send_msg(self),
@@ -340,6 +364,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/settings/sections": lambda: h["settings"].handle_settings_sections(self),
             "/api/settings/env": lambda: h["settings"].handle_settings_env_get(self),
             "/api/settings/paths": lambda: h["settings"].handle_settings_paths(self),
+            "/api/settings/compose-files": lambda: h["settings"].handle_compose_files_list(self),
             "/api/settings/integrations": lambda: h["settings"].handle_integrations(self),
             "/api/skills/index": lambda: h["settings"].handle_skills_index(self),
             "/api/discover": lambda: h["lifecycle"].handle_discover(self),
@@ -376,8 +401,16 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                 h["settings"].handle_settings_section_get(self, section)
             else:
                 self._send_json({"error": "not_found"}, 404)
+        elif path.startswith("/api/settings/compose-files/"):
+            rel = path[len("/api/settings/compose-files/"):].lstrip("/")
+            if rel:
+                h["settings"].handle_compose_file_get(self, rel)
+            else:
+                h["settings"].handle_compose_files_list(self)
         elif path.startswith("/api/human-queue"):
             h["tasks"].handle_human_queue(self)
+        elif path == "/api/manager/pending":
+            h["tasks"].handle_manager_pending(self)
         elif path == "/api/a2a/agent-cards":
             h["a2a"].handle_a2a_agent_card_list(self)
         elif path == "/api/a2a/protocol":
@@ -405,7 +438,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             elif "/fsm/" in rest:
                 parts = rest.split("/fsm/", 1)
                 tid, sub = parts[0], parts[1].split("/")[0]
-                if tid and sub in ("rollback", "skip", "cancel", "pause", "priority", "approve-plan", "accept", "continue"):
+                if tid and sub in ("rollback", "skip", "cancel", "pause", "priority", "approve-plan", "approve-join", "accept", "continue"):
                     self._send_json({"error": "method_not_allowed", "use": "POST"}, 405)
                 elif tid:
                     h["tasks"].handle_task_fsm_get(self, tid)
@@ -416,6 +449,12 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             else:
                 h["tasks"].handle_tasks(self)
         
+        elif path.startswith("/api/device/chat/"):
+            ticket_id = path[len("/api/device/chat/"):].strip("/")
+            if ticket_id:
+                h["device"].handle_device_ticket(self, ticket_id)
+            else:
+                self._send_json({"error": "not_found"}, 404)
         elif path.startswith("/api/inbox/"):
             h["inbox"].handle_inbox(self, path[len("/api/inbox/"):])
         elif path.startswith("/api/agent-profile/"):
@@ -463,9 +502,20 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
     # ── HTTP POST 路由 ─────────────────────────────────────────────────
 
     def do_POST(self):
+        path = self._read_path()
+        if path == "/api/device/chat":
+            # 设备桥走独立设备 token 鉴权，不经 mailbus API token
+            h = _get_handlers()
+            h["device"].handle_device_chat(self)
+            return
+        if path in ("/metis/agent/api/sse", "/agent/api/sse"):
+            # 灵珠/Rokid 眼镜上游走独立 AK 鉴权，不经 mailbus API token
+            # funnel 的 /metis/ 前缀会剥离，实际到站路径为 /agent/api/sse
+            h = _get_handlers()
+            h["device"].handle_metis_sse(self)
+            return
         if not self._check_auth(write=True):
             return
-        path = self._read_path()
         h = _get_handlers()
 
         if path == "/api/launch":
@@ -585,6 +635,12 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                 h["settings"].handle_settings_section_patch(self, section)
             else:
                 self._send_json({"error": "not_found"}, 404)
+        elif path.startswith("/api/settings/compose-files/"):
+            rel = path[len("/api/settings/compose-files/"):].lstrip("/")
+            if rel:
+                h["settings"].handle_compose_file_put(self, rel)
+            else:
+                self._send_json({"error": "path required"}, 400)
         elif path == "/api/a2a/tasks":
             h["a2a"].handle_a2a_tasks_create(self)
         elif path.startswith("/api/a2a/rpc/"):
@@ -608,8 +664,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self):
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self._apply_cors_headers()
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-API-Key, X-Mailbus-Device-Token, Accept")
         self.end_headers()
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Generate docker-compose volume mounts from access/**/agent.json (Phase 3.3).
 
 Usage:
@@ -16,10 +16,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+# 必须在 import lib.*（尤其 constants）之前加载 .env，否则 AGENT_VAULT_ROOT 会
+# 固化为 "<AGENT_VAULT_ROOT>/Agent" 占位符，导致 emit_override 丢失 Vault 挂载。
+from lib.infra.env_bootstrap import load_mailbus_env  # noqa: E402
+
+load_mailbus_env()
+
 from lib.adapters.config.agent_registry import load_all_agents  # noqa: E402
 from lib.adapters.config.compose_registry import agent_compose_services, resolve_compose_service  # noqa: E402
 from lib.infra.constants import MAILBUS_ROOT  # noqa: E402
-from lib.infra.env_bootstrap import load_mailbus_env, mailbus_paths  # noqa: E402
+from lib.infra.env_bootstrap import mailbus_paths  # noqa: E402
 from lib.adapters.config.sync_layers import normalize_host_path  # noqa: E402
 
 COMPOSE_PATH = ROOT / "docker-agents" / "docker-compose.yml"
@@ -276,27 +282,14 @@ def emit_override(host_prefix: str = "", *, mail_root: Path | None = None) -> st
     for svc in agent_services:
         vols = list(shared)
         if svc == "hermes":
-            # .sync = optional framework-skill mirror only; runtime skills SoT = Vault via
-            # profiles/*/skills junctions under /home/hermes/.hermes (see Agent/_path-map.md)
+            # .sync = optional framework-skill mirror; runtime SoT via HERMES_DATA / settings
             vols.append(f"      - {mroot}/access/hermes/.sync:/mailbus/access/hermes/.sync")
             inbox = str(Path(data) / "inbox").replace("\\", "/")
             vols.append(f"      - {inbox}:/home/hermes/inbox:ro")
         vols.extend(infra.get(svc, []))
         vols.extend(ws.get(svc, []))
-        # Runtime skills/memory SoT = Vault（须在 workspace 挂载之后，覆盖本地 junction）
-        if vault_hp:
-            if svc == "openclaw":
-                vols.append(f"      - {vault_hp}/02-members/022-category/0222-openclaw/02222-skills:/workspace/skills:ro")
-                vols.append(f"      - {vault_hp}/02-members/022-category/0222-openclaw/02223-persons/022231-agent-a/0222313-memory:/workspace/memory")
-            elif svc in (codex_web_svc, codex_review_svc):
-                vols.append(
-                    f"      - {vault_hp}/02-members/022-category/0223-codex/02232-skills:/home/node/.codex/skills:ro"
-                )
-            elif svc == opencode_svc:
-                vols.append(
-                    f"      - {vault_hp}/02-members/022-category/0226-opencode/02262-skills:/workspace/opencode/skills:rw"
-                )
-                vols.append(f"      - {vault_hp}/02-members/022-category/0226-opencode/02263-persons/022631-agent-d/0226313-memory:/workspace/opencode/memory")
+        # Vault binds are machine-private: put them in docker-compose.override.yml
+        # (do not hardcode team member folder names into generated override).
         if svc == "mailbus":
             vols = [
                 f"      - {mroot}:/mailbus",

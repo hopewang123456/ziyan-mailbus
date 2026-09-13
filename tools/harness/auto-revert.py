@@ -2,7 +2,7 @@
 """post-commit harness 失败时可选回退 commit（stash + reset，幂等）。
 
 仅当 report aggregate_status=fail 且 --enable 时执行；失败不阻塞 commit（exit 0）。
-规范：mail/docs/harness-final-plan.md
+规范：tools/harness/auto-revert.py
 """
 from __future__ import annotations
 

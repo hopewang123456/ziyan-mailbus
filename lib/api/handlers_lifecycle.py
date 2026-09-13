@@ -10,7 +10,8 @@ from lib.application.lifecycle import (
     set_role_enabled,
 )
 from lib.application.queries import active_agents
-from lib.adapters.locale.errors_zh import message_zh
+# 跨层解耦：api→adapter 通过 composition 拿服务（2026-09 治理）
+from lib.composition import message_zh
 from lib.infra.utils import json_read
 
 
@@ -108,7 +109,7 @@ def handle_mailbus_token(handler):
         resolve_token,
         rotate_token,
     )
-    from lib.adapters.locale.errors_zh import message_zh
+    from lib.composition import message_zh
 
     ctx = client_context_from_handler(handler)
     if handler.command == "POST":
@@ -146,7 +147,7 @@ def handle_mailbus_token(handler):
 
 def handle_agent_instance_load_roles(handler):
     """POST /api/agent-instances/load-roles — 扫描 Members/约定目录，挂到实例下。"""
-    from lib.adapters.config.instance_roles import load_roles_for_instance
+    from lib.composition import load_roles_for_instance
 
     body = handler._read_post_body() or {}
     iid = str(body.get("instance_id") or "").strip()
@@ -164,13 +165,35 @@ def handle_agent_instance_load_roles(handler):
 
 def handle_agent_instance_upsert(handler):
     """POST /api/agent-instances — 新建/更新 Agent 实例卡（不含角色）。"""
-    from lib.adapters.config.instance_roles import upsert_instance
+    from lib.composition import discover_roles_for_instance, upsert_instance
 
     body = handler._read_post_body() or {}
     fields = body.get("fields") if isinstance(body.get("fields"), dict) else body
     iid = str(body.get("instance_id") or fields.get("id") or "").strip() or None
+    auto_discover = True
+    if isinstance(body, dict) and "auto_discover_roles" in body:
+        auto_discover = bool(body.get("auto_discover_roles"))
     try:
         result = upsert_instance(handler.data_dir, fields, instance_id=iid)
+        effects = list(result.get("effects") or [])
+        inst = result.get("instance") if isinstance(result.get("instance"), dict) else {}
+        if auto_discover and str(inst.get("install_path") or "").strip():
+            try:
+                roles = discover_roles_for_instance(inst)
+                effects.append({
+                    "op": "discover_roles",
+                    "instance_id": inst.get("id"),
+                    "ok": True,
+                    "count": len(roles) if isinstance(roles, list) else 0,
+                })
+            except Exception as exc:
+                effects.append({
+                    "op": "discover_roles",
+                    "instance_id": inst.get("id"),
+                    "ok": False,
+                    "error": str(exc)[:160],
+                })
+        result["effects"] = effects
         handler._send_json({"status": "ok", **result})
     except ValueError as exc:
         handler._send_json({"status": "error", "error": str(exc)}, 400)
@@ -180,7 +203,7 @@ def handle_agent_instance_upsert(handler):
 
 def handle_agent_instance_discover(handler):
     """POST /api/agent-instances/discover — 仅预览将加载的角色（不写盘）。"""
-    from lib.adapters.config.instance_roles import discover_roles_for_instance
+    from lib.composition import discover_roles_for_instance
     from lib.infra.utils import json_read
     import os
 
@@ -205,7 +228,7 @@ def handle_agent_scan(handler):
     """
     import os
 
-    from lib.adapters.config.native_scan import scan_agent_assets
+    from lib.composition import scan_agent_assets
     from lib.application.commands.commands import save_config
     from lib.infra.utils import json_read
 
@@ -224,7 +247,7 @@ def handle_agent_scan(handler):
     run_target = str(body.get("run_target") or "windows").strip()
     distro = str(body.get("distro") or "auto").strip()
 
-    from lib.adapters.frameworks.framework_discovery import (
+    from lib.composition import (
         clear_framework_discovery_cache,
         framework_run_targets,
     )

@@ -11,6 +11,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+# 必须先加载 .env 再 import 会触发 constants 的模块（AGENT_VAULT_ROOT 等在 import 时固化）
+from lib.infra.env_bootstrap import load_mailbus_env  # noqa: E402
+
+load_mailbus_env()
+
 from lib.infra.constants import AGENT_VAULT_ROOT  # noqa: E402
 from lib.adapters.config.agent_registry import layer_skills_for_agent, load_all_agents  # noqa: E402
 
@@ -31,7 +36,14 @@ def _protocol_skill_path() -> Path:
 
 
 def _universal_skill_path() -> Path:
-    return AGENT_VAULT_ROOT / "02-members" / "021-common" / "0211-rules" / "agent-universal" / "SKILL.md"
+    return (
+        AGENT_VAULT_ROOT
+        / "01-mailbus"
+        / "011-rule"
+        / "0111-common"
+        / "agent-universal"
+        / "SKILL.md"
+    )
 
 
 MAILBUS_FILE_PROTOCOL = _protocol_skill_path()

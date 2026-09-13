@@ -78,7 +78,7 @@ Host (Windows / WSL / Linux native)            Docker daemon
 
 - 无浏览器凭据的 agent 非本机 host 下 URL 生成退回 `127.0.0.1`。
 - Basic Auth userinfo 会进 URL 历史，公网必须 HTTPS 反代。
-- 广域网强制有效 token（非 `change-me`）。
+- 广域网强制有效 token（禁止空或伪默认）。
 - 本机默认行为零变化：空白名单 = `127.0.0.1`，四环境探测与现状一致。
 
 ## Package map
@@ -103,8 +103,6 @@ Notable adapter modules:
 
 | 代号 | 名称 | 框架 | 版本 | 浏览器 | 终端 | 身份文件 |
 |------|------|------|------|--------|------|---------|
-| 代号 | 名称 | 框架 | 版本 | 浏览器 | 终端 | 身份文件 |
-|------|------|------|------|--------|------|---------|
 | `agent-a` | Agent A | Hermes · dashboard | hermes-agent 0.17.0 | `:9120` (免登) | `docker exec hermes chat` | `profiles/agent-a/SOUL.md` |
 | `agent-c` | Agent C | Hermes · dashboard | hermes-agent 0.17.0 | `:9121` (免登) | `docker exec hermes chat` | `profiles/agent-c/SOUL.md` |
 | `agent-d` | Agent D | Hermes · dashboard | hermes-agent 0.17.0 | `:9122` (免登) | `docker exec hermes chat` | `profiles/agent-d/SOUL.md` |
@@ -116,8 +114,8 @@ Notable adapter modules:
 | `agent-g` | Agent G | Codex · Docker | codex-cli 0.147.0 | `:9240` (Web UI) | `docker exec codex` | Codex identity preset |
 | `agent-e` | Agent E | Codex · Docker | codex-cli 0.147.0 | `:9241` (Web UI) | `docker exec codex` | Codex identity preset |
 | `agent-i` | Agent I | OpenCode · Docker | opencode 1.18.16 | — | `docker exec opencode cli` | — |
-| `agent-m` | Agent M | OpenClaw · Docker | 2026.7.1-2 | `:18789/chat?token=change-me` | `docker exec openclaw tui` | `/workspace/SOUL.md` |
-| `agent-n` | Agent N | OpenClaw · Docker | 2026.7.1-2 | `:18790/chat?token=change-me` | `docker exec openclaw tui` | `/workspace/IDENTITY.md` |
+| `agent-m` | Agent M | OpenClaw · Docker | 2026.7.1-2 | `:18789/chat?token=<OPENCLAW_GATEWAY_TOKEN>` | `docker exec openclaw tui` | `/workspace/SOUL.md` |
+| `agent-n` | Agent N | OpenClaw · Docker | 2026.7.1-2 | `:18790/chat?token=<OPENCLAW_GATEWAY_TOKEN>` | `docker exec openclaw tui` | `/workspace/IDENTITY.md` |
 
 > 说明：上表为**示例名册**（demo ids）。实际 roster 以 `store/config.json` 的 `agents` 段为准（`mailbus init-store` 聚合 `config/mailbus/` 与本地覆盖生成）。
 
@@ -127,11 +125,10 @@ Notable adapter modules:
 |------|------|------|------|
 | n8n | 1.76.1 | `:5678` | 独立 compose 栈，可视化 workflow 编排 |
 | AgentMemory | iii-engine | `:3111` | 共享记忆存储 |
+| DeepSeek Gateway | — | `:3000` | Codex 模型路由 |
 
 ### Agent Memory 连接状态
 
-| Agent | 框架 | AgentMemory 连接 | 身份文件 |
-|-------|------|-----------------|---------|
 | Agent | 框架 | AgentMemory 连接 | 身份文件 |
 |-------|------|-----------------|---------|
 | agent-a | Hermes | ✅ `AGENTMEMORY_URL` (compose) | `profiles/agent-a/SOUL.md` |
@@ -151,7 +148,6 @@ Notable adapter modules:
 - **Claude Code**: 启动命令注入 `AGENTMEMORY_URL=http://127.0.0.1:3111`，WSL 宿主机通过 Docker 端口映射访问
 - **Codex**: 通过 MCP 协议直连 `iii-engine:3111`，无需中间桥接
 - **n8n**: 加入 `mailbus-net` 网络后通过 Docker 内部域名 `iii-engine` 访问
-| DeepSeek Gateway | — | `:3000` | Codex 模型路由 |
 
 ### 基础设施版本
 
@@ -205,10 +201,9 @@ Chain step templates: `config/mailbus/chains.template.json` (minimal default-dev
 
 - [AGENTS.md](AGENTS.md) — agent entry
 - Package `Overview.md` under `lib/*/Overview.md` and nested packages
-- [docs/agent-adapter-layer.md](docs/agent-adapter-layer.md)
-- [docs/harness-runtime-spec.md](docs/harness-runtime-spec.md)
-- [docs/migration-guide.md](docs/migration-guide.md) — package rename / move reference
-- [docs/legacy-bash-eval.md](docs/legacy-bash-eval.md) — bash keep vs Python candidates
+- Adapter SPECs: `access/<framework>/adapter/SPEC.md`
+- Migration tooling: [migrate/README.md](migrate/README.md)
+- Harness notes: `tools/harness/` (`/docs/` is local/Vault and not published in git)
 
 ## Schema IDs (wire format)
 

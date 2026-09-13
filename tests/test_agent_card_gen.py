@@ -16,7 +16,7 @@ class TestAgentCardGen(unittest.TestCase):
         registry = load_registry()
         hermes = [
             aid for aid, e in registry.items()
-            if (e.get("framework") or "").startswith("hermes")
+            if (e.get("framework") or e.get("runtime") or "").startswith("hermes")
         ]
         if not hermes:
             self.skipTest("no hermes agent in registry")
@@ -30,7 +30,7 @@ class TestAgentCardGen(unittest.TestCase):
         registry = load_registry()
         opencode = [
             aid for aid, e in registry.items()
-            if e.get("framework") == "opencode"
+            if (e.get("framework") or e.get("runtime")) == "opencode"
         ]
         if not opencode:
             self.skipTest("no opencode agent in registry")

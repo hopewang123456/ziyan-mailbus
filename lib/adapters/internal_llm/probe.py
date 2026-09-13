@@ -82,8 +82,45 @@ def _probe_openai_compatible(name: str, pc: dict) -> dict:
         return {"ok": False, "kind": "openai_compatible", "base_url": base, "error": str(exc)}
 
 
+def _probe_anthropic(name: str, pc: dict) -> dict:
+    base = (pc.get("base_url") or "https://api.anthropic.com").rstrip("/")
+    env_key = pc.get("api_key_env") or "ANTHROPIC_API_KEY"
+    api_key = os.environ.get(env_key) or pc.get("api_key") or ""
+    if not api_key:
+        return {"ok": False, "kind": "anthropic", "base_url": base, "error": f"missing env {env_key}"}
+    timeout = int(pc.get("timeout_seconds") or 10)
+    model = pc.get("model") or "claude-sonnet-4-5"
+    payload = {"model": model, "max_tokens": 1, "messages": [{"role": "user", "content": "ping"}]}
+    try:
+        req = urllib.request.Request(
+            f"{base}/v1/messages",
+            data=json.dumps(payload).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            json.loads(resp.read().decode())
+        return {"ok": True, "kind": "anthropic", "base_url": base, "model": model}
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            return {"ok": False, "kind": "anthropic", "base_url": base, "error": f"auth failed ({exc.code})"}
+        return {
+            "ok": True,
+            "kind": "anthropic",
+            "base_url": base,
+            "model": model,
+            "note": f"messages endpoint {exc.code}",
+        }
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        return {"ok": False, "kind": "anthropic", "base_url": base, "error": str(exc)}
+
+
 def probe_provider(name: str, pc: dict) -> dict:
-    kind = pc.get("kind") or name
+    kind = (pc.get("protocol") or pc.get("kind") or name).strip().lower()
     if kind == "stub" or name == "stub":
         return {"ok": True, "kind": "stub", "name": name}
     if kind == "ollama":
@@ -92,6 +129,10 @@ def probe_provider(name: str, pc: dict) -> dict:
         return out
     if kind in ("openai_compatible", "openai"):
         out = _probe_openai_compatible(name, pc)
+        out["name"] = name
+        return out
+    if kind == "anthropic":
+        out = _probe_anthropic(name, pc)
         out["name"] = name
         return out
     return {"ok": False, "name": name, "kind": kind, "error": f"unknown kind {kind}"}

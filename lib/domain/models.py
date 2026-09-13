@@ -11,6 +11,21 @@ import json
 from lib.infra.constants import DEFAULT_DATA_DIR, _now_iso
 
 from lib.infra.clock import now_dt, now_iso, now_ts, now_utc_dt
+
+
+def get_msg_state(msg):
+    """统一读取消息状态：先读 state，回退读 status。
+
+    原位置 `lib/application/scan/inbox.py.get_msg_state`（2026-09 治理下沉），
+    是纯 dict 字段提取，无 application 子树依赖，适合放在 domain。
+    application 层保留 compat shim。
+    """
+    state = msg.get('state', '') if isinstance(msg, dict) else getattr(msg, 'state', '')
+    if not state:
+        state = msg.get('status', '') if isinstance(msg, dict) else getattr(msg, 'status', '')
+    return state
+
+
 # ── 消息状态 ──────────────────────────────────────────────────────────
 
 class MsgStatus:

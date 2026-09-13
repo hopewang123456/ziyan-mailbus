@@ -8,6 +8,10 @@ workers:
     config:
       host: 0.0.0.0
       port: 3111
+      default_timeout: 180000
+      cors:
+        allowed_origins: ["http://localhost:3111", "http://localhost:3113", "http://127.0.0.1:3111", "http://127.0.0.1:3113"]
+        allowed_methods: [GET, POST, PUT, DELETE, OPTIONS]
 
   - name: iii-stream
     config:
@@ -35,7 +39,23 @@ workers:
           store_method: file_based
           file_path: /data/queue_store
 
+  - name: iii-pubsub
+    config:
+      adapter:
+        name: local
+
+  - name: iii-cron
+    config:
+      adapter:
+        name: kv
+
   - name: iii-observability
     config:
       enabled: true
       level: info
+      service_name: agentmemory
+      exporter: memory
+      sampling_ratio: 0.1
+      metrics_enabled: true
+      logs_enabled: true
+      logs_console_output: false

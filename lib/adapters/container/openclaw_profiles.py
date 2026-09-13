@@ -40,8 +40,13 @@ def _init_profile(profile: str, port: int, statedir: Path, src: Path) -> None:
     cfg.setdefault("gateway", {})
     cfg["gateway"]["port"] = port
     cfg["gateway"]["bind"] = "auto"
-    token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "change-me")
-    cfg["gateway"]["auth"] = {"mode": "token", "token": token}
+    token = (os.environ.get("OPENCLAW_GATEWAY_TOKEN") or "").strip()
+    if token == "change-me":
+        token = ""
+    if not token:
+        print(f"  skip {profile} auth token (set OPENCLAW_GATEWAY_TOKEN)", file=sys.stderr)
+    else:
+        cfg["gateway"]["auth"] = {"mode": "token", "token": token}
 
     agents = (cfg.get("agents") or {}).get("list") or []
     picked = [a for a in agents if a.get("id") == profile]

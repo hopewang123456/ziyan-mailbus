@@ -155,6 +155,13 @@ class TestClaudeBrowserLaunch(unittest.TestCase):
     @patch("lib.adapters.frameworks.claude_browser_launch._launch_url")
     def test_launch_claude_browser_ready(self, mock_open, _mock_ready):
         from lib.adapters.frameworks.claude_browser_launch import launch_claude_browser
+        from lib.adapters.frameworks.claude_launch import resolve_ttyd_bin
+        from lib.domain.errors import Fatal
+
+        try:
+            resolve_ttyd_bin()
+        except Fatal as e:
+            self.skipTest(f"ttyd unavailable in this environment: {e}")
 
         info = launch_claude_browser("agent-h", self.data_dir)
         self.assertEqual(info["agent"], "agent-h")

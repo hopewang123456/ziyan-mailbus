@@ -20,7 +20,8 @@
     "agent-b": "hermes",
     "agent-d": "hermes",
     "agent-j": "hermes",
-    "agent-k": "hermes"
+    "agent-k": "hermes",
+    "lingtan": "dsh"
   },
-  "default_services": ["mailbus", "agentmemory", "hermes", "openclaw", "codex-web", "codex-review", "opencode"]
+  "default_services": ["mailbus", "agentmemory", "hermes", "openclaw", "codex-web", "codex-review", "opencode", "dsh"]
 }

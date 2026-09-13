@@ -60,7 +60,7 @@ class WebhookMessageTransport:
         }
         secret = h.get("webhook_secret") or agent_cfg.get("webhook_secret") or ""
         try:
-            from lib.application.push.webhook_pusher import _post_webhook
+            from lib.infra.http_webhook import post_webhook as _post_webhook
 
             status = _post_webhook(
                 url,

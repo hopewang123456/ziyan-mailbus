@@ -20,8 +20,39 @@ dev = [
 ]
 
 [project.scripts]
-mailbus = "tools.mailbus:main"
+# 消息总线 CLI（init/send/ack/scan/status/serve …）— README 快速开始用的入口
+mailbus = "bus.cli:main"
+# 运维编排 CLI（start/stop/doctor/portproxy/watchdog …）— 原 tools/mailbus.py
+mailbus-ops = "tools.mailbus:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["lib*", "tools*"]
+include = ["lib*", "bus*", "tools*"]
+
+# pytest 收集配置：避开根目录的两个 WSL 死符号链接（.codex / codex），
+# 避免 pytest 自动 rootdir 上溯时 WinError 1920 把整个 collection 干掉。
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [
+  ".codex",
+  "codex",
+  "codex-review",
+  "store",
+  "web",
+  ".git",
+  ".workbuddy",
+  "lib",
+  "bus",
+  "tools",
+  "docker-agents",
+  "examples",
+  "external-tools",
+  "windows",
+  "scripts",
+  "skills",
+  "team-pack",
+  "access",
+  "migrate",
+  "plans",
+  "run",
+]

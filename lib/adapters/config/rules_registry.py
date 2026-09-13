@@ -5,13 +5,15 @@ from pathlib import Path
 from typing import Iterable
 
 from .agent_registry import get_agent, mailbus_root
-from lib.infra.constants import AGENT_VAULT_ROOT, MAILBUS_RULES_ROOT, TEAM_PACK_RULES_ROOT
+from lib.infra.constants import AGENT_VAULT_ROOT, MAILBUS_RULES_ROOT
 from .profile_registry import get_profile, rule_paths_for_profile
 
 DEFAULT_COMMON_RULES: tuple[str, ...] = (
+    "01-mailbus/011-rule/0111-common/agent-universal",
     "01-mailbus/011-rule/0111-common/execution-order",
     "01-mailbus/011-rule/0111-common/task-fsm",
     "01-mailbus/011-rule/0111-common/team-secrets-policy",
+    "01-mailbus/011-rule/0111-common/memory-routing",
 )
 
 
@@ -56,23 +58,28 @@ def rule_paths_for_agent(agent_id: str, *, mail_root: Path | str | None = None) 
 
 def resolve_rule_path(rel: str, *, mail_root: Path | str | None = None) -> Path:
     rules = MAILBUS_RULES_ROOT
-    pack_rules = TEAM_PACK_RULES_ROOT
     vault = AGENT_VAULT_ROOT
+    repo = mailbus_root(mail_root)
     rel = _norm_rel(rel)
     if rel.startswith("01-mailbus/") or rel.startswith("02-members/") or rel.startswith("03-shared/"):
         p = vault / rel
-        if p.is_file() or p.suffix == ".md":
+        if p.is_file():
             return p
-        return p.with_suffix(".md")
+        # 目录型规则包（如 agent-universal/SKILL.md）
+        skill = p / "SKILL.md"
+        if skill.is_file():
+            return skill
+        md = vault / f"{rel}.md"
+        if md.is_file():
+            return md
+        return p.with_suffix(".md") if p.suffix != ".md" else p
+    # mailbus/ / mailbus-core/ / 旧名 mail/ 均指仓库内规则（repo fallback），非知识库根。
     if rel.startswith("mailbus-core/rules/"):
-        return rules / rel[len("mailbus-core/rules/"):]
-    if rel.startswith("team-pack/rules/"):
-        return pack_rules / rel[len("team-pack/rules/"):]
+        return repo / "rules" / rel[len("mailbus-core/rules/"):]
+    if rel.startswith("mailbus/rules/"):
+        return repo / "rules" / rel[len("mailbus/rules/"):]
     if rel.startswith("mail/rules/"):
-        tail = rel[len("mail/rules/"):]
-        if tail.startswith("roles/"):
-            return pack_rules / tail
-        return rules / tail
+        return repo / "rules" / rel[len("mail/rules/"):]
     if rel.startswith("rules/"):
         return rules / rel[len("rules/"):]
     p = Path(rel)

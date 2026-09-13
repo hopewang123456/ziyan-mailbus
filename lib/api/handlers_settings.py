@@ -5,19 +5,20 @@ from __future__ import annotations
 import os
 from typing import cast
 
-from lib.adapters.config.config_admin import (
-    env_status,
-    get_section,
-    list_sections,
-    patch_env,
-    patch_section,
+# 跨层解耦：api→adapter 通过 composition 拿服务（2026-09 治理）
+from lib.composition import (
+    config_env_status,
+    config_get_section,
+    config_list_sections,
+    config_patch_env,
+    config_patch_section,
 )
 from lib.domain.types import IntegrationsOverviewView, SettingsSectionsView
 from lib.infra.utils import json_read
 
 
 def handle_settings_sections(handler):
-    body: SettingsSectionsView = {"status": "ok", "sections": list_sections()}
+    body: SettingsSectionsView = {"status": "ok", "sections": config_list_sections()}
     handler._send_json(body)
 
 
@@ -36,17 +37,17 @@ def handle_settings_paths(handler):
 
 def handle_skills_index(handler):
     """GET /api/skills/index — skills-index (agents/reverse/orphans) from person-index frontmatter."""
-    from lib.adapters.config.sync_layers import build_skills_index_from_registry
-    from lib.adapters.config.agent_registry import mailbus_root
+    # 跨层解耦：api→adapter 通过 composition 拿服务
+    from lib.composition import build_skills_index_from_registry, config_mailbus_root
 
-    root = mailbus_root(handler.data_dir)
+    root = config_mailbus_root(handler.data_dir)
     index = build_skills_index_from_registry(mail_root=root)
     handler._send_json({"status": "ok", "index": index})
 
 
 def handle_settings_section_get(handler, section: str):
     try:
-        handler._send_json({"status": "ok", **get_section(handler.data_dir, section)})
+        handler._send_json({"status": "ok", **config_get_section(handler.data_dir, section)})
     except ValueError as exc:
         handler._send_json({"status": "error", "error": str(exc)}, 400)
 
@@ -54,6 +55,11 @@ def handle_settings_section_get(handler, section: str):
 def handle_settings_section_patch(handler, section: str):
     body = handler._read_post_body()
     patch = body.get("patch") if isinstance(body.get("patch"), dict) else body
+    auto_discover = True
+    if isinstance(body, dict) and "auto_discover_roles" in body:
+        auto_discover = bool(body.get("auto_discover_roles"))
+    elif isinstance(patch, dict) and "auto_discover_roles" in patch:
+        auto_discover = bool(patch.pop("auto_discover_roles"))
     # Optional ?persist_seed=1 for services
     if section == "services" and isinstance(patch, dict):
         qs = handler.path.split("?", 1)
@@ -61,15 +67,95 @@ def handle_settings_section_patch(handler, section: str):
             patch = dict(patch)
             patch["persist_seed"] = True
     try:
-        result, _restart = patch_section(handler.data_dir, section, patch)
+        result, _restart = config_patch_section(handler.data_dir, section, patch)
+        effects = list(result.get("effects") or [])
+        if auto_discover and section in ("agents", "frameworks"):
+            effects.extend(_try_auto_discover_roles(handler.data_dir))
+        result["effects"] = effects
         handler._send_json({"status": "ok", **result})
+    except ValueError as exc:
+        handler._send_json({"status": "error", "error": str(exc)}, 400)
+
+
+def _try_auto_discover_roles(data_dir: str) -> list:
+    """Best-effort：对已配置 install_path 的实例跑 discover（失败写入 effects，不回滚配置）。"""
+    effects = []
+    try:
+        from lib.composition import discover_roles_for_instance
+        from lib.infra.utils import json_read
+
+        cfg = json_read(os.path.join(data_dir, "config.json"), {})
+        instances = cfg.get("agent_instances") or {}
+        if not isinstance(instances, dict):
+            return effects
+        for iid, inst in instances.items():
+            if not isinstance(inst, dict):
+                continue
+            if not (inst.get("install_path") or "").strip():
+                effects.append({"op": "discover_roles", "instance_id": iid, "ok": False, "error": "missing_install_path"})
+                continue
+            try:
+                roles = discover_roles_for_instance(inst)
+                effects.append({
+                    "op": "discover_roles",
+                    "instance_id": iid,
+                    "ok": True,
+                    "roles": len(roles) if isinstance(roles, list) else 0,
+                })
+            except Exception as exc:
+                effects.append({"op": "discover_roles", "instance_id": iid, "ok": False, "error": str(exc)})
+    except Exception as exc:
+        effects.append({"op": "discover_roles", "ok": False, "error": str(exc)})
+    return effects
+
+
+def handle_compose_files_list(handler):
+    """GET /api/settings/compose-files — 列出可编辑 compose yml（无启停）。"""
+    from lib.composition import list_compose_files
+    from lib.infra.constants import MAILBUS_ROOT
+
+    try:
+        files = list_compose_files(MAILBUS_ROOT)
+        handler._send_json({
+            "status": "ok",
+            "files": files,
+            "note": "仅加载/编辑/保存 YAML；docker compose / k8s 启停由运维侧执行",
+        })
+    except Exception as exc:
+        handler._send_json({"status": "error", "error": str(exc)}, 400)
+
+
+def handle_compose_file_get(handler, rel: str):
+    from lib.composition import read_compose_file
+    from lib.infra.constants import MAILBUS_ROOT
+
+    try:
+        handler._send_json({"status": "ok", **read_compose_file(MAILBUS_ROOT, rel)})
+    except FileNotFoundError:
+        handler._send_json({"status": "error", "error": "not_found"}, 404)
+    except ValueError as exc:
+        handler._send_json({"status": "error", "error": str(exc)}, 400)
+
+
+def handle_compose_file_put(handler, rel: str):
+    from lib.composition import write_compose_file
+    from lib.infra.constants import MAILBUS_ROOT
+
+    body = handler._read_post_body() or {}
+    content = body.get("content")
+    if content is None:
+        handler._send_json({"status": "error", "error": "content required"}, 400)
+        return
+    try:
+        handler._send_json({"status": "ok", **write_compose_file(MAILBUS_ROOT, rel, str(content))})
     except ValueError as exc:
         handler._send_json({"status": "error", "error": str(exc)}, 400)
 
 
 def handle_settings_services_probe(handler):
     """POST /api/settings/section/services/probe — lightweight connectivity check."""
-    from lib.adapters.ops.service_registry import probe_service
+    # 跨层解耦：api→adapter 通过 composition 拿服务
+    from lib.composition import probe_service
 
     cfg = json_read(os.path.join(handler.data_dir, "config.json"), {})
     body = handler._read_post_body() or {}
@@ -83,7 +169,7 @@ def handle_settings_services_probe(handler):
 
 
 def handle_settings_env_get(handler):
-    handler._send_json({"status": "ok", **env_status(handler.data_dir)})
+    handler._send_json({"status": "ok", **config_env_status(handler.data_dir)})
 
 
 def handle_settings_env_patch(handler):
@@ -92,14 +178,15 @@ def handle_settings_env_patch(handler):
     if not isinstance(vars_patch, dict):
         handler._send_json({"status": "error", "error": "vars must be object"}, 400)
         return
-    result = patch_env(handler.data_dir, vars_patch)
+    result = config_patch_env(handler.data_dir, vars_patch)
     handler._send_json({"status": "ok", **result})
 
 
 def handle_integrations(handler):
     """GET/POST /api/settings/integrations — list adapters; POST add/remove plugin specs."""
     from lib.application.integrations_query import integrations_overview
-    from lib.adapters.config.config_admin import config_path
+    # 跨层解耦：api→adapter 通过 composition 拿服务
+    from lib.composition import config_path
     from lib.infra.utils import json_read, json_write
 
     if handler.command == "POST":
@@ -120,7 +207,8 @@ def handle_integrations(handler):
             cfg["integrations"] = integ
             json_write(cfg_path, cfg)
             try:
-                from lib.adapters.integrations.entry_point_discovery import reload_integration_plugins
+                # 跨层解耦：api→adapter 通过 composition 拿服务
+                from lib.composition import reload_integration_plugins
 
                 loaded = reload_integration_plugins(data_dir=handler.data_dir, config=cfg)
             except Exception as exc:

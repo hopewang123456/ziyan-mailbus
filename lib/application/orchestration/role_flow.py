@@ -70,6 +70,48 @@ def get_next_role(current_role: str, conclusion: str):
     return _FLOW_RULES.get((current_role, conclusion))
 
 
+def blocked_fallback_role_type(data_dir: str = "") -> Optional[int]:
+    """role-flow.json 的 blocked_fallback_role_type；无配置返回 None。"""
+    flow = load_role_flow(data_dir) if data_dir else {}
+    fb = flow.get("blocked_fallback_role_type")
+    return int(fb) if fb is not None else None
+
+
+def next_role_after(
+    current_role: str,
+    conclusion: str,
+    data_dir: str = "",
+    current_role_type: Optional[int] = None,
+) -> Optional[str]:
+    """步骤内下一跳裁决（P0-2 统一入口，裁决顺序见 mailbus-vision-gap-report §6）。
+
+    - role-flow.json SoT 优先：terminal → None；transition 命中 → 对应岗位；
+      conclusion=blocked 且配了 blocked_fallback → 回退岗位；
+    - SoT 未命中时**降级 legacy _FLOW_RULES**（迁移期 shim），保证老流程行为不变；
+    - current_role_type 由调用方从 chain step 传入，无法提供时按中文名反查 role-types。
+    """
+    rt = current_role_type
+    if rt is None and data_dir:
+        try:
+            from lib.infra.role_types import zh_to_role_type
+            rt = zh_to_role_type(current_role, data_dir)
+        except Exception:
+            rt = None
+    if rt is not None and data_dir:
+        if is_terminal_role_type(rt, conclusion, data_dir):
+            return None
+        nxt = get_next_role_type(rt, conclusion, data_dir)
+        if nxt is not None:
+            from lib.infra.role_types import role_type_to_zh
+            return role_type_to_zh(int(nxt), data_dir)
+        if (conclusion or "").lower() == "blocked":
+            fb = blocked_fallback_role_type(data_dir)
+            if fb is not None:
+                from lib.infra.role_types import role_type_to_zh
+                return role_type_to_zh(int(fb), data_dir)
+    return get_next_role(current_role, conclusion)
+
+
 def pick_person_for_role(role: str, exclude=None, data_dir: str = ""):
     candidates = _role_map(data_dir).get(role, [])
     skip = exclude or set()

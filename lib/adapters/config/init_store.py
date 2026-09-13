@@ -1,4 +1,4 @@
-"""init-store — aggregate mailbus-core/config + team-pack/org + access/transport → store/."""
+"""init-store — aggregate mailbus/config + team-pack/org + access/transport → store/."""
 from __future__ import annotations
 
 import json
@@ -114,7 +114,7 @@ def load_roster(mail_root: Path | None = None) -> dict[str, Any]:
 
 
 def load_config_fragments(mail_root: Path | None = None) -> dict[str, Any]:
-    """Merge mail/config/**/*.json into a store config fragment (no agents)."""
+    """Merge mailbus/config/**/*.json into a store config fragment (no agents)."""
     root = mailbus_root(mail_root)
     cfg_dir = root / "config"
     merged: dict[str, Any] = {}
@@ -160,6 +160,13 @@ def load_config_fragments(mail_root: Path | None = None) -> dict[str, Any]:
         merged["mailbus_intake_bridge"] = _deep_merge(
             merged.get("mailbus_intake_bridge") or {},
             _read_json(intake_bridge, {}),
+        )
+
+    device_bridge = cfg_dir / "edge" / "device-bridge.json"
+    if device_bridge.is_file():
+        merged["mailbus_device_bridge"] = _deep_merge(
+            merged.get("mailbus_device_bridge") or {},
+            _read_json(device_bridge, {}),
         )
 
     launch_watchdog = cfg_dir / "launch" / "watchdog.json"
@@ -431,7 +438,52 @@ def build_store_config(
                 rec.setdefault("inbox", os.path.join(data_dir, "inbox", aid, "inbox.json").replace("\\", "/"))
                 rec.setdefault("available", True)
                 config["agents"][aid] = rec
+    ensure_device_bridge_test_agent(config, data_dir, mail_root=root)
     return config
+
+
+def ensure_device_bridge_test_agent(
+    config: dict[str, Any],
+    data_dir: str | Path,
+    *,
+    mail_root: Path | str | None = None,
+) -> bool:
+    """Ensure public Device Bridge mock agent ``test`` exists (from config/edge/test-agent.json).
+
+    Idempotent: does not overwrite a user-customized ``agents.test`` entry.
+    Returns True if config was mutated.
+    """
+    agents = config.setdefault("agents", {})
+    if not isinstance(agents, dict):
+        return False
+    if isinstance(agents.get("test"), dict) and (agents["test"].get("type") or agents["test"].get("agent_id")):
+        # already present — still ensure inbox path default
+        rec = agents["test"]
+        if not (rec.get("inbox") or "").strip():
+            rec["inbox"] = os.path.join(str(data_dir), "inbox", "test", "inbox.json").replace("\\", "/")
+            return True
+        return False
+
+    root = mailbus_root(mail_root)
+    seed = _read_json(root / "config" / "edge" / "test-agent.json", {})
+    rec = (seed.get("agents") or {}).get("test") if isinstance(seed, dict) else None
+    if not isinstance(rec, dict):
+        rec = {
+            "name": "test",
+            "role": "Device Bridge mock target",
+            "type": "none",
+            "agent_id": "test",
+            "agent": "test",
+            "enabled": True,
+            "available": True,
+        }
+    else:
+        rec = dict(rec)
+    rec.setdefault("inbox", os.path.join(str(data_dir), "inbox", "test", "inbox.json").replace("\\", "/"))
+    rec.setdefault("available", True)
+    rec.setdefault("enabled", True)
+    agents["test"] = rec
+    return True
 
 
 def ensure_ollama_local_model_alias(
@@ -469,7 +521,7 @@ def ensure_runtime_dirs(data_dir: str | Path) -> None:
 
 
 def mirror_workflows_to_store(data_dir: str | Path, *, mail_root: Path | None = None) -> list[str]:
-    """Copy mail/config/workflows/* → store/workflows/ (registry SoT)."""
+    """Copy mailbus/config/workflows/* → store/workflows/ (registry SoT)."""
     root = mailbus_root(mail_root)
     src_dir = root / "config" / "workflows"
     if not src_dir.is_dir():
@@ -484,7 +536,7 @@ def mirror_workflows_to_store(data_dir: str | Path, *, mail_root: Path | None = 
 
 
 def mirror_rule_schemas_to_store(data_dir: str | Path, *, mail_root: Path | None = None) -> list[str]:
-    """Copy mail/rules/schemas/*.json → store/rules/ (validator SoT)."""
+    """Copy rules/schemas/*.json → store/rules/ (validator SoT)."""
     from lib.infra.constants import MAILBUS_RULES_ROOT
 
     if mail_root is not None:
@@ -503,7 +555,7 @@ def mirror_rule_schemas_to_store(data_dir: str | Path, *, mail_root: Path | None
 
 
 def mirror_dispatch_seed(data_dir: str | Path, *, mail_root: Path | None = None) -> list[str]:
-    """Copy mail/config/dispatch/* → store/dispatch/."""
+    """Copy mailbus/config/dispatch/* → store/dispatch/."""
     root = mailbus_root(mail_root)
     src_dir = root / "config" / "dispatch"
     if not src_dir.is_dir():
@@ -548,7 +600,7 @@ def mirror_org_json(data_dir: str | Path, *, mail_root: Path | None = None) -> l
 
 
 def write_runtime_seed_files(data_dir: str | Path, agents: dict[str, Any]) -> None:
-    from lib.application.commands.commands import get_system_message
+    from lib.composition import get_system_message
 
     root = Path(data_dir)
     json_write(str(root / "sent.json"), {})
@@ -628,6 +680,7 @@ def run_merge_store_config(
     merged["data_dir"] = data_dir.replace("\\", "/")
     merged["version"] = fresh.get("version") or merged.get("version")
     merged["agents"] = fresh.get("agents") or merged.get("agents") or {}
+    ensure_device_bridge_test_agent(merged, data_dir, mail_root=mail_root)
     json_write(config_path, merged)
 
     if not quiet:

@@ -182,7 +182,9 @@ def _ensure_codex_container(agent_key: str, cfg: dict, wait_sec: int) -> str:
 
 def _launch_browser(agent_key: str, data_dir: str, merged: dict, cfg: dict) -> int:
     kind = merged.get("kind", "none")
-    token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "change-me")
+    token = (os.environ.get("OPENCLAW_GATEWAY_TOKEN") or "").strip()
+    if token == "change-me":
+        token = ""
 
     if kind in ("codex_desktop", "codex_web", "codex_ui", "codex_docker"):
         wait_sec = int(merged.get("start_wait_seconds", 15))
@@ -228,10 +230,13 @@ def _launch_browser(agent_key: str, data_dir: str, merged: dict, cfg: dict) -> i
 
     if kind == "openclaw_gateway":
         from lib.adapters.config.browser_auth import openclaw_gateway_token
+        from lib.adapters.runtime.cred_delivery import resolve_openclaw_token
 
         port = OpenClawAdapter.resolve_gateway_port(agent_key, merged)
-        token = openclaw_gateway_token() or os.environ.get("OPENCLAW_GATEWAY_TOKEN", "change-me")
-        url = f"http://127.0.0.1:{port}/chat?token={token}"
+        token = (openclaw_gateway_token() or resolve_openclaw_token(data_dir) or "").strip()
+        if token == "change-me":
+            token = ""
+        url = f"http://127.0.0.1:{port}/chat" + (f"?token={token}" if token else "")
         if not probe_http(f"http://127.0.0.1:{port}/", ok_codes=frozenset({200, 401, 403, 404})):
             start_cmd = merged.get("start_command", "")
             if start_cmd:

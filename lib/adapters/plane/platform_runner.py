@@ -298,9 +298,16 @@ def kill_process_pattern(pattern: str) -> None:
     r = run(["pgrep", "-f", pattern], timeout=10)
     if r.returncode != 0:
         return
+    self_pid = os.getpid()
     for pid in r.stdout.split():
-        with contextlib.suppress(OSError, ValueError):
-            os.kill(int(pid), 15)
+        try:
+            pid = int(pid)
+        except ValueError:
+            continue
+        if pid == self_pid:
+            continue
+        with contextlib.suppress(OSError):
+            os.kill(pid, 15)
 
 
 @contextlib.contextmanager

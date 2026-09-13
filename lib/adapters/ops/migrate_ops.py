@@ -28,7 +28,7 @@ def cmd_migrate_plan(_args) -> int:
     elif layout.core_is_reparse:
         print(f"  [WARN] layout: {layout.message}")
     else:
-        print("  [OK] layout: mail/ 与 mailbus-core/ 独立")
+        print("  [OK] layout: mailbus/ 与 mailbus-core/ 独立（或 core 不存在）")
     for entry in manifest_entries(prefix):
         flag = "OK" if entry["exists"] else ("WARN" if entry["optional"] else "MISSING")
         print(f"  [{flag}] {entry['env']}: {entry['path']}")

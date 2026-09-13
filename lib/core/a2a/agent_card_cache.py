@@ -93,9 +93,10 @@ class AgentCardCache:
         if not entry:
             return None
         entry = enrich_agent_channels(agent_id, entry)
-        from lib.adapters.config.profile_registry import get_profile
+        # 跨层解耦：core→adapter 通过 composition 拿服务（2026-09 治理）
+        from lib.composition import get_agent_profile
 
-        prof = get_profile(agent_id) or {}
+        prof = get_agent_profile(agent_id) or {}
         display = prof.get("display_name") or entry.get("display_name") or agent_id
         card = to_agent_card(
             agent_id, entry,

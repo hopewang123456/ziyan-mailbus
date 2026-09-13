@@ -10,9 +10,10 @@ import sys
 from typing import Any, Dict, Optional, Tuple
 
 from lib.domain.errors import Fatal
+from lib.infra.constants import PROJECT_ROOT_STR
 from lib.infra.utils import json_read
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = PROJECT_ROOT_STR
 SYNC_CODEX_SCRIPT = os.path.join(ROOT, "tools", "sync-codex-desktop-config.py")
 
 PS_HELPER = "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"

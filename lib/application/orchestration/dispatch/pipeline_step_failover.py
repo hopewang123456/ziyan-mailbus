@@ -115,6 +115,8 @@ def next_failover_agent_for_step(
     data_dir: str,
     task: dict,
     config: Optional[dict] = None,
+    *,
+    from_agent: Optional[str] = None,
 ) -> Optional[Tuple[str, dict]]:
     """
     为当前 running 步骤按工种选取下一个 agent。
@@ -125,8 +127,11 @@ def next_failover_agent_for_step(
     if not failover_enabled(config):
         return None
 
-    step = get_fsm().get_active_step(task)
-    if not step or step.get("status") != "running":
+    step = get_fsm().resolve_step_for_agent(task, from_agent)
+    if not step:
+        return None
+    fs = step.get("fsm_state") or step.get("status") or ""
+    if fs in ("completed", "failed", "skipped", "superseded"):
         return None
 
     step_rt = step.get("role_type")
@@ -169,6 +174,7 @@ def next_failover_agent_for_step(
             "failover_to_role_type": plan_rt,
             "failover_to_role_zh": _locale(data_dir).role_type_to_zh(plan_rt),
             "failover_plan": plan,
+            "failover_step_id": step.get("step_id"),
         })
         return agent_id, meta
 
@@ -228,12 +234,12 @@ def failover_pipeline_step(
     if not task or task.get("status") != "running":
         return None
     config = json_read(os.path.join(data_dir, "config.json"), {})
-    step = get_fsm().get_active_step(task)
+    step = get_fsm().resolve_step_for_agent(task, from_agent)
     if not step:
         return None
 
     old_agent = from_agent or step.get("to_agent") or step.get("to_person") or ""
-    picked = next_failover_agent_for_step(data_dir, task, config)
+    picked = next_failover_agent_for_step(data_dir, task, config, from_agent=old_agent or None)
     if not picked:
         return None
     new_agent, failover_meta = picked
@@ -252,8 +258,12 @@ def failover_pipeline_step(
         **failover_meta,
     }
 
+    target_id = step.get("step_id")
     for s in task.get("chain") or []:
-        if s.get("step") != step_num:
+        if target_id:
+            if s.get("step_id") != target_id:
+                continue
+        elif s.get("step") != step_num:
             continue
         s["failover_tried"] = tried
         s["pin_agent"] = new_agent
@@ -262,6 +272,8 @@ def failover_pipeline_step(
         s["dispatch_meta"] = dispatch_meta
         if failover_meta.get("failover_to_role_type") is not None:
             s["role_type"] = failover_meta["failover_to_role_type"]
+        task["fsm"] = task.get("fsm") or {}
+        task["fsm"]["active_step_id"] = s.get("step_id")
         break
 
     task["assignee"] = new_agent

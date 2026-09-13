@@ -1,59 +1,30 @@
-"""Pipeline step 字段访问与 planned 队列 — role-pipeline chain 辅助。"""
-from __future__ import annotations
+"""Compat shim — 纯函数已下沉到 `lib.domain.pipeline_step`。
 
-from typing import Any, List
-
-_ROLE_TYPE_ZH = {
-    1: "方案设计师",
-    2: "安全审计师",
-    3: "技术研究员",
-    4: "市场拓展官",
-    5: "审查官",
-    6: "测试工程师",
-    7: "巡检官",
-    8: "开发工程师",
-    9: "调度员",
-    10: "财务跟进官",
-    11: "运营",
-    12: "验收员",
-}
-
-
-def is_pipeline_step(item: Any) -> bool:
-    return isinstance(item, dict) and bool(item.get("step_id") or item.get("to_agent") or item.get("to_person"))
-
-
-def is_role_pipeline_task(task: dict) -> bool:
-    """True when chain head carries role_type / planned_role_types (current pipeline schema)."""
-    chain = task.get("chain") or []
-    if not chain or not isinstance(chain[0], dict):
-        return False
-    head = chain[0]
-    return bool(head.get("planned_role_types") is not None or head.get("role_type") is not None)
-
-
-
-def step_agent(step: dict) -> str:
-    return (step.get("to_agent") or step.get("to_person") or "").strip()
-
-
-def step_role_type(step: dict) -> int:
-    rt = step.get("role_type")
-    if rt is not None:
-        return int(rt)
-    role = step.get("to_role") or ""
-    for k, zh in _ROLE_TYPE_ZH.items():
-        if zh == role:
-            return k
-    return 0
+`step_role_zh` 需要 chain._agent_role_map（agent 名 → 角色中文），该回退路径依赖
+application 子树，所以保留在本文件。新代码请直接 import `lib.domain.pipeline_step`。
+"""
+from lib.domain.pipeline_step import (  # noqa: F401
+    is_pipeline_step,
+    is_role_pipeline_task,
+    step_agent,
+    step_role_type,
+    planned_agents_remaining,
+    planned_role_types_remaining,
+)
 
 
 def step_role_zh(step: dict, data_dir: str = "") -> str:
+    """带运行时配置回退的角色名查找。
+
+    优先取 step['to_role']，否则按 role_type 映射，否则按 agent 名查 chain 表。
+    chain._agent_role_map 需要 application 子树上下文，故保留在 application 层。
+    """
     role = step.get("to_role")
     if role:
         return role
     rt = step.get("role_type")
     if rt is not None:
+        from lib.domain.pipeline_step import _ROLE_TYPE_ZH
         return _ROLE_TYPE_ZH.get(int(rt), "方案设计师")
     agent = step_agent(step)
     if not agent:
@@ -61,20 +32,6 @@ def step_role_zh(step: dict, data_dir: str = "") -> str:
     from lib.application.orchestration.pipeline.chain import _agent_role_map
 
     return _agent_role_map(data_dir).get(agent, "方案设计师")
-
-
-def planned_agents_remaining(chain: List[dict]) -> List[str]:
-    head = chain[0] if chain else {}
-    planned = head.get("planned_agents")
-    return list(planned) if isinstance(planned, list) else []
-
-
-def planned_role_types_remaining(chain: List[dict]) -> List[int]:
-    head = chain[0] if chain else {}
-    planned = head.get("planned_role_types")
-    if isinstance(planned, list):
-        return [int(x) for x in planned]
-    return []
 
 
 __all__ = [

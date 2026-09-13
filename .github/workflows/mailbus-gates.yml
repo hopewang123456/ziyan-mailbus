@@ -1,4 +1,4 @@
-# Mailbus gate subset — e2e L-gates + V acceptance + Wave F3/F4.
+# Mailbus gate subset — e2e L-gates + V acceptance + Wave F3/F4 + web build.
 # Full suite: python -m pytest tests -q
 name: mailbus-gates
 
@@ -21,7 +21,7 @@ jobs:
           python -m pip install -U pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest
-      - name: pytest e2e + v_suite + wave_f3_f4 + ports_import + clock_lint
+      - name: pytest e2e + v_suite + wave_f3_f4 + ports_import + clock_lint + auth/cors
         env:
           PYTHONUTF8: "1"
         run: |
@@ -36,4 +36,30 @@ jobs:
             tests/test_integration_entry_points.py \
             tests/test_no_secrets_in_git.py \
             tests/test_config_files.py \
-            tests/test_config_readers_no_example.py -q
+            tests/test_config_readers_no_example.py \
+            tests/test_mailbus_token.py \
+            tests/test_cors.py \
+            tests/test_doctor_auth.py \
+            tests/test_decouple_paths.py \
+            tests/test_compose_files.py \
+            tests/test_dispatch_governance.py \
+            tests/test_pipeline_step_failover.py \
+            tests/test_failover_after_two.py \
+            tests/test_failover_metrics.py -q
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: npm ci && build
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          npm run build

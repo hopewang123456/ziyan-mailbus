@@ -87,12 +87,13 @@ def build_contract(
     ack_path = ""
     msg_file = ""
     delivery = ""
-    if data_dir and agent_id:
-        ack_path = f"{data_dir.rstrip('/\\')}/inbox/{agent_id}/ack.json"
-    if data_dir and msg_id:
-        msg_file = f"{data_dir.rstrip('/\\')}/msg-files/{msg_id}.md"
-    if data_dir and task_id and step_id:
-        delivery = f"{data_dir.rstrip('/\\')}/msg-results/{task_id}/step-{step_id}.json"
+    data_root = data_dir.rstrip("/\\") if data_dir else ""
+    if data_root and agent_id:
+        ack_path = f"{data_root}/inbox/{agent_id}/ack.json"
+    if data_root and msg_id:
+        msg_file = f"{data_root}/msg-files/{msg_id}.md"
+    if data_root and task_id and step_id:
+        delivery = f"{data_root}/msg-results/{task_id}/step-{step_id}.json"
     c = HarnessContract(
         agent_id=agent_id,
         msg_id=msg_id,

@@ -32,6 +32,7 @@ RULE_FILES = [
     ("team-secrets-policy", "团队密钥与 sudo 规范"),
     ("execution-order", "执行顺序与并发规范"),
     ("iteration-protocol", "三轮迭代协议"),
+    ("memory-routing", "工单 AM / Hermes 个人 MemOS 分流"),
 ]
 
 NOTICE_SUMMARY = """【团队规范已更新】请阅读 Vault 规则 SoT（store/rules 已挂载到同一目录）：
@@ -39,8 +40,9 @@ NOTICE_SUMMARY = """【团队规范已更新】请阅读 Vault 规则 SoT（stor
 1. team-secrets-policy.md — .env.secrets 禁止提交 git，sudo 密码不得写入代码/记忆
 2. execution-order.md — 主任务优先、每 agent 串行、Round2 门禁、light 编排器
 3. iteration-protocol.md — Round1→audit→Round2 流程
+4. memory-routing.md — 工单/团队→AgentMemory；Hermes 个人→MemOS；勿双写无主
 
-真源：Obsidian Agent/rules/mailbus/（容器内 /mailbus/rules 与 /mailbus/store/rules）
+真源：Obsidian Agent/01-mailbus/011-rule/（容器内挂载为 store/rules）
 运维：docker-agents/.env.secrets（gitignore）+ wsl-sudo.sh
 排查：python3 tools/pipeline-watchdog.py --data-dir store
 """

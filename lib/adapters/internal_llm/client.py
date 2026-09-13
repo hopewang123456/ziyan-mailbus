@@ -132,6 +132,61 @@ def _openai_compatible_complete(messages: List[dict], provider_cfg: dict) -> str
     return (choices[0].get("message") or {}).get("content") or ""
 
 
+def _anthropic_complete(messages: List[dict], provider_cfg: dict) -> str:
+    """原生 Anthropic Messages API — system 独立字段，x-api-key 头。"""
+    base = (provider_cfg.get("base_url") or "https://api.anthropic.com").rstrip("/")
+    env_key = provider_cfg.get("api_key_env") or "ANTHROPIC_API_KEY"
+    api_key = os.environ.get(env_key) or provider_cfg.get("api_key") or ""
+    if not api_key:
+        raise LLMError("llm_no_api_key", env_key)
+    model = provider_cfg.get("model") or "claude-sonnet-4-5"
+
+    system_parts: List[str] = []
+    anthropic_msgs: List[dict] = []
+    for m in messages:
+        role = m.get("role")
+        content = m.get("content") or ""
+        if role == "system":
+            system_parts.append(content)
+        elif role in ("user", "assistant"):
+            anthropic_msgs.append({"role": role, "content": content})
+    if not anthropic_msgs:
+        anthropic_msgs = [{"role": "user", "content": (system_parts or ["continue"])[0]}]
+        system_parts = []
+
+    payload: dict = {
+        "model": model,
+        "max_tokens": int(provider_cfg.get("max_tokens") or 4096),
+        "messages": anthropic_msgs,
+    }
+    if system_parts:
+        payload["system"] = "\n".join(system_parts).strip()
+    if provider_cfg.get("temperature") is not None:
+        payload["temperature"] = float(provider_cfg["temperature"])
+
+    req = urllib.request.Request(
+        f"{base}/v1/messages",
+        data=json.dumps(payload).encode(),
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+        method="POST",
+    )
+    timeout = int(provider_cfg.get("timeout_seconds") or 120)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode())
+    parts = []
+    for block in data.get("content") or []:
+        if isinstance(block, dict) and block.get("type") == "text":
+            parts.append(block.get("text") or "")
+    text = "\n".join(parts).strip()
+    if not text:
+        raise LLMError("llm_empty_response")
+    return text
+
+
 def complete(
     messages: List[dict],
     cfg: dict,
@@ -149,7 +204,7 @@ def complete(
     errors = []
     for name in order:
         pc = providers.get(name) or {}
-        kind = pc.get("kind") or name
+        kind = (pc.get("protocol") or pc.get("kind") or name).strip().lower()
         for attempt in range(1, per_provider_retries + 1):
             try:
                 if kind == "stub" or name == "stub":
@@ -168,6 +223,9 @@ def complete(
                     used = "local"
                 elif kind in ("openai_compatible", "openai"):
                     raw = _openai_compatible_complete(messages, pc)
+                    used = "remote"
+                elif kind == "anthropic":
+                    raw = _anthropic_complete(messages, pc)
                     used = "remote"
                 else:
                     errors.append(f"{name}: unknown kind {kind}")

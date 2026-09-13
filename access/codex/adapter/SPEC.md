@@ -14,4 +14,4 @@
 
 ## Sync
 
-`mail/tools/sync_codex_agent_skills.py`
+`tools/sync_codex_agent_skills.py`

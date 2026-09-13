@@ -60,9 +60,11 @@ class EnvDiscoverySource:
 
 
 class DirDiscoverySource:
+    """本机常见家目录 + 显式配置/环境；不硬猜 ai_tools/Agent 布局。"""
+
     def scan(self) -> Sequence[DiscoveredAgent]:
         home = Path.home()
-        candidates = [
+        candidates: list[tuple[Path, str]] = [
             (home / ".openclaw", "openclaw"),
             (home / "openclaw_space", "openclaw"),
             (home / ".hermes", "hermes"),
@@ -70,13 +72,44 @@ class DirDiscoverySource:
             (home / ".claude", "claude_code"),
             (Path(os.environ.get("USERPROFILE", str(home))) / ".codex", "codex"),
         ]
-        for drive in ("E:", "C:"):
-            candidates.extend([
-                (Path(f"{drive}/ai_tools/openclaw_space"), "openclaw"),
-                (Path(f"{drive}/hermes-data/.hermes"), "hermes"),
-                (Path(f"{drive}/ai_tools/opencode"), "opencode"),
-                (Path(f"{drive}/ai_tools/codex"), "codex"),
-            ])
+        # 可选：MAILBUS_DISCOVERY_DIRS=path1;path2（framework 由末级目录名猜测）
+        extra = (os.environ.get("MAILBUS_DISCOVERY_DIRS") or "").strip()
+        if extra:
+            fw_guess = {
+                "openclaw_space": "openclaw",
+                "openclaw": "openclaw",
+                "opencode": "opencode",
+                "codex": "codex",
+                "hermes": "hermes",
+                ".claude": "claude_code",
+                "claude": "claude_code",
+            }
+            for part in extra.replace(",", ";").split(";"):
+                p = Path(part.strip()).expanduser()
+                if not str(p):
+                    continue
+                name = p.name.lower()
+                fw = fw_guess.get(name, name.replace("-", "_") or "unknown")
+                candidates.append((p, fw))
+        # store frameworks.*.root_path（已配置的安装根）
+        try:
+            from lib.infra.constants import MAILBUS_ROOT
+
+            cfg_path = Path(os.environ.get("MAILBUS_DATA") or MAILBUS_ROOT / "store") / "config.json"
+            if cfg_path.is_file():
+                import json
+
+                cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+                fws = cfg.get("frameworks") if isinstance(cfg.get("frameworks"), dict) else {}
+                for fw_id, block in fws.items():
+                    if not isinstance(block, dict):
+                        continue
+                    root = str(block.get("root_path") or "").strip()
+                    if root:
+                        candidates.append((Path(root), str(fw_id)))
+        except Exception:
+            pass
+
         out: list[dict[str, Any]] = []
         seen: set[str] = set()
         for path, fw in candidates:
