@@ -44,7 +44,8 @@ jobs:
             tests/test_compose_files.py \
             tests/test_dispatch_governance.py \
             tests/test_pipeline_step_failover.py \
-            tests/test_failover_after_two.py -q
+            tests/test_failover_after_two.py \
+            tests/test_failover_metrics.py -q
 
   web:
     runs-on: ubuntu-latest

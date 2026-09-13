@@ -38,6 +38,16 @@ WORKSPACE_KEYS: dict[str, str] = {
     "HERMES_DATA": "hermes-data",
 }
 
+# Optional sibling Agent/docker folder names when using --source-root
+AGENT_DOCKER_NAMES: dict[str, str] = {
+    "OPENCLAW_WORKSPACE": "openclaw_space",
+    "CODEX_WORKSPACE": "codex",
+    "CODEX_REVIEW_WORKSPACE": "codex-review",
+    "OPENCODE_ROOT": "opencode",
+    "DSH_WORKSPACE": "dsh",
+    "HERMES_DATA": "hermes-data",
+}
+
 
 def _load_env(path: Path) -> dict[str, str]:
     out: dict[str, str] = {}
@@ -119,9 +129,20 @@ def main() -> int:
         help="WSL/Docker host root for .env values (default: MAILBUS_HOST_ROOT from .env or /mnt/.../mailbus)",
     )
     ap.add_argument(
+        "--source-root",
+        default="",
+        help="Read sources from SOURCE_ROOT/<agent-folder> (e.g. E:/ai_tools/Agent/docker) "
+        "even when .env already points at workspaces/",
+    )
+    ap.add_argument(
         "--only",
         default="",
         help="comma-separated env keys to migrate (default: all set keys)",
+    )
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="replace existing destination (rmdir junction or refuse nonempty copy)",
     )
     args = ap.parse_args()
     mode_copy = bool(args.copy)
@@ -134,26 +155,30 @@ def main() -> int:
         host_root = _win_to_wsl(MAILBUS_ROOT)
 
     only = {x.strip() for x in args.only.split(",") if x.strip()} or set(WORKSPACE_KEYS)
+    source_root = Path(args.source_root.strip()) if args.source_root.strip() else None
 
     plans: list[tuple[str, Path, Path, str]] = []
     for key, folder in WORKSPACE_KEYS.items():
         if key not in only:
+            continue
+        dst = WORKSPACES / folder
+        new_val = f"{host_root.rstrip('/')}/docker-agents/workspaces/{folder}"
+        if source_root is not None:
+            src = source_root / AGENT_DOCKER_NAMES.get(key, folder)
+            plans.append((key, src, dst, new_val))
             continue
         src_raw = (env.get(key) or "").strip()
         if not src_raw:
             print(f"skip {key}: empty in .env")
             continue
         src = _wsl_to_win(src_raw)
-        dst = WORKSPACES / folder
-        new_val = f"{host_root.rstrip('/')}/docker-agents/workspaces/{folder}"
-        # Already under workspaces?
         try:
-            if src.resolve() == dst.resolve():
+            if src.resolve() == dst.resolve() and dst.exists():
                 print(f"ok {key}: already at {dst}")
                 continue
         except OSError:
             pass
-        if "docker-agents/workspaces/" in src_raw.replace("\\", "/"):
+        if "docker-agents/workspaces/" in src_raw.replace("\\", "/") and dst.exists():
             print(f"ok {key}: already workspace-relative ({src_raw})")
             continue
         plans.append((key, src, dst, new_val))
@@ -175,9 +200,17 @@ def main() -> int:
             updates[key] = new_val
             continue
         if dst.exists() or dst.is_symlink():
-            print(f"  skip: dest exists {dst}", file=sys.stderr)
-            updates[key] = new_val
-            continue
+            if args.force:
+                if not args.dry_run:
+                    if platform.system() == "Windows":
+                        subprocess.check_call(["cmd", "/c", "rmdir", str(dst)], shell=False)
+                    else:
+                        if dst.is_symlink() or dst.is_dir():
+                            dst.unlink() if dst.is_symlink() else shutil.rmtree(dst)
+            else:
+                print(f"  skip: dest exists {dst}", file=sys.stderr)
+                updates[key] = new_val
+                continue
         if mode_copy:
             _copy_tree(src, dst)
         else:

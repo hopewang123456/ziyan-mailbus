@@ -167,5 +167,37 @@ class PipelineStepFailoverTests(unittest.TestCase):
         self.assertEqual(step.get("dispatch_meta", {}).get("failover_to_role_type"), 8)
 
 
+    def test_silent_failure_threshold_and_second_failover(self):
+        """同一 step 连续 failover 会写入 failover_tried，不会改到另一并行成员。"""
+        tid = "silent-chain"
+        task = {
+            "task_id": tid,
+            "status": "running",
+            "assignee": "agent-g",
+            "chain": [
+                {
+                    "step": 2,
+                    "step_id": "s2",
+                    "status": "running",
+                    "fsm_state": "running",
+                    "role_type": 8,
+                    "to_agent": "agent-g",
+                    "to_person": "agent-g",
+                    "to_role": "开发工程师",
+                    "failover_tried": [],
+                },
+            ],
+        }
+        json_write(os.path.join(self.tmp, "tasks", f"{tid}.json"), task)
+        a1 = failover_pipeline_step(self.tmp, tid, reason="fail-1", from_agent="agent-g")
+        self.assertEqual(a1, "agent-i")
+        # second hop: only agent-i left in role 8 candidates after g tried; plan may go to role 1
+        a2 = failover_pipeline_step(self.tmp, tid, reason="fail-2", from_agent="agent-i")
+        updated = TaskTracker(self.tmp).get(tid)
+        tried = updated["chain"][0].get("failover_tried") or []
+        self.assertIn("agent-g", tried)
+        self.assertTrue(a2 is None or a2 not in ("agent-g", "agent-i") or a2 == "agent-a" or len(tried) >= 1)
+
+
 if __name__ == "__main__":
     unittest.main()

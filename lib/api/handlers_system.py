@@ -1324,6 +1324,26 @@ def handle_doctor(handler):
         handler._send_json({"ok": False, "error": str(exc)}, 500)
 
 
+def handle_failover_metrics(handler):
+    """GET /api/failover/metrics — 任务链改派汇总（诊所看板）。"""
+    from lib.application.orchestration.dispatch.failover_metrics import collect_failover_metrics
+
+    try:
+        limit = 500
+        qs = handler.path.split("?", 1)
+        if len(qs) > 1 and "limit=" in qs[1]:
+            for part in qs[1].split("&"):
+                if part.startswith("limit="):
+                    try:
+                        limit = max(50, min(2000, int(part.split("=", 1)[1])))
+                    except ValueError:
+                        pass
+        data = collect_failover_metrics(handler.data_dir, limit_tasks=limit)
+        handler._send_json({"status": "ok", **data})
+    except Exception as exc:
+        handler._send_json({"status": "error", "error": str(exc)}, 500)
+
+
 def handle_locale_errors(handler):
     """GET /api/locale/errors — W7e D21 驾驶舱错误码中文目录。"""
     from lib.domain.error_codes import ALL_STABLE_CODES

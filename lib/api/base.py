@@ -352,6 +352,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/clinic/jobs": lambda: h["system"].handle_clinic_jobs(self),
             "/api/test-agents": lambda: h["system"].handle_test_agents(self),
             "/api/doctor": lambda: h["system"].handle_doctor(self),
+            "/api/failover/metrics": lambda: h["system"].handle_failover_metrics(self),
             "/api/locale/errors": lambda: h["system"].handle_locale_errors(self),
             "/api/workload": lambda: h["system"].handle_workload(self),
             "/api/send-msg": lambda: h["inbox"].handle_send_msg(self),

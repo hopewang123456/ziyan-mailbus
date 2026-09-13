@@ -85,7 +85,7 @@ const LEVEL_STYLE: Record<string, string> = {
   warn: "text-amber-signal",
   ok: "text-mint",
 };
-type ClinicTab = "agent" | "bus" | "tools" | "overview";
+type ClinicTab = "agent" | "bus" | "tools" | "overview" | "failover";
 
 // ── 修复建议卡片 ──────────────────────────────────────────────────────
 function FixHintCard({ hint }: { hint: string }) {
@@ -630,6 +630,118 @@ function OverviewTab() {
   );
 }
 
+// ── Failover 度量 Tab ────────────────────────────────────────────────
+type FailoverMetrics = {
+  scanned_tasks?: number;
+  tasks_with_failover?: number;
+  event_count?: number;
+  by_from_agent?: Record<string, number>;
+  by_to_agent?: Record<string, number>;
+  by_tier?: Record<string, number>;
+  by_reason_prefix?: Record<string, number>;
+  recent?: {
+    task_id?: string;
+    step_id?: string;
+    from_agent?: string;
+    to_agent?: string;
+    tier?: string;
+    reason?: string;
+    at?: string;
+  }[];
+};
+
+function FailoverTab() {
+  const [data, setData] = useState<FailoverMetrics | null>(null);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    setBusy(true);
+    setErr("");
+    const r = await api<FailoverMetrics>("/api/failover/metrics");
+    setBusy(false);
+    if (r.ok) setData(r.data);
+    else setErr(r.error);
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  function bars(map?: Record<string, number>) {
+    const entries = Object.entries(map || {}).sort((a, b) => b[1] - a[1]).slice(0, 12);
+    if (!entries.length) return <p className="text-xs text-mute">暂无</p>;
+    const max = Math.max(...entries.map(([, n]) => n), 1);
+    return (
+      <ul className="space-y-1">
+        {entries.map(([k, n]) => (
+          <li key={k} className="flex items-center gap-2 text-xs">
+            <span className="w-28 truncate font-mono text-frost" title={k}>{k}</span>
+            <span className="h-1.5 flex-1 overflow-hidden rounded bg-rail/50">
+              <span className="block h-full bg-cyan-signal/70" style={{ width: `${(n / max) * 100}%` }} />
+            </span>
+            <span className="w-8 text-right text-mute">{n}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-mute">
+          扫描任务链 <code className="font-mono">dispatch_meta</code> / <code className="font-mono">failover_tried</code>
+          {data && (
+            <span className="text-frost">
+              {" "}— {data.event_count ?? 0} 次 · {data.tasks_with_failover ?? 0}/{data.scanned_tasks ?? 0} 任务
+            </span>
+          )}
+        </p>
+        <button type="button" className="hud-btn" disabled={busy} onClick={() => void load()}>
+          {busy ? "加载中…" : "刷新"}
+        </button>
+      </div>
+      <ErrorAlert message={err} />
+      {data && (
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="soft-inset space-y-2">
+            <p className="hud-label">改派来源 from</p>
+            {bars(data.by_from_agent)}
+          </div>
+          <div className="soft-inset space-y-2">
+            <p className="hud-label">改派目标 to</p>
+            {bars(data.by_to_agent)}
+          </div>
+          <div className="soft-inset space-y-2">
+            <p className="hud-label">tier</p>
+            {bars(data.by_tier)}
+          </div>
+          <div className="soft-inset space-y-2">
+            <p className="hud-label">reason 前缀</p>
+            {bars(data.by_reason_prefix)}
+          </div>
+        </div>
+      )}
+      {data?.recent && data.recent.length > 0 && (
+        <div className="soft-inset">
+          <p className="hud-label mb-2">最近事件</p>
+          <ul className="max-h-64 space-y-1 overflow-y-auto font-mono text-[11px]">
+            {data.recent.map((e, i) => (
+              <li key={`${e.task_id}-${e.step_id}-${i}`} className="text-mute">
+                <span className="text-frost">{e.task_id}</span>{" "}
+                {e.from_agent || "?"}→{e.to_agent || "?"}{" "}
+                <span className="text-cyan-signal">{e.tier}</span>{" "}
+                <span className="opacity-70">{e.at}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 主页面 ───────────────────────────────────────────────────────────
 export function ClinicPage() {
   const [tab, setTab] = useState<ClinicTab>("overview");
@@ -638,6 +750,7 @@ export function ClinicPage() {
     { id: "overview", label: "全景体检", desc: "Agent + 第三方组件" },
     { id: "agent", label: "Agent 诊断", desc: "自动检测 · 修复建议" },
     { id: "bus", label: "总线修复", desc: "Doctor · 任务链" },
+    { id: "failover", label: "Failover", desc: "改派度量" },
     { id: "tools", label: "其它工具", desc: "深度配置校验" },
   ];
 
@@ -674,6 +787,7 @@ export function ClinicPage() {
       {tab === "overview" && <OverviewTab />}
       {tab === "agent" && <AgentTab />}
       {tab === "bus" && <BusTab />}
+      {tab === "failover" && <FailoverTab />}
       {tab === "tools" && <ToolsTab />}
     </div>
   );

@@ -255,6 +255,71 @@ def check_config_hygiene(config: dict | None = None) -> list[DoctorItem]:
     return items
 
 
+def check_mail_path_alias_sunset(config: dict | None = None) -> list[DoctorItem]:
+    """探测配置中仍写 mail/ 前缀的路径；兼容期 warn，鼓励改 mailbus/。"""
+    items: list[DoctorItem] = []
+    cfg = config if isinstance(config, dict) else {}
+    blob = ""
+    try:
+        import json as _json
+
+        blob = _json.dumps(cfg, ensure_ascii=False)
+    except Exception:
+        blob = str(cfg)
+    # 避免误伤 mailbus/ 与 mailbus_ 键名：只计 "mail/skills" "mail/rules" "mail/adapters" 等
+    markers = ("mail/skills/", "mail/rules/", "mail/adapters/", '"mail/skills', '"mail/rules')
+    hits = [m for m in markers if m in blob]
+    if hits:
+        items.append(
+            DoctorItem(
+                "warn",
+                "config",
+                "配置仍含废弃路径前缀 mail/…",
+                f"命中 {', '.join(hits[:3])}；请改为 mailbus/…（兼容期至 2026-12-31）",
+            )
+        )
+    else:
+        items.append(DoctorItem("ok", "config", "无 mail/ 技能·规则旧前缀", "sunset 2026-12-31"))
+    return items
+
+
+def check_asset_path_env_conflict(config: dict | None = None) -> list[DoctorItem]:
+    """config.asset_paths 自定义与 MAILBUS_*_ROOT env 双源时提示。"""
+    items: list[DoctorItem] = []
+    cfg = config if isinstance(config, dict) else {}
+    stored = cfg.get("asset_paths") if isinstance(cfg.get("asset_paths"), dict) else {}
+    env_keys = (
+        ("skills", "MAILBUS_SKILLS_ROOT"),
+        ("rules", "MAILBUS_RULES_ROOT"),
+        ("identities", "MAILBUS_IDENTITIES_ROOT"),
+    )
+    conflicts: list[str] = []
+    for key, env_name in env_keys:
+        block = stored.get(key) if isinstance(stored.get(key), dict) else {}
+        mode = str(block.get("mode") or "default")
+        custom = str(block.get("path") or block.get("custom") or "").strip()
+        env_val = (os.environ.get(env_name) or "").strip()
+        if mode == "custom" and custom and env_val:
+            # normalize light compare
+            if os.path.normcase(os.path.normpath(env_val)) != os.path.normcase(os.path.normpath(custom)):
+                conflicts.append(f"{key}: config={custom} vs {env_name}={env_val}")
+        elif mode == "default" and env_val:
+            # env set while config says default — env may still win at process boot
+            conflicts.append(f"{key}: asset_paths=default 但 {env_name} 仍设置")
+    if conflicts:
+        items.append(
+            DoctorItem(
+                "warn",
+                "config",
+                "资产路径 config 与 env 双源冲突",
+                "; ".join(conflicts[:3]) + ("…" if len(conflicts) > 3 else ""),
+            )
+        )
+    else:
+        items.append(DoctorItem("ok", "config", "资产路径无 config/env 冲突", ""))
+    return items
+
+
 _COMPOSE_COUPLING_MARKERS = (
     "ai_tools/Agent",
     "ai_tools\\Agent",
@@ -764,10 +829,14 @@ def run_doctor_checks(*, mail_root: Path | None = None, wsl_distro: str = "Ubunt
 
         items.extend(check_auth_hardening(store_cfg, data_dir=str(paths["data_dir"])))
         items.extend(check_config_hygiene(store_cfg))
+        items.extend(check_mail_path_alias_sunset(store_cfg))
+        items.extend(check_asset_path_env_conflict(store_cfg))
         items.extend(check_compose_coupling(mail_root=root))
     else:
         items.extend(check_auth_hardening({}, data_dir=str(paths.get("data_dir") or "")))
         items.extend(check_config_hygiene({}))
+        items.extend(check_mail_path_alias_sunset({}))
+        items.extend(check_asset_path_env_conflict({}))
         items.extend(check_compose_coupling(mail_root=root))
 
     if plat == "win32":

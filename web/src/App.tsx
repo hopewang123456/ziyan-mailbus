@@ -10,12 +10,10 @@ import { getUiMode, setUiMode } from "./lib/ui-mode";
 import { t } from "./lib/i18n";
 
 /**
- * 逃生舱侧栏：仅舰桥 + 首页 + 配置/诊所/协调台。
- * 其它旧路由一律回舰桥（功能在驾驶舱旋钮内）。
+ * 逃生舱侧栏：舰桥 + 配置/诊所/协调台（不再挂「首页」入口；/legacy 仍可直达排障页）。
  */
 const NAV = [
   { to: "/", labelKey: "cockpitUi" as const },
-  { to: "/legacy", labelKey: "legacyHome" as const, end: true },
   { to: "/config", label: "配置合页" },
   { to: "/clinic", label: "诊所" },
   { to: "/manager", label: "协调台" },

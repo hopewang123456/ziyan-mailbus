@@ -2,7 +2,7 @@
  * Compose YAML 文件柜：列表 / 加载 / 保存。不含 docker compose 启停。
  */
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, formatSettingsEffects } from "../lib/api";
 import { ErrorAlert } from "./ErrorAlert";
 
 type FileRow = { path?: string; name?: string; size?: number };
@@ -56,7 +56,7 @@ export function ComposeFilesPanel() {
       setErr(r.error || "save failed");
       return;
     }
-    setMsg(`已保存 ${active}（启停请用运维侧 docker compose / k8s）`);
+    setMsg(formatSettingsEffects(r.data, `已保存 ${active}（启停请用运维侧 docker compose / k8s）`));
     void loadList();
   }
 

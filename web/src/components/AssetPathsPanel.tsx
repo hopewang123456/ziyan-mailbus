@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, formatSettingsEffects } from "../lib/api";
 import { ErrorAlert } from "./ErrorAlert";
 
 /**
@@ -66,7 +66,7 @@ export function AssetPathsPanel() {
     });
     setBusy(false);
     if (r.ok) {
-      setMsg(`已保存（需重启生效）: ${(r.data.updated || []).join(", ")}`);
+      setMsg(formatSettingsEffects(r.data, `已保存（需重启生效）: ${(r.data.updated || []).join(", ")}`));
       void load();
     } else setErr(r.error);
   }
