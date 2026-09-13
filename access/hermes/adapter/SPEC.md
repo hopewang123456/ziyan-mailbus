@@ -18,4 +18,4 @@ agent-a, agent-b, agent-c, agent-d, agent-e, agent-f
 
 ## Sync
 
-`mail/tools/sync-all-agent-layers.py`（L0–L2 层 skill 同步，Vault SoT + 运行时 junction）
+`tools/sync-all-agent-layers.py`（L0–L2 层 skill 同步；Vault SoT。Compose 工作区仍靠 `.env` 绝对路径关联，勿 junction 进 `docker-agents/workspaces/`）

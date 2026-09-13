@@ -4,13 +4,14 @@ mailbus Docker full-agent stack (compose SoT in this directory).
 
 | Item | Path |
 |------|------|
-| Source + store | `../` (mail repo root) |
+| Source + store | `../` (mailbus root) |
 | `MAILBUS_DATA` | `../store` |
 | Env template | [`../migrate/env.template`](../migrate/env.template) |
-| Local Vault binds | `docker-compose.override.yml` (gitignored; copy from `override.example.yml`) |
+| Agent homes | `.env` absolute paths (`OPENCLAW_WORKSPACE`, …); see [`workspaces/README.md`](workspaces/README.md) |
+| Local overrides | `docker-compose.override.yml` (gitignored; copy from `override.example.yml`) |
 | Start | `pip install -e ..` then `mailbus start` |
 
-`docker-compose.yml` uses **repo-relative** mounts (`../skills`, …) and `${ENV}` for external homes (`HERMES_DATA`, `OPENCLAW_WORKSPACE`, `OPENCODE_ROOT`, `CODEX_WORKSPACE`, `CODEX_SKILLS`, `NODE_MODULES`, `TEAM_PACK_ROOT`). Do not put host Vault absolute paths in the committed compose file.
+`docker-compose.yml` mounts **mailbus repo** paths (`../skills`, …) and `${ENV}` for agent homes. Unset env falls back to empty `./workspaces/*` placeholders — **not** sibling `../openclaw_space` or `../../Agent/docker`. Point `.env` at your real Agent trees; that is config association, not layout coupling.
 
 `tools/mailbus.py` is the canonical entry (`python tools/mailbus.py start`); thin wrappers are `scripts/start-mailbus.bat` / `scripts/start-mailbus.sh`.
 
