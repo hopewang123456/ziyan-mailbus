@@ -1,5 +1,7 @@
 # Windows helpers (port forwarding)
 
+> **Scope:** companion to **device-bridge** (phone ↔ host `:9814`). Not required for mailbus config-plane / compose decoupling. Safe to keep in the same branch as device-bridge; omit from a config-only cherry-pick.
+
 Scripts here are **Windows-only**. Native Linux/macOS does not need them.
 
 | Script | Purpose |
