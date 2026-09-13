@@ -4,7 +4,7 @@ Hermes / OpenClaw / Cline / OpenCode / Codex CLI / Claude Code / A2A Remote 等
 **平级 Agent 架构**，push / interactive CLI、HTTP 交付均在 Adapter 层集中维护。
 
 mailbus Core 只认 agent_id + role_type；新增框架 = 新 Adapter 类 + ADAPTERS 注册。
-规范: mail/access/{framework}/adapter/SPEC.md · mail/docs/agent-adapter-layer.md
+规范: access/{framework}/adapter/SPEC.md
 """
 from __future__ import annotations
 

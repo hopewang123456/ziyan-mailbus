@@ -1,4 +1,4 @@
-"""init-store — aggregate mailbus-core/config + team-pack/org + access/transport → store/."""
+"""init-store — aggregate mailbus/config + team-pack/org + access/transport → store/."""
 from __future__ import annotations
 
 import json
@@ -536,7 +536,7 @@ def mirror_workflows_to_store(data_dir: str | Path, *, mail_root: Path | None = 
 
 
 def mirror_rule_schemas_to_store(data_dir: str | Path, *, mail_root: Path | None = None) -> list[str]:
-    """Copy mail/rules/schemas/*.json → store/rules/ (validator SoT)."""
+    """Copy rules/schemas/*.json → store/rules/ (validator SoT)."""
     from lib.infra.constants import MAILBUS_RULES_ROOT
 
     if mail_root is not None:

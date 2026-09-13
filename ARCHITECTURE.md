@@ -201,10 +201,9 @@ Chain step templates: `config/mailbus/chains.template.json` (minimal default-dev
 
 - [AGENTS.md](AGENTS.md) — agent entry
 - Package `Overview.md` under `lib/*/Overview.md` and nested packages
-- [docs/agent-adapter-layer.md](docs/agent-adapter-layer.md)
-- [docs/harness-runtime-spec.md](docs/harness-runtime-spec.md)
-- [docs/migration-guide.md](docs/migration-guide.md) — package rename / move reference
-- [docs/legacy-bash-eval.md](docs/legacy-bash-eval.md) — bash keep vs Python candidates
+- Adapter SPECs: `access/<framework>/adapter/SPEC.md`
+- Migration tooling: [migrate/README.md](migrate/README.md)
+- Harness notes: `tools/harness/` (`/docs/` is local/Vault and not published in git)
 
 ## Schema IDs (wire format)
 

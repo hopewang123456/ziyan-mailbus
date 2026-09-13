@@ -1,8 +1,7 @@
-"""根据 install_prefix 生成 mailbus-core/.env。"""
+"""根据 install_prefix 生成 mailbus/.env。"""
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from paths import MAILBUS_CORE, load_manifest, to_wsl_path
@@ -16,7 +15,17 @@ def write_env(
     dry_run: bool = False,
 ) -> Path:
     prefix = install_prefix.resolve()
-    root = (mailbus_root or prefix / "mailbus-core").resolve()
+    # Prefer in-tree mailbus checkout (this repo); legacy mailbus-core name still accepted.
+    if mailbus_root is not None:
+        root = mailbus_root.resolve()
+    elif (prefix / "mailbus").is_dir():
+        root = (prefix / "mailbus").resolve()
+    elif (prefix / "mailbus-core").is_dir():
+        root = (prefix / "mailbus-core").resolve()
+    elif prefix.resolve() == MAILBUS_CORE.resolve() or (prefix / "lib").is_dir():
+        root = prefix.resolve()
+    else:
+        root = (prefix / "mailbus").resolve()
     data = (mailbus_data or root / "store").resolve()
 
     lines = [
@@ -29,36 +38,33 @@ def write_env(
     ]
 
     manifest = load_manifest()
+    existing_keys = {"MAILBUS_ROOT", "MAILBUS_DATA", "MAILBUS_API_PORT", "COMPOSE_PROJECT_NAME"}
+
     for item in manifest.get("infra") or []:
         env = item["env"]
         p = prefix / item["path"]
+        if env in existing_keys:
+            continue
         if p.exists() or not item.get("optional"):
             lines.append(f"{env}={to_wsl_path(p)}")
+            existing_keys.add(env)
 
     for item in manifest.get("framework_workspaces") or []:
         env = item["env"]
-        p = prefix / item.get("default_subpath", item["agent_id"])
+        sub = item.get("path") or item.get("default_subpath") or item.get("agent_id")
+        if not sub or env in existing_keys:
+            continue
+        p = prefix / sub
         if p.exists():
             lines.append(f"{env}={to_wsl_path(p)}")
-
-    # sensible defaults when sibling dirs exist
-    defaults = {
-        "OPENCLAW_WORKSPACE": prefix / "openclaw_space",
-        "OPENCODE_ROOT": prefix / "opencode",
-        "NODE_MODULES": prefix / "node_modules",
-        "HERMES_DATA": prefix / "hermes-data" / ".hermes",
-        "TEAM_PACK_ROOT": prefix / "team-pack",
-    }
-    existing_keys = {ln.split("=", 1)[0] for ln in lines if "=" in ln and not ln.startswith("#")}
-    for env, p in defaults.items():
-        if env not in existing_keys and p.exists():
-            lines.append(f"{env}={to_wsl_path(p)}")
+            existing_keys.add(env)
 
     content = "\n".join(lines) + "\n"
     target = root / ".env"
     if dry_run:
         print(content)
         return target
+    target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
     return target
 
@@ -66,7 +72,7 @@ def write_env(
 def main() -> int:
     import argparse
 
-    ap = argparse.ArgumentParser(description="Write mailbus-core/.env for new install prefix")
+    ap = argparse.ArgumentParser(description="Write mailbus/.env for new install prefix")
     ap.add_argument("--prefix", required=True, help="Install root, e.g. /opt/mailbus or <LOCAL_ROOT>")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()

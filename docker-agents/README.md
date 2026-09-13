@@ -10,10 +10,21 @@ mailbus Docker full-agent stack (compose SoT in this directory).
 | Repo-root env | [`../migrate/env.template`](../migrate/env.template) / [`../config/env.template`](../config/env.template) |
 | Agent homes | `.env` absolute paths (`OPENCLAW_WORKSPACE`, …); see [`workspaces/README.md`](workspaces/README.md) |
 | Local overrides | `docker-compose.override.yml` (gitignored; copy from `docker-compose.override.example.yml`) |
-| Start | `pip install -e ..` then `mailbus start` |
 
-`docker-compose.yml` mounts **mailbus repo** paths (`../skills`, …) and `${ENV}` for agent homes. Unset env falls back to empty `./workspaces/*` placeholders — **not** sibling `../openclaw_space` or `../../Agent/docker`. Point `.env` at your real Agent trees; that is config association, not layout coupling.
+## Quick start
 
-`tools/mailbus.py` is the canonical entry (`python tools/mailbus.py start`); thin wrappers are `scripts/start-mailbus.bat` / `scripts/start-mailbus.sh`.
+```bash
+cd docker-agents
+cp .env.example .env
+# optional local volume remap:
+# cp docker-compose.override.example.yml docker-compose.override.yml
+# edit .env: MAILBUS_HOST_ROOT + absolute HERMES_DATA / OPENCLAW_WORKSPACE / …
+pip install -e ..
+mailbus start   # or: python ../tools/mailbus.py start
+```
 
-See [`../README.md`](../README.md) (EN) · [`../README.zh.md`](../README.zh.md) (ZH) · [`../docs/migration-guide.md`](../docs/migration-guide.md).
+`docker-compose.yml` mounts **mailbus repo** paths (`../skills`, …) and `${ENV}` for agent homes. Unset env falls back to empty `./workspaces/*` placeholders — not sibling-repo relative defaults. Point `.env` at your real Agent trees; that is config association, not layout coupling.
+
+Thin wrappers: `scripts/start-mailbus.bat` / `scripts/start-mailbus.sh`.
+
+See [`../README.md`](../README.md) (EN) · [`../README.zh.md`](../README.zh.md) (ZH) · [`../migrate/README.md`](../migrate/README.md).

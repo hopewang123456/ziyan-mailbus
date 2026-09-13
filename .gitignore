@@ -81,7 +81,8 @@ docker-agents/C:/
 docker-agents/E/
 docker-agents/C/
 
-# Local Vault / machine absolute mounts — keep override.example.yml only
+# Local Vault / machine absolute mounts — keep *.override.example.yml only
+# (docker-compose.override.example.yml / compose.public.override.example.yml)
 docker-agents/docker-compose.override.yml
 
 # Knowledge dirs are often NTFS junctions → private Vault.

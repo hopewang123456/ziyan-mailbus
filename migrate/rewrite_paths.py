@@ -31,11 +31,19 @@ def rewrite_tree(
     mailbus_root: Path | None = None,
     dry_run: bool = False,
 ) -> dict[str, int]:
-    root = (mailbus_root or install_prefix / "mailbus-core").resolve()
-    if not (root / "tools" / "mailbus.py").is_file():
-        alt = (install_prefix / "mail").resolve()
-        if (alt / "tools" / "mailbus.py").is_file():
-            root = alt
+    if mailbus_root is not None:
+        root = mailbus_root.resolve()
+    else:
+        root = (install_prefix / "mailbus").resolve()
+        for alt in (
+            install_prefix / "mailbus",
+            install_prefix / "mailbus-core",
+            install_prefix / "mail",
+            install_prefix,
+        ):
+            if (alt / "tools" / "mailbus.py").is_file():
+                root = alt.resolve()
+                break
     new_prefix = to_wsl_path(install_prefix)
     old_prefixes = collect_old_prefixes(install_prefix)
     stats: dict[str, int] = {"files": 0, "replacements": 0}
@@ -94,7 +102,8 @@ def _rewrite_transport_workspaces(transport_dir: Path, install_prefix: Path) -> 
     mapping = {
         "agent-f": install_prefix / "agent-f",
         "opencode": install_prefix / "opencode",
-        "openclaw_space": install_prefix / "openclaw_space",
+        "openclaw": install_prefix / "openclaw",
+        "openclaw_space": install_prefix / "openclaw_space",  # legacy install name
     }
     for agent_dir in transport_dir.iterdir():
         if not agent_dir.is_dir():
@@ -116,11 +125,12 @@ def _rewrite_transport_workspaces(transport_dir: Path, install_prefix: Path) -> 
             push["cwd"] = to_wsl_path(mapping["opencode"])
             data["push"] = push
         if data.get("framework") == "openclaw":
-            sub = mapping["openclaw_space"] / ("a-agent-g" if agent_id == "agent-g" else "")
+            oc_home = mapping["openclaw"] if mapping["openclaw"].exists() else mapping["openclaw_space"]
+            sub = oc_home / ("a-agent-g" if agent_id == "agent-g" else "")
             if agent_id == "agent-g" and sub.exists():
                 data["workspace"] = to_wsl_path(sub)
-            elif mapping["openclaw_space"].exists():
-                data["workspace"] = to_wsl_path(mapping["openclaw_space"])
+            elif oc_home.exists():
+                data["workspace"] = to_wsl_path(oc_home)
         if data.get("framework") == "claude_code":
             claude_ws = install_prefix / ".mailbus" / "claude" / agent_id
             if claude_ws.exists() or not ws:

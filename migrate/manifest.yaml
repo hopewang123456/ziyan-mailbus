@@ -22,8 +22,8 @@ infra:
     path: hermes-data
     optional: true
   - env: OPENCLAW_WORKSPACE
-    description: OpenClaw container /workspace
-    path: openclaw_space
+    description: OpenClaw container /workspace (neutral default name under install_prefix)
+    path: openclaw
     optional: true
   - env: OPENCODE_ROOT
     description: OpenCode workspace

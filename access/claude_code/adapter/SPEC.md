@@ -14,4 +14,4 @@
 
 ## Sync
 
-`mail/tools/sync-claude-agent-context.py {agent}`
+`tools/sync-claude-agent-context.py {agent}`

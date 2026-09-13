@@ -1,4 +1,4 @@
-"""Framework adapter metadata — load from mail/access/{fw}/adapter/ (Phase 3.4)."""
+"""Framework adapter metadata — load from access/{fw}/adapter/ (Phase 3.4)."""
 from __future__ import annotations
 
 from functools import lru_cache

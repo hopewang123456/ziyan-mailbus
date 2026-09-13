@@ -897,11 +897,20 @@ def patch_env(data_dir: str, vars_patch: dict) -> dict:
     root = mailbus_root(data_dir)
     primary = os.path.join(root, ".env")
     if not os.path.isfile(primary):
-        example = os.path.join(root, "docker-agents", ".env.example")
-        if os.path.isfile(example):
-            import shutil
-            shutil.copy(example, primary)
-        else:
+        import shutil
+
+        candidates = [
+            os.path.join(root, "migrate", "env.template"),
+            os.path.join(root, "config", "env.template"),
+            os.path.join(root, "docker-agents", ".env.example"),
+        ]
+        seeded = False
+        for example in candidates:
+            if os.path.isfile(example):
+                shutil.copy(example, primary)
+                seeded = True
+                break
+        if not seeded:
             os.makedirs(os.path.dirname(primary) or root, exist_ok=True)
             open(primary, "a", encoding="utf-8").close()
 

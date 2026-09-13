@@ -1,6 +1,6 @@
 # 迁移后验收
 
-- [ ] `pip install -e mail`
+- [ ] `pip install -e .`
 - [ ] `mailbus migrate plan` — required 路径均 exists
 - [ ] `mailbus doctor` — 无 FAIL（Docker 可选 WARN）
 - [ ] `mailbus compose sync` — override 已生成

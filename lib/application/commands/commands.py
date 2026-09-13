@@ -17,7 +17,7 @@ mailbus — 多 Agent 消息总线系统
   bus.py agent-add <名> --cli <CLI>  注册新 agent
   bus.py agent-remove <名>           移除 agent
 
-配置: data_dir (默认 $MAILBUS_DATA 或 mail/store) 中的 config.json
+配置: data_dir (默认 $MAILBUS_DATA 或 mailbus/store) 中的 config.json
 """
 
 import os

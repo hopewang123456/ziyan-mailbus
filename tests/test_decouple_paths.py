@@ -132,6 +132,26 @@ class TestPublishedExampleTemplates(unittest.TestCase):
         self.assertIn("DSH_WORKSPACE", override)
         self.assertNotIn("../../Agent/", override)
 
+    def test_write_env_handles_dsh_without_agent_id(self):
+        import sys
+
+        migrate_dir = Path(__file__).resolve().parents[1] / "migrate"
+        sys.path.insert(0, str(migrate_dir))
+        from write_env import write_env  # type: ignore
+
+        with tempfile.TemporaryDirectory() as td:
+            prefix = Path(td)
+            mb = prefix / "mailbus"
+            mb.mkdir()
+            (mb / "lib").mkdir()
+            (prefix / "dsh").mkdir()
+            (prefix / "openclaw").mkdir()
+            target = write_env(prefix, mailbus_root=mb)
+            text = target.read_text(encoding="utf-8")
+            self.assertIn("DSH_WORKSPACE=", text)
+            self.assertIn("OPENCLAW_WORKSPACE=", text)
+            self.assertNotIn("openclaw_space", text)
+
 
 if __name__ == "__main__":
     unittest.main()

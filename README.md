@@ -562,18 +562,17 @@ tools/ · lib/api/ → lib/application/ → lib/interfaces/ ← lib/adapters/
 | `lib/infra/` | clock, paths, `mbus_log`, internal LLM bootstrap |
 
 Composition root: `lib/composition.py` only (`build_a2a_transport`, `build_transport_bundle`, `build_config_repo`, …).  
-Each package ships an `Overview.md` map. Path migration: [`docs/migration-guide.md`](docs/migration-guide.md).  
+Each package ships an `Overview.md` map. Install / path migrate: [`migrate/README.md`](migrate/README.md).  
 Harness rules: `config.harness.rules_path`; chain templates: `config/mailbus/chains.template.json`.
 
 ## Docs
 
 - Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - Agent entry: [`AGENTS.md`](AGENTS.md)
-- Migration (ports → interfaces, transport → core/a2a): [`docs/migration-guide.md`](docs/migration-guide.md)
-- Legacy bash eval: [`docs/legacy-bash-eval.md`](docs/legacy-bash-eval.md)
-- Adapter layer: [`docs/agent-adapter-layer.md`](docs/agent-adapter-layer.md)
-- Harness: [`docs/harness-runtime-spec.md`](docs/harness-runtime-spec.md)
-- Env template: `migrate/env.template`
+- Migration tooling: [`migrate/README.md`](migrate/README.md)
+- Adapter layer: `access/<framework>/adapter/SPEC.md`
+- Harness notes: `tools/harness/` (published git does not ship `/docs/` — often a local/Vault mount)
+- Env templates: `migrate/env.template`, `docker-agents/.env.example`
 
 ## License
 
