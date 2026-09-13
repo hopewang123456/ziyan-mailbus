@@ -15,7 +15,8 @@ volumes:
 
 # Host paths: repo-relative under ../ (mailbus root). External deps via env
 # (docker-agents/.env.example + migrate/env.template). Machine absolute paths
-# → docker-agents/.env; override.yml only references ${VAR} (see override.example).
+# → docker-agents/.env; override.yml only references ${VAR}
+# (see docker-compose.override.example.yml + .env.example).
 
 services:
 

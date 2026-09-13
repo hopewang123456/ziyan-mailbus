@@ -86,5 +86,45 @@ class TestMailbusPathPrefix(unittest.TestCase):
         self.assertTrue(a.is_file() or (a.parent / "SKILL.md").is_file() or a.name == "SKILL.md")
 
 
+class TestPublishedExampleTemplates(unittest.TestCase):
+    """Sample files referenced by README / settings seed must exist and stay decoupled."""
+
+    def test_compose_env_example(self):
+        from lib.infra.constants import PROJECT_ROOT
+
+        p = Path(PROJECT_ROOT) / "docker-agents" / ".env.example"
+        self.assertTrue(p.is_file(), "missing docker-agents/.env.example")
+        text = p.read_text(encoding="utf-8")
+        for key in (
+            "MAILBUS_HOST_ROOT=",
+            "HERMES_DATA=",
+            "OPENCLAW_WORKSPACE=",
+            "CODEX_WORKSPACE=",
+            "OPENCODE_ROOT=",
+            "DSH_WORKSPACE=",
+            "OPENCLAW_GATEWAY_TOKEN=",
+        ):
+            self.assertIn(key, text)
+        self.assertNotIn("change-me", text)
+        self.assertNotIn("../../Agent/docker", text)
+        self.assertNotIn("../openclaw_space", text)
+
+    def test_override_and_repo_env_templates(self):
+        from lib.infra.constants import PROJECT_ROOT
+
+        root = Path(PROJECT_ROOT)
+        for rel in (
+            "docker-agents/docker-compose.override.example.yml",
+            "migrate/env.template",
+            "config/env.template",
+        ):
+            self.assertTrue((root / rel).is_file(), f"missing {rel}")
+        override = (root / "docker-agents/docker-compose.override.example.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("DSH_WORKSPACE", override)
+        self.assertNotIn("../../Agent/", override)
+
+
 if __name__ == "__main__":
     unittest.main()

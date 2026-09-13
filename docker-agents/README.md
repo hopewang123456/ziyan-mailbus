@@ -6,9 +6,10 @@ mailbus Docker full-agent stack (compose SoT in this directory).
 |------|------|
 | Source + store | `../` (mailbus root) |
 | `MAILBUS_DATA` | `../store` |
-| Env template | [`../migrate/env.template`](../migrate/env.template) |
+| Compose env sample | [`.env.example`](.env.example) → copy to `.env` |
+| Repo-root env | [`../migrate/env.template`](../migrate/env.template) / [`../config/env.template`](../config/env.template) |
 | Agent homes | `.env` absolute paths (`OPENCLAW_WORKSPACE`, …); see [`workspaces/README.md`](workspaces/README.md) |
-| Local overrides | `docker-compose.override.yml` (gitignored; copy from `override.example.yml`) |
+| Local overrides | `docker-compose.override.yml` (gitignored; copy from `docker-compose.override.example.yml`) |
 | Start | `pip install -e ..` then `mailbus start` |
 
 `docker-compose.yml` mounts **mailbus repo** paths (`../skills`, …) and `${ENV}` for agent homes. Unset env falls back to empty `./workspaces/*` placeholders — **not** sibling `../openclaw_space` or `../../Agent/docker`. Point `.env` at your real Agent trees; that is config association, not layout coupling.

@@ -21,4 +21,6 @@
 
 **要：** `.env` / 设置页写你机器上的真实绝对路径（可以是 Agent 树——那是配置关联）。
 
+样例：`docker-agents/.env.example` → 复制为 `docker-agents/.env`。
+
 `migrate_compose_workspaces.py` 仅可选「主动镜像到仓内」；解耦不要求。

@@ -44,6 +44,11 @@ services:
       - ${MAILBUS_HOST_ROOT}/lib:/mailbus/lib:ro
       - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
       - ${OPENCODE_ROOT}:/workspace/opencode:rw
+  dsh:
+    volumes:
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
+      - ${DSH_WORKSPACE}:/home/dsh/.dsh
   mailbus:
     volumes:
       - ${MAILBUS_HOST_ROOT}:/mailbus

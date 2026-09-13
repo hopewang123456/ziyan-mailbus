@@ -23,7 +23,7 @@ def _env_path(key: str, default: Path) -> Path:
 
 
 # ── 项目根目录 ──────────────────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).resolve().parents[2]  # mail/lib/infra → mail/
+PROJECT_ROOT = Path(__file__).resolve().parents[2]  # mailbus/lib/infra → mailbus/
 PROJECT_ROOT_STR = str(PROJECT_ROOT)
 MAILBUS_ROOT = _env_path("MAILBUS_ROOT", PROJECT_ROOT)
 MAILBUS_ROOT_STR = str(MAILBUS_ROOT)
