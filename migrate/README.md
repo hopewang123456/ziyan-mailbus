@@ -17,7 +17,10 @@
 
 各 agent 工作区（如 `agent-f/`）按 manifest 的 `framework_workspaces` 或 `access/transport/*/transport.json` 的 `workspace` 字段。
 
-## 快速用法
+## 路径前缀 sunset
+
+技能/规则路径请用 `mailbus/skills/…`、`mailbus/rules/…`。  
+旧前缀 `mail/skills/…` 仍可解析至 **2026-12-31**（doctor 会 warn）。到期后将从 `utils` / `agent_registry` 移除别名。
 
 ```bash
 cd mailbus
