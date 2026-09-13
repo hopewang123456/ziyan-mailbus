@@ -282,27 +282,14 @@ def emit_override(host_prefix: str = "", *, mail_root: Path | None = None) -> st
     for svc in agent_services:
         vols = list(shared)
         if svc == "hermes":
-            # .sync = optional framework-skill mirror only; runtime skills SoT = Vault via
-            # profiles/*/skills junctions under /home/hermes/.hermes (see Agent/_path-map.md)
+            # .sync = optional framework-skill mirror; runtime SoT via HERMES_DATA / settings
             vols.append(f"      - {mroot}/access/hermes/.sync:/mailbus/access/hermes/.sync")
             inbox = str(Path(data) / "inbox").replace("\\", "/")
             vols.append(f"      - {inbox}:/home/hermes/inbox:ro")
         vols.extend(infra.get(svc, []))
         vols.extend(ws.get(svc, []))
-        # Runtime skills/memory SoT = Vault（须在 workspace 挂载之后，覆盖本地 junction）
-        if vault_hp:
-            if svc == "openclaw":
-                vols.append(f"      - {vault_hp}/02-members/022-category/0222-openclaw/02222-skills:/workspace/skills:ro")
-                vols.append(f"      - {vault_hp}/02-members/022-category/0222-openclaw/02224-memory/022231-xiaoqi:/workspace/memory")
-            elif svc in (codex_web_svc, codex_review_svc):
-                vols.append(
-                    f"      - {vault_hp}/02-members/022-category/0223-codex/02232-skills:/home/node/.codex/skills:ro"
-                )
-            elif svc == opencode_svc:
-                vols.append(
-                    f"      - {vault_hp}/02-members/022-category/0226-opencode/02262-skills:/workspace/opencode/skills:rw"
-                )
-                vols.append(f"      - {vault_hp}/02-members/022-category/0226-opencode/02264-memory/022631-dali:/workspace/opencode/memory")
+        # Vault binds are machine-private: put them in docker-compose.override.yml
+        # (do not hardcode team member folder names into generated override).
         if svc == "mailbus":
             vols = [
                 f"      - {mroot}:/mailbus",

@@ -607,7 +607,7 @@ def check_hermes_readiness(
             "fail",
             "hermes",
             "缺少 DEEPSEEK_API_KEY",
-            "在 mailbus-core/.env 设置 DEEPSEEK_API_KEY",
+            "在 mailbus/.env 或 docker-agents/.env 设置 DEEPSEEK_API_KEY",
         ))
 
     hermes_data = Path(paths["hermes_data"])

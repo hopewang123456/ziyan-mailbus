@@ -1,1 +1,1 @@
-See `mail/lib/memory_bridge.py` and `mail/mailbus-memory-bridge.py`.
+See `lib/adapters/integrations/memory_bridge.py` and `tools/mailbus-memory-bridge.py`.

@@ -1,7 +1,7 @@
 #!/bin/sh
 # mailbus Quality Harness — post-commit hook 模板
 # 安装: python tools/harness/install-hook.py --repo /path/to/project [--publish]
-# 规范: mail/docs/quality-harness-pipeline-spec.md
+# 规范: tools/harness/（质量门禁脚本；仓库不发布 /docs/）
 
 set -e
 ROOT="$(git rev-parse --show-toplevel)"

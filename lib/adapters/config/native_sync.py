@@ -14,7 +14,9 @@ def default_native_paths(framework: str, agent_id: str = "") -> dict[str, str]:
     home = Path.home()
     fw = (framework or "").replace("-", "_")
     if fw == "openclaw":
-        base = os.environ.get("OPENCLAW_WORKSPACE") or str(home / "openclaw_space")
+        base = (os.environ.get("OPENCLAW_WORKSPACE") or "").strip()
+        if not base:
+            return {"config_file": ""}
         profile = agent_id or "default"
         return {
             "config_file": str(Path(base) / f".openclaw-{profile}" / "openclaw.json")
