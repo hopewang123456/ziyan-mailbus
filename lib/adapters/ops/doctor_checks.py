@@ -404,14 +404,20 @@ def check_compose_coupling(*, mail_root: Path | None = None) -> list[DoctorItem]
             et = env_file.read_text(encoding="utf-8")
         except OSError:
             et = ""
-        env_hits = [m for m in _COMPOSE_COUPLING_MARKERS if m in et]
-        if env_hits:
+        # .env 指向 Agent 绝对路径 = 合法「配置关联」，不算耦合。
+        # 仅当仍用相对兄弟仓默认（../../Agent/docker）时告警。
+        rel_hits = [
+            m
+            for m in ("../../Agent/docker", "..\\..\\Agent\\docker", ":-change-me")
+            if m in et
+        ]
+        if rel_hits:
             items.append(
                 DoctorItem(
                     "warn",
                     "compose",
-                    "docker-agents/.env 工作区仍指向 ai_tools/Agent",
-                    "运行: python tools/ops/migrate_compose_workspaces.py --link --update-env",
+                    "docker-agents/.env 含相对 Agent/docker 或 change-me 默认",
+                    "改为显式绝对路径（设置页 / .env），勿依赖相对兄弟仓",
                 )
             )
         else:
@@ -419,7 +425,7 @@ def check_compose_coupling(*, mail_root: Path | None = None) -> list[DoctorItem]
                 DoctorItem(
                     "ok",
                     "compose",
-                    "docker-agents/.env 未硬绑 Agent/docker",
+                    "docker-agents/.env 用显式路径关联（允许指向本机 Agent 树）",
                     "",
                 )
             )

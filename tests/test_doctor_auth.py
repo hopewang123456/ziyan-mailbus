@@ -129,7 +129,8 @@ class TestComposeCoupling(unittest.TestCase):
             items = check_compose_coupling(mail_root=base)
             self.assertTrue(any(i.level == "fail" for i in items))
 
-    def test_env_agent_docker_warn(self):
+    def test_env_absolute_agent_path_ok(self):
+        """显式绝对路径指向本机 Agent 树 = 配置关联，不告警。"""
         with tempfile.TemporaryDirectory() as td:
             base = Path(td)
             da = base / "docker-agents"
@@ -140,9 +141,26 @@ class TestComposeCoupling(unittest.TestCase):
                 encoding="utf-8",
             )
             items = check_compose_coupling(mail_root=base)
+            self.assertFalse(
+                any(i.level == "warn" and ".env" in i.message and "相对" in i.message for i in items),
+                [(i.level, i.message) for i in items],
+            )
+            self.assertTrue(any(i.level == "ok" and ".env" in i.message for i in items))
+
+    def test_env_relative_agent_default_warn(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            da = base / "docker-agents"
+            da.mkdir()
+            (da / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+            (da / ".env").write_text(
+                "OPENCLAW_WORKSPACE=../../Agent/docker/openclaw_space\n",
+                encoding="utf-8",
+            )
+            items = check_compose_coupling(mail_root=base)
             self.assertTrue(
                 any(i.level == "warn" and ".env" in i.message for i in items),
-                [ (i.level, i.message) for i in items ],
+                [(i.level, i.message) for i in items],
             )
 
 

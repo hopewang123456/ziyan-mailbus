@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
-"""Migrate compose framework workspaces into docker-agents/workspaces/.
+"""Optional: mirror configured workspace dirs into docker-agents/workspaces/.
 
-Reads current paths from docker-agents/.env (OPENCLAW_WORKSPACE, CODEX_*, …),
-links or copies them under workspaces/, then rewrites .env to mailbus-local paths.
+Decoupling does NOT require this. Prefer setting absolute paths in
+docker-agents/.env / settings (OPENCLAW_WORKSPACE, …) that point at your
+agent runtimes wherever they live.
 
-Does not guess ai_tools/Agent layout — source = whatever .env already points to
-(or --from-dir / explicit --map).
-
-Examples:
-  python tools/ops/migrate_compose_workspaces.py --dry-run
-  python tools/ops/migrate_compose_workspaces.py --link --update-env
-  python tools/ops/migrate_compose_workspaces.py --copy --update-env
+Use this script only if you intentionally want a mailbus-owned copy/link
+under workspaces/ (self-contained tree). Default product path = config only.
 """
 from __future__ import annotations
 

@@ -1,25 +1,31 @@
-# Compose 工作区占位（仓内默认，不猜兄弟仓 Agent/docker）
+# Compose 工作区占位（仅「未配置时」回落）
 
-`docker-compose.yml` 在未设置环境变量时回落到本目录下的子文件夹，例如：
+**解耦原则：** Agent 运行时数据不搬进、不联进 mailbus。关联方式只有一种——在 **mailbus 配置**里写绝对路径：
 
-| 环境变量 | 默认目录 |
-|----------|----------|
+- `docker-agents/.env`（compose 挂卷）：`OPENCLAW_WORKSPACE`、`CODEX_WORKSPACE`、…
+- 或设置页 / `store/config.json` 实例 `install_path` 等
+
+本目录下的空文件夹只给 `docker-compose.yml` 在**环境变量未设**时当无害占位，例如：
+
+| 环境变量 | 未设置时的回落 |
+|----------|----------------|
 | `HERMES_DATA` | `./workspaces/hermes-data` |
 | `CODEX_WORKSPACE` | `./workspaces/codex` |
-| `CODEX_REVIEW_WORKSPACE` | `./workspaces/codex-review` |
-| `CODEX_SKILLS` | `./workspaces/codex-skills` |
-| `DSH_WORKSPACE` | `./workspaces/dsh` |
+| `OPENCLAW_WORKSPACE` | （compose 里对应 `${OPENCLAW_WORKSPACE:-…}`，有则用配置） |
 
-生产/本机请在 `docker-agents/.env`（可从 `.env.example` 复制）或设置页写入真实绝对路径。
-挂机专属卷用 `docker-compose.override.yml`（gitignore）：从 `docker-compose.override.example.yml` 复制，**只写 `${MAILBUS_HOST_ROOT}` / `${OPENCLAW_WORKSPACE}` 等变量**，绝对路径放进 `.env`，勿写进 yml。
+**不要：**
 
-若 `.env` 仍指向兄弟仓 `Agent/docker/...`，迁到本目录：
+- 在本目录对 `Agent/docker/...` 建 junction / 拷贝整树（那是把 Agent 嵌回 mailbus）
+- 在已提交的 `docker-compose.yml` 写死 `../../Agent/docker/...`
+
+**要：**
 
 ```bash
-python tools/ops/migrate_compose_workspaces.py --dry-run
-python tools/ops/migrate_compose_workspaces.py --link --update-env
+# docker-agents/.env（gitignore）
+OPENCLAW_WORKSPACE=/mnt/e/path/to/your/openclaw_space
+CODEX_WORKSPACE=/mnt/e/path/to/your/codex
 ```
 
-`--link` 在 Windows 建目录联接（不复制数据）；`--copy` 做完整拷贝。脚本只读现有 `.env` 源路径，不猜布局。
+路径可以指向本机任意位置（含你现在的 Agent 树）；那是**配置关联**，不是布局耦合。
 
-勿再使用 `../../Agent/docker/...` 作为默认。
+可选脚本 `tools/ops/migrate_compose_workspaces.py` 仅当你**主动**想把数据镜像到仓内占位目录时使用；解耦不要求跑它。
