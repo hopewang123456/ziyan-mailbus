@@ -326,6 +326,8 @@ _COMPOSE_COUPLING_MARKERS = (
     "../../Agent/docker",
     "..\\..\\Agent\\docker",
     "/mnt/e/ai_tools/Agent",
+    "../openclaw_space",
+    "../opencode",
     ":-change-me",
     "OPENCLAW_GATEWAY_TOKEN:-change-me",
 )
@@ -393,8 +395,8 @@ def check_compose_coupling(*, mail_root: Path | None = None) -> list[DoctorItem]
                 DoctorItem(
                     "warn",
                     "compose",
-                    "本机 override.yml 含 ai_tools/Agent 绝对路径",
-                    "改用 docker-agents/.env（MAILBUS_HOST_ROOT / *_WORKSPACE）+ override.example 变量挂卷",
+                    "本机 override.yml 含兄弟仓硬编码路径",
+                    "改为 ${OPENCLAW_WORKSPACE} 等变量；绝对路径只写 docker-agents/.env / 设置页",
                 )
             )
 

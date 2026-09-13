@@ -31,7 +31,7 @@ MAILBUS_ROOT_STR = str(MAILBUS_ROOT)
 TEAM_PACK_ROOT = _env_path("TEAM_PACK_ROOT", MAILBUS_ROOT / "team-pack")
 TEAM_PACK_ROOT_STR = str(TEAM_PACK_ROOT)
 
-# ── 知识库根目录（默认 = 仓库内路径；本地靠 junction 进 Vault）──────────
+# ── 知识库根目录（默认 = 仓库内 example；自定义走设置页 asset_paths / 下列 env）──
 # CI/publish 才用 env 覆盖，例如：
 #   MAILBUS_SKILLS_ROOT=./skills
 MAILBUS_SKILLS_ROOT = _env_path("MAILBUS_SKILLS_ROOT", MAILBUS_ROOT / "skills")

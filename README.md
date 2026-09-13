@@ -66,7 +66,7 @@ After `mailbus serve`, open `http://127.0.0.1:9814/`:
 - **Fleet / inbox** — live agent status, unread messages, send & ack
 - **Tasks** — pipeline / FSM state, assign, audit (`?reviewer=`), recover
 - **Settings** — form-based **agent config** and **model config** (agent-type / internal LLM / external services); every field is edited as a form and saved back to JSON; legacy JSON editors remain for `frameworks / mailbus_codex / mailbus_claude`
-- **Settings / Asset paths** — skills / rules / identities roots as "default / custom": default uses in-repo junction dirs (`skills/` `rules/` `identities/`, SoT in the Obsidian Vault); custom writes `.env` (`MAILBUS_SKILLS_ROOT` / `MAILBUS_RULES_ROOT` / `MAILBUS_IDENTITIES_ROOT`), restart required
+- **Settings / Asset paths** — skills / rules / identities: **default** = in-repo `skills/` `rules/` `identities/` examples; **custom** = absolute paths via settings (or `.env` escape hatch). No junction-as-product.
 - **Clinic / doctor** — one-click health checks (Hermes readiness, compose drift, token budget, …)
 
 ### Sending an A2A message

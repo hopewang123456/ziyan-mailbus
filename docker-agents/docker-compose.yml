@@ -192,7 +192,7 @@ services:
     networks:
       - mailbus-net
     volumes:
-      - ${OPENCLAW_WORKSPACE:-../openclaw_space}:/workspace
+      - ${OPENCLAW_WORKSPACE:-./workspaces/openclaw}:/workspace
       - ../store:/mailbus/store
       - ../tools:/mailbus/tools:ro
       - ../lib:/mailbus/lib:ro
@@ -201,8 +201,8 @@ services:
       - ../skills:/mailbus/skills:ro
       - ../rules:/mailbus/rules:ro
       # Default: workspace skills/memory. Local Vault overlay: override.yml
-      - ${OPENCLAW_WORKSPACE:-../openclaw_space}/skills:/workspace/skills:ro
-      - ${OPENCLAW_WORKSPACE:-../openclaw_space}/memory:/workspace/memory
+      - ${OPENCLAW_WORKSPACE:-./workspaces/openclaw}/skills:/workspace/skills:ro
+      - ${OPENCLAW_WORKSPACE:-./workspaces/openclaw}/memory:/workspace/memory
       - ../access:/mailbus/access:ro
       - ../access/external-tools:/mailbus/external-tools:ro
       - ../store/inbox:/inbox:ro
@@ -351,8 +351,8 @@ services:
       - ../access:/mailbus/access:ro
       - ../access/external-tools:/mailbus/external-tools:ro
       - ./codex-agent/wait-agentmemory.sh:/mailbus/docker-agents/codex-agent/wait-agentmemory.sh:ro
-      - ${OPENCODE_ROOT:-../opencode}:/workspace/opencode:rw
-      - ${OPENCODE_ROOT:-../opencode}/skills:/workspace/opencode/skills
+      - ${OPENCODE_ROOT:-./workspaces/opencode}:/workspace/opencode:rw
+      - ${OPENCODE_ROOT:-./workspaces/opencode}/skills:/workspace/opencode/skills
       - ${HERMES_DATA:-./workspaces/hermes-data}/.env:/run/hermes/.env:ro
     environment:
       - TZ=Asia/Shanghai

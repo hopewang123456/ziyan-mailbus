@@ -49,8 +49,8 @@ docker compose -f compose.public.yml up -d --build
 ```
 
 完整本地团队栈请继续用 `docker-compose.yml` + 本机 `docker-compose.override.yml`（不入库）。
-override 只写 `${MAILBUS_HOST_ROOT}` / `${OPENCLAW_WORKSPACE}` 等变量，绝对路径放进 `docker-agents/.env`（见 `.env.example`）。
-若 `.env` 仍指向兄弟仓 `Agent/docker`，可运行：`python tools/ops/migrate_compose_workspaces.py --link --update-env`。
+override 只写 `${MAILBUS_HOST_ROOT}` / `${OPENCLAW_WORKSPACE}` 等变量；**绝对路径放进 `docker-agents/.env`（或设置页）**——这是与 Agent 运行时的唯一关联方式。
+勿把 Agent 树 junction/拷贝进 `docker-agents/workspaces/`；该目录仅作「未配置时」空占位。
 
 ### 团队栈日启（Linux / macOS / Windows）
 
@@ -156,7 +156,7 @@ Windows 专用端口转发脚本统一放在 [`windows/`](windows/)。
 - **设置 / 资产路径** —— skill / rule / identity 三项根目录「默认 / 自定义」：默认 = 仓库内 `skills/` `rules/` `identities/`（含可提交 example）；自定义路径写进配置（亦可经 `.env` 的 `MAILBUS_*_ROOT`），覆盖默认
 - **设置 / 鉴权** —— 默认写 API 需 Token；可选开启无 Token 写 + CIDR 白名单（本机/WSL/Docker）；CORS Origin 白名单（默认不放行 `*`）
 - **设置 / Compose 文件** —— 加载/编辑/保存 `docker-compose*.yml`；**不**提供 up/down（启停归运维）
-- **门诊 / doctor** —— 一键健康检查；鉴权红灯：过宽 CIDR、OpenClaw Token 未配置；compose 含 `Agent/docker` 或 `:-change-me` 亦红灯
+- **门诊 / doctor** —— 一键健康检查；鉴权红灯：过宽 CIDR、OpenClaw Token 未配置；**已提交** compose 含相对 `../openclaw_space` / `Agent/docker` 或 `:-change-me` 亦红灯。`.env` 里写绝对路径关联本机 Agent 树是合法配置。
 
 ### 发一条 A2A 消息
 

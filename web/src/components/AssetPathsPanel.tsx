@@ -4,7 +4,7 @@ import { ErrorAlert } from "./ErrorAlert";
 
 /**
  * 资产路径（28b）— mailbus 自身 skills / rules / identity 三项。
- * 默认 = 仓库内 junction 路径（skills|rules|identities）；自定义 = Obsidian Vault 目录。
+ * 默认 = 仓内 skills|rules|identities（公开 example）；自定义 = 设置页绝对路径（可指向 Vault）。
  * 保存走 /api/settings/section/asset_paths（后端写 .env，default 删除键）。
  */
 
