@@ -105,9 +105,16 @@ class TestPublishedExampleTemplates(unittest.TestCase):
             "OPENCLAW_GATEWAY_TOKEN=",
         ):
             self.assertIn(key, text)
-        self.assertNotIn("change-me", text)
-        self.assertNotIn("../../Agent/docker", text)
-        self.assertNotIn("../openclaw_space", text)
+        # Assignment lines only — comments may mention forbidden patterns as warnings
+        for ln in text.splitlines():
+            s = ln.strip()
+            if not s or s.startswith("#"):
+                continue
+            low = s.lower()
+            self.assertNotIn("change-me", low)
+            self.assertNotIn("../../Agent/docker", s)
+            self.assertNotIn("../openclaw_space", s)
+            self.assertNotIn(":-change-me", s)
 
     def test_override_and_repo_env_templates(self):
         from lib.infra.constants import PROJECT_ROOT
