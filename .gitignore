@@ -21,11 +21,16 @@ deliverables/
 .idea/
 .cursor/
 .codex/
+.codex
+/codex
 *.swp
 *.swo
 
 # Path-garbage / local scratch
 _verify_out.txt
+.pytest_tmp/
+.workbuddy/
+/tmp*/
 
 # Cline checkpoints
 .git/refs/cline/
