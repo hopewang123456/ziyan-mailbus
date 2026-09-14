@@ -18,6 +18,9 @@ class TestDirDiscoveryNoAiToolsGuess(unittest.TestCase):
         src = inspect.getsource(DirDiscoverySource.scan)
         self.assertNotIn("ai_tools/Agent", src)
         self.assertNotIn("ai_tools\\Agent", src)
+        # Default candidates must not assume ~/openclaw_space
+        self.assertNotIn('home / "openclaw_space"', src)
+        self.assertNotIn("home / 'openclaw_space'", src)
 
     def test_extra_dirs_env_used(self):
         with tempfile.TemporaryDirectory() as td:

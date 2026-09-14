@@ -15,7 +15,7 @@
 | `config/` | Seed / template config |
 | `store/` | Runtime data (local, gitignored secrets) |
 | `docker-agents/` | Compose stacks |
-| `docs/` | In-repo docs |
+| `docs/` | Often local/Vault (gitignored); public notes → `migrate/README.md` + `access/*/SPEC.md` |
 | `tests/` | pytest |
 
 ## Architecture SoT
@@ -23,7 +23,7 @@
 - 代码分层/快速开始：本文件上方 [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - 完整架构文档：Obsidian `Agent/01-mailbus/016-docs/0161-architecture/`（SoT）
 - Vault 计划：`Agent/01-mailbus/017-plans/`（Obsidian）
-- 路径/结构映射：`Agent/_path-map.json`（机器可读）
+- 路径/结构映射（可选）：`AGENT_VAULT_ROOT/_path-map.json`（Obsidian Agent 仓；未配置则跳过）
 
 ## Dependency rule (target)
 

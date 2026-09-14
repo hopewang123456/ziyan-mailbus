@@ -34,14 +34,17 @@ WORKSPACE_KEYS: dict[str, str] = {
     "HERMES_DATA": "hermes-data",
 }
 
-# Optional sibling Agent/docker folder names when using --source-root
+# Optional names under --source-root (legacy openclaw_space still accepted)
 AGENT_DOCKER_NAMES: dict[str, str] = {
-    "OPENCLAW_WORKSPACE": "openclaw_space",
+    "OPENCLAW_WORKSPACE": "openclaw",
     "CODEX_WORKSPACE": "codex",
     "CODEX_REVIEW_WORKSPACE": "codex-review",
     "OPENCODE_ROOT": "opencode",
     "DSH_WORKSPACE": "dsh",
     "HERMES_DATA": "hermes-data",
+}
+AGENT_DOCKER_ALIASES: dict[str, tuple[str, ...]] = {
+    "OPENCLAW_WORKSPACE": ("openclaw", "openclaw_space"),
 }
 
 
@@ -160,7 +163,15 @@ def main() -> int:
         dst = WORKSPACES / folder
         new_val = f"{host_root.rstrip('/')}/docker-agents/workspaces/{folder}"
         if source_root is not None:
-            src = source_root / AGENT_DOCKER_NAMES.get(key, folder)
+            names = AGENT_DOCKER_ALIASES.get(key) or (AGENT_DOCKER_NAMES.get(key, folder),)
+            src = None
+            for name in names:
+                cand = source_root / name
+                if cand.exists():
+                    src = cand
+                    break
+            if src is None:
+                src = source_root / AGENT_DOCKER_NAMES.get(key, folder)
             plans.append((key, src, dst, new_val))
             continue
         src_raw = (env.get(key) or "").strip()

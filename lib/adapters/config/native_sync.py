@@ -31,8 +31,15 @@ def default_native_paths(framework: str, agent_id: str = "") -> dict[str, str]:
         hermes = os.environ.get("HERMES_DATA") or str(home / ".hermes")
         return {"config_file": str(Path(hermes) / "config.yaml")}
     if fw == "opencode":
-        root = os.environ.get("OPENCODE_ROOT") or str(home / "opencode")
+        root = (os.environ.get("OPENCODE_ROOT") or "").strip()
+        if not root:
+            return {"config_file": ""}
         return {"config_file": str(Path(root) / "opencode.json")}
+    if fw == "dsh":
+        root = (os.environ.get("DSH_WORKSPACE") or "").strip()
+        if not root:
+            return {"config_file": ""}
+        return {"config_file": str(Path(root) / "config.json")}
     return {"config_file": ""}
 
 

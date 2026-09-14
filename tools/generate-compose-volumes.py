@@ -146,7 +146,7 @@ def workspace_mounts(host_prefix: str, *, mail_root: Path | None = None) -> dict
             skills_hp = _to_compose_host(host_path / "skills", host_prefix)
             lines.append(f"      - {skills_hp}:/workspace/opencode/skills")
         elif fw == "openclaw":
-            # 只挂一次主 workspace；a-agent-l 等已在 openclaw_space 子目录内
+            # 只挂一次主 workspace（子目录由 OPENCLAW_WORKSPACE 内布局决定）
             root_line = f"      - {hp}:/workspace"
             already = any(
                 x.split(":")[0].strip("- ").rstrip() == hp and ":/workspace" in x and "/workspace/" not in x.split(":/")[-1]

@@ -321,5 +321,5 @@ def handle_agent_scan(handler):
         "gate_passed": gate_passed,
         "enabled": gate_passed,
         "first_configure": all_disabled,
-        "hint": "扫描结果来自 _path-map.json junctions.mount_points + 框架约定；运行环境字段已写回实例级",
+        "hint": "扫描结果来自框架约定与可选 AGENT_VAULT_ROOT/_path-map.json；运行环境字段已写回实例级",
     })

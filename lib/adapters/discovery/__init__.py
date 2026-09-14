@@ -45,6 +45,7 @@ class EnvDiscoverySource:
             ("CODEX_WORKSPACE", "codex"),
             ("CODEX_REVIEW_WORKSPACE", "codex"),
             ("CODEX_HOME", "codex"),
+            ("DSH_WORKSPACE", "dsh"),
         ]
         for env_key, fw in mapping:
             val = (os.environ.get(env_key) or "").strip()
@@ -66,7 +67,6 @@ class DirDiscoverySource:
         home = Path.home()
         candidates: list[tuple[Path, str]] = [
             (home / ".openclaw", "openclaw"),
-            (home / "openclaw_space", "openclaw"),
             (home / ".hermes", "hermes"),
             (home / ".codex", "codex"),
             (home / ".claude", "claude_code"),
@@ -76,11 +76,12 @@ class DirDiscoverySource:
         extra = (os.environ.get("MAILBUS_DISCOVERY_DIRS") or "").strip()
         if extra:
             fw_guess = {
-                "openclaw_space": "openclaw",
+                "openclaw_space": "openclaw",  # legacy folder name if user lists it
                 "openclaw": "openclaw",
                 "opencode": "opencode",
                 "codex": "codex",
                 "hermes": "hermes",
+                "dsh": "dsh",
                 ".claude": "claude_code",
                 "claude": "claude_code",
             }

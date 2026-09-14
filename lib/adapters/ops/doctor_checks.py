@@ -578,7 +578,7 @@ def check_layout_hazard(*, repo_parent: Path | None = None) -> list[DoctorItem]:
             "mailbus-core 为 reparse 点",
             report.message,
         )]
-    return [DoctorItem("ok", "layout", "mail/ 与 mailbus-core/ 独立", report.message)]
+    return [DoctorItem("ok", "layout", "mailbus/ 与 mailbus-core/ 独立（或 core 不存在）", report.message)]
 
 
 def check_hermes_readiness(
