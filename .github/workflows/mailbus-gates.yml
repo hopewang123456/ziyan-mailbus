@@ -21,7 +21,7 @@ jobs:
           python -m pip install -U pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest
-      - name: pytest e2e + v_suite + wave_f3_f4 + ports_import + clock_lint + auth/cors
+      - name: pytest e2e + v_suite + auth/cors + pipeline/settings/compose/device
         env:
           PYTHONUTF8: "1"
         run: |
@@ -45,7 +45,11 @@ jobs:
             tests/test_dispatch_governance.py \
             tests/test_pipeline_step_failover.py \
             tests/test_failover_after_two.py \
-            tests/test_failover_metrics.py -q
+            tests/test_failover_metrics.py \
+            tests/test_pipeline_trigger_p0.py \
+            tests/test_launch_ports_settings.py \
+            tests/test_sync_layers.py \
+            tests/test_device_bridge.py -q
 
   web:
     runs-on: ubuntu-latest

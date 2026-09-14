@@ -396,15 +396,21 @@ def ensure_hermes_dashboards(log: LogFn | None = None) -> int:
 
 
 def _sync_layers(log: LogFn | None = None) -> None:
-    """Default: do NOT mass-sync skills into agent workspaces (plan: Vault SoT + harness contract).
+    """启动时轻量重建 store skills-index；全量拷进各框架工作区需 MAILBUS_SYNC_LAYERS=1。"""
+    paths = mailbus_paths()
+    try:
+        from lib.infra.skills_index_startup import rebuild_skills_index_on_start
 
-    Opt-in: MAILBUS_SYNC_LAYERS=1 restores legacy patch/sync-team-pack behavior.
-    """
+        out = rebuild_skills_index_on_start(paths["data_dir"])
+        if log:
+            log(f"Light skills-index sync: {out}")
+    except Exception as exc:
+        if log:
+            log(f"WARNING: light skills-index sync skipped: {exc}")
     if os.environ.get("MAILBUS_SYNC_LAYERS", "0") != "1":
         if log:
-            log("Skip full skill sync (set MAILBUS_SYNC_LAYERS=1 to enable legacy sync)")
+            log("Skip full workspace skill copy (set MAILBUS_SYNC_LAYERS=1 for sync-all-agent-layers)")
         return
-    paths = mailbus_paths()
     root = paths["root"]
     data = paths["data_dir"]
     team_pack = paths["team_pack_root"]

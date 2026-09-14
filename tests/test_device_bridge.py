@@ -1,4 +1,5 @@
 """Device Bridge 单元测试：配置段、token 绑定、通讯式一轮一答、ticket、隔离。"""
+import json
 import os
 import shutil
 import sys
@@ -209,6 +210,78 @@ class TestDeliverAndWait(unittest.TestCase):
         self.assertEqual(last["from"], "device:phone-hope")
         self.assertEqual(last["type"], "notice")
         self.assertNotIn("task", last)
+
+
+class TestDeviceTaskEnvelope(unittest.TestCase):
+    def test_default_explicit_pins_device_agent(self):
+        from lib.api.handlers_device import device_body_to_envelope
+
+        env = device_body_to_envelope(
+            {"id": "phone-hope", "agent_id": "lingzhao"},
+            {"text": "帮我建一个修登录的工单"},
+        )
+        self.assertEqual(env["mode"], "explicit")
+        self.assertEqual(env["tier"], "S")
+        self.assertIn("修登录", env["intent"])
+        self.assertTrue(str(env["task_id"]).startswith("dev-phone-hope-"))
+        self.assertEqual(env["planned_chain"][0]["pin_agent"], "lingzhao")
+        self.assertEqual(env["planned_chain"][0]["role_type"], 1)
+        self.assertEqual(env["initiator"], "device:phone-hope")
+
+    def test_auto_mode_keeps_intent(self):
+        from lib.api.handlers_device import device_body_to_envelope
+
+        env = device_body_to_envelope(
+            {"id": "g", "agent_id": "lingzhao"},
+            {"intent": "写周报", "mode": "auto", "task_type": "doc"},
+        )
+        self.assertEqual(env["mode"], "auto")
+        self.assertNotIn("planned_chain", env)
+        self.assertEqual(env["task_type"], "doc")
+
+    @mock.patch("lib.api.handlers_device.create_task_from_envelope")
+    def test_handle_device_task_ok(self, create_fn):
+        from io import BytesIO
+        from lib.api.handlers_device import handle_device_task
+
+        create_fn.return_value = ({"status": "ok", "task": {"task_id": "dev-x"}}, 201)
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(tmp, ignore_errors=True))
+        json_write(
+            os.path.join(tmp, "config.json"),
+            _minimal_config(devices=[{
+                "id": "phone-hope", "token": "secret-x", "agent_id": "lingzhao", "enabled": True,
+            }]),
+        )
+        body = json.dumps({"text": "建工单"}).encode("utf-8")
+
+        class Handler:
+            data_dir = tmp
+            headers = {
+                "Authorization": "Bearer secret-x",
+                "Content-Length": str(len(body)),
+                "Content-Type": "application/json",
+            }
+            client_address = ("100.1.2.3", 0)
+            path = "/api/device/task"
+            rfile = BytesIO(body)
+            out = None
+            status = None
+
+            def _send_json(self, data, status=200):
+                self.out, self.status = data, status
+
+            def _send_api_error(self, code, status, detail=""):
+                self.out, self.status = {"error": code, "detail": detail}, status
+
+        h = Handler()
+        handle_device_task(h)
+        self.assertEqual(h.status, 201)
+        self.assertEqual(h.out["status"], "ok")
+        create_fn.assert_called_once()
+        env = create_fn.call_args[0][1]
+        self.assertEqual(env["intent"], "建工单")
+        self.assertEqual(env["planned_chain"][0]["pin_agent"], "lingzhao")
 
 
 if __name__ == "__main__":

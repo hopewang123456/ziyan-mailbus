@@ -391,6 +391,8 @@ services:
     volumes:
       - ${DSH_WORKSPACE:-./workspaces/dsh}:/home/dsh/.dsh
       - ../store:/mailbus/store
+      - ../skills:/mailbus/skills:ro
+      - ../rules:/mailbus/rules:ro
       - ../access:/mailbus/access:ro
       - ../access/external-tools:/mailbus/external-tools:ro
     environment:

@@ -157,6 +157,19 @@ class TestSyncLayers(unittest.TestCase):
         self.assertIsInstance(index.get("orphans"), list)
 
 
+    def test_dsh_framework_skill_is_tracked(self):
+        from lib.adapters.frameworks.framework_skills import (
+            framework_skill_path_rel,
+            resolve_skill_src,
+        )
+        from pathlib import Path
+
+        rel = framework_skill_path_rel("dsh")
+        self.assertTrue(rel.endswith("access/dsh/adapter/SKILL.md"))
+        src = resolve_skill_src(rel, mail_root=MAILBUS_ROOT)
+        self.assertTrue(Path(src).is_file(), msg=str(src))
+
+
 class TestGenerateComposeVolumes(unittest.TestCase):
     def test_compose_check_passes(self):
         import subprocess

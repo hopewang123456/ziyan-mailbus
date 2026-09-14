@@ -101,19 +101,25 @@ def ensure_fsm(task: dict, *, default_priority: int = 50) -> dict:
         step.setdefault("step", sn)
         step.setdefault("step_id", _make_step_id(sn, int(step.get("attempt") or 1)))
         legacy = (step.get("status") or "running").lower()
-        if not step.get("fsm_state"):
+        terminal_legacy = {"completed", "done", "failed", "skipped"}
+        # status 已是终态时以 status 为准，避免 stale fsm_state=awaiting_result 把 completed 打回 running
+        if legacy in terminal_legacy:
+            mapped = _LEGACY_TO_FSM.get(legacy)
+            if mapped:
+                step["fsm_state"] = mapped.value
+        elif not step.get("fsm_state"):
             step["fsm_state"] = _LEGACY_TO_FSM.get(legacy, StepFsmState.PENDING).value
         step.setdefault("attempt", 1)
         tid = task.get("task_id") or task.get("id") or ""
         if tid and not step.get("result_ref"):
             step["result_ref"] = f"msg-results/{tid}/step-{step['step_id']}.json"
-        # legacy status 与 fsm 同步（running 步骤）
+        # legacy status 与 fsm 同步（running 步骤）；终态 status 不再被覆盖
         if step.get("fsm_state") in (
             StepFsmState.QUEUED.value,
             StepFsmState.DISPATCHED.value,
             StepFsmState.IN_PROGRESS.value,
             StepFsmState.AWAITING_RESULT.value,
-        ):
+        ) and legacy not in terminal_legacy:
             step["status"] = "running"
 
     active = get_active_step(task)

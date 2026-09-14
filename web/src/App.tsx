@@ -8,6 +8,7 @@ import { ClinicPage } from "./pages/ClinicPage";
 import { ManagerDeskPage } from "./pages/ManagerDeskPage";
 import { getUiMode, setUiMode } from "./lib/ui-mode";
 import { t } from "./lib/i18n";
+import { AuthTokenBanner } from "./components/AuthTokenBanner";
 
 /**
  * 逃生舱侧栏：舰桥 + 配置/诊所/协调台（不再挂「首页」入口；/legacy 仍可直达排障页）。
@@ -132,10 +133,13 @@ function CockpitEntry() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<CockpitEntry />} />
-      <Route path="/cockpit" element={<CockpitEntry />} />
-      <Route path="/*" element={<LegacyApp />} />
-    </Routes>
+    <>
+      <AuthTokenBanner />
+      <Routes>
+        <Route path="/" element={<CockpitEntry />} />
+        <Route path="/cockpit" element={<CockpitEntry />} />
+        <Route path="/*" element={<LegacyApp />} />
+      </Routes>
+    </>
   );
 }

@@ -93,7 +93,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
 
     def _check_auth(self, *, write: bool = False) -> bool:
         """Read: token optional unless require_api_auth; presented token must match.
-        Write: localhost free; remote requires token.
+        Write: 默认需要有效 Token（含本机）；仅 config.auth.allow_write_without_token + CIDR 可免。
         """
         # 跨层解耦：api→adapter 通过 composition 拿服务（2026-09 治理）
         from lib.composition import message_zh
@@ -116,14 +116,17 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             }, 401)
             return False
 
-        from lib.application.mailbus_token import authorize_write, client_context_from_handler
+        from lib.application.mailbus_token import authorize_write, client_context_from_handler, live_auth_config
         from lib.domain.types import AuthDecision
 
         ctx = client_context_from_handler(self)
+        extra = {}
+        if getattr(self, "exempt_cidrs", None):
+            extra["exempt_cidrs"] = list(self.exempt_cidrs)
         decision = authorize_write(
             self.data_dir,
             ctx,
-            config={"auth": {"exempt_cidrs": self.exempt_cidrs}},
+            config=live_auth_config(self.data_dir, extra=extra),
         )
         if decision == AuthDecision.ALLOW:
             return True
@@ -131,7 +134,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "error": "unauthorized",
             "error_code": "unauthorized",
             "message_zh": message_zh("unauthorized"),
-            "hint": "本机可免 token；跨机写操作需 Authorization: Bearer <mailbus_api_token>",
+            "hint": "写操作需要 Authorization: Bearer <mailbus_api_token>；可在配置合页填写。开启 allow_write_without_token 后仅 CIDR 白名单可免 Token。",
         }, 401)
         return False
 
@@ -507,6 +510,10 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             # 设备桥走独立设备 token 鉴权，不经 mailbus API token
             h = _get_handlers()
             h["device"].handle_device_chat(self)
+            return
+        if path == "/api/device/task":
+            h = _get_handlers()
+            h["device"].handle_device_task(self)
             return
         if path in ("/metis/agent/api/sse", "/agent/api/sse"):
             # 灵珠/Rokid 眼镜上游走独立 AK 鉴权，不经 mailbus API token

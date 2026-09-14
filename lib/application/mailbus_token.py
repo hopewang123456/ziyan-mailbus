@@ -1,6 +1,8 @@
 """Mailbus Token use cases — AuthPort behavior."""
 from __future__ import annotations
 
+import os
+
 from lib.composition import get_token_store
 from lib.domain.types import AuthDecision, ClientContext
 
@@ -40,6 +42,21 @@ def _write_free_cidrs(config: dict | None) -> list[str]:
         raw = [raw]
     out = [str(x).strip() for x in raw if str(x).strip()]
     return out
+
+
+def live_auth_config(data_dir: str, *, extra: dict | None = None) -> dict:
+    """从 store/config.json 读 auth 段（设置页保存后无需重启即可生效）。"""
+    from lib.infra.utils import json_read
+
+    cfg = json_read(os.path.join(data_dir or "", "config.json"), {})
+    auth = dict(cfg.get("auth") or {}) if isinstance(cfg.get("auth"), dict) else {}
+    if extra:
+        for k, v in extra.items():
+            if v in (None, "", [], {}):
+                continue
+            if k not in auth or auth.get(k) in (None, "", [], {}):
+                auth[k] = v
+    return {"auth": auth}
 
 
 def allow_write_without_token_enabled(config: dict | None) -> bool:

@@ -645,7 +645,9 @@ def check_hermes_readiness(
             "warn",
             "hermes",
             f"access/hermes/.sync 缺失 {len(missing_sync)} 个 agent",
-            ", ".join(missing_sync) + "；运行 sync_framework_workspace_skills 或 sync-all-agent-layers",
+            ", ".join(missing_sync)
+            + "；启动默认只重建 skills-index。"
+            "全量写入框架工作区需 MAILBUS_SYNC_LAYERS=1 后跑 sync-all-agent-layers",
         ))
     else:
         items.append(DoctorItem("ok", "hermes", "Hermes .sync skills 齐全", str(sync_root)))

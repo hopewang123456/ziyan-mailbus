@@ -18,6 +18,7 @@ FRAMEWORK_SKILL_DIRS: dict[str, str] = {
     "openclaw": "frameworks/openclaw/SKILL.md",
     "cline": "frameworks/cline/SKILL.md",
     "cursor": "frameworks/cursor/SKILL.md",
+    "dsh": "frameworks/dsh/SKILL.md",
 }
 
 SHARED_PROTOCOL = "common/mailbus-file-protocol/SKILL.md"
@@ -28,6 +29,9 @@ def framework_skill_id(framework: str) -> str:
 
 
 def framework_skill_path_rel(framework: str) -> str:
+    # /skills/ 常为 Vault junction 且 gitignore；dsh L1 放已跟踪的 access/dsh/adapter/
+    if framework == "dsh":
+        return "mailbus/access/dsh/adapter/SKILL.md"
     rel = FRAMEWORK_SKILL_DIRS.get(framework)
     if not rel:
         raise ValueError(f"unknown framework: {framework}")
@@ -65,6 +69,10 @@ def resolve_skill_src(rel: str, *, mail_root: Path | None = None) -> Path:
     # mail/adapters、mailbus/skills 旧/新前缀均指仓库内 skills，非知识库根。
     skills = mail_root / "skills"
     rel = (rel or "").replace("\\", "/")
+    if rel.startswith("mailbus/access/") or rel.startswith("mail/access/"):
+        return mail_root / rel.split("/", 1)[1]
+    if rel.startswith("access/"):
+        return mail_root / rel
     for adapters_prefix in ("mailbus/adapters/", "mail/adapters/"):
         if rel.startswith(adapters_prefix):
             tail = rel[len(adapters_prefix):]

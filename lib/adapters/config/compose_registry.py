@@ -24,6 +24,7 @@ _FALLBACK_LOGICAL_TO_COMPOSE: dict[str, str] = {
     "openclaw-agent": "openclaw",
     "hermes-agent": "hermes",
     "claude-agent": "",
+    "dsh-agent": "dsh",
 }
 
 _FALLBACK_AGENT_COMPOSE_SERVICE: dict[str, str] = {
@@ -41,7 +42,7 @@ _FALLBACK_AGENT_COMPOSE_SERVICE: dict[str, str] = {
 }
 
 _FALLBACK_SERVICES = {
-    "mailbus", "agentmemory", "hermes", "openclaw", "codex-web", "codex-review", "opencode",
+    "mailbus", "agentmemory", "hermes", "openclaw", "codex-web", "codex-review", "opencode", "dsh",
 }
 
 

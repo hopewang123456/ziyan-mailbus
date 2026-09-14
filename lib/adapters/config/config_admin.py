@@ -836,6 +836,7 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
 
             invalidate_ollama_probe_cache()
 
+    _fill_required_config_fields(cfg, data_dir)
     errors = validate_config(cfg)
     # 阻断项：agents 未知字段 + 任意「缺少必需字段」类错误一律不落盘
     blocking = [
@@ -861,6 +862,26 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
     if section == "auth":
         result["data"] = cfg.get("auth") or {}
     return result, requires_restart
+
+
+def _fill_required_config_fields(cfg: dict, data_dir: str) -> None:
+    """稀疏 config（设置页只改一段）落盘前补顶层必需字段，避免 schema 整段拒绝。"""
+    from lib.infra.constants import (
+        DEFAULT_ACK_TIMEOUT,
+        DEFAULT_ARCHIVE_DAYS,
+        DEFAULT_ARCHIVE_MAX_MESSAGES,
+        DEFAULT_MAX_RETRIES,
+        MAILBUS_VERSION,
+    )
+
+    cfg.setdefault("project", "mailbus")
+    cfg.setdefault("version", MAILBUS_VERSION)
+    cfg.setdefault("data_dir", str(data_dir or ".").replace("\\", "/"))
+    cfg.setdefault("ack_timeout", DEFAULT_ACK_TIMEOUT)
+    cfg.setdefault("max_retries", DEFAULT_MAX_RETRIES)
+    cfg.setdefault("archive_days", DEFAULT_ARCHIVE_DAYS)
+    cfg.setdefault("archive_max_messages", DEFAULT_ARCHIVE_MAX_MESSAGES)
+    cfg.setdefault("agents", {})
 
 
 def _strip_llm_secrets_from_patch(patch: dict) -> dict:

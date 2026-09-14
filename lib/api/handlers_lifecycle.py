@@ -106,6 +106,7 @@ def handle_mailbus_token(handler):
     from lib.application.mailbus_token import (
         client_context_from_handler,
         ensure_token,
+        live_auth_config,
         resolve_token,
         rotate_token,
     )
@@ -113,10 +114,14 @@ def handle_mailbus_token(handler):
 
     ctx = client_context_from_handler(handler)
     if handler.command == "POST":
+        extra = {}
+        cidrs = getattr(handler, "exempt_cidrs", []) or []
+        if cidrs:
+            extra["exempt_cidrs"] = list(cidrs)
         result = rotate_token(
             handler.data_dir,
             ctx,
-            config={"auth": {"exempt_cidrs": getattr(handler, "exempt_cidrs", [])}},
+            config=live_auth_config(handler.data_dir, extra=extra),
         )
         if not result.get("ok"):
             handler._send_json({
@@ -141,7 +146,7 @@ def handle_mailbus_token(handler):
         "status": "ok",
         "configured": bool(resolve_token(handler.data_dir)),
         "token_masked": masked,
-        "hint": "跨机写操作使用 Authorization: Bearer <token>；本机可免 token",
+        "hint": "写操作使用 Authorization: Bearer <token>。默认本机也需要 Token；可在配置合页填写或开启 allow_write_without_token。",
     })
 
 

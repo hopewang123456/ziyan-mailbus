@@ -379,6 +379,7 @@ function DeviceBridgePanel() {
         <div className="soft-inset p-2 text-xs text-mute">
           <p className="text-frost/70">快捷指令 URL</p>
           <p className="font-mono">http://&lt;电脑 MagicDNS 或 100.x&gt;:9814/api/device/chat</p>
+          <p className="font-mono mt-1">…/api/device/task（建工单，同样设备 token）</p>
           <p className="mt-1">
             Header：<span className="font-mono">Authorization: Bearer &lt;设备token&gt;</span>
           </p>
@@ -761,8 +762,8 @@ function GearPanel() {
         </p>
       </div>
       <p className="text-[13px] leading-relaxed text-mute">
-        <span className="text-amber-signal">提示</span>：前端在 Windows 访问 WSL/Docker 后端时，跨机写操作
-        需 Bearer token。Token 存在后端 <code className="font-mono">store/secrets.json</code>（或
+        <span className="text-amber-signal">提示</span>：默认所有写 API 需要 Bearer
+        Token（本机也不再免鉴权）。Token 存在后端 <code className="font-mono">store/secrets.json</code>（或
         <code className="font-mono">MAILBUS_API_TOKEN</code> 环境变量）。获取方式：容器内
         <code className="font-mono">docker exec &lt;容器&gt; cat store/secrets.json</code>，
         或点下方「轮换 Token」（明文仅返回一次）。填好后保存即可，所有请求自动携带 Bearer。

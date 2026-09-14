@@ -5,7 +5,7 @@
 - 通讯式一轮一答：投递 inbox → 即时 push → 等本轮回复 → HTTP 回传；
 - 每请求新 session_id，不拼历史气泡进 prompt；
 - 每轮双写 memory（SQLite 同步 + AgentMemory 后台降级），防 Agent 失忆；
-- MVP 不建工单（tasks 另属 Phase 2）。
+- 工单走独立入口 POST /api/device/task（设备 token，转 A2A Envelope）。
 """
 from __future__ import annotations
 

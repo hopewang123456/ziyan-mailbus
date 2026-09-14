@@ -409,7 +409,7 @@ mailbus 无论跑在 **Windows / WSL / Linux native / Docker**，都能统一探
 - **与 Intake Bridge 分离**：`mailbus_intake_bridge` 管模型/商机自动 spawn；`mailbus_device_bridge` 管外部设备会话入口，互不干扰。
 - **每请求新 `session_id`**（UUID，用完即弃），禁止长会话粘连、防上下文挤压。
 - **每轮落 memory**：问 + 答各写一条（SQLite 同步 + AgentMemory 后台降级），防绑定 Agent「失忆」。
-- **MVP 不建工单**：`action` 仅支持 `chat`；建工单属 Phase 2。
+- **通讯 / 工单分流**：`POST /api/device/chat` 一轮一答；`POST /api/device/task` 用同一设备 token 建 pipeline 工单（默认 pin 到绑定 Agent）。
 
 ### 配置（驾驶舱「总线」→ 设备桥）
 
@@ -495,15 +495,13 @@ curl.exe -N -X POST http://127.0.0.1:9814/api/device/chat ^
 
 **免费工具足够**：Safari 探活 + 快捷指令打 POST，无需 Postman（iOS 无好用的免费 Postman；电脑端可用 curl 先验接口，验收以手机快捷指令为准）。
 
-**建议用例**：T1 探活 → T2 错 token 401 → T3 正常一轮（说「回我：pong」）→ T4 绑定生效（只进绑定 Agent inbox）→ T5 换绑 → T6 配错 `tailscale_ips` 被拒 → T7 多设备互不串话 → T8 慢回复走 pending→poll → T9 不建工单 → T10 蜂窝网 + Tailscale 仍通。
+**建议用例**：T1 探活 → T2 错 token 401 → T3 正常一轮（说「回我：pong」）→ T4 绑定生效（只进绑定 Agent inbox）→ T5 换绑 → T6 配错 `tailscale_ips` 被拒 → T7 多设备互不串话 → T8 慢回复走 pending→poll → T9 `POST /api/device/task` 建工单 → T10 蜂窝网 + Tailscale 仍通。
 
 **排障**：401 查 token/Header；`pending`+`inbox_status=failed` 查绑定 Agent 的 CLI/Docker（灵昭 Hermes 需容器在线）；200 无 reply 查日志与 `default_wait_ms`；进错 Agent 查绑定；快捷指令超时走 ticket 或 SSE。
 
 ## 本版不做（防预期膨胀）
 
 - A2A **streaming**（stub 保留，债务）
-- **工单**字段 / 状态机 / 流转细则（下一 session）
-- Device Bridge **建工单**（`/api/device/task`，待 tasks 稳定后 Phase 2；当前仅 chat）
 - n8n / ComfyUI **编排 UI**（workflow CRUD）
 - Hermes identities **自动同步**验收
 - sqlite_fts / 向量 RAG 升级

@@ -1,6 +1,6 @@
 """mailbus HTTP API — Device Bridge 路由处理器。
 
-处理: POST /api/device/chat（通讯式一轮一答 / 可选 SSE）、GET /api/device/chat/<ticket_id>（超时取票）。
+处理: POST /api/device/chat（通讯式一轮一答 / 可选 SSE）、POST /api/device/task（工单）、GET /api/device/chat/<ticket_id>（超时取票）。
 鉴权独立于 mailbus API token：设备 token（Authorization Bearer / X-Mailbus-Device-Token）。
 """
 from __future__ import annotations
@@ -15,6 +15,7 @@ from lib.application.device_bridge import (
     resolve_ticket,
     set_memory_recorder,
 )
+from lib.api.handlers_tasks import create_task_from_envelope
 from lib import composition  # 跨层解耦：api→adapter 通过 composition 拿服务
 
 
@@ -217,7 +218,7 @@ def handle_device_chat(handler):
     if action != "chat":
         handler._send_api_error(
             "unsupported_action", 400,
-            detail=f"不支持的 action: {action!r}（MVP 仅 chat；建工单属 Phase 2）",
+            detail=f"不支持的 action: {action!r}（通讯用 POST /api/device/chat；建工单用 POST /api/device/task）",
         )
         return
 
@@ -279,6 +280,80 @@ def handle_device_chat(handler):
         return
 
     handler._send_json(result)
+
+
+def device_body_to_envelope(device: dict, body: dict) -> dict:
+    """设备工单请求 → A2A Envelope。默认 explicit 单步，pin 到设备绑定的 agent。"""
+    import uuid
+
+    text = str(body.get("intent") or body.get("text") or body.get("summary") or "").strip()
+    raw_id = str(body.get("task_id") or "").strip()
+    if not raw_id:
+        did = str(device.get("id") or "device").replace(" ", "-")
+        raw_id = f"dev-{did}-{uuid.uuid4().hex[:12]}"
+    pin = str(body.get("pin_agent") or device.get("agent_id") or "").strip()
+    mode = str(body.get("mode") or "").strip().lower()
+    planned = body.get("planned_chain")
+    if isinstance(planned, list) and planned:
+        mode = "explicit"
+        if pin and isinstance(planned[0], dict) and not planned[0].get("pin_agent"):
+            planned = [{**planned[0], "pin_agent": pin}, *planned[1:]]
+    elif mode == "auto":
+        planned = None
+    else:
+        mode = "explicit"
+        try:
+            rt = int(body["role_type"]) if body.get("role_type") is not None else 1
+        except (TypeError, ValueError):
+            rt = 1
+        step: dict = {"role_type": rt, "reason": "device_bridge"}
+        if pin:
+            step["pin_agent"] = pin
+        planned = [step]
+    tier = str(body.get("tier") or "S").strip().upper() or "S"
+    if tier not in ("S", "M", "L"):
+        tier = "S"
+    envelope: dict = {
+        "task_id": raw_id,
+        "intent": text,
+        "initiator": f"device:{device.get('id') or 'unknown'}",
+        "mode": mode,
+        "tier": tier,
+        "task_type": str(body.get("task_type") or "feature").strip() or "feature",
+        "extensions": {
+            "device_bridge": {
+                "device_id": device.get("id"),
+                "agent_id": device.get("agent_id"),
+                "source": body.get("source") if isinstance(body.get("source"), dict) else {},
+            }
+        },
+    }
+    if pin:
+        envelope["pin_agent"] = pin
+    if mode == "explicit" and planned:
+        envelope["planned_chain"] = planned
+    return envelope
+
+
+def handle_device_task(handler):
+    """POST /api/device/task — 设备鉴权后按 Envelope 创建 pipeline 工单。"""
+    try:
+        device = _resolve_authenticated_device(handler)
+    except DeviceBridgeError as exc:
+        handler._send_api_error(exc.code, exc.status, detail=exc.detail)
+        return
+
+    body = _read_device_chat_body(handler)
+    if not isinstance(body, dict):
+        body = {}
+    text = str(body.get("intent") or body.get("text") or body.get("summary") or "").strip()
+    if not text:
+        handler._send_api_error("empty_text", 400, detail="缺少 intent/text")
+        return
+
+    envelope = device_body_to_envelope(device, body)
+    resp, status = create_task_from_envelope(handler.data_dir, envelope)
+    handler._send_json(resp, status)
 
 
 def handle_device_ticket(handler, ticket_id: str):

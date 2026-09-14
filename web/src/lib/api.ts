@@ -7,8 +7,12 @@ export function getToken(): string {
 }
 
 export function setToken(token: string) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("mailbus:auth-ok"));
+    }
+  } else localStorage.removeItem(TOKEN_KEY);
 }
 
 export type ApiResult<T = unknown> =
@@ -86,15 +90,31 @@ export async function api<T = unknown>(
       }
     }
     if (!res.ok) {
-      // Bad/stale localStorage token on loopback → clear once and retry without Bearer
-      if (res.status === 401 && token && !_retried) {
+      const method = String(init.method || "GET").toUpperCase();
+      const isRead = method === "GET" || method === "HEAD";
+      // 读请求：过期/错误 Bearer 会 401（presented token must match）→ 清掉后无 Bearer 重试
+      if (res.status === 401 && token && !_retried && isRead) {
         setToken("");
         const retryHeaders = new Headers(init.headers || {});
         if (!retryHeaders.has("Content-Type") && init.body) {
           retryHeaders.set("Content-Type", "application/json");
         }
         retryHeaders.delete("Authorization");
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("mailbus:auth-required", {
+              detail: { status: 401, path, hadToken: true, stale: true },
+            }),
+          );
+        }
         return api<T>(path, { ...init, headers: retryHeaders }, true);
+      }
+      if (res.status === 401 && typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("mailbus:auth-required", {
+            detail: { status: 401, path, hadToken: Boolean(token), write: !isRead },
+          }),
+        );
       }
       const formatted = formatApiError(data, res.status);
       return { ok: false, error: formatted.error, status: res.status, data, errorCode: formatted.errorCode };

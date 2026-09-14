@@ -47,7 +47,10 @@ services:
   dsh:
     volumes:
       - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/skills:/mailbus/skills:ro
+      - ${MAILBUS_HOST_ROOT}/rules:/mailbus/rules:ro
       - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
+      - ${MAILBUS_HOST_ROOT}/access/external-tools:/mailbus/external-tools:ro
       - ${DSH_WORKSPACE}:/home/dsh/.dsh
   mailbus:
     volumes:
