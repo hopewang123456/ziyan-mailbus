@@ -93,7 +93,7 @@ def assert_safe_for_mail_code_dedup(repo_parent: Path | None = None) -> None:
     if report.dedup_unsafe:
         raise SystemExit(
             f"ERROR: layout hazard — {report.message}\n"
-            f"  mail={report.mail_path}\n"
+            f"  mailbus={report.mail_path}\n"
             f"  mailbus-core={report.core_path}\n"
             "  解除 junction 或改为物理拆分后再去重。"
         )

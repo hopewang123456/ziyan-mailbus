@@ -42,7 +42,7 @@ def resolve_codex_home(explicit: str | None = None) -> str:
         return os.path.abspath(explicit)
     for cand in (
         os.environ.get("CODEX_HOME"),
-        r"E:\ai_tools\Agent\wsl\codex",
+        os.environ.get("CODEX_WORKSPACE"),
         os.path.join(os.path.expanduser("~"), ".codex"),
     ):
         if cand and os.path.isdir(cand):

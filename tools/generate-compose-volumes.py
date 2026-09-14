@@ -36,7 +36,8 @@ FORBIDDEN_PATTERNS = (
     re.compile(r"/mailbus/adapters"),
     re.compile(r"/mailbus/roles"),
     re.compile(r"/mailbus/identities"),
-    re.compile(r"mail/external-tools:"),
+    re.compile(r"mailbus/external-tools:"),
+    re.compile(r"mail/external-tools:"),  # legacy alias sunset
     re.compile(r"adapters/\.sync"),
 )
 

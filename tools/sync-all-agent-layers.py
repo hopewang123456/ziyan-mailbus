@@ -78,7 +78,7 @@ def main() -> int:
     p.add_argument("--skip-claude", action="store_true")
     p.add_argument("--skip-hermes", action="store_true")
     p.add_argument("--skip-codex", action="store_true")
-    p.add_argument("--skip-rules", action="store_true", help="skip mail/rules → store/rules mirror")
+    p.add_argument("--skip-rules", action="store_true", help="skip rules/ → store/rules mirror")
     p.add_argument(
         "--symlink",
         action="store_true",

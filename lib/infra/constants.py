@@ -44,9 +44,8 @@ MAILBUS_IDENTITIES_ROOT = _env_path("MAILBUS_IDENTITIES_ROOT", MAILBUS_ROOT / "i
 # 默认仓库 skills/skillgroup/ 开箱；本机 SoT 在 Vault 时用 MAILBUS_SKILLGROUP_ROOT 指过去。
 MAILBUS_SKILLGROUP_ROOT = _env_path("MAILBUS_SKILLGROUP_ROOT", MAILBUS_ROOT / "skills" / "skillgroup")
 
-# Agent Vault 根：compose 挂载 profiles 软链目标用（本地默认路径，非「用 env 指知识库」）
-# Docker 内 Hermes profile skills 常 symlink 到此树，容器需同路径 bind-mount。
-# 公开仓库用通用占位；本机部署请设 AGENT_VAULT_ROOT 指向真实 Vault。
+# Agent Vault 根（可选）：compose/本地 symlink 目标。公开仓默认占位；
+# 未设置 AGENT_VAULT_ROOT 时不视为硬依赖，native_scan / Members 仅少增强映射。
 _default_vault = Path("<AGENT_VAULT_ROOT>/Agent")
 if not (os.environ.get("AGENT_VAULT_ROOT") or "").strip():
     # 从 _path-map.json 的 vault_root + roots.agent_root 解析（迁移工具生成），

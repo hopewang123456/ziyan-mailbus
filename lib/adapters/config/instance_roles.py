@@ -23,6 +23,7 @@ _TYPE_TO_MAP_FW = {
     "cursor": "cursor",
     "opencode": "opencode",
     "cline": "cline",
+    "dsh": "dsh",
 }
 
 _DEFAULT_LAUNCH = {
@@ -32,6 +33,7 @@ _DEFAULT_LAUNCH = {
     "codex": "codex_docker",
     "claude_code": "claude_host",
     "opencode": "opencode_cli",
+    "dsh": "dsh_docker",
     "cursor": None,
 }
 
@@ -66,6 +68,7 @@ _NATIVE_SHARED_DIRS: dict[str, frozenset[str]] = {
     }),
     "opencode": frozenset({"docs", "memory", "skills", "node_modules", "opencode"}),
     "codex": frozenset({"skills", "plugins", "sqlite", "tmp", "vendor_imports"}),
+    "dsh": frozenset({"plugins", "sessions", "credentials", "skills", "memory"}),
 }
 
 # 所有框架通用跳过的工程/隐藏目录（. 开头另算）
@@ -133,6 +136,15 @@ def _discover_native_roles(
             for child in pdata.iterdir():
                 if child.is_dir() and child.name.startswith(".openclaw-"):
                     add(child.name[len(".openclaw-"):], "native-profile-dir")
+
+    elif fw == "dsh":
+        profiles = base / "profiles"
+        if profiles.is_dir():
+            for child in profiles.iterdir():
+                if child.is_dir() and not _skip_native_dir(fw, child.name):
+                    add(child.name, "native-profiles")
+        elif base.is_dir():
+            add("headless", "native-default")
 
     elif fw == "claude_code":
         # 角色目录 = ~/.claude-{name}（排除 ~/.claude 本身）

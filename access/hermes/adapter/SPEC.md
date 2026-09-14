@@ -14,8 +14,8 @@ agent-a, agent-b, agent-c, agent-d, agent-e, agent-f
 
 ## 交付 SoT
 
-见 [../../hermes/framework-runtime/references/delivery.md](../../hermes/framework-runtime/references/delivery.md)
+见 [references/delivery.md](references/delivery.md)
 
 ## Sync
 
-`tools/sync-all-agent-layers.py`（L0–L2 层 skill 同步；Vault SoT。Compose 工作区仍靠 `.env` 绝对路径关联，勿 junction 进 `docker-agents/workspaces/`）
+`tools/sync-all-agent-layers.py`（L0–L2 层 skill 同步）。Compose 工作区靠 `.env` 绝对路径关联，勿 junction 进 `docker-agents/workspaces/`。

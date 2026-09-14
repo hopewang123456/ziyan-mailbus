@@ -172,6 +172,8 @@ class DockerDiscoverySource:
                 "codex-web": "codex",
                 "codex-review": "codex",
                 "opencode": "opencode",
+                "dsh": "dsh",
+                "mailbus-dsh": "dsh",
                 "agentmemory": "agentmemory",
                 "iii-engine": "agentmemory",
             }

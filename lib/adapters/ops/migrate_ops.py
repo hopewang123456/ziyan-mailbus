@@ -24,7 +24,7 @@ def cmd_migrate_plan(_args) -> int:
     print(f"[migrate plan] MAILBUS_CORE={MAILBUS_CORE}")
     if layout.dedup_unsafe:
         print(f"  [FAIL] layout: {layout.message}")
-        print("         勿对 mail/ 执行代码去重；先解除 junction 或物理拆分目录。")
+        print("         勿对 mailbus/ 执行代码去重；先解除 junction 或物理拆分目录。")
     elif layout.core_is_reparse:
         print(f"  [WARN] layout: {layout.message}")
     else:

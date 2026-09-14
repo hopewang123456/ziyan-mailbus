@@ -113,6 +113,7 @@ AGENT_TYPE_META = {
     "codex": {"label": "Codex CLI", "note": "codex exec · codex Docker"},
     "claude_code": {"label": "Claude Code CLI", "note": "宿主机 claude -p · Windows/Linux 可选"},
     "cursor": {"label": "Cursor", "note": "Windows Cursor IDE / cursor-agent CLI"},
+    "dsh": {"label": "DeepSeek Harness", "note": "dsh headless · mailbus-dsh 容器"},
     "none": {"label": "纯文件", "note": "无 CLI 推送"},
 }
 

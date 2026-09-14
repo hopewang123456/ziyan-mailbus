@@ -252,6 +252,20 @@ def check_config_hygiene(config: dict | None = None) -> list[DoctorItem]:
                 f"daily_budget_cny={chains.get('daily_budget_cny', '—')}",
             )
         )
+    vault = (os.environ.get("AGENT_VAULT_ROOT") or "").strip()
+    if not vault or "<AGENT_VAULT_ROOT>" in vault:
+        items.append(
+            DoctorItem(
+                "warn",
+                "config",
+                "AGENT_VAULT_ROOT 未配置（可选）",
+                "Members/_path-map 增强扫描可跳过；需要时在设置页或 .env 填写绝对路径",
+            )
+        )
+    else:
+        items.append(
+            DoctorItem("ok", "config", "AGENT_VAULT_ROOT 已配置", vault)
+        )
     return items
 
 
@@ -568,7 +582,7 @@ def check_layout_hazard(*, repo_parent: Path | None = None) -> list[DoctorItem]:
         return [DoctorItem(
             "warn",
             "layout",
-            "mail ≡ mailbus-core（junction）— 禁止代码去重",
+            "mailbus ≡ mailbus-core（junction）— 禁止代码去重",
             report.message,
         )]
     if report.core_is_reparse and report.mail_exists:

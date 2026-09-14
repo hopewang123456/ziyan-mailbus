@@ -543,7 +543,7 @@ export function AgentRuntimePanel() {
             className="hud-input w-full font-mono text-xs"
             value={draft.install_path || ""}
             onChange={(e) => setDraft((d) => ({ ...d, install_path: e.target.value }))}
-            placeholder={draft.install_path_default || "如 E:\\ai_tools\\docker\\mailbus-hermes\\.hermes"}
+            placeholder={draft.install_path_default || "绝对路径；留空则用 env / 框架默认"}
           />
           <p className="text-[10px] text-mute">
             实例层配置 = 该框架下全员公共（skills/rules 等）；未勾自定义时按父路径约定目录扫描。

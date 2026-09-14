@@ -421,7 +421,11 @@ def build_store_config(
                     _deep_merge(config[key], val)
     from lib.infra.env_bootstrap import mailbus_paths
 
-    install_prefix = str(Path(mailbus_paths()["root"]).parent).replace("\\", "/")
+    install_prefix = (os.environ.get("MAILBUS_INSTALL_PREFIX") or "").strip()
+    if not install_prefix:
+        install_prefix = str(Path(mailbus_paths()["root"])).replace("\\", "/")
+    else:
+        install_prefix = str(Path(install_prefix)).replace("\\", "/")
     config.setdefault("canonical_root", install_prefix)
     config["agents"] = build_agents_from_registry(
         data_dir=data_dir,
