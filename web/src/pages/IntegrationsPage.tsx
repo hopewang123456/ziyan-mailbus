@@ -238,7 +238,7 @@ export function IntegrationsPage() {
 
       <SoftFold
         title="OpenClaw Gateway Token"
-        hint={gwConfigured ? "已配置 · 浏览器入口可免密" : "未配置（默认 change-me）"}
+        hint={gwConfigured ? "已配置 · 浏览器入口可免密" : "未配置（请在设置写入 Gateway Token）"}
       >
         <div className="flex flex-wrap gap-2">
           <input

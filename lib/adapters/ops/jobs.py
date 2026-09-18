@@ -25,7 +25,7 @@ def _mail_root(data_dir: str) -> str:
 
 def run_scan(data_dir: str, config: dict, *, quiet: bool = False) -> int:
     """执行一轮 bus scan（与 cmd_scan 相同逻辑）。"""
-    from lib.application.commands.commands import run_scan_once
+    from lib.composition import run_scan_once
     return run_scan_once(data_dir, config, quiet=quiet)
 
 
@@ -286,7 +286,7 @@ def _recent_patrol_notice(data_dir: str, agent: str = "", hours: float = 1.0) ->
     agent = agent or _patrol_target(data_dir)
     from datetime import datetime, timezone, timedelta
     from lib.domain.models import Inbox
-    from lib.application.orchestration.tracker import _parse_iso_dt
+    from lib.infra.utils import parse_iso_dt
 
     paths = resolve_paths(data_dir)
     inbox_file = f"{paths['inbox']}/{agent}/inbox.json"
@@ -306,7 +306,7 @@ def _recent_patrol_notice(data_dir: str, agent: str = "", hours: float = 1.0) ->
         created = inbox.msg_field(m, "created_at", "")
         if created:
             try:
-                if _parse_iso_dt(created).astimezone(timezone.utc) >= cutoff:
+                if parse_iso_dt(created).astimezone(timezone.utc) >= cutoff:
                     return True
             except Exception:
                 return True
@@ -395,7 +395,8 @@ def run_platform_scout(data_dir: str) -> int:
 
 def run_pipeline_repair(data_dir: str) -> int:
     """扫描 running pipeline 任务，清理 stale queue / 报告 phantom。"""
-    from lib.application.orchestration.tracker import TaskTracker
+    from lib.composition import task_tracker_factory
+    TaskTracker = task_tracker_factory()
 
     root = _mail_root(data_dir)
     script = os.path.join(root, "tools", "repair-pipeline-stuck.py")
@@ -433,7 +434,7 @@ def run_pipeline_repair(data_dir: str) -> int:
 
 
 def run_intake_bridge(data_dir: str) -> int:
-    from lib.application.workflow.intake.spawn_rules import bridge_reconcile
+    from lib.composition import bridge_reconcile
 
     try:
         out = bridge_reconcile(data_dir)
@@ -445,7 +446,7 @@ def run_intake_bridge(data_dir: str) -> int:
 
 
 def run_triage_inbox(data_dir: str, config: dict | None = None) -> int:
-    from lib.application.internal_llm.triage import triage_inbox_anomaly
+    from lib.composition import triage_inbox_anomaly
 
     try:
         cfg = config or json_read(os.path.join(data_dir, "config.json"), {})

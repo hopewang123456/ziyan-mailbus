@@ -44,9 +44,12 @@ def _is_reparse_point(path: Path) -> bool:
 
 
 def layout_report(repo_parent: Path | None = None) -> LayoutReport:
-    """探测 ai_tools 下 mail/ 与 mailbus-core/ 是否为同一物理树。"""
+    """探测仓库父目录下 mailbus|mail 与 mailbus-core 是否为同一物理树（防误删）。"""
     base = Path(repo_parent or Path(__file__).resolve().parents[4]).resolve()
-    mail = base / "mail"
+    mailbus = base / "mailbus"
+    mail_legacy = base / "mail"
+    # 优先 mailbus（当前仓名）；保留 mail 仅作迁移残留探测
+    mail = mailbus if mailbus.exists() else mail_legacy
     core = base / "mailbus-core"
     mail_exists = mail.exists()
     core_exists = core.exists()
@@ -61,15 +64,16 @@ def layout_report(repo_parent: Path | None = None) -> LayoutReport:
     core_reparse = _is_reparse_point(core) if core_exists else False
     dedup_unsafe = same
 
+    label = "mailbus/" if mail == mailbus else "mail/"
     if dedup_unsafe:
         msg = (
-            "mail/ 与 mailbus-core/ 解析为同一路径（多为 junction）。"
-            "禁止对 mail/ 做「删代码留 store」去重 — 会删除唯一源码。"
+            f"{label} 与 mailbus-core/ 解析为同一路径（多为 junction）。"
+            f"禁止对 {label} 做「删代码留 store」去重 — 会删除唯一源码。"
         )
     elif core_reparse and mail_exists:
-        msg = "mailbus-core 为 reparse 点；去重前须确认未指向 mail/。"
+        msg = "mailbus-core 为 reparse 点；去重前须确认未指向源码仓。"
     else:
-        msg = "mail/ 与 mailbus-core/ 为独立目录，可按计划拆分源码与数据。"
+        msg = f"{label} 与 mailbus-core/ 为独立目录（或 core 不存在），布局风险低。"
 
     return LayoutReport(
         mail_path=mail,
@@ -89,7 +93,7 @@ def assert_safe_for_mail_code_dedup(repo_parent: Path | None = None) -> None:
     if report.dedup_unsafe:
         raise SystemExit(
             f"ERROR: layout hazard — {report.message}\n"
-            f"  mail={report.mail_path}\n"
+            f"  mailbus={report.mail_path}\n"
             f"  mailbus-core={report.core_path}\n"
             "  解除 junction 或改为物理拆分后再去重。"
         )

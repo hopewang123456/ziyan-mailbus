@@ -56,6 +56,10 @@ class TestInitStore(unittest.TestCase):
             self.assertIn("mailbus_internal_llm", cfg)
             po = cfg.get("pipeline_ops") or {}
             self.assertIn("role_failover", po)
+            # Device Bridge 公开测试角色
+            self.assertIn("test", cfg["agents"])
+            self.assertEqual(cfg["agents"]["test"].get("type"), "none")
+            self.assertIn("mailbus_device_bridge", cfg)
 
     def test_run_init_store_fresh(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -94,6 +98,26 @@ class TestInitStore(unittest.TestCase):
             copied = mirror_org_json(tmp, mail_root=MAILBUS_ROOT)
             self.assertIn("role-flow.json", copied)
             self.assertIn("roster.json", copied)
+
+    def test_dsh_agent_type_accepted(self):
+        from lib.adapters.config.config_schema import AGENT_TYPES, CONFIG_SCHEMA
+
+        self.assertIn("dsh", AGENT_TYPES)
+        self.assertEqual(
+            CONFIG_SCHEMA["properties"]["agents"]["patternProperties"]["^[a-zA-Z][a-zA-Z0-9_-]*$"]["properties"]["type"]["enum"],
+            list(AGENT_TYPES),
+        )
+        cfg = {
+            "project": "mailbus",
+            "version": "2.1.0",
+            "data_dir": ".",
+            "ack_timeout": 10,
+            "max_retries": 3,
+            "archive_days": 7,
+            "archive_max_messages": 300,
+            "agents": {"agent-t": {"type": "dsh"}},
+        }
+        self.assertEqual(validate_config(cfg), [])
 
 
 if __name__ == "__main__":

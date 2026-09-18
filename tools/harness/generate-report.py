@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """从 git + pytest 结果生成 code-review-report-v1（Quality Harness Layer 1/2）。
 
-规范：mail/docs/quality-harness-pipeline-spec.md §3.2
+规范：tools/harness/generate-report.py（质量报告）
 """
 from __future__ import annotations
 

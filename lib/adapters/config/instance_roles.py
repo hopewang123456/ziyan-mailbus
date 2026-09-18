@@ -23,6 +23,7 @@ _TYPE_TO_MAP_FW = {
     "cursor": "cursor",
     "opencode": "opencode",
     "cline": "cline",
+    "dsh": "dsh",
 }
 
 _DEFAULT_LAUNCH = {
@@ -32,6 +33,7 @@ _DEFAULT_LAUNCH = {
     "codex": "codex_docker",
     "claude_code": "claude_host",
     "opencode": "opencode_cli",
+    "dsh": "dsh_docker",
     "cursor": None,
 }
 
@@ -56,8 +58,129 @@ def map_framework(instance_type: str) -> str:
     return _TYPE_TO_MAP_FW.get((instance_type or "").strip(), (instance_type or "").strip())
 
 
+# 身份文件名：目录下任一存在即判为角色目录（各框架身份文件约定）
+_IDENTITY_FILENAMES: tuple[str, ...] = ("SOUL.md", "IDENTITY.md", "CLAUDE.md", "AGENTS.md")
+
+# 各框架原生目录下「非角色」共享目录名（原生枚举时跳过）
+_NATIVE_SHARED_DIRS: dict[str, frozenset[str]] = {
+    "openclaw": frozenset({
+        "data", "memory", "memory.__pre-vault", "skills", "matt-skills", "notifications",
+    }),
+    "opencode": frozenset({"docs", "memory", "skills", "node_modules", "opencode"}),
+    "codex": frozenset({"skills", "plugins", "sqlite", "tmp", "vendor_imports"}),
+    "dsh": frozenset({"plugins", "sessions", "credentials", "skills", "memory"}),
+}
+
+# 所有框架通用跳过的工程/隐藏目录（. 开头另算）
+_NATIVE_ALWAYS_SKIP: frozenset[str] = frozenset({
+    "node_modules", "__pycache__", ".git", ".history", ".config",
+    ".pytest_cache", ".openclaw", ".clawhub",
+})
+
+
+def _skip_native_dir(fw: str, name: str) -> bool:
+    if name.startswith("."):
+        return True
+    if name in _NATIVE_ALWAYS_SKIP:
+        return True
+    return name in _NATIVE_SHARED_DIRS.get(fw, frozenset())
+
+
+def _has_identity_file(dir_path: Path) -> bool:
+    try:
+        return any((dir_path / name).is_file() for name in _IDENTITY_FILENAMES)
+    except OSError:
+        return False
+
+
+def _discover_native_roles(
+    fw: str,
+    install_path: str,
+    *,
+    skip_ids: set[str] | frozenset[str] = frozenset(),
+) -> dict[str, dict[str, Any]]:
+    """扫描框架原生目录，枚举实际存在的角色（身份目录为主，profile 目录兜底）。
+
+    返回 {role_id: {id, display_name, source}}。native 仅作兜底补充，调用方须
+    setdefault 合并，避免覆盖 path-map persons 已登记的角色。
+    """
+    roles: dict[str, dict[str, Any]] = {}
+    if not install_path:
+        return roles
+    base = Path(install_path)
+
+    def add(rid: str, source: str) -> None:
+        rid = (rid or "").strip()
+        if not rid or rid in skip_ids:
+            return
+        roles.setdefault(rid, {"id": rid, "display_name": rid, "source": source})
+
+    if fw in ("hermes", "hermes_profile"):
+        profiles = base / "profiles"
+        if profiles.is_dir():
+            for child in profiles.iterdir():
+                if child.is_dir() and not _skip_native_dir(fw, child.name):
+                    add(child.name, "native-profiles")
+
+    elif fw == "openclaw":
+        # 身份目录（主）：workspace 一级目录含身份文件
+        if base.is_dir():
+            for child in base.iterdir():
+                if not child.is_dir() or _skip_native_dir(fw, child.name):
+                    continue
+                if _has_identity_file(child):
+                    add(child.name, "native-identity-dir")
+        # profile 目录（兜底）：data/.openclaw-{name}
+        pdata = base / "data"
+        if pdata.is_dir():
+            for child in pdata.iterdir():
+                if child.is_dir() and child.name.startswith(".openclaw-"):
+                    add(child.name[len(".openclaw-"):], "native-profile-dir")
+
+    elif fw == "dsh":
+        profiles = base / "profiles"
+        if profiles.is_dir():
+            for child in profiles.iterdir():
+                if child.is_dir() and not _skip_native_dir(fw, child.name):
+                    add(child.name, "native-profiles")
+        elif base.is_dir():
+            add("headless", "native-default")
+
+    elif fw == "claude_code":
+        # 角色目录 = ~/.claude-{name}（排除 ~/.claude 本身）
+        try:
+            children = list(Path.home().iterdir())
+        except OSError:
+            children = []
+        for child in children:
+            name = child.name
+            if child.is_dir() and name.startswith(".claude-") and name != ".claude":
+                add(name[len(".claude-"):], "native-profile-dir")
+
+    elif fw == "codex":
+        agents = base / "agents"
+        if agents.is_dir():
+            for child in agents.iterdir():
+                if child.is_dir() and not _skip_native_dir(fw, child.name):
+                    add(child.name, "native-agents-dir")
+
+    elif fw == "opencode":
+        # 多角色形态：{install_path}/{id}/SOUL.md；单项目根本身不算角色
+        if base.is_dir():
+            for child in base.iterdir():
+                if not child.is_dir() or _skip_native_dir(fw, child.name):
+                    continue
+                if _has_identity_file(child):
+                    add(child.name, "native-identity-dir")
+
+    return roles
+
+
 def discover_roles_for_instance(instance: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return candidate roles [{id, display_name, members_category, source}]."""
+    """Return candidate roles [{id, display_name, members_category, source}].
+
+    来源 = path-map persons（规范角色，优先）∪ 框架原生目录扫描（兜底补充）。
+    """
     atype = (instance.get("type") or "").strip()
     fw = map_framework(atype)
     found: dict[str, dict[str, Any]] = {}
@@ -78,31 +201,15 @@ def discover_roles_for_instance(instance: dict[str, Any]) -> list[dict[str, Any]
             "source": "path-map",
         }
 
-    # Native: Hermes profiles under install_path (skip ids owned by other frameworks in path-map)
+    # 其它 framework 在 path-map 中占用的角色 id：原生扫描跳过，避免跨框架抢占用
+    other_fw_ids = {
+        pid
+        for pid, meta in persons.items()
+        if isinstance(meta, dict) and (meta.get("framework") or "").strip() not in ("", fw)
+    }
     install = (instance.get("install_path") or "").strip()
-    if fw == "hermes" and install:
-        other_fw_ids = {
-            pid
-            for pid, meta in persons.items()
-            if isinstance(meta, dict) and (meta.get("framework") or "").strip() not in ("", fw)
-        }
-        profiles = Path(install) / "profiles"
-        if profiles.is_dir():
-            for child in profiles.iterdir():
-                if not child.is_dir() or child.name.startswith("."):
-                    continue
-                rid = child.name
-                if rid in other_fw_ids:
-                    continue
-                found.setdefault(
-                    rid,
-                    {
-                        "id": rid,
-                        "display_name": rid,
-                        "members_category": "",
-                        "source": "native-profiles",
-                    },
-                )
+    for rid, rec in _discover_native_roles(fw, install, skip_ids=other_fw_ids).items():
+        found.setdefault(rid, rec)
 
     return sorted(found.values(), key=lambda x: x["id"])
 

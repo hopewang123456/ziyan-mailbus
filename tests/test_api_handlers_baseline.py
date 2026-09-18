@@ -12,6 +12,7 @@ import pytest
         ("lib.api.handlers_inbox", "handle_inbox"),
         ("lib.api.handlers_lifecycle", "handle_mailbus_token"),
         ("lib.api.handlers_settings", "handle_settings_sections"),
+        ("lib.api.handlers_device", "handle_device_task"),
     ],
 )
 def test_api_handlers_callable(module: str, handler: str) -> None:

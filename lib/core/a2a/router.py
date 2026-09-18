@@ -5,7 +5,7 @@ import os
 import time
 from typing import Any, Optional
 
-from lib.application.orchestration.pipeline.results import step_result_path
+from lib.infra.pipeline_results import step_result_path  # 2026-09 治理下沉
 from lib.infra.utils import _now_iso, json_read
 from .step_result_io import read_step_result_file, write_step_result_file
 from .a2a_standard import A2ATransport
@@ -65,11 +65,12 @@ class TransportRouter:
                     )
                     hq_payload = outcome.get("human_queue")
                     if hq_payload:
-                        from lib.adapters.orchestration.human_queue import enqueue
+                        # 跨层解耦：core→adapter 通过 composition 拿服务
+                        from lib.composition import enqueue_human_queue
 
                         hq_payload = dict(hq_payload)
                         hq_payload.setdefault("task_id", ctx.task_id)
-                        enqueue(ctx.data_dir, hq_payload)
+                        enqueue_human_queue(ctx.data_dir, hq_payload)
                     return DispatchResult(
                         ok=False,
                         transport_used="a2a_standard",

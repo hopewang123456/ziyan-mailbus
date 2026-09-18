@@ -180,6 +180,12 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
         debug(f"[fsm] blocked {task_id[:24]} conclusion={result.get('conclusion')}")
         return {"ok": True, "action": "blocked"}
 
+    if action == "parallel_await":
+        # P0-1：collab 并行组内等待（兄弟步骤仍在执行），落盘后等下一轮扫描
+        json_write(task_file, t)
+        info(f"[fsm] parallel_await {task_id[:24]} (group member done)")
+        return {"ok": True, "action": "parallel_await"}
+
     if action == "advance":
         nxt = outcome.get("next_step") or {}
         n_role = outcome.get("next_role", "")

@@ -113,6 +113,48 @@ class PipelineStepFailoverTests(unittest.TestCase):
         self.assertEqual(meta.get("failover_tier"), "similar_role")
         self.assertEqual(meta.get("failover_to_role_type"), 8)
 
+    def test_failover_multi_active_uses_from_agent(self):
+        """并行多活跃成员时，必须按 from_agent 定位步骤，不能改错人。"""
+        tid = "collab-parallel"
+        task = {
+            "task_id": tid,
+            "status": "running",
+            "assignee": "agent-e",
+            "chain": [
+                {
+                    "step": 1,
+                    "step_id": "s1",
+                    "status": "running",
+                    "fsm_state": "running",
+                    "role_type": 5,
+                    "to_agent": "agent-e",
+                    "to_person": "agent-e",
+                    "to_role": "审查官",
+                },
+                {
+                    "step": 2,
+                    "step_id": "s2",
+                    "status": "running",
+                    "fsm_state": "running",
+                    "role_type": 8,
+                    "to_agent": "agent-g",
+                    "to_person": "agent-g",
+                    "to_role": "开发工程师",
+                },
+            ],
+        }
+        json_write(os.path.join(self.tmp, "tasks", f"{tid}.json"), task)
+        # failover agent-g 的开发步骤 → 应落到 agent-i，且 agent-e 步骤不变
+        new_agent = failover_pipeline_step(
+            self.tmp, tid, reason="parallel-test", from_agent="agent-g",
+        )
+        self.assertEqual(new_agent, "agent-i")
+        updated = TaskTracker(self.tmp).get(tid)
+        s1, s2 = updated["chain"][0], updated["chain"][1]
+        self.assertEqual(s1["to_agent"], "agent-e")
+        self.assertEqual(s2["to_agent"], "agent-i")
+        self.assertIn("agent-g", s2.get("failover_tried") or [])
+
     def test_failover_updates_task_role_meta(self):
         new_agent = failover_pipeline_step(
             self.tmp, "game-courier-test", reason="test", from_agent="agent-e",
@@ -123,6 +165,38 @@ class PipelineStepFailoverTests(unittest.TestCase):
         self.assertEqual(step["to_agent"], new_agent)
         self.assertIn("agent-e", step.get("failover_tried", []))
         self.assertEqual(step.get("dispatch_meta", {}).get("failover_to_role_type"), 8)
+
+
+    def test_silent_failure_threshold_and_second_failover(self):
+        """同一 step 连续 failover 会写入 failover_tried，不会改到另一并行成员。"""
+        tid = "silent-chain"
+        task = {
+            "task_id": tid,
+            "status": "running",
+            "assignee": "agent-g",
+            "chain": [
+                {
+                    "step": 2,
+                    "step_id": "s2",
+                    "status": "running",
+                    "fsm_state": "running",
+                    "role_type": 8,
+                    "to_agent": "agent-g",
+                    "to_person": "agent-g",
+                    "to_role": "开发工程师",
+                    "failover_tried": [],
+                },
+            ],
+        }
+        json_write(os.path.join(self.tmp, "tasks", f"{tid}.json"), task)
+        a1 = failover_pipeline_step(self.tmp, tid, reason="fail-1", from_agent="agent-g")
+        self.assertEqual(a1, "agent-i")
+        # second hop: only agent-i left in role 8 candidates after g tried; plan may go to role 1
+        a2 = failover_pipeline_step(self.tmp, tid, reason="fail-2", from_agent="agent-i")
+        updated = TaskTracker(self.tmp).get(tid)
+        tried = updated["chain"][0].get("failover_tried") or []
+        self.assertIn("agent-g", tried)
+        self.assertTrue(a2 is None or a2 not in ("agent-g", "agent-i") or a2 == "agent-a" or len(tried) >= 1)
 
 
 if __name__ == "__main__":

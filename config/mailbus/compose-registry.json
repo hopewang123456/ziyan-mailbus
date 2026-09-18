@@ -7,7 +7,8 @@
     "opencode-agent": "opencode",
     "openclaw-agent": "openclaw",
     "hermes-agent": "hermes",
-    "claude-agent": ""
+    "claude-agent": "",
+    "dsh-agent": "dsh"
   },
   "agent_compose_service": {
     "agent-g": "codex-web",
@@ -20,7 +21,8 @@
     "agent-b": "hermes",
     "agent-d": "hermes",
     "agent-j": "hermes",
-    "agent-k": "hermes"
+    "agent-k": "hermes",
+    "lingtan": "dsh"
   },
-  "default_services": ["mailbus", "agentmemory", "hermes", "openclaw", "codex-web", "codex-review", "opencode"]
+  "default_services": ["mailbus", "agentmemory", "hermes", "openclaw", "codex-web", "codex-review", "opencode", "dsh"]
 }

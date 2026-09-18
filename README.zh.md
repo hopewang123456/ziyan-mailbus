@@ -31,6 +31,16 @@ mailbus status --data-dir ./store
 首次启动优先使用本机 Ollama（未配置时取 Ollama 列表中的第一个模型）。  
 若既无 Ollama 也无云端 API Key，驾驶舱会提示配置。
 
+模型 Provider 支持三种协议（对齐 Cursor 配置第三方模型的范式）：
+
+| 协议 | 端点/鉴权 | 说明 |
+|------|-----------|------|
+| `ollama` | 本机 `/api/chat` | `providers.local` |
+| `openai` | `/chat/completions` + `Bearer` | `providers.remote`（DeepSeek 等 OpenAI 兼容端点） |
+| `anthropic` | `/v1/messages` + `x-api-key` | `providers.claude`（`base_url` 留空=默认端点） |
+
+每个 provider 填 `protocol` / `base_url` / `model` / `api_key_env`（可选 `api_key`、`context_window`、`temperature`、`max_tokens` 等）。`api_key` 保存后掩码为 `***`，留空表示不更新；面板会标注「已配置 Key / 未配置 Key」。
+
 ### 公共 Docker（最小栈）
 
 ```bash
@@ -39,6 +49,8 @@ docker compose -f compose.public.yml up -d --build
 ```
 
 完整本地团队栈请继续用 `docker-compose.yml` + 本机 `docker-compose.override.yml`（不入库）。
+override 只写 `${MAILBUS_HOST_ROOT}` / `${OPENCLAW_WORKSPACE}` 等变量；**绝对路径放进 `docker-agents/.env`（或设置页）**——这是与 Agent 运行时的唯一关联方式。
+勿把 Agent 树 junction/拷贝进 `docker-agents/workspaces/`；该目录仅作「未配置时」空占位。
 
 ### 团队栈日启（Linux / macOS / Windows）
 
@@ -135,11 +147,16 @@ Windows 专用端口转发脚本统一放在 [`windows/`](windows/)。
 
 `mailbus serve` 后打开 `http://127.0.0.1:9814/`：
 
+- **舰桥（主入口）** —— `/` 驾驶舱旋钮与舰队视界
+- **逃生舱（侧栏）** —— `/legacy`；导航仅配置 / 诊所 / 协调台；其它旧直链回跳舰桥
+
 - **舰队 / 收件箱** —— Agent 实时状态、未读、发送与 ack
 - **任务** —— pipeline / FSM 状态、指派、审计（`?reviewer=`）、recover
-- **设置** —— **智能体配置**与**模型配置**已表单化编辑：每个字段直接表单输入，保存后仍以 JSON 落盘；`frameworks / mailbus_codex / mailbus_claude` 保留 JSON 折叠编辑器
-- **设置 / 资产路径** —— skill / rule / identity 三项根目录单选「默认 / 自定义」：默认走仓库内 junction 路径（`skills/` `rules/` `identities/`，SoT 在 Obsidian Vault）；自定义写 `.env`（`MAILBUS_SKILLS_ROOT` / `MAILBUS_RULES_ROOT` / `MAILBUS_IDENTITIES_ROOT`），需重启生效
-- **门诊 / doctor** —— 一键健康检查（Hermes 就绪、compose 漂移、token 预算等）
+- **设置** —— **智能体 / 模型 / 框架运行时 / 总线运行段 / 路由端口** 均有 typed 面板；极少遗留段才走 JSON 逃生舱
+- **设置 / 资产路径** —— skill / rule / identity 三项根目录「默认 / 自定义」：默认 = 仓库内 `skills/` `rules/` `identities/`（含可提交 example）；自定义路径写进配置（亦可经 `.env` 的 `MAILBUS_*_ROOT`），覆盖默认
+- **设置 / 鉴权** —— 默认写 API 需 Token；可选开启无 Token 写 + CIDR 白名单（本机/WSL/Docker）；CORS Origin 白名单（默认不放行 `*`）
+- **设置 / Compose 文件** —— 加载/编辑/保存 `docker-compose*.yml`；**不**提供 up/down（启停归运维）
+- **门诊 / doctor** —— 一键健康检查；鉴权红灯：过宽 CIDR、OpenClaw Token 未配置；**已提交** compose 含相对 `../openclaw_space` / `Agent/docker` 或 `:-change-me` 亦红灯。`.env` 里写绝对路径关联本机 Agent 树是合法配置。
 
 ### 发一条 A2A 消息
 
@@ -167,6 +184,16 @@ mailbus search --data-dir ./store --query order-intake
 | `config/mailbus/compose-registry.json` | 逻辑 build 名 / agent id → docker-compose 服务名 | 可直接提交 |
 | `config/mailbus/role-types.json` | 角色类型 → 候选 agent（demo） | 可直接提交 |
 | `.env` | API keys / 路径 | **绝不提交**（用 `migrate/env.template`） |
+
+### 鉴权（`auth`）
+
+默认**所有写 API 需要有效 Token**（含本机）。推荐只在驾驶舱 **设置 → 鉴权** 改，勿手改散落文件。样例见 `examples/config.example.json`：
+
+| 键 | 说明 |
+|----|------|
+| `allow_write_without_token` | 默认 `false`；`true` 时仅 CIDR 白名单可无 Token 写 |
+| `write_without_token_cidrs` | CIDR 列表（可含 WSL/Docker 网段）；开启且列表空 ⇒ 仅 loopback |
+| `cors_origins` | Origin 白名单；空则不放行 `*` |
 
 ### `store/config.json` 的 `agents` 对象
 
@@ -304,18 +331,17 @@ tools/ · lib/api/ → lib/application/ → lib/interfaces/ ← lib/adapters/
 | `lib/infra/` | clock、路径、`mbus_log`、internal LLM 启动 |
 
 唯一 Composition Root：`lib/composition.py`（`build_a2a_transport`、`build_transport_bundle`、`build_config_repo` 等）。  
-各包有 `Overview.md` 目录地图。路径迁移：[`docs/migration-guide.md`](docs/migration-guide.md)。  
+各包有 `Overview.md` 目录地图。安装/路径迁移：[`migrate/README.md`](migrate/README.md)。  
 Harness 规则：`config.harness.rules_path`；链路模板：`config/mailbus/chains.template.json`。
 
 ## 文档
 
 - 架构：[`ARCHITECTURE.md`](ARCHITECTURE.md)
 - Agent 入口：[`AGENTS.md`](AGENTS.md)
-- 迁移指南：[`docs/migration-guide.md`](docs/migration-guide.md)
-- 遗留 bash 评估：[`docs/legacy-bash-eval.md`](docs/legacy-bash-eval.md)
-- Adapter：[`docs/agent-adapter-layer.md`](docs/agent-adapter-layer.md)
-- Harness：[`docs/harness-runtime-spec.md`](docs/harness-runtime-spec.md)
-- 环境变量模板：`migrate/env.template`
+- 迁移工具：[`migrate/README.md`](migrate/README.md)
+- Adapter：`access/<framework>/adapter/SPEC.md`
+- Harness：`tools/harness/`（公开 git 不发布 `/docs/`，多为本地/Vault 挂载）
+- 环境变量模板：`migrate/env.template`、`docker-agents/.env.example`
 
 ## 许可证
 

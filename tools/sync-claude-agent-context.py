@@ -32,26 +32,22 @@ from lib.infra.utils import identity_candidates, json_read
 MAIL_ROOT = MAILBUS_ROOT
 
 
-def _ai_tools_root() -> Path:
-    return Path(ROOT).parent
-
-
 def _resolve_path(rel: str) -> Path:
     rel = (rel or "").strip().replace("\\", "/")
     if not rel:
         raise ValueError("empty path")
+    root = Path(ROOT)
     if rel.startswith(".codex/"):
-        return _ai_tools_root() / rel
-    if rel.startswith("mailbus-core/") or rel.startswith("team-pack/"):
-        return normalize_host_path(rel, mail_root=Path(ROOT))
-    if rel.startswith("mail/"):
-        return normalize_host_path(rel, mail_root=Path(ROOT))
-    if rel.startswith("store/"):
-        return Path(ROOT) / rel.replace("store/", "", 1)
+        # Prefer CODEX_HOME / CODEX_WORKSPACE; never assume monorepo parent layout
+        codex = (os.environ.get("CODEX_HOME") or os.environ.get("CODEX_WORKSPACE") or "").strip()
+        base = Path(codex) if codex else Path.home() / ".codex"
+        return base / rel[len(".codex/") :]
+    if rel.startswith(("mailbus-core/", "mailbus/", "mail/", "team-pack/", "store/")):
+        return normalize_host_path(rel, mail_root=root)
     p = Path(rel)
     if p.is_absolute():
-        return normalize_host_path(rel, mail_root=Path(ROOT))
-    return _ai_tools_root() / rel
+        return normalize_host_path(rel, mail_root=root)
+    return normalize_host_path(rel, mail_root=root)
 
 
 def _load_skills_index(data_dir: str) -> dict:

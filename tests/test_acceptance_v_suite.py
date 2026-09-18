@@ -95,18 +95,30 @@ class TestAcceptanceVSuite(unittest.TestCase):
         self.assertEqual(hits, [], msg=f"concrete framework imports: {hits}")
 
     def test_loopback_write_without_token(self):
-        """Loopback may write without token; forged non-loopback without token is denied."""
+        """默认 loopback 写也要 token；仅 allow_write_without_token 时 loopback 可免。"""
         from lib.application.mailbus_token import authorize_write, ensure_token
         from lib.domain.types import AuthDecision, ClientContext
 
         with tempfile.TemporaryDirectory() as td:
-            ensure_token(td)
+            tok = ensure_token(td)
             self.assertEqual(
                 authorize_write(td, ClientContext(remote_addr="127.0.0.1")),
+                AuthDecision.DENY,
+            )
+            self.assertEqual(
+                authorize_write(
+                    td,
+                    ClientContext(remote_addr="127.0.0.1", authorization=f"Bearer {tok}"),
+                ),
+                AuthDecision.ALLOW,
+            )
+            cfg = {"auth": {"allow_write_without_token": True}}
+            self.assertEqual(
+                authorize_write(td, ClientContext(remote_addr="127.0.0.1"), config=cfg),
                 AuthDecision.ALLOW,
             )
             self.assertEqual(
-                authorize_write(td, ClientContext(remote_addr="192.168.1.10")),
+                authorize_write(td, ClientContext(remote_addr="192.168.1.10"), config=cfg),
                 AuthDecision.DENY,
             )
 

@@ -33,7 +33,6 @@ def default_use_symlink() -> bool:
 def normalize_host_path(path_str: str, *, mail_root: Path | None = None) -> Path:
     """Convert /mnt/e/..., Windows drive paths, or relative paths to native absolute Path."""
     root = Path(mail_root) if mail_root is not None else MAILBUS_ROOT
-    ai_tools = root.parent
     raw = (path_str or "").strip().replace("\\", "/")
     if not raw:
         raise ValueError("empty path")
@@ -54,12 +53,14 @@ def normalize_host_path(path_str: str, *, mail_root: Path | None = None) -> Path
     if raw.startswith("team-pack/"):
         from lib.infra.constants import TEAM_PACK_ROOT
         return TEAM_PACK_ROOT / raw[len("team-pack/"):]
+    if raw.startswith("mailbus/"):
+        return root / raw[len("mailbus/"):]
     if raw.startswith("mail/"):
-        return root / raw.replace("mail/", "", 1)
+        return root / raw[len("mail/"):]
     p = Path(raw)
     if p.is_absolute():
         return p
-    return ai_tools / raw
+    return root / raw
 
 
 def workspace_skills_root(agent_rec: dict[str, Any], *, mail_root: Path | None = None) -> Path | None:
@@ -158,10 +159,9 @@ def mirror_rules_to_store(
     """Ensure store/rules → rules SoT (junction/symlink), no copy.
 
     SoT priority: explicit rules_sot → config.harness.rules_path → mail_root/rules → MAILBUS_RULES_ROOT.
-    team-pack rules stay at TEAM_PACK_RULES_ROOT (already Vault-mounted on host).
     Local: Obsidian is the only md SoT; store/rules is a mount point.
     """
-    from lib.infra.constants import MAILBUS_RULES_ROOT, TEAM_PACK_RULES_ROOT
+    from lib.infra.constants import MAILBUS_RULES_ROOT
     from lib.infra.utils import json_read
 
     if rules_sot:
@@ -187,7 +187,8 @@ def mirror_rules_to_store(
     linked: list[str] = []
 
     if not sot.is_dir():
-        raise FileNotFoundError(f"rules SoT missing: {sot}")
+        # SoT 缺失（如干净 clone 无本地 rules 树）不镜像也不崩；缺失提示归 doctor/诊所
+        return []
 
     need_link = True
     if dest.exists() or dest.is_symlink():
@@ -220,9 +221,6 @@ def mirror_rules_to_store(
     # Report reachable md files (SoT), not copied count
     for src in sorted(sot.rglob("*.md")):
         linked.append(src.relative_to(sot).as_posix())
-    # team-pack remains separate SoT
-    if TEAM_PACK_RULES_ROOT.is_dir():
-        linked.append(f"(team-pack SoT) {TEAM_PACK_RULES_ROOT}")
     return linked
 
 

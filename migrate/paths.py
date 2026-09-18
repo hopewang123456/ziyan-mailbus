@@ -19,7 +19,7 @@ MAILBUS_CORE = MIGRATE_DIR.parent
 def require_yaml() -> None:
     if yaml is None:
         raise SystemExit(
-            "ERROR: PyYAML required for migrate. Install: pip install PyYAML  (or pip install -e mailbus-core)"
+            "ERROR: PyYAML required for migrate. Install: pip install PyYAML  (or pip install -e .)"
         )
 
 def _old_prefixes() -> tuple[str, ...]:
@@ -68,7 +68,8 @@ def resolve_path(env_name: str, install_prefix: Path | None = None) -> Path:
                 return (prefix / item["path"]).resolve()
     for item in manifest.get("framework_workspaces") or []:
         if item.get("env") == env_name:
-            return (prefix / item.get("default_subpath", "")).resolve()
+            sub = item.get("path") or item.get("default_subpath") or item.get("agent_id") or ""
+            return (prefix / sub).resolve() if sub else (prefix / env_name.lower()).resolve()
     return prefix / env_name.lower()
 
 
@@ -110,13 +111,24 @@ def manifest_entries(install_prefix: Path | None = None) -> list[dict[str, Any]]
     prefix = install_prefix or install_prefix_from_env()
     manifest = load_manifest()
     entries: list[dict[str, Any]] = []
-    for section in ("required", "infra"):
+    for section in ("required", "infra", "framework_workspaces"):
         for item in manifest.get(section) or []:
             env = item["env"]
-            p = resolve_path(env, prefix) if os.environ.get(env) else prefix / item["path"]
+            sub = item.get("path") or item.get("default_subpath") or item.get("agent_id")
+            if os.environ.get(env):
+                p = resolve_path(env, prefix)
+            elif sub:
+                p = prefix / sub
+            else:
+                p = prefix / env.lower()
+            tier = {
+                "required": "required",
+                "infra": "infra",
+                "framework_workspaces": "framework",
+            }.get(section, section)
             entries.append(
                 {
-                    "tier": section.rstrip("s") if section != "required" else "required",
+                    "tier": tier,
                     "env": env,
                     "path": str(p),
                     "optional": item.get("optional", section != "required"),

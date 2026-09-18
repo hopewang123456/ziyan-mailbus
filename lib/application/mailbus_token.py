@@ -1,8 +1,13 @@
 """Mailbus Token use cases — AuthPort behavior."""
 from __future__ import annotations
 
+import os
+
 from lib.composition import get_token_store
 from lib.domain.types import AuthDecision, ClientContext
+
+# 开启无 Token 写且未填 CIDR 时的安全默认（仅 loopback）
+_DEFAULT_WRITE_FREE_CIDRS = ("127.0.0.1/32", "::1/128")
 
 
 def _ip_in_network(addr: str, cidr: str) -> bool:
@@ -17,45 +22,78 @@ def _ip_in_network(addr: str, cidr: str) -> bool:
         return False
 
 
-def _exempt_cidrs(config: dict | None) -> list[str]:
-    """从 config 读豁免 IP 白名单：config["auth"]["exempt_cidrs"] 或 config["exempt_cidrs"]。"""
+def _auth_block(config: dict | None) -> dict:
     cfg = config or {}
     auth = cfg.get("auth") if isinstance(cfg.get("auth"), dict) else {}
-    raw = auth.get("exempt_cidrs") or cfg.get("exempt_cidrs") or []
+    return auth
+
+
+def _write_free_cidrs(config: dict | None) -> list[str]:
+    """合并 write_without_token_cidrs 与 legacy exempt_cidrs。"""
+    cfg = config or {}
+    auth = _auth_block(config)
+    raw = (
+        auth.get("write_without_token_cidrs")
+        or auth.get("exempt_cidrs")
+        or cfg.get("exempt_cidrs")
+        or []
+    )
     if isinstance(raw, str):
         raw = [raw]
-    return [str(x).strip() for x in raw if str(x).strip()]
+    out = [str(x).strip() for x in raw if str(x).strip()]
+    return out
 
 
-def _is_local(addr: str, extra_cidrs: list[str] | None = None) -> bool:
-    """本机视为免 token：loopback 或 Docker bridge 私有地址，或用户豁免白名单。
+def live_auth_config(data_dir: str, *, extra: dict | None = None) -> dict:
+    """从 store/config.json 读 auth 段（设置页保存后无需重启即可生效）。"""
+    from lib.infra.utils import json_read
 
-    只认 loopback 与 Docker/WSL2 标准网桥 172.16.0.0/12。
-    （10.x / 192.168.x 不视为本机——内网主机同样需要 token，避免安全边界过宽。
-    如需放行可经 exempt_cidrs 白名单显式配置。）
-    """
+    cfg = json_read(os.path.join(data_dir or "", "config.json"), {})
+    auth = dict(cfg.get("auth") or {}) if isinstance(cfg.get("auth"), dict) else {}
+    if extra:
+        for k, v in extra.items():
+            if v in (None, "", [], {}):
+                continue
+            if k not in auth or auth.get(k) in (None, "", [], {}):
+                auth[k] = v
+    return {"auth": auth}
+
+
+def allow_write_without_token_enabled(config: dict | None) -> bool:
+    auth = _auth_block(config)
+    return bool(auth.get("allow_write_without_token"))
+
+
+def _normalize_addr(addr: str) -> str:
     a = (addr or "").strip().lower()
     if a.startswith("::ffff:"):
         a = a.split("::ffff:", 1)[-1]
+    return a
+
+
+def ip_matches_write_free_cidrs(addr: str, config: dict | None) -> bool:
+    """请求 IP 是否落在无 Token 写白名单（需先开启开关）。"""
+    if not allow_write_without_token_enabled(config):
+        return False
+    a = _normalize_addr(addr)
+    if a == "localhost":
+        a = "127.0.0.1"
+    cidrs = _write_free_cidrs(config) or list(_DEFAULT_WRITE_FREE_CIDRS)
+    for cidr in cidrs:
+        if cidr == a or _ip_in_network(a, cidr):
+            return True
+    return False
+
+
+def _is_local(addr: str, extra_cidrs: list[str] | None = None) -> bool:
+    """历史辅助：loopback / 显式 CIDR。写鉴权请用 ip_matches_write_free_cidrs。"""
+    a = _normalize_addr(addr)
     if a in ("127.0.0.1", "::1", "localhost"):
         return True
-    # 用户豁免白名单（优先级高，可覆盖 10.x/192.168 等自定义网段）
     if extra_cidrs:
         for cidr in extra_cidrs:
-            if _ip_in_network(a, cidr):
+            if _ip_in_network(a, cidr) or cidr == a:
                 return True
-    # Docker / WSL2 网桥：mailbus 在容器内看到的客户端 IP 是宿主机侧网关
-    # 常见 Docker bridge: 172.17.0.0/16 · 172.18.0.0/16 · 172.19+（均在 172.16/12 内）
-    try:
-        parts = a.split(".")
-        if len(parts) == 4:
-            octets = [int(p) for p in parts]
-            first_two = (octets[0] << 8) | octets[1]
-            # 172.16.0.0/12 → 172.16.x.x – 172.31.x.x
-            if 0xAC10 <= first_two <= 0xAC1F:
-                return True
-    except (ValueError, IndexError):
-        pass
     return False
 
 
@@ -68,23 +106,26 @@ def resolve_token(data_dir: str, config: dict | None = None) -> str | None:
 
 
 def authorize_write(data_dir: str, ctx: ClientContext, *, config: dict | None = None) -> AuthDecision:
-    """本机（含 Docker/WSL 网桥 + 用户豁免白名单）写操作免 token；跨机需有效 token。"""
-    extra = _exempt_cidrs(config)
-    if _is_local(ctx.remote_addr, extra_cidrs=extra):
-        presented = _presented_token(ctx)
+    """写操作鉴权。
+
+    默认（无 allow_write_without_token）：一律需要有效 Token（含本机）。
+    开启后：仅 write_without_token_cidrs / exempt_cidrs 白名单内 IP 可无 Token 写
+    （未填 CIDR 时默认仅 loopback）。
+    """
+    presented = _presented_token(ctx)
+    expected = resolve_token(data_dir, config)
+
+    if ip_matches_write_free_cidrs(ctx.remote_addr, config):
         if not presented:
             return AuthDecision.ALLOW
-        expected = resolve_token(data_dir, config)
         if expected and presented == expected:
             return AuthDecision.ALLOW
         if expected and presented != expected:
             return AuthDecision.DENY
         return AuthDecision.ALLOW
 
-    expected = resolve_token(data_dir, config)
     if not expected:
         return AuthDecision.DENY
-    presented = _presented_token(ctx)
     if presented and presented == expected:
         return AuthDecision.ALLOW
     return AuthDecision.DENY
@@ -92,10 +133,10 @@ def authorize_write(data_dir: str, ctx: ClientContext, *, config: dict | None = 
 
 def rotate_token(data_dir: str, ctx: ClientContext, *, config: dict | None = None) -> dict:
     """
-    Localhost: may rotate without old token.
-    Remote: must present current token; old value invalidated on success.
+    白名单无 Token 写网段：可无旧 token 轮换。
+    其它：必须出示当前 token。
     """
-    if _is_local(ctx.remote_addr, extra_cidrs=_exempt_cidrs(config)):
+    if ip_matches_write_free_cidrs(ctx.remote_addr, config):
         token = get_token_store().rotate_token(data_dir)
         return {"ok": True, "token": token, "message": "rotated"}
     expected = resolve_token(data_dir, config)

@@ -24,6 +24,7 @@ import os
 import subprocess
 import sys
 import time
+from typing import Optional
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
@@ -68,6 +69,21 @@ def _terminate(proc: subprocess.Popen, timeout: float = 5.0) -> None:
         pass
 
 
+def _port_listening(port: int, host: str = "127.0.0.1", timeout: float = 1.0) -> bool:
+    """TCP connect 探测 host:port 是否已有进程监听（跨平台，避开 bind 探测的 TIME_WAIT 误判）。"""
+    import socket
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        s.connect((host, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="mailbus 外部看门狗（L2）")
     ap.add_argument("--data-dir", default="./store", help="store 数据目录")
@@ -87,8 +103,16 @@ def main() -> int:
         interval, threshold, max_backoff = 10.0, 3, 60.0
 
     cmd = _build_cmd(args)
-    proc = subprocess.Popen(cmd, cwd=ROOT)
-    print(f"[watchdog] 启动 serve: {' '.join(cmd)} (pid={proc.pid})")
+    proc: Optional[subprocess.Popen] = None
+    own_child = False
+
+    # 幂等启动：端口已被监听 → 复用现有 serve，不重复拉起，避免多进程共享端口导致假死。
+    if _port_listening(port):
+        print(f"[watchdog] 端口 {port} 已被监听，复用现有 serve（旁路监控，异常时接管）")
+    else:
+        proc = subprocess.Popen(cmd, cwd=ROOT)
+        own_child = True
+        print(f"[watchdog] 启动 serve: {' '.join(cmd)} (pid={proc.pid})")
 
     consecutive_fail = 0
     restarts = 0
@@ -97,14 +121,15 @@ def main() -> int:
         while True:
             time.sleep(interval)
 
-            # 子进程已退出 → 直接重启（含 L1 自尽退出码 70）
-            if proc.poll() is not None:
+            # 自己拉起的子进程已退出 → 直接重启（含 L1 自尽退出码 70）
+            if proc is not None and proc.poll() is not None:
                 code = proc.returncode
                 print(f"[watchdog] serve 退出 (code={code})，重启中…")
                 restarts += 1
                 backoff = min(max_backoff, 2 ** (restarts - 1))
                 time.sleep(backoff)
                 proc = subprocess.Popen(cmd, cwd=ROOT)
+                own_child = True
                 consecutive_fail = 0
                 print(f"[watchdog] 已重启 serve (pid={proc.pid}, backoff={backoff:.0f}s)")
                 continue
@@ -118,16 +143,19 @@ def main() -> int:
             print(f"[watchdog] 健康检查失败 {consecutive_fail}/{threshold}")
             if consecutive_fail >= threshold:
                 print(f"[watchdog] 连续 {threshold} 次失败，终止并重启 serve…")
-                _terminate(proc)
+                if proc is not None:
+                    _terminate(proc)
                 restarts += 1
                 backoff = min(max_backoff, 2 ** (restarts - 1))
                 time.sleep(backoff)
                 proc = subprocess.Popen(cmd, cwd=ROOT)
+                own_child = True
                 consecutive_fail = 0
                 print(f"[watchdog] 已重启 serve (pid={proc.pid})")
     except KeyboardInterrupt:
         print("\n[watchdog] 收到中断，清理子进程…")
-        _terminate(proc)
+        if proc is not None:
+            _terminate(proc)
         return 0
 
 

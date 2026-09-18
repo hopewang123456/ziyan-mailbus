@@ -8,19 +8,23 @@
 
 | 层级 | 变量 | 典型目录 |
 |------|------|----------|
-| 必拷 | `MAILBUS_ROOT` | `mail/` |
-| 必拷 | `MAILBUS_DATA` | `mail/store/`（含 `run/` 若分离） |
-| 可选 | `OPENCLAW_WORKSPACE` | `openclaw_space/` |
-| 可选 | `OPENCODE_ROOT` | `opencode/` |
+| 必拷 | `MAILBUS_ROOT` | `mailbus/` |
+| 必拷 | `MAILBUS_DATA` | `mailbus/store/`（含 `run/` 若分离） |
+| 可选 | `OPENCLAW_WORKSPACE` | 显式绝对路径（配置关联）；未设则 compose 回落 `workspaces/openclaw` |
+| 可选 | `OPENCODE_ROOT` | 同上 → `workspaces/opencode` |
 | 可选 | `NODE_MODULES` | `node_modules/` |
-| 可选 | `HERMES_DATA` | `hermes-data/.hermes/` |
+| 可选 | `HERMES_DATA` | 显式绝对路径；未设 → `workspaces/hermes-data` |
+| 可选 | `CODEX_WORKSPACE` / `DSH_WORKSPACE` | 同上模式 |
 
 各 agent 工作区（如 `agent-f/`）按 manifest 的 `framework_workspaces` 或 `access/transport/*/transport.json` 的 `workspace` 字段。
 
-## 快速用法
+## 路径前缀 sunset
+
+技能/规则路径请用 `mailbus/skills/…`、`mailbus/rules/…`。  
+旧前缀 `mail/skills/…` 仍可解析至 **2026-12-31**（doctor 会 warn）。到期后将从 `utils` / `agent_registry` 移除别名。
 
 ```bash
-cd mail
+cd mailbus
 pip install -e .
 
 # 源机打包
@@ -35,7 +39,7 @@ mailbus migrate plan
 
 ## import 后自动执行
 
-1. 写 `mail/.env`
+1. 写 `mailbus/.env`（以及可选 `docker-agents/.env` 的 `MAILBUS_HOST_ROOT`）
 2. `rewrite_paths` — 替换 store/transport 旧前缀
 3. `init-store` + `sync-all-agent-layers` — 生成 config.json 与人物/skills
 4. `mailbus compose sync` — 从 transport 生成 compose override 挂载

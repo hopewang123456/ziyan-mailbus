@@ -17,7 +17,7 @@ mailbus — 多 Agent 消息总线系统
   bus.py agent-add <名> --cli <CLI>  注册新 agent
   bus.py agent-remove <名>           移除 agent
 
-配置: data_dir (默认 $MAILBUS_DATA 或 mail/store) 中的 config.json
+配置: data_dir (默认 $MAILBUS_DATA 或 mailbus/store) 中的 config.json
 """
 
 import os
@@ -36,6 +36,7 @@ from lib.domain.models import (
     Message, MsgStatus, Priority, MsgType, Inbox, AgentConfig, BusConfig,
 )
 from lib.infra import mbus_log
+from lib.infra.constants import PROJECT_ROOT_STR
 from lib.infra.utils import (
     json_read, json_write, jsonl_append, log_error, resolve_paths,
     build_message, _now_iso, _ensure_dir, file_lock,
@@ -47,6 +48,8 @@ from lib.composition import (
     get_context,
     get_integrations,
     index_catalog,
+    process_ack_entry,
+    process_mark_read_entry,
     scan_ack_files,
     scan_error_reports,
     scan_forward_files,
@@ -342,12 +345,19 @@ def cmd_search(args) -> int:
     data_dir = config["data_dir"]
     agents = config.get("agents", {})
 
-    query = getattr(args, "query", "") or ""
+    query = getattr(args, "query_opt", "") or getattr(args, "query", "") or ""
     scope = getattr(args, "scope", "messages") or "messages"
     limit = getattr(args, "limit", 20)
 
     if scope in ("all", "catalog"):
         index_catalog(data_dir, agents)
+
+    # 搜前同步一次消息索引：scan 索引按 every_n 降频（CLI 单次进程轮次归零），
+    # 不同步则新消息检索不到
+    try:
+        get_context().ensure_ops().scan_and_index(data_dir, agents)
+    except Exception:
+        pass
 
     ops = get_context().ensure_ops()
     if scope == "all":
@@ -974,11 +984,12 @@ def cmd_ack(args) -> int:
     config = load_config(config_path)
     data_dir = config["data_dir"]
     
-    msg_id = args.msg_id
+    msg_id = getattr(args, 'msg_id', None) or getattr(args, 'msg_id_pos', None)
     agent_name = getattr(args, 'agent', None)
-    
+    if not msg_id:
+        print("✗ 请指定消息 ID（位置参数或 --msg-id）")
+        return 1
     if not agent_name:
-        # 尝试从消息本身推断 agent
         print("✗ 请指定 agent 名称")
         return 1
     
@@ -988,14 +999,25 @@ def cmd_ack(args) -> int:
         "agent": agent_name,
         "timestamp": _now_iso(),
     }
-    
-    # 写入 ack.json
+
+    # 追加式写入 ack.json（覆盖写会吞掉调度窗口内的其他 ack；scan 默认 180s）
     paths = resolve_paths(data_dir)
     ack_dir = f"{paths['inbox']}/{agent_name}"
     _ensure_dir(ack_dir)
-    json_write(f"{ack_dir}/ack.json", ack_data)
-    
-    print(f"✓ ack 已提交: {msg_id}")
+    ack_file = f"{ack_dir}/ack.json"
+    pending = json_read(ack_file, [])
+    if isinstance(pending, dict):
+        pending = [pending]
+    if not isinstance(pending, list):
+        pending = []
+    if not any(isinstance(a, dict) and a.get("msg_id") == msg_id and a.get("action") == "ack" for a in pending):
+        pending.append(ack_data)
+    json_write(ack_file, pending)
+
+    # 立即处理本条 ack，不等调度器（经 composition 转发，保持分层）
+    processed = process_ack_entry(data_dir, agent_name, ack_data)
+
+    print(f"✓ ack 已提交: {msg_id}" + ("" if processed else "（等待调度器处理）"))
     return 0
 
 
@@ -1018,13 +1040,25 @@ def cmd_mark_read(args) -> int:
         "agent": agent_name,
         "timestamp": _now_iso(),
     }
-    
+
+    # 追加式写入 mark.json（覆盖写会吞掉调度窗口内的其他标记）
     paths = resolve_paths(data_dir)
     mark_dir = f"{paths['inbox']}/{agent_name}"
     _ensure_dir(mark_dir)
-    json_write(f"{mark_dir}/mark.json", mark_data)
-    
-    print(f"✓ 已标记 {len(msg_ids)} 条消息为已读")
+    mark_file = f"{mark_dir}/mark.json"
+    pending = json_read(mark_file, [])
+    if isinstance(pending, dict):
+        pending = [pending]
+    if not isinstance(pending, list):
+        pending = []
+    if not any(isinstance(m, dict) and m.get("action") == "mark_read" and m.get("msg_ids") == msg_ids for m in pending):
+        pending.append(mark_data)
+    json_write(mark_file, pending)
+
+    # 立即处理，不等调度器（经 composition 转发，保持分层）
+    processed = process_mark_read_entry(data_dir, agent_name, mark_data)
+
+    print(f"✓ 已标记 {len(msg_ids)} 条消息为已读" + ("" if processed else "（等待调度器处理）"))
     return 0
 
 
@@ -1248,12 +1282,12 @@ def cmd_errors(args) -> int:
     
     for fname in files[-5:]:  # 只看最近 5 个文件
         path = f"{error_dir}/{fname}"
-        with open(path) as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
         print(f"\n📄 {fname} ({len(lines)} 条):")
         for line in lines[-10:]:  # 每个文件看最近 10 条
             entry = json.loads(line)
-            print(f"  [{entry['level']}] {entry.get('msg_id', '?')} → {entry.get('to', '?')}: {entry.get('error', '?')}")
+            print(f"  [{entry.get('level') or entry.get('event', '?')}] {entry.get('msg_id', '?')} → {entry.get('to', '?')}: {entry.get('error', '?')}")
     
     return 0
 
@@ -1486,7 +1520,7 @@ def cmd_review(args) -> int:
     if not review_script:
         review_script = os.environ.get("MAILBUS_REVIEW_SCRIPT", "")
     if not review_script:
-        mail_home = os.environ.get("MAIL_HOME", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        mail_home = os.environ.get("MAIL_HOME", PROJECT_ROOT_STR)
         review_script = os.path.join(mail_home, "..", "pr-agent", "review.py")
     review_script = os.path.normpath(review_script)
     if os.path.isfile(review_script):

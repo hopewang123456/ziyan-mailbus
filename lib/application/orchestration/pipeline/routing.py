@@ -5,7 +5,12 @@ from __future__ import annotations
 from typing import List, Optional, Set, Tuple
 
 from lib.application.orchestration.pipeline.chain import _agent_role_map, agent_to_role
-from lib.application.orchestration.role_flow import get_next_role, pick_person_for_role
+from lib.application.orchestration.role_flow import (
+    get_next_role,
+    is_terminal_role_type,
+    next_role_after,
+    pick_person_for_role,
+)
 
 VALID_ROLES = frozenset({
     "方案设计师", "调度员", "开发工程师", "审查官", "测试工程师", "验收员",
@@ -35,11 +40,17 @@ def is_pipeline_terminal(
     data_dir: str = "",
     current_role_type: Optional[int] = None,
 ) -> bool:
-    """planned 未清空时永不终态；否则仅允许白名单 conclusion。"""
+    """planned 未清空时永不终态；否则按 SoT(role-flow terminal) → legacy 白名单裁决。"""
     from lib.application.orchestration.pipeline.step import planned_role_types_remaining
 
     if planned_agents_remaining(chain) or planned_role_types_remaining(chain):
         return False
+    if data_dir and current_role_type is not None:
+        try:
+            if is_terminal_role_type(int(current_role_type), conclusion, data_dir):
+                return True
+        except Exception:
+            pass
     return (current_role, (conclusion or "").lower()) in {
         (r, c.lower()) for r, c in TERMINAL_CONCLUSIONS
     }
@@ -122,7 +133,15 @@ def resolve_next_assignee(
     if explicit_next and explicit_next != current_role:
         n_role = explicit_next
     else:
-        n_role = get_next_role(current_role, conclusion)
+        # P0-2：role-flow.json SoT 优先；legacy _FLOW_RULES 仅作迁移期 shim
+        rt = None
+        if chain and chain[-1].get("role_type") is not None:
+            rt = int(chain[-1]["role_type"])
+        n_role = (
+            next_role_after(current_role, conclusion, data_dir, current_role_type=rt)
+            if data_dir
+            else get_next_role(current_role, conclusion)
+        )
 
     if not n_role:
         return None, None

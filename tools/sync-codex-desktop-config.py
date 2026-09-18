@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """同步 Codex Desktop / CLI 的 config.toml + 模型目录（消除 deepseek metadata 警告 + 注入 agent 人设）。"""
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ def resolve_codex_home(explicit: str | None = None) -> str:
         return os.path.abspath(explicit)
     for cand in (
         os.environ.get("CODEX_HOME"),
-        r"E:\.codex",
+        os.environ.get("CODEX_WORKSPACE"),
         os.path.join(os.path.expanduser("~"), ".codex"),
     ):
         if cand and os.path.isdir(cand):

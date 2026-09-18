@@ -16,7 +16,7 @@
 ## sync 链路
 
 ```bash
-python mail/tools/sync-claude-agent-context.py agent-h
+python tools/sync-claude-agent-context.py agent-h
 ```
 
 刷新：`CLAUDE.md`、skills、`{agent}-memory/output.md`

@@ -16,6 +16,11 @@ provider: deepseek
 EOFYAML
 fi
 
+# MemOS（memtensor）：个人记忆外挂；工单/团队仍走 AgentMemory（见 mailbus memory-routing 规则）
+if [ -x /ensure-memos.sh ]; then
+  bash /ensure-memos.sh || echo "[entrypoint] ensure-memos failed (non-fatal)"
+fi
+
 # 可选：把 framework skills 同步到 access/hermes/.sync（镜像缓存，非运行时 SoT）。
 # Hermes 实际加载: profiles/<id>/skills → Vault views/roles 或 library（junction）。
 # 默认 symlink；仅当 HERMES_SKILL_COPY=1 时写实体副本。

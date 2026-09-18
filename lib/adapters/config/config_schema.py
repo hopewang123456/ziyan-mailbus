@@ -9,6 +9,20 @@ import json
 import os
 from typing import Optional
 
+# 运行时校验与 JSON Schema enum 共用，避免 dsh 等类型只写进一处。
+AGENT_TYPES = (
+    "hermes",
+    "hermes_profile",
+    "openclaw",
+    "cline",
+    "opencode",
+    "codex",
+    "claude_code",
+    "cursor",
+    "dsh",
+    "none",
+)
+
 # ── Config JSON Schema ────────────────────────────────────────────────────
 
 CONFIG_SCHEMA = {
@@ -68,7 +82,7 @@ CONFIG_SCHEMA = {
                     "properties": {
                         "type": {
                             "type": "string",
-                            "enum": ["hermes", "hermes_profile", "openclaw", "cline", "opencode", "codex", "claude_code", "cursor", "none"]
+                            "enum": list(AGENT_TYPES)
                         },
                         "role": {"type": "string", "maxLength": 500},
                         "profile": {"type": "string"},
@@ -179,7 +193,7 @@ def validate_config(config: dict, config_path: str = "") -> list:
                 continue
             if "type" not in cfg:
                 errors.append(f"agents.{name}: 缺少必需字段 type")
-            elif cfg["type"] not in ("hermes", "hermes_profile", "openclaw", "cline", "opencode", "codex", "claude_code", "cursor", "none"):
+            elif cfg["type"] not in AGENT_TYPES:
                 errors.append(f"agents.{name}.type: 不支持的 agent 类型 ({cfg['type']})")
             # 检查未知字段
             allowed = {"type", "role", "profile", "agent", "agent_id", "archetype", "provider",
@@ -233,6 +247,61 @@ def validate_config(config: dict, config_path: str = "") -> list:
                     for tier in tier_map:
                         if tier not in valid:
                             errors.append(f"smart_routing.tier_map: 未知 tier {tier!r}")
+
+    # ── mailbus_internal_llm.providers protocol 校验 ──
+    illm = config.get("mailbus_internal_llm")
+    if illm is not None:
+        if not isinstance(illm, dict):
+            errors.append("mailbus_internal_llm: 期望 object 类型")
+        else:
+            providers = illm.get("providers")
+            if providers is not None:
+                if not isinstance(providers, dict):
+                    errors.append("mailbus_internal_llm.providers: 期望 object 类型")
+                else:
+                    valid_proto = ("ollama", "openai", "openai_compatible", "anthropic", "stub")
+                    for pname, pc in providers.items():
+                        if not isinstance(pc, dict):
+                            continue
+                        proto = (pc.get("protocol") or pc.get("kind") or "").strip().lower()
+                        if proto and proto not in valid_proto:
+                            errors.append(
+                                f"mailbus_internal_llm.providers.{pname}.protocol: 未知协议 {proto!r}"
+                            )
+
+    # ── mailbus_device_bridge 校验 ──
+    dbr = config.get("mailbus_device_bridge")
+    if dbr is not None:
+        if not isinstance(dbr, dict):
+            errors.append("mailbus_device_bridge: 期望 object 类型")
+        else:
+            for field in ("enabled", "write_memory"):
+                if field in dbr and not isinstance(dbr[field], bool):
+                    errors.append(f"mailbus_device_bridge.{field}: 期望 boolean 类型")
+            if "default_wait_ms" in dbr and (
+                not isinstance(dbr["default_wait_ms"], int) or not (1000 <= dbr["default_wait_ms"] <= 600000)
+            ):
+                errors.append("mailbus_device_bridge.default_wait_ms: 值超出范围 [1000, 600000]")
+            devices = dbr.get("devices")
+            if devices is not None:
+                if not isinstance(devices, list):
+                    errors.append("mailbus_device_bridge.devices: 期望 array 类型")
+                else:
+                    seen_ids = set()
+                    for i, d in enumerate(devices):
+                        if not isinstance(d, dict):
+                            errors.append(f"mailbus_device_bridge.devices[{i}]: 期望 object 类型")
+                            continue
+                        did = (d.get("id") or "").strip()
+                        if not did:
+                            errors.append(f"mailbus_device_bridge.devices[{i}]: 缺少 id")
+                        elif did in seen_ids:
+                            errors.append(f"mailbus_device_bridge.devices[{i}]: 重复 id {did!r}")
+                        seen_ids.add(did)
+                        if not (d.get("agent_id") or "").strip():
+                            errors.append(f"mailbus_device_bridge.devices[{i}]: 缺少 agent_id")
+                        if not (d.get("token_env") or "").strip() and not (d.get("token") or "").strip():
+                            errors.append(f"mailbus_device_bridge.devices[{i}]: 缺少 token_env 或 token")
 
     return errors
 

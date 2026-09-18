@@ -1,0 +1,16 @@
+{
+  "_note": "Device Bridge 公开测试角色：type=none，无需框架 CLI。用户绑设备到 test，再跑 tools/device_bridge_mock_agent.py 即可本地验通。",
+  "agents": {
+    "test": {
+      "name": "test",
+      "role": "Device Bridge mock target",
+      "type": "none",
+      "agent_id": "test",
+      "agent": "test",
+      "archetype": "demo",
+      "enabled": true,
+      "available": true,
+      "max_concurrency": 1
+    }
+  }
+}

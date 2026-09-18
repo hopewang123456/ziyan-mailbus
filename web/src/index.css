@@ -41,6 +41,77 @@ body {
   color: var(--mute);
 }
 
+/* 字段旁 ? 悬浮说明（驾驶舱暗色浮层） */
+.field-hint {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.35rem;
+  vertical-align: middle;
+}
+.field-required {
+  margin-left: 0.2rem;
+  color: #ff6b4a;
+  font-family: "Sora", sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.field-hint-mark {
+  display: inline-flex;
+  height: 0.9rem;
+  width: 0.9rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(154, 171, 190, 0.45);
+  color: rgba(154, 171, 190, 0.95);
+  font-family: "Sora", sans-serif;
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: help;
+  user-select: none;
+}
+.field-hint-mark:hover,
+.field-hint:focus-within .field-hint-mark {
+  border-color: rgba(0, 212, 255, 0.55);
+  color: #00d4ff;
+}
+.field-hint-tip {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  top: calc(100% + 0.4rem);
+  width: min(17.5rem, 70vw);
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid rgba(230, 238, 248, 0.12);
+  background: rgba(10, 14, 22, 0.96);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  color: #c8d6e8;
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  line-height: 1.45;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-2px);
+  transition: opacity 0.12s ease, visibility 0.12s ease, transform 0.12s ease;
+}
+.field-hint:hover .field-hint-tip,
+.field-hint:focus-within .field-hint-tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
 .hud-btn,
 .hud-btn-amber {
   display: inline-flex;

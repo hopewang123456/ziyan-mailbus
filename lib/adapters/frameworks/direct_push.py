@@ -25,8 +25,9 @@ from lib.adapters.frameworks import (
     resolve_container,
 )
 from lib.adapters.frameworks.claude_launch import parse_model_name_from_push_template
+from lib.infra.constants import PROJECT_ROOT_STR
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = PROJECT_ROOT_STR
 
 
 def parse_model_from_push_template(cmd_template: str) -> str | None:
@@ -288,7 +289,7 @@ def try_build_push_direct(
         )
     if not built or not built.get("argv"):
         return built
-    from lib.adapters.frameworks.support import assert_spawn_argv_allowed
+    from lib.domain.spawn_guard import assert_spawn_argv_allowed
     from lib.infra.utils import json_read
 
     cfg = json_read(os.path.join(data_dir, "config.json"), {}) if data_dir else {}

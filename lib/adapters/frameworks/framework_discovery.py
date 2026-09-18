@@ -33,6 +33,7 @@ _ENV_TO_PATHS_KEY = {
     "OPENCODE_ROOT": "opencode_root",
     "OPENCLAW_WORKSPACE": "openclaw_workspace",
     "CODEX_WORKSPACE": "codex_workspace",
+    "DSH_WORKSPACE": "dsh_workspace",
     "NODE_MODULES": "node_modules",
     "TEAM_PACK_ROOT": "team_pack_root",
 }
@@ -48,6 +49,7 @@ FRAMEWORK_RUN_TARGETS: dict[str, list[str]] = {
     "claude_code": ["windows", "wsl", "linux"],
     "cursor": ["windows"],
     "cline": ["windows", "wsl", "linux"],
+    "dsh": ["docker"],
 }
 
 RUN_TARGET_LABELS: dict[str, str] = {
@@ -66,6 +68,7 @@ CONTAINER_INSTALL_ROOTS: dict[str, str] = {
     "openclaw": "/workspace",
     "codex": "/workspace/codex",
     "opencode": "/workspace/opencode",
+    "dsh": "/home/dsh/.dsh",
 }
 
 
@@ -78,9 +81,18 @@ def _resolve_probe_path(spec: dict[str, Any], paths: dict[str, str]) -> Path | N
     probe = (spec.get("probe") or "dir").strip()
     base_s = ""
     if env_key == "CLAUDE_WORKSPACE_ROOT":
-        install = Path(paths["root"]).parent
-        sub = probe.split(":", 1)[1] if probe.startswith("dir:") else ".mailbus/claude"
-        return install / sub.replace("/", os.sep)
+        # Only respect explicit env — do not guess MAILBUS_ROOT.parent/.mailbus/claude
+        base_s = (os.environ.get(env_key) or "").strip()
+        if not base_s:
+            return None
+        base = Path(base_s)
+        if probe.startswith("file:"):
+            rel = probe.split(":", 1)[1]
+            return base / rel if rel else base
+        if probe.startswith("dir:"):
+            rel = probe.split(":", 1)[1]
+            return base / rel if rel else base
+        return base
     paths_key = _ENV_TO_PATHS_KEY.get(env_key, "")
     base_s = os.environ.get(env_key) or (paths.get(paths_key, "") if paths_key else "")
     if not base_s:
@@ -115,8 +127,7 @@ def framework_run_targets(framework: str) -> list[str]:
 def framework_default_install_path(framework: str, *, mail_root: Path | None = None) -> str:
     """框架安装路径预填默认值（35f）：优先 env 显式值，否则 registry path_env 约定路径。
 
-    注意 claude_code 的 CLAUDE_WORKSPACE_ROOT 特判：_resolve_probe_path 恒算
-    install_parent/.mailbus/claude，预填时若 env 有显式值则优先使用（否则回到约定路径）。
+    claude_code：仅当 CLAUDE_WORKSPACE_ROOT 已设置时预填；不猜 monorepo 父目录。
     """
     load_mailbus_env()
     paths = mailbus_paths()
@@ -126,13 +137,7 @@ def framework_default_install_path(framework: str, *, mail_root: Path | None = N
         return ""
     env_key = (spec.get("path_env") or "").strip()
     if env_key == "CLAUDE_WORKSPACE_ROOT":
-        env_val = os.environ.get(env_key, "").strip()
-        if env_val:
-            return env_val
-        install = Path(paths["root"]).parent
-        probe = (spec.get("probe") or "dir:.mailbus/claude").strip()
-        sub = probe.split(":", 1)[1] if probe.startswith("dir:") else ".mailbus/claude"
-        return str(install / sub.replace("/", os.sep))
+        return os.environ.get(env_key, "").strip()
     env_val = os.environ.get(env_key, "").strip()
     if env_val:
         return env_val

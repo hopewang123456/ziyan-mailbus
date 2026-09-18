@@ -200,7 +200,7 @@ def cmd_scripts(args: argparse.Namespace) -> int:
     docker = [s for s in scripts if s.startswith("docker-agents/")]
     tools = [s for s in scripts if s.startswith("tools/")]
     other = [s for s in scripts if s not in docker and s not in tools]
-    print(f"Total shell scripts under mailbus-core: {len(scripts)}")
+    print(f"Total shell scripts under mailbus: {len(scripts)}")
     print(f"  docker-agents/: {len(docker)} (容器 entrypoint 建议保留 bash)")
     print(f"  tools/:         {len(tools)}")
     print(f"  other:          {len(other)}")

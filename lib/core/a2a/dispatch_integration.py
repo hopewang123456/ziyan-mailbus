@@ -4,8 +4,8 @@ from __future__ import annotations
 import os
 from typing import Any, Optional
 
-from lib.application.harness import get_harness
 from lib.infra.utils import json_read
+from lib.infra.pipeline_results import step_result_path  # 2026-09 治理下沉
 from .agent_card_cache import enrich_agent_channels
 from .file_bus import FileBusTransport
 from .router import TransportRouter
@@ -27,6 +27,9 @@ def merge_agent_transport_config(agents: dict) -> dict:
 
 def build_router(data_dir: str, config: Optional[dict] = None) -> TransportRouter:
     cfg = config or json_read(os.path.join(data_dir, "config.json"), {})
+    # 跨层解耦：core→application 通过 composition 拿服务
+    from lib.composition import get_harness
+
     harness = get_harness(cfg)
     mode = (cfg.get("harness") or {}).get("mode", "production")
     return TransportRouter(
@@ -73,7 +76,8 @@ def send_via_message_port(
     config: Optional[dict] = None,
 ) -> dict[str, Any]:
     """Wave3/W7c: MessageTransportPort 统一发送（可选 Harness wait）。"""
-    from lib.application.transport_send import send_outbound
+    # 跨层解耦：core→application 通过 composition 拿服务
+    from lib.composition import send_outbound
 
     return send_outbound(
         data_dir,
@@ -152,17 +156,19 @@ def dispatch_pipeline_step(
         else:
             out["error_code"] = "delivery_failed"
         try:
-            from lib.adapters.locale.errors_zh import message_zh
+            # 跨层解耦：core→adapter 通过 composition 拿服务
+            from lib.composition import message_zh
 
             out["message_zh"] = message_zh(out["error_code"], err)
         except Exception:
             pass
     if result.awaiting_human and result.human_queue_payload:
-        from lib.adapters.orchestration.human_queue import enqueue
+        # 跨层解耦：core→adapter 通过 composition 拿服务
+        from lib.composition import enqueue_human_queue
 
         hq = dict(result.human_queue_payload)
         hq.setdefault("task_id", task_id)
-        hq_id = enqueue(data_dir, hq)
+        hq_id = enqueue_human_queue(data_dir, hq)
         out["human_queue_id"] = hq_id
     return out
 
@@ -211,8 +217,7 @@ def _dispatch_via_message_port(
         if receipt.get("message_zh"):
             out["message_zh"] = receipt["message_zh"]
     else:
-        from lib.application.orchestration.pipeline.results import step_result_path
-
+        # step_result_path 已在顶部改为 infra 导入（2026-09 治理）
         path = step_result_path(data_dir, task_id, step_id)
         if os.path.isfile(path):
             out["step_result_path"] = path

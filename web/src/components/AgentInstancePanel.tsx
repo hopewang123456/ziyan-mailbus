@@ -5,7 +5,7 @@
  * 实例卡字段：run_target · Agent 类型 · 父路径(+自定义) · 访问地址 · 登录凭证
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api } from "../lib/api";
+import { api, formatSettingsEffects } from "../lib/api";
 import { AgentConfigForm, type AgentFormItem } from "./AgentConfigForm";
 
 type AuthBlock = {
@@ -231,7 +231,7 @@ export function AgentRuntimePanel() {
         /* ignore */
       }
     } else {
-      setMsg("实例已保存");
+      setMsg(formatSettingsEffects(data, "实例已保存"));
     }
     await load();
     return data.instance || null;
@@ -543,7 +543,7 @@ export function AgentRuntimePanel() {
             className="hud-input w-full font-mono text-xs"
             value={draft.install_path || ""}
             onChange={(e) => setDraft((d) => ({ ...d, install_path: e.target.value }))}
-            placeholder={draft.install_path_default || "如 E:\\hermes-data\\.hermes"}
+            placeholder={draft.install_path_default || "绝对路径；留空则用 env / 框架默认"}
           />
           <p className="text-[10px] text-mute">
             实例层配置 = 该框架下全员公共（skills/rules 等）；未勾自定义时按父路径约定目录扫描。

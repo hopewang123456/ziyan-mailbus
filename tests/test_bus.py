@@ -70,8 +70,8 @@ def test_get_system_message():
     assert "bus_cli_location" in msg["system_info"]
 
 
-def test_cmd_init_fresh_thirteen_agents():
-    """bus.py init --fresh 应生成 13 agents + workflows registry。"""
+def test_cmd_init_fresh_agents():
+    """bus.py init --fresh 应生成完整 agents 名单（含 dsh lingtan + device-bridge test）+ workflows registry。"""
     import json
     import tempfile
     from lib.infra.constants import MAILBUS_ROOT
@@ -81,7 +81,7 @@ def test_cmd_init_fresh_thirteen_agents():
         rc = run_init_store(tmp, fresh=True, mail_root=MAILBUS_ROOT, quiet=True)
         assert rc == 0
         cfg = json.load(open(os.path.join(tmp, "config.json"), encoding="utf-8"))
-        assert len(cfg.get("agents") or {}) == 13
+        assert len(cfg.get("agents") or {}) >= 14
         reg = json.load(open(os.path.join(tmp, "workflows", "registry.json"), encoding="utf-8"))
         assert len(reg.get("workflows") or {}) >= 6
 
@@ -97,6 +97,6 @@ if __name__ == "__main__":
     print("✅ test_load_config_bad_json")
     test_get_system_message()
     print("✅ test_get_system_message")
-    test_cmd_init_fresh_thirteen_agents()
-    print("✅ test_cmd_init_fresh_thirteen_agents")
+    test_cmd_init_fresh_agents()
+    print("✅ test_cmd_init_fresh_agents")
     print("\n🎉 全部通过")

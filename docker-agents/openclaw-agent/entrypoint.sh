@@ -26,7 +26,13 @@ if [ -f /mailbus/tools/sync-all-agent-layers.py ]; then
 fi
 
 echo "[entrypoint] Starting OpenClaw gateways..."
-OPENCLAW_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-change-me}"
+OPENCLAW_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
+if [ "$OPENCLAW_TOKEN" = "change-me" ]; then
+  OPENCLAW_TOKEN=""
+fi
+if [ -z "$OPENCLAW_TOKEN" ]; then
+  echo "[entrypoint] WARN: OPENCLAW_GATEWAY_TOKEN unset — gateways start without injected token (set via compose/.env)"
+fi
 
 gateway_env_base=(
   "DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}"
@@ -59,16 +65,21 @@ start_gateway() {
   env OPENCLAW_STATE_DIR="$statedir" OPENCLAW_CONFIG_PATH="${statedir}/openclaw.json" \
     openclaw --no-color plugins install @openclaw/deepseek-provider \
     >/tmp/openclaw-plugin-${name}.log 2>&1 || true
+  local auth_args=()
+  if [ -n "$OPENCLAW_TOKEN" ]; then
+    auth_args=(--auth token --token "$OPENCLAW_TOKEN")
+  fi
   nohup env \
     "${extra[@]}" \
     OPENCLAW_STATE_DIR="$statedir" \
     OPENCLAW_CONFIG_PATH="${statedir}/openclaw.json" \
     CI=1 NO_COLOR=1 \
     "${gateway_env_base[@]}" \
-    openclaw --no-color gateway run --allow-unconfigured --auth token --token "$OPENCLAW_TOKEN" \
+    openclaw --no-color gateway run --allow-unconfigured \
+      "${auth_args[@]}" \
       --port "$port" --bind lan --force \
     >"/tmp/openclaw-gw-${port}.log" 2>&1 &
-  echo "  ${name} (${port}) started [state=${statedir}] pid=$!"
+  echo "  ${name} (${port}) started [state=${statedir}] pid=$! token=$([ -n "$OPENCLAW_TOKEN" ] && echo set || echo unset)"
 }
 
 # 从 store/config.json 读取 openclaw agents（名→端口）；缺失时回落 demo 名单

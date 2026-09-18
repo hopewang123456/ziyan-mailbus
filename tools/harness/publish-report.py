@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """post-commit harness 报告发布到 mailbus（可选创建 code_review task）。
 
-规范：mail/docs/quality-harness-pipeline-spec.md
+规范：tools/harness/publish-report.py
 """
 from __future__ import annotations
 

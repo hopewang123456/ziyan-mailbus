@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { setUiMode } from "../lib/ui-mode";
 
 export function HomePage() {
   const [status, setStatus] = useState<string>("…");
@@ -24,7 +25,7 @@ export function HomePage() {
         mailbus
       </h1>
       <p className="mt-4 max-w-xl text-base text-mute md:text-lg">
-        星系驾驶舱 · 编排总线与 agent 舰队的实时视界。非管理台，是舰桥。
+        逃生舱首页 · 日常请回<strong className="text-frost">舰桥</strong>。此处保留侧栏路由作排障。
       </p>
 
       <div className="mt-8 flex flex-wrap items-center gap-3">
@@ -32,19 +33,26 @@ export function HomePage() {
           <span className="h-2 w-2 animate-pulse-ring rounded-full bg-mint" />
           bus {status}
         </span>
-        <Link to="/config" className="hud-btn">
-          配置 / Token
+        <Link to="/" className="hud-btn hud-btn-primary">
+          返回舰桥
         </Link>
-        <Link to="/discover" className="hud-btn-amber">
-          发现舰队
+        <Link to="/config" className="hud-btn">
+          配置合页
+        </Link>
+        <Link
+          to="/"
+          className="hud-btn-amber"
+          onClick={() => setUiMode("cockpit")}
+        >
+          发现舰队（舰桥）
         </Link>
       </div>
 
       <div className="mt-12 grid gap-3 sm:grid-cols-3">
         {[
-          ["任务轨", "/tasks", "工单与 FSM"],
-          ["Inbox", "/inbox", "信箱与回复"],
+          ["配置合页", "/config", "与舰桥同面板"],
           ["诊所", "/clinic", "doctor / tools"],
+          ["协调台", "/manager", "待我处理"],
         ].map(([title, to, sub]) => (
           <Link
             key={to}
@@ -56,6 +64,7 @@ export function HomePage() {
           </Link>
         ))}
       </div>
+      <p className="mt-6 text-xs text-mute">任务 / Inbox / 发现等请回舰桥旋钮操作；旧直链已自动跳转。</p>
     </section>
   );
 }

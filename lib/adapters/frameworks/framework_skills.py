@@ -18,6 +18,7 @@ FRAMEWORK_SKILL_DIRS: dict[str, str] = {
     "openclaw": "frameworks/openclaw/SKILL.md",
     "cline": "frameworks/cline/SKILL.md",
     "cursor": "frameworks/cursor/SKILL.md",
+    "dsh": "frameworks/dsh/SKILL.md",
 }
 
 SHARED_PROTOCOL = "common/mailbus-file-protocol/SKILL.md"
@@ -28,16 +29,19 @@ def framework_skill_id(framework: str) -> str:
 
 
 def framework_skill_path_rel(framework: str) -> str:
+    # /skills/ 常为 Vault junction 且 gitignore；dsh L1 放已跟踪的 access/dsh/adapter/
+    if framework == "dsh":
+        return "mailbus/access/dsh/adapter/SKILL.md"
     rel = FRAMEWORK_SKILL_DIRS.get(framework)
     if not rel:
         raise ValueError(f"unknown framework: {framework}")
-    return f"mail/skills/{rel}"
+    return f"mailbus/skills/{rel}"
 
 
 def shared_protocol_spec() -> dict:
     return {
         "id": "mailbus-file-protocol",
-        "path": f"mail/skills/{SHARED_PROTOCOL}",
+        "path": f"mailbus/skills/{SHARED_PROTOCOL}",
         "type": "shared_skill",
         "always": True,
     }
@@ -54,24 +58,29 @@ def framework_skill_spec(framework: str) -> dict:
 
 
 def resolve_skill_src(rel: str, *, mail_root: Path | None = None) -> Path:
-    """Resolve mail/skills/..., mailbus-core/skills/..., or Obsidian Vault rel paths.
+    """Resolve mailbus/skills/..., mail/skills/... (alias), or Obsidian Vault rel paths.
 
     委托 agent_registry 统一解析（含 Vault 相对路径与 .md 回退），
-    再兜底处理 mail/adapters/ 与 store/ 旧形态。
+    再兜底处理 mail(bus)/adapters/ 与 store/ 旧形态。
     """
     from lib.adapters.config.agent_registry import resolve_skill_src as _resolve_vault
 
     mail_root = mail_root or ROOT
-    skills = MAILBUS_SKILLS_ROOT if mail_root == ROOT else (mail_root / "skills")
-    ai_tools = mail_root.parent
+    # mail/adapters、mailbus/skills 旧/新前缀均指仓库内 skills，非知识库根。
+    skills = mail_root / "skills"
     rel = (rel or "").replace("\\", "/")
-    if rel.startswith("mail/adapters/"):
-        tail = rel[len("mail/adapters/"):]
-        if tail.startswith("_shared/mailbus-file-protocol"):
-            return skills / "common" / "mailbus-file-protocol" / "SKILL.md"
-        if "/framework-runtime/" in tail:
-            fw, _ = tail.split("/framework-runtime/", 1)
-            return skills / "frameworks" / fw / "SKILL.md"
+    if rel.startswith("mailbus/access/") or rel.startswith("mail/access/"):
+        return mail_root / rel.split("/", 1)[1]
+    if rel.startswith("access/"):
+        return mail_root / rel
+    for adapters_prefix in ("mailbus/adapters/", "mail/adapters/"):
+        if rel.startswith(adapters_prefix):
+            tail = rel[len(adapters_prefix):]
+            if tail.startswith("_shared/mailbus-file-protocol"):
+                return skills / "common" / "mailbus-file-protocol" / "SKILL.md"
+            if "/framework-runtime/" in tail:
+                fw, _ = tail.split("/framework-runtime/", 1)
+                return skills / "frameworks" / fw / "SKILL.md"
     if rel.startswith("store/"):
         return mail_root / rel
     return _resolve_vault(rel, mail_root=mail_root)

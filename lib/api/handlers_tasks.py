@@ -9,7 +9,13 @@ import os
 import json
 import sys
 from lib.infra.utils import json_read, json_write, _now_iso
-from lib.application.orchestration.tracker import TaskTracker, TaskStatus, SKIP_TIMEOUT_PREFIXES
+from lib import composition
+from lib.application.orchestration.tracker import (
+    TaskTracker,
+    TaskStatus,
+    SKIP_TIMEOUT_PREFIXES,
+    append_task_event,
+)
 from lib.application.orchestration.pipeline.chain import normalize_task_chain, is_pipeline_step
 
 # Dashboard 默认分页（无 query 时也生效，避免一次返回 400+ 任务拖死浏览器）
@@ -25,7 +31,6 @@ def _is_noise_task_id(task_id: str) -> bool:
 def _normalize_tasks_for_api(tasks: list, data_dir: str = "") -> list:
     """API 返回前规范化 chain 格式，并补全 audit_reviewer / needs_audit / fsm。"""
     from lib.application.orchestration.audit_dispatch import task_requires_audit
-    from lib.adapters.orchestration.task_fsm import ensure_fsm, fsm_summary
 
     for task in tasks:
         normalize_task_chain(task)
@@ -35,8 +40,8 @@ def _normalize_tasks_for_api(tasks: list, data_dir: str = "") -> list:
             task["audit_reviewer"] = org_default(data_dir, "reviewer")
         task["needs_audit"] = task_requires_audit(task)
         if chain and is_pipeline_step(chain[0]):
-            ensure_fsm(task)
-            task["fsm"] = fsm_summary(task)
+            composition.ensure_fsm(task)
+            task["fsm"] = composition.fsm_summary(task)
     return tasks
 
 
@@ -107,6 +112,50 @@ def handle_tasks(handler):
         })
 
 
+def _plan_task_with_deadline(envelope: dict, *, data_dir: str, config: dict, default_timeout: float = 45.0) -> dict:
+    """plan_task 带总超时闸。
+
+    internal LLM 慢/挂时同步 HTTP 请求会假死（实测 ~6 分钟）；超时后降级为
+    Tier-0 单步兜底链（role_type=1），建单立刻返回，plan_meta 标注
+    timeout_fallback。超时秒数可经 config.mailbus_internal_llm.plan_timeout_seconds 调整。
+    """
+    import threading
+    from lib.application.orchestration.router.planner import PlanError, plan_task
+
+    llm_cfg = (config or {}).get("mailbus_internal_llm") or {}
+    try:
+        timeout = float(llm_cfg.get("plan_timeout_seconds") or default_timeout)
+    except (TypeError, ValueError):
+        timeout = default_timeout
+
+    result: dict = {}
+
+    def _run():
+        try:
+            result["out"] = plan_task(envelope, data_dir=data_dir, config=config)
+        except PlanError as exc:
+            result["error"] = exc
+        except Exception as exc:  # planner 自身异常按 plan_failed 处理
+            result["error"] = PlanError("plan_failed", f"planner crashed: {exc}")
+
+    worker = threading.Thread(target=_run, daemon=True)
+    worker.start()
+    worker.join(timeout)
+    if "out" in result:
+        return result["out"]
+    if worker.is_alive():
+        return {
+            "planned_chain": [{"role_type": 1, "reason": "plan_timeout_fallback"}],
+            "plan_meta": {
+                "method": "timeout_fallback",
+                "task_type_guess": envelope.get("task_type"),
+                "confidence": 0.1,
+                "provider_used": "none",
+            },
+        }
+    raise result.get("error") or PlanError("plan_failed", "planner failed")
+
+
 def create_task_from_envelope(data_dir: str, body: dict) -> tuple[dict, int]:
     """从 A2A Envelope 创建任务。返回 (response_body, http_status)。"""
     from lib.application.orchestration.router.envelope_validate import is_legacy_create_body, validate_envelope
@@ -154,7 +203,7 @@ def create_task_from_envelope(data_dir: str, body: dict) -> tuple[dict, int]:
             planned = expand_planned_chain_for_collab(planned, body)
         else:
             config = json_read(os.path.join(data_dir, "config.json"), {})
-            out = plan_task(body, data_dir=data_dir, config=config)
+            out = _plan_task_with_deadline(body, data_dir=data_dir, config=config)
             planned = out["planned_chain"]
             plan_meta = out["plan_meta"]
             from lib.application.orchestration.dispatch.collab_plan import expand_planned_chain_for_collab
@@ -602,17 +651,22 @@ def handle_skill_use(handler):
         handle_skill_usage(handler)
 
 
+def handle_manager_pending(handler):
+    """GET /api/manager/pending — 管理者「待我处理」聚合（协调台数据源）。"""
+    from lib.application.queries.manager import manager_pending
+
+    handler._send_json(manager_pending(handler.data_dir))
+
+
 def handle_task_fsm_get(handler, task_id: str):
     """GET /api/tasks/<task_id>/fsm — 状态机摘要（Dashboard 用）。"""
-    from lib.adapters.orchestration.task_fsm import ensure_fsm, fsm_summary
-
     tracker = TaskTracker(handler.data_dir)
     task = tracker.get(task_id)
     if not task:
         handler._send_json({"error": "not_found"}, 404)
         return
-    ensure_fsm(task)
-    handler._send_json({"status": "ok", "fsm": fsm_summary(task)})
+    composition.ensure_fsm(task)
+    handler._send_json({"status": "ok", "fsm": composition.fsm_summary(task)})
 
 
 def handle_human_queue(handler):
@@ -683,15 +737,6 @@ def handle_human_queue_resolve(handler, item_id: str):
 
 def handle_task_fsm_action(handler, task_id: str, action: str):
     """POST /api/tasks/<id>/fsm/{rollback|skip|cancel|pause|priority}"""
-    from lib.adapters.orchestration.task_fsm import (
-        apply_cancel,
-        apply_pause,
-        apply_rollback,
-        apply_skip,
-        ensure_fsm,
-        fsm_summary,
-    )
-
     tracker = TaskTracker(handler.data_dir)
     task = tracker.get(task_id)
     if not task:
@@ -709,24 +754,24 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
             code = 400
             handler._send_json({"status": "error", **outcome}, code)
             return
+        append_task_event(task, "fsm:approve_plan", actor="manager", note=reason)
         json_write(os.path.join(handler.data_dir, "tasks", f"{task_id}.json"), task)
         handler._send_json({
             "status": "ok",
-            "fsm": fsm_summary(task),
+            "fsm": composition.fsm_summary(task),
             "dispatch_ok": outcome.get("dispatch_ok"),
             "action": outcome.get("action"),
         })
         return
 
-    if action == "accept":
-        from lib.application.orchestration.actions import apply_accept
+    if action == "approve-join":
         from lib.application.orchestration.step_dispatch import dispatch_fsm_step
-        from lib.adapters.orchestration.task_fsm import mark_step_dispatched
 
-        outcome = apply_accept(task, body, data_dir=handler.data_dir)
+        outcome = composition.apply_approve_join(task, body, data_dir=handler.data_dir)
         if not outcome.get("ok"):
             handler._send_json({"status": "error", **outcome}, 400)
             return
+        append_task_event(task, "fsm:approve_join", actor="manager", note=reason)
         json_write(os.path.join(handler.data_dir, "tasks", f"{task_id}.json"), task)
         dispatch_ok = None
         nxt = outcome.get("next_step")
@@ -736,27 +781,56 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
                 summary=body.get("reason") or task.get("summary", ""),
             )
             if dispatch_ok:
-                mark_step_dispatched(nxt)
+                composition.mark_step_dispatched(nxt)
                 json_write(os.path.join(handler.data_dir, "tasks", f"{task_id}.json"), task)
         handler._send_json({
             "status": "ok",
-            "fsm": fsm_summary(task),
+            "fsm": composition.fsm_summary(task),
+            "action": outcome.get("action"),
+            "dispatch_ok": dispatch_ok,
+            "next_person": outcome.get("next_person"),
+        })
+        return
+
+    if action == "accept":
+        from lib.application.orchestration.actions import apply_accept
+        from lib.application.orchestration.step_dispatch import dispatch_fsm_step
+
+        outcome = apply_accept(task, body, data_dir=handler.data_dir)
+        if not outcome.get("ok"):
+            handler._send_json({"status": "error", **outcome}, 400)
+            return
+        append_task_event(task, "fsm:accept", actor="manager", note=reason)
+        json_write(os.path.join(handler.data_dir, "tasks", f"{task_id}.json"), task)
+        dispatch_ok = None
+        nxt = outcome.get("next_step")
+        if nxt:
+            dispatch_ok = dispatch_fsm_step(
+                handler.data_dir, task_id, nxt,
+                summary=body.get("reason") or task.get("summary", ""),
+            )
+            if dispatch_ok:
+                composition.mark_step_dispatched(nxt)
+                json_write(os.path.join(handler.data_dir, "tasks", f"{task_id}.json"), task)
+        handler._send_json({
+            "status": "ok",
+            "fsm": composition.fsm_summary(task),
             "action": outcome.get("action"),
             "dispatch_ok": dispatch_ok,
         })
         return
 
     if action == "rollback":
-        outcome = apply_rollback(
+        outcome = composition.apply_rollback(
             task,
             to_step=body.get("to_step"),
             to_person=body.get("to_agent") or body.get("to_person"),
             reason=reason,
         )
     elif action == "skip":
-        outcome = apply_skip(task, reason=reason)
+        outcome = composition.apply_skip(task, reason=reason)
     elif action == "cancel":
-        outcome = apply_cancel(
+        outcome = composition.apply_cancel(
             task, reason=reason, data_dir=handler.data_dir, agents=handler.agents,
         )
     elif action == "continue":
@@ -767,19 +841,21 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
         )
         if outcome.get("ok"):
             task = tracker.get(task_id) or task
-            ensure_fsm(task)
+            append_task_event(task, "fsm:continue", actor="manager", note=reason)
+            json_write(os.path.join(handler.data_dir, "tasks", f"{task_id}.json"), task)
+            composition.ensure_fsm(task)
             handler._send_json({
                 "status": "ok",
                 "action": outcome.get("action"),
-                "fsm": fsm_summary(task),
+                "fsm": composition.fsm_summary(task),
                 "dispatch_ok": outcome.get("dispatch_ok"),
                 "step_id": outcome.get("step_id"),
             })
             return
     elif action == "pause":
-        outcome = apply_pause(task, reason=reason)
+        outcome = composition.apply_pause(task, reason=reason)
     elif action == "priority":
-        ensure_fsm(task)
+        composition.ensure_fsm(task)
         p = body.get("priority")
         if p is None:
             handler._send_json({"error": "missing priority"}, 400)
@@ -795,12 +871,21 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
         return
 
     task_path = os.path.join(handler.data_dir, "tasks", f"{task_id}.json")
+    append_task_event(
+        task,
+        "fsm:" + action.replace("-", "_"),
+        actor="manager",
+        note=reason,
+        data={
+            "to_step": body.get("to_step") or "",
+            "to_agent": body.get("to_agent") or body.get("to_person") or "",
+        },
+    )
     json_write(task_path, task)
 
     dispatch_ok = None
     if action == "rollback" and outcome.get("next_step"):
         from lib.application.orchestration.step_dispatch import dispatch_fsm_step
-        from lib.adapters.orchestration.task_fsm import mark_step_dispatched
 
         nxt = outcome["next_step"]
         dispatch_ok = dispatch_fsm_step(
@@ -810,7 +895,7 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
             summary=reason or task.get("summary", ""),
         )
         if dispatch_ok:
-            mark_step_dispatched(nxt)
+            composition.mark_step_dispatched(nxt)
             json_write(task_path, task)
         else:
             from lib.infra.mbus_log import warn
@@ -819,7 +904,7 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
     handler._send_json({
         "status": "ok",
         "action": outcome.get("action"),
-        "fsm": fsm_summary(task),
+        "fsm": composition.fsm_summary(task),
         "next_step": outcome.get("next_step"),
         "dispatch_ok": dispatch_ok,
     })

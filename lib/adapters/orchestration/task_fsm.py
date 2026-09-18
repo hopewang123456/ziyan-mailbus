@@ -13,16 +13,17 @@ import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
-from lib.application.orchestration.role_flow import get_next_role, pick_person_for_role
-from lib.application.orchestration.pipeline.step import (
+from lib.composition import get_next_role, pick_person_for_role  # 跨层解耦
+from lib.domain.pipeline_step import (
+    is_role_pipeline_task,
+    planned_agents_remaining,
+    planned_role_types_remaining,
     step_agent,
     step_role_type,
-    step_role_zh,
-    is_role_pipeline_task,
 )
 from lib.domain.fsm import StepFsmState, TaskFsmState
-from lib.infra.utils import _now_iso, json_read, json_write
-from lib.application.orchestration.tracker import _parse_iso_dt
+from lib.infra.constants import PROJECT_ROOT_STR
+from lib.infra.utils import _now_iso, json_read, json_write, parse_iso_dt
 
 # ── 状态枚举：定义在 lib.domain.fsm（此处再导出供既有 import）─────────────
 
@@ -51,7 +52,7 @@ _LEGACY_TO_FSM = {
 
 # ── 路径与 ID（re-export 框架层）──────────────────────────────────────────
 
-from lib.application.orchestration.pipeline.results import (
+from lib.infra.pipeline_results import (
     load_config as load_pipeline_config,
     result_paths_to_try,
     step_result_dir,
@@ -100,19 +101,25 @@ def ensure_fsm(task: dict, *, default_priority: int = 50) -> dict:
         step.setdefault("step", sn)
         step.setdefault("step_id", _make_step_id(sn, int(step.get("attempt") or 1)))
         legacy = (step.get("status") or "running").lower()
-        if not step.get("fsm_state"):
+        terminal_legacy = {"completed", "done", "failed", "skipped"}
+        # status 已是终态时以 status 为准，避免 stale fsm_state=awaiting_result 把 completed 打回 running
+        if legacy in terminal_legacy:
+            mapped = _LEGACY_TO_FSM.get(legacy)
+            if mapped:
+                step["fsm_state"] = mapped.value
+        elif not step.get("fsm_state"):
             step["fsm_state"] = _LEGACY_TO_FSM.get(legacy, StepFsmState.PENDING).value
         step.setdefault("attempt", 1)
         tid = task.get("task_id") or task.get("id") or ""
         if tid and not step.get("result_ref"):
             step["result_ref"] = f"msg-results/{tid}/step-{step['step_id']}.json"
-        # legacy status 与 fsm 同步（running 步骤）
+        # legacy status 与 fsm 同步（running 步骤）；终态 status 不再被覆盖
         if step.get("fsm_state") in (
             StepFsmState.QUEUED.value,
             StepFsmState.DISPATCHED.value,
             StepFsmState.IN_PROGRESS.value,
             StepFsmState.AWAITING_RESULT.value,
-        ):
+        ) and legacy not in terminal_legacy:
             step["status"] = "running"
 
     active = get_active_step(task)
@@ -122,7 +129,7 @@ def ensure_fsm(task: dict, *, default_priority: int = 50) -> dict:
 
 
 def get_active_step(task: dict) -> Optional[dict]:
-    """当前活跃步骤：最后一个非终态、非 superseded 的 chain 节点。"""
+    """当前活跃步骤：优先 fsm.active_step_id（非终态）；否则最后一个非终态节点。"""
     chain = task.get("chain") or []
     terminal = {
         StepFsmState.COMPLETED.value,
@@ -130,6 +137,16 @@ def get_active_step(task: dict) -> Optional[dict]:
         StepFsmState.SKIPPED.value,
         StepFsmState.SUPERSEDED.value,
     }
+    aid = (task.get("fsm") or {}).get("active_step_id")
+    if aid:
+        for step in chain:
+            if not isinstance(step, dict):
+                continue
+            if (step.get("step_id") or step.get("step")) == aid:
+                fs = step.get("fsm_state") or step.get("status", "")
+                if fs not in terminal:
+                    return step
+                break
     for step in reversed(chain):
         if not isinstance(step, dict):
             continue
@@ -137,6 +154,27 @@ def get_active_step(task: dict) -> Optional[dict]:
         if fs not in terminal:
             return step
     return chain[-1] if chain else None
+
+
+def resolve_step_for_agent(task: dict, agent: str | None = None) -> Optional[dict]:
+    """改派/回写时定位步骤：优先匹配 agent 的非终态并行成员，再回退 get_active_step。"""
+    if agent:
+        terminal = {
+            StepFsmState.COMPLETED.value,
+            StepFsmState.FAILED.value,
+            StepFsmState.SKIPPED.value,
+            StepFsmState.SUPERSEDED.value,
+        }
+        for step in task.get("chain") or []:
+            if not isinstance(step, dict):
+                continue
+            who = step.get("to_agent") or step.get("to_person") or ""
+            if who != agent:
+                continue
+            fs = step.get("fsm_state") or step.get("status") or ""
+            if fs not in terminal:
+                return step
+    return get_active_step(task)
 
 
 def task_priority(task: dict) -> int:
@@ -173,7 +211,7 @@ def _normalize_result_timestamp(step: dict, ts: str) -> str:
     if not started:
         return out
     try:
-        if _parse_iso_dt(out) < _parse_iso_dt(started):
+        if parse_iso_dt(out) < parse_iso_dt(started):
             return now
     except Exception:
         return now
@@ -190,7 +228,7 @@ def result_mtime_ok(
     result_ts = result.get("timestamp") or result.get("updated_at") or ""
     if step_started and result_ts:
         try:
-            return _parse_iso_dt(result_ts) >= _parse_iso_dt(step_started)
+            return parse_iso_dt(result_ts) >= parse_iso_dt(step_started)
         except Exception:
             return True
     if step_started:
@@ -199,7 +237,7 @@ def result_mtime_ok(
         for rf in paths_to_try:
             try:
                 mtime = datetime.fromtimestamp(os.path.getmtime(rf), tz=timezone.utc)
-                return mtime >= _parse_iso_dt(step_started)
+                return mtime >= parse_iso_dt(step_started)
             except OSError:
                 continue
     return True
@@ -272,7 +310,7 @@ def _maybe_immediate_pipeline(data_dir: str, task_id: str) -> None:
         auto = cfg.get("mailbus_automation") or {}
         if auto.get("immediate_pipeline_dispatch", True) is False:
             return
-        from lib.application.orchestration.pipeline.trigger import trigger_task
+        from lib.composition import trigger_task
         from lib.infra.utils import resolve_paths
 
         agents = cfg.get("agents") or {}
@@ -282,7 +320,7 @@ def _maybe_immediate_pipeline(data_dir: str, task_id: str) -> None:
 
 
 def read_step_result(data_dir: str, task_id: str, step: dict) -> Optional[dict]:
-    from lib.application.orchestration.pipeline.results import read_result_from_paths, result_paths_to_try
+    from lib.infra.pipeline_results import read_result_from_paths, result_paths_to_try
 
     paths = result_paths_to_try(data_dir, task_id, step)
     data = read_result_from_paths(paths)
@@ -434,11 +472,10 @@ def resolve_transition(
     data_dir: str = "",
 ) -> Tuple[Optional[str], Optional[str], str]:
     """返回 (next_role, next_person, kind)。kind: advance|terminal|blocked。"""
-    from lib.application.orchestration.pipeline.routing import resolve_next_assignee, is_pipeline_terminal
-    from lib.application.orchestration.pipeline.step import planned_agents_remaining, planned_role_types_remaining
+    from lib.composition import resolve_next_assignee, is_pipeline_terminal
 
     if not data_dir:
-        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "store")
+        data_dir = os.path.join(PROJECT_ROOT_STR, "store")
 
     n_role, n_person = resolve_next_assignee(
         chain, result, current_role, conclusion, agents, data_dir=data_dir,
@@ -447,19 +484,114 @@ def resolve_transition(
         return n_role, n_person, "advance"
     if planned_role_types_remaining(chain) or planned_agents_remaining(chain):
         return None, None, "blocked"
-    crt_rt = None
-    if chain:
-        from lib.application.orchestration.pipeline.step import step_role_type
-        crt_rt = step_role_type(chain[-1])
+    crt_rt = step_role_type(chain[-1]) if chain else None
     if is_pipeline_terminal(
         current_role, conclusion, chain,
         data_dir=data_dir, current_role_type=crt_rt,
     ):
         return None, None, "terminal"
     if (conclusion or "").lower() in _BLOCKING_CONCLUSIONS:
-        nxt = get_next_role(current_role, conclusion)
+        from lib.composition import next_role_after
+        crt_rt = step_role_type(chain[-1]) if chain else None
+        nxt = next_role_after(
+            current_role, conclusion, data_dir,
+            current_role_type=int(crt_rt) if crt_rt is not None else None,
+        )
         return nxt, pick_person_for_role(nxt or "", exclude=None, data_dir=data_dir), "rollback_flow"
     return None, None, "blocked"
+
+
+def _advance_collab_join(
+    task: dict,
+    step: dict,
+    chain: List[dict],
+    current_role: str,
+    to_person: str,
+    summary: str,
+    cj: dict,
+    *,
+    data_dir: str,
+) -> Dict[str, Any]:
+    """并行组全部完成后创建 join 步骤并 advance。"""
+    from lib.infra.role_types import role_type_to_zh
+    from lib.composition import pick_person_for_role
+
+    join_role = role_type_to_zh(int(cj["join_role_type"]), data_dir)
+    join_person = pick_person_for_role(
+        join_role,
+        exclude={s.get("to_person") for s in chain if s.get("to_person")},
+        data_dir=data_dir,
+    )
+    if not join_person:
+        task["fsm"]["state"] = TaskFsmState.BLOCKED.value
+        return {"ok": False, "error": "no_assignee", "action": "blocked", "reason": "no_join_assignee"}
+    nxt = create_next_step(
+        task,
+        to_role=join_role,
+        to_person=join_person,
+        from_role=current_role,
+        from_person=to_person,
+        reason=(summary or "collab join")[:200],
+        role_type=int(cj["join_role_type"]),
+    )
+    chain.append(nxt)
+    task["assignee"] = join_person
+    task["fsm"]["state"] = TaskFsmState.EXECUTING.value
+    task["fsm"]["active_step_id"] = nxt["step_id"]
+    task["fsm"].pop("substate", None)
+    task["fsm"].pop("join_pending", None)
+    if task["fsm"].get("reason") in ("join_gate_review", "join_gate_not_supported"):
+        task["fsm"].pop("reason", None)
+    task["status"] = "running"
+    _append_history(task, "advance", {
+        "from_step": step.get("step_id"),
+        "to_step": nxt["step_id"],
+        "to_person": join_person,
+        "kind": "collab_join",
+    })
+    return {
+        "ok": True,
+        "action": "advance",
+        "next_step": nxt,
+        "next_person": join_person,
+        "next_role": join_role,
+        "task": task,
+    }
+
+
+def apply_approve_join(
+    task: dict,
+    body: Optional[dict] = None,
+    *,
+    data_dir: str = "",
+) -> Dict[str, Any]:
+    """管理者批准 collab join_gate=review 后推进汇合步骤。"""
+    ensure_fsm(task)
+    fsm = task.get("fsm") or {}
+    if fsm.get("substate") != "await_join_review" and fsm.get("reason") != "join_gate_review":
+        return {"ok": False, "error": "not_awaiting_join_review", "action": "noop"}
+    cj_meta = fsm.get("join_pending") or {}
+    chain = task.get("chain") or []
+    step = None
+    cj: dict = {}
+    for s in reversed(chain):
+        if s.get("collab_join") and s.get("parallel_group"):
+            step = s
+            cj = dict(s.get("collab_join") or {})
+            break
+    if not step or not cj:
+        return {"ok": False, "error": "no_collab_join_meta", "action": "blocked"}
+    if cj_meta.get("join_role_type") is not None:
+        cj["join_role_type"] = cj_meta.get("join_role_type") or cj.get("join_role_type")
+    current_role = step.get("to_role") or ""
+    to_person = step.get("to_person") or step.get("to_agent") or ""
+    note = (body or {}).get("reason") or "manager approve join"
+    out = _advance_collab_join(
+        task, step, chain, current_role, to_person, note, cj, data_dir=data_dir,
+    )
+    if out.get("ok"):
+        _append_history(task, "approve_join", {"reviewer": (body or {}).get("reviewer") or "manager"})
+    return out
 
 
 def apply_submit(
@@ -471,7 +603,7 @@ def apply_submit(
 ) -> Dict[str, Any]:
     """处理步骤结果提交 → 完成当前步 / 推进 / 阻塞 / 终态。"""
     ensure_fsm(task)
-    step = get_active_step(task)
+    step = resolve_step_for_agent(task, result.get("agent"))
     if not step:
         return {"ok": False, "error": "no_active_step"}
 
@@ -485,17 +617,20 @@ def apply_submit(
         return {"ok": False, "error": reason}
 
     conclusion = (result.get("conclusion") or "done").lower()
-    current_role = step.get("to_role") or step_role_zh(step)
+    # step_role_zh 回退链：step.to_role → role_type→zh dict → 默认 "方案设计师"
+    # 这里不需要 chain._agent_role_map（agent 名回退），因为 step.get("to_role") 已覆盖主流场景。
+    from lib.domain.pipeline_step import _ROLE_TYPE_ZH as _STEP_ROLE_ZH
+    rt_fallback = step.get("role_type")
+    role_fallback = _STEP_ROLE_ZH.get(int(rt_fallback), "方案设计师") if rt_fallback is not None else "方案设计师"
+    current_role = step.get("to_role") or role_fallback
     to_person = step_agent(step)
     summary = result.get("summary", "") or ""
 
-    from lib.application.orchestration.pipeline.step import step_role_type
     from lib.infra.utils import json_read as _json_read
 
     cfg = _json_read(os.path.join(data_dir, "config.json"), {}) if data_dir else {}
     crt_rt = step_role_type(step)
-    from lib.application.ops.verify.runner import run_step_verify
-    from lib.application.harness.escalation import notify_verify_failure
+    from lib.composition import run_step_verify, notify_verify_failure
     from lib.adapters.orchestration.automation import bump_retry_count, retry_exceeded, verify_fail_auto_retry
 
     v_ok, v_err, v_meta = run_step_verify(
@@ -558,9 +693,9 @@ def apply_submit(
     })
 
     if not data_dir:
-        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "store")
+        data_dir = os.path.join(PROJECT_ROOT_STR, "store")
 
-    from lib.application.orchestration.decomposition import block_for_clarifications, handle_design_step_decomposition
+    from lib.composition import block_for_clarifications, handle_design_step_decomposition
 
     dec_out = handle_design_step_decomposition(task, step, result, data_dir=data_dir)
     if dec_out:
@@ -578,12 +713,73 @@ def apply_submit(
         if action == "subtasks_applied":
             _append_history(task, "decomposition_applied", {"count": dec_out.get("count")})
 
-    from lib.application.workflow.engine import maybe_block_after_step
+    from lib.composition import maybe_block_after_step
 
     wf_block = maybe_block_after_step(task, step, result, data_dir=data_dir)
     if wf_block:
         _append_history(task, "workflow_gate", wf_block)
         return {"ok": True, "action": "blocked", "task": task, "reason": wf_block.get("gate_id")}
+
+    # ── P0-1：collab 并行组成员完成 → 组内等待 / 汇合 join ──────────────
+    cj = step.get("collab_join") or {}
+    if step.get("parallel_group") and cj:
+        gid = step["parallel_group"]
+        total = int(cj.get("total") or 0)
+        terminal = {
+            StepFsmState.COMPLETED.value,
+            StepFsmState.SKIPPED.value,
+            StepFsmState.SUPERSEDED.value,
+        }
+        done_cnt = 0
+        failed_member = False
+        pending_members = []
+        for s in chain:
+            if not (s.get("parallel_group") == gid):
+                continue
+            st = s.get("fsm_state") or s.get("status") or ""
+            if st == StepFsmState.FAILED.value:
+                failed_member = True
+            elif st in terminal:
+                done_cnt += 1
+            else:
+                pending_members.append(s)
+        if failed_member:
+            task["fsm"]["state"] = TaskFsmState.BLOCKED.value
+            _append_history(task, "collab_member_failed", {
+                "group": gid, "step_id": step.get("step_id"),
+            })
+            return {"ok": True, "action": "blocked", "task": task, "reason": "collab_member_failed"}
+        if done_cnt < total:
+            # 还有兄弟在跑：不推进，等待全部完成（active 指到最后一个待办成员）
+            task["fsm"]["state"] = TaskFsmState.EXECUTING.value
+            if pending_members:
+                task["fsm"]["active_step_id"] = pending_members[-1].get("step_id")
+            _append_history(task, "parallel_await", {
+                "group": gid, "resolved": done_cnt, "total": total,
+            })
+            return {"ok": True, "action": "parallel_await", "task": task}
+
+        gate = cj.get("join_gate") or "auto"
+        if gate == "review":
+            task["fsm"]["state"] = TaskFsmState.BLOCKED.value
+            task["fsm"]["substate"] = "await_join_review"
+            task["fsm"]["reason"] = "join_gate_review"
+            task["fsm"]["join_pending"] = {
+                "group": gid,
+                "join_role_type": cj.get("join_role_type"),
+                "join_gate": gate,
+            }
+            _append_history(task, "await_join_review", {"group": gid, "gate": gate})
+            return {"ok": True, "action": "await_join_review", "task": task, "reason": "join_gate_review"}
+        if gate != "auto":
+            task["fsm"]["state"] = TaskFsmState.BLOCKED.value
+            task["fsm"]["reason"] = "join_gate_not_supported"
+            _append_history(task, "join_gate_not_supported", {"gate": gate})
+            return {"ok": True, "action": "blocked", "task": task, "reason": "join_gate_not_supported"}
+
+        return _advance_collab_join(
+            task, step, chain, current_role, to_person, summary, cj, data_dir=data_dir,
+        )
 
     n_role, n_person, kind = resolve_transition(
         chain, result, current_role, conclusion, agents, data_dir=data_dir,
@@ -602,7 +798,7 @@ def apply_submit(
             next_role_type = zh_to_role_type(n_role, data_dir)
 
     if kind == "terminal":
-        from lib.application.orchestration.actions import enter_accepting_or_succeed
+        from lib.composition import enter_accepting_or_succeed
 
         outcome = enter_accepting_or_succeed(task, result, data_dir=data_dir)
         if outcome == "auto_accept":

@@ -11,9 +11,8 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
-
-from lib.infra.constants import MAILBUS_ROOT
 
 # auth 块允许的 mode（显式配置）
 AUTH_MODES = ("none", "token", "basic", "header")
@@ -52,17 +51,37 @@ def _auth_from_block(auth_block: dict, data_dir: str) -> dict:
 
 
 def openclaw_gateway_token() -> str:
-    """OpenClaw gateway token：env > openclaw.json gateway.auth；无则 change-me。"""
+    """OpenClaw gateway token：env > OPENCLAW_* 路径 / 家目录 openclaw.json；未配置返回空串。
+
+    不猜测兄弟仓路径；不回落伪默认 change-me（遗留值仍视为无效）。
+    """
     env_token = os.environ.get("OPENCLAW_GATEWAY_TOKEN", "").strip()
-    if env_token:
+    if env_token and env_token != "change-me":
         return env_token
+    if env_token == "change-me":
+        return ""
     import json
 
-    candidates = [
-        str(MAILBUS_ROOT.parent / "openclaw_space" / "data" / ".openclaw" / "openclaw.json"),
-        os.path.expanduser("~/.openclaw-data/openclaw.json"),
-        os.path.expanduser("~/.openclaw/openclaw.json"),
-    ]
+    candidates: list[str] = []
+    oc_cfg = (os.environ.get("OPENCLAW_CONFIG") or "").strip()
+    if oc_cfg:
+        candidates.append(oc_cfg)
+    ws = (os.environ.get("OPENCLAW_WORKSPACE") or "").strip()
+    if ws:
+        base = Path(ws)
+        candidates.extend(
+            [
+                str(base / "data" / ".openclaw" / "openclaw.json"),
+                str(base / ".openclaw" / "openclaw.json"),
+                str(base / "openclaw.json"),
+            ]
+        )
+    candidates.extend(
+        [
+            os.path.expanduser("~/.openclaw-data/openclaw.json"),
+            os.path.expanduser("~/.openclaw/openclaw.json"),
+        ]
+    )
     for oc_path in candidates:
         try:
             if os.path.isfile(oc_path):
@@ -71,10 +90,12 @@ def openclaw_gateway_token() -> str:
                 gw = oc.get("gateway", {})
                 auth = gw.get("auth", {})
                 if auth.get("mode") == "token" and auth.get("token"):
-                    return str(auth["token"]).strip()
+                    tok = str(auth["token"]).strip()
+                    if tok and tok != "change-me":
+                        return tok
         except Exception:
             pass
-    return "change-me"
+    return ""
 
 
 def resolve_agent_auth(agent_cfg: dict, agent_id: str, data_dir: str = "") -> dict:

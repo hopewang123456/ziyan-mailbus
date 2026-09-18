@@ -76,6 +76,36 @@ def init_chain_from_planned(
     if not planned_chain:
         raise ValueError("empty planned_chain")
 
+    # ── collab 并行组：头部为 parallel 项 → 折叠为 [首成员] + 尾序，组/汇合元数据入 meta
+    _collab_join_meta: Optional[dict] = None
+    if (planned_chain[0].get("collab_mode") or "") == "parallel":
+        gid = planned_chain[0].get("parallel_group") or "g1"
+        members: List[dict] = []
+        k = 0
+        while k < len(planned_chain) and (
+            planned_chain[k].get("collab_mode") == "parallel"
+            and (planned_chain[k].get("parallel_group") or gid) == gid
+        ):
+            members.append(planned_chain[k])
+            k += 1
+        join_item = planned_chain[k] if (
+            k < len(planned_chain) and (planned_chain[k].get("collab_mode") or "") == "join"
+        ) else {}
+        tail = planned_chain[k + 1:] if join_item else planned_chain[k:]
+        if not join_item or "role_type" not in join_item:
+            raise ValueError("collab parallel group requires a join step")
+        planned_chain = [members[0]] + list(tail)
+        _collab_join_meta = {
+            "group_id": gid,
+            "total": len(members),
+            "join_role_type": int(join_item["role_type"]),
+            "join_gate": str(join_item.get("join_gate") or "auto"),
+            "members": [
+                {"role_type": int(m["role_type"]), "pin_agent": m.get("pin_agent")}
+                for m in members
+            ],
+        }
+
     first = planned_chain[0]
     rt0 = int(first["role_type"])
     pin0 = first.get("pin_agent")
@@ -139,6 +169,10 @@ def init_chain_from_planned(
         if parallel_item.get("collab_mode"):
             step2["collab_mode"] = parallel_item["collab_mode"]
         chain.append(step2)
+
+    if _collab_join_meta:
+        chain[0]["collab_join"] = _collab_join_meta
+        chain[0]["parallel_group"] = _collab_join_meta["group_id"]
 
     return chain
 

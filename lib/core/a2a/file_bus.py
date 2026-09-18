@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from lib.infra.constants import MAILBUS_ROOT
-from lib.application.orchestration.pipeline.results import step_result_path
+from lib.infra.pipeline_results import step_result_path  # 2026-09 治理下沉
 from .step_result_io import write_step_result_file
 from lib.infra.utils import json_write, json_read, jsonl_append, _now_iso
 from .types import DispatchContext, DispatchResult

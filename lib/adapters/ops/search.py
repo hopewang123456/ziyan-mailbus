@@ -125,8 +125,13 @@ def search(data_dir: str, query_str: str = "", from_agent: str = "",
 
     if query_str:
         conditions.append("messages MATCH ?")
-        # FTS5 查询语法：用双引号精确匹配，空格 OR 模糊匹配
-        params.append(query_str)
+        # FTS5 查询语法：每个词用双引号包裹成整词短语，多词 OR；
+        # 裸传入含 -/: 等字符的词会被解析为列过滤或操作符（no such column）
+        terms = [t for t in query_str.split() if t]
+        fts_query = " OR ".join(
+            '"' + t.replace('"', '""') + '"' for t in terms
+        )
+        params.append(fts_query or '""')
 
     if from_agent:
         conditions.append("from_agent = ?")

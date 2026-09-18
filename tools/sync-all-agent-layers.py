@@ -29,9 +29,9 @@ def _sync_framework_workspace(
 ) -> int:
     sync_py = ROOT / "tools" / "sync_framework_workspace_skills.py"
     if not sync_py.exists():
-        # 新架构下 workspace skills 由运行时 junction 挂载（Vault SoT），
+        # 新架构下 workspace skills 由配置关联的运行时路径承载（.env / 设置页），
         # 构建时复制脚本已移除，直接跳过。
-        print(f"[sync-all] skip workspace/{agent} (runtime junction SoT)")
+        print(f"[sync-all] skip workspace/{agent} (skills via configured runtime paths)")
         return 0
     target.mkdir(parents=True, exist_ok=True)
     cmd = [
@@ -78,7 +78,7 @@ def main() -> int:
     p.add_argument("--skip-claude", action="store_true")
     p.add_argument("--skip-hermes", action="store_true")
     p.add_argument("--skip-codex", action="store_true")
-    p.add_argument("--skip-rules", action="store_true", help="skip mail/rules → store/rules mirror")
+    p.add_argument("--skip-rules", action="store_true", help="skip rules/ → store/rules mirror")
     p.add_argument(
         "--symlink",
         action="store_true",

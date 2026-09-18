@@ -1,42 +1,17 @@
-"""Webhook 推送 — 将 inbox 消息 POST 到 agent 配置的 webhook_url。"""
+"""Webhook 推送 — 将 inbox 消息 POST 到 agent 配置的 webhook_url。
 
+HTTP POST + HMAC 签名的底层 I/O 已下沉到 `lib.infra.http_webhook`；本模块只保留
+业务编排（push_via_webhook 处理 retry / mark_as_pushed / update_message_status）。
+"""
 from __future__ import annotations
 
-import hashlib
-import hmac
-import json
 import time
-import urllib.error
-import urllib.request
 from typing import Any
 
 from lib.domain.models import MsgStatus
 from lib.application.scan import mark_as_pushed, update_message_status
+from lib.infra.http_webhook import post_webhook as _post_webhook  # compat alias
 from lib.infra.utils import _now_iso
-
-
-def _sign_body(secret: str, body: bytes) -> str:
-    digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
-    return f"sha256={digest}"
-
-
-def _post_webhook(
-    webhook_url: str,
-    payload: dict[str, Any],
-    *,
-    webhook_secret: str = "",
-    timeout: float = 30.0,
-) -> int:
-    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    headers = {"Content-Type": "application/json"}
-    if webhook_secret:
-        headers["X-Mailbus-Signature"] = _sign_body(webhook_secret, body)
-    req = urllib.request.Request(webhook_url, data=body, headers=headers, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status
-    except urllib.error.HTTPError as exc:
-        return exc.code
 
 
 def push_via_webhook(

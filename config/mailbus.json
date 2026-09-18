@@ -2,7 +2,7 @@
   "schema": "mailbus-runtime-v1",
   "api_port": 9814,
   "api_host": "127.0.0.1",
-  "canonical_root": "/path/to/mail",
+  "canonical_root": "/path/to/mailbus",
   "ports": {
     "mailbus_api": 9814,
     "agentmemory": 3111,
@@ -14,10 +14,10 @@
     "claude_ttyd": [9260, 9261]
   },
   "env_chain": [
-    "mail/config/env.template",
-    "mail/.env",
-    "mail/docker-agents/.env",
-    "lib/env_bootstrap.py (Python serve/CLI)"
+    "mailbus/config/env.template",
+    "mailbus/.env",
+    "mailbus/docker-agents/.env",
+    "lib/infra/env_bootstrap.py (Python serve/CLI)"
   ],
-  "notes": "Docker compose maps ${MAILBUS_API_PORT:-9814}; native serve defaults 9814 per lib/constants.py. Do not put API keys here."
+  "notes": "Docker compose maps ${MAILBUS_API_PORT:-9814}; native serve defaults 9814. Do not put API keys here. Legacy mail/ path prefixes still resolve as aliases."
 }

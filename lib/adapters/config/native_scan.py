@@ -4,8 +4,8 @@
 输出：该 agent 在原生目录下 rule/skill/memory/identity 资产路径（含存在性），
       以及四端（windows / wsl / linux / docker）路径形态。
 
-扫描依据：`_path-map.json` 的 `junctions.mount_points`（原生目录 → Obsidian 目标
-的正式映射），叠加各框架身份文件约定（SOUL.md / CLAUDE.md / IDENTITY.md）。
+扫描依据：实例 `install_path` + 各框架身份文件约定；可选
+`AGENT_VAULT_ROOT/_path-map.json`（junctions.mount_points）作增强，非硬依赖。
 """
 from __future__ import annotations
 
@@ -29,6 +29,7 @@ _IDENTITY_FILENAME = {
     "claude_code": "CLAUDE.md",
     "cursor": "CLAUDE.md",
     "cline": "CLAUDE.md",
+    "dsh": "SOUL.md",
 }
 
 
@@ -323,5 +324,5 @@ def scan_agent_assets(
         "assets": [_with_targets(it) for it in all_items],
         "found": [_with_targets(it) for it in all_items if it.get("exists")],
         "missing": [_with_targets(it) for it in all_items if not it.get("exists")],
-        "note": "扫描依据 _path-map.json junctions.mount_points + 框架身份文件约定",
+        "note": "扫描依据 install_path + 框架身份文件约定；可选 AGENT_VAULT_ROOT/_path-map.json",
     }

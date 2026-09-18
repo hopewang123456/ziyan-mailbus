@@ -14,10 +14,15 @@ from write_env import write_env
 
 
 def _resolve_mailbus_root(prefix: Path) -> Path:
-    for candidate in (prefix / "mailbus-core", prefix / "mail", Path(__file__).resolve().parent.parent):
+    for candidate in (
+        prefix / "mailbus",
+        prefix / "mailbus-core",
+        prefix / "mail",
+        Path(__file__).resolve().parent.parent,
+    ):
         if (candidate / "tools" / "mailbus.py").is_file():
             return candidate.resolve()
-    return (prefix / "mailbus-core").resolve()
+    return (prefix / "mailbus").resolve()
 
 
 def _import_env(prefix: Path, root: Path, env_path: Path) -> dict[str, str]:
@@ -34,10 +39,11 @@ def _import_env(prefix: Path, root: Path, env_path: Path) -> dict[str, str]:
     load_mailbus_env_keys()
     env.update({k: v for k, v in os.environ.items() if k.startswith("MAILBUS_") or k in (
         "OPENCLAW_WORKSPACE", "OPENCODE_ROOT", "NODE_MODULES", "HERMES_DATA", "TEAM_PACK_ROOT",
-        "CODEX_WORKSPACE", "COMPOSE_PROJECT_NAME",
+        "CODEX_WORKSPACE", "CODEX_REVIEW_WORKSPACE", "CODEX_SKILLS", "DSH_WORKSPACE",
+        "COMPOSE_PROJECT_NAME",
     )})
     env["MAILBUS_ROOT"] = to_wsl_path(root)
-    data = env.get("MAILBUS_DATA") or to_wsl_path(prefix / "mail" / "store")
+    data = env.get("MAILBUS_DATA") or to_wsl_path(root / "store")
     env["MAILBUS_DATA"] = data
     return env
 

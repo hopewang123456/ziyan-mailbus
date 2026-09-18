@@ -1,19 +1,8 @@
-"""推送阶段短生命周期上下文（供 model_flag / ollama 解析 data_dir）。"""
-from __future__ import annotations
+"""Compat shim — 实际实现已下沉到 `lib.infra.push_context`。"""
+from lib.infra.push_context import (  # noqa: F401
+    set_push_context,
+    get_push_context,
+    clear_push_context,
+)
 
-from typing import Any, Optional
-
-_ctx: dict[str, Any] = {}
-
-
-def set_push_context(*, data_dir: str = "", config: Optional[dict] = None) -> None:
-    _ctx["data_dir"] = data_dir
-    _ctx["config"] = config
-
-
-def get_push_context() -> dict[str, Any]:
-    return dict(_ctx)
-
-
-def clear_push_context() -> None:
-    _ctx.clear()
+__all__ = ["set_push_context", "get_push_context", "clear_push_context"]

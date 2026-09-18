@@ -254,6 +254,7 @@ function LeafField({
               </option>
             ))}
           </select>
+          {spec.help && <p className="mt-1 text-[10px] text-mute">{spec.help}</p>}
         </label>
       );
     }

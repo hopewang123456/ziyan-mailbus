@@ -6,9 +6,11 @@ mailbus HTTP API 包
 
 import os
 import json
+import sys
 from http.server import HTTPServer
 from socketserver import ThreadingMixIn
 
+from lib import composition  # 跨层解耦：api→adapter 通过 composition 拿服务
 from .base import MailbusAPIHandler
 
 
@@ -16,6 +18,71 @@ class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     """多线程 HTTP 服务器"""
     allow_reuse_address = True
     daemon_threads = True
+
+
+def _connect_ok(family: int, addr: str, port: int) -> bool:
+    """对 addr:port 做一次 TCP connect 探测，成功返回 True。"""
+    import socket
+
+    s = socket.socket(family, socket.SOCK_STREAM)
+    s.settimeout(0.5)
+    try:
+        s.connect((addr, port))
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
+def _port_occupied(host: str, port: int) -> bool:
+    """检测 host:port 是否已被监听（TCP connect 探测，跨平台）。
+
+    用 connect 而非 bind 探测：Windows 下 SO_REUSEADDR 会让多个进程共享端口，
+    而 TIME_WAIT 状态又会干扰 bind 探测；connect 只在真正有 LISTENING 时成功，
+    可精确区分「已占用」与「仅 TIME_WAIT」，避免 watchdog 重启时误判。
+
+    地址归一化：
+      - localhost → 127.0.0.1（回环），与 127.0.0.1 等价；
+      - 空 / 0.0.0.0 / * / :: → 通配，会绑定**所有**网卡，因此需探测
+        回环 + 本机全部非回环 IP，任一被监听即视为冲突；
+      - 具体 IP / 域名 → 仅探测该地址（0.0.0.0 通配已占用时，connect 具体
+        地址同样会被接受，故一并覆盖）。
+
+    保证 agent 既可接入本地（127.0.0.1 / 0.0.0.0 / localhost），也可接入
+    外部 IP:port 时，不会因地址归一化不同而漏判重复。
+    """
+    import socket
+
+    host = (host or "0.0.0.0").strip()
+    if host.lower() == "localhost":
+        host = "127.0.0.1"
+
+    targets: list[tuple[int, str]] = []
+    if host in ("0.0.0.0", "::", "*"):
+        # 通配：覆盖回环 + 本机所有非回环 IPv4
+        addrs: set[str] = {"127.0.0.1", "::1"}
+        try:
+            _name, _alias, resolved = socket.gethostbyname_ex(socket.gethostname())
+        except OSError:
+            resolved = []
+        addrs.update(a for a in resolved if not a.startswith("127."))
+        for addr in sorted(addrs):
+            family = socket.AF_INET6 if ":" in addr else socket.AF_INET
+            targets.append((family, addr))
+    else:
+        # 具体地址：getaddrinfo 解析域名 / IPv4 / IPv6
+        try:
+            infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        except OSError:
+            return False
+        for family, _st, _proto, _cn, sockaddr in infos:
+            targets.append((family, sockaddr[0]))
+
+    for family, addr in targets:
+        if _connect_ok(family, addr, port):
+            return True
+    return False
 
 
 def serve(data_dir: str, agents: dict, agent_types: dict = None,
@@ -29,10 +96,18 @@ def serve(data_dir: str, agents: dict, agent_types: dict = None,
     if port is None:
         port = DEFAULT_API_PORT
 
+    if _port_occupied(host, port):
+        print(f"✗ {host}:{port} 已被占用（已有 mailbus serve 在运行）。", file=sys.stderr)
+        print("  为避免多进程共享端口导致假死，请先停掉多余实例后再启动。", file=sys.stderr)
+        raise SystemExit(1)
+
     try:
-        from lib.adapters.frameworks.entry_point_discovery import ensure_framework_plugins_loaded
-        from lib.adapters.integrations.entry_point_discovery import ensure_integration_plugins_loaded
-        from lib.composition import bind_data_dir
+        # 跨层解耦：api→adapter 通过 composition 拿服务（2026-09 治理）
+        from lib.composition import (
+            bind_data_dir,
+            ensure_framework_plugins_loaded,
+            ensure_integration_plugins_loaded,
+        )
 
         bind_data_dir(data_dir)
         ensure_framework_plugins_loaded(data_dir=data_dir, config=config)
@@ -82,7 +157,8 @@ def serve(data_dir: str, agents: dict, agent_types: dict = None,
 
     hub = None
     if config:
-        from lib.adapters.ops.scheduler import SchedulerHub
+        # 跨层解耦：api→adapter 通过 composition 拿服务
+        SchedulerHub = composition.scheduler_hub_factory()
         hub = SchedulerHub(data_dir, config)
         hub.start()
 

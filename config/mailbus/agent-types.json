@@ -19,6 +19,10 @@
     "push": "docker exec CONTAINER codex exec 'MSG'",
     "description": "OpenAI Codex CLI（Docker）"
   },
+  "dsh": {
+    "push": "docker exec CONTAINER dsh --profile headless 'MSG'",
+    "description": "DeepSeek Harness (dsh) — headless 单次执行"
+  },
   "cline": {
     "push": "docker exec CONTAINER cline 'MSG'",
     "description": "Cline CLI（legacy）"

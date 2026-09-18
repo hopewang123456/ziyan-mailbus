@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { api } from "../lib/api";
+import { api, formatSettingsEffects } from "../lib/api";
 import { ErrorAlert } from "./ErrorAlert";
 
 /**
  * 资产路径（28b）— mailbus 自身 skills / rules / identity 三项。
- * 默认 = 仓库内 junction 路径（skills|rules|identities）；自定义 = Obsidian Vault 目录。
+ * 默认 = 仓内 skills|rules|identities（公开 example）；自定义 = 设置页绝对路径（可指向 Vault）。
  * 保存走 /api/settings/section/asset_paths（后端写 .env，default 删除键）。
  */
 
@@ -66,7 +66,7 @@ export function AssetPathsPanel() {
     });
     setBusy(false);
     if (r.ok) {
-      setMsg(`已保存（需重启生效）: ${(r.data.updated || []).join(", ")}`);
+      setMsg(formatSettingsEffects(r.data, `已保存（需重启生效）: ${(r.data.updated || []).join(", ")}`));
       void load();
     } else setErr(r.error);
   }
@@ -83,7 +83,7 @@ export function AssetPathsPanel() {
         </button>
       </div>
       <p className="mt-3 text-[13px] leading-relaxed text-mute">
-        默认 = 仓库内 junction；自定义 = Obsidian Vault 目录，写入 .env。
+        默认 = 仓库内 `skills/` `rules/` `identities/`；自定义 = 本机绝对路径，写入配置（及可选 `.env`）。
         <span className="text-amber-signal"> 需重启 mailbus 生效。</span>
       </p>
       {err && <ErrorAlert message={err} />}

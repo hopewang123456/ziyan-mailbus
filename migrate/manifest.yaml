@@ -1,47 +1,49 @@
-# Mailbus 迁移 manifest — 各路径独立声明，无单一 REPO_ROOT
+﻿# Mailbus migrate manifest — paths declared independently (no single REPO_ROOT assumption)
 #
 # tier: required | framework | infra
-# env: 写入 .env 的变量名
-# path: 相对 install_prefix 的默认子路径（可被 --mapping 覆盖）
+# env:  variable written into .env
+# path: default subpath relative to install_prefix (overridable via --mapping)
 
 required:
   - env: MAILBUS_ROOT
-    description: mail 源码树
-    path: mail
+    description: mailbus source root
+    path: mailbus
   - env: MAILBUS_DATA
-    description: store + run 运行时数据
-    path: mail/store
+    description: store + run runtime data
+    path: mailbus/store
 
 infra:
   - env: NODE_MODULES
-    description: AgentMemory npm 包（@agentmemory/agentmemory）
+    description: AgentMemory npm package (@agentmemory/agentmemory)
     path: node_modules
     optional: true
   - env: HERMES_DATA
-    description: Hermes secrets 与 shared-memory
-    path: hermes-data/.hermes
+    description: Hermes runtime root (profiles / memos-plugin / shared-memory); set explicitly in .env or settings
+    path: hermes-data
     optional: true
   - env: OPENCLAW_WORKSPACE
-    description: OpenClaw 容器 /workspace
-    path: openclaw_space
+    description: OpenClaw container /workspace (neutral default name under install_prefix)
+    path: openclaw
     optional: true
   - env: OPENCODE_ROOT
-    description: OpenCode 工作区
+    description: OpenCode workspace
     path: opencode
     optional: true
   - env: TEAM_PACK_ROOT
-    description: team-pack 组织配置
+    description: team-pack org config
     path: team-pack
     optional: true
 
-# framework agent workspace — 也可在 import 时从 transport.json 推导
+# framework agent workspace — can also be derived from transport.json on import
 framework_workspaces:
   - env: CODEX_WORKSPACE
     agent_id: agent-f
-    default_subpath: agent-f
-
-path_rewrite_globs:
-  - "store/**/*.json"
-  - "store/**/*.md"
-  - "access/transport/**/*.json"
-  - "access/hermes/.sync/**/*"
+    path: codex
+    optional: true
+  - env: CODEX_REVIEW_WORKSPACE
+    agent_id: agent-e
+    path: codex-review
+    optional: true
+  - env: DSH_WORKSPACE
+    path: dsh
+    optional: true

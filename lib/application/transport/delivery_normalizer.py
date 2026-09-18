@@ -27,7 +27,7 @@ def _delivery_cfg(config: Optional[dict]) -> dict:
 
 
 def load_delivery_config(config: Optional[dict] = None) -> dict:
-    """合并 store config 与 mail/config/frameworks/opencode/delivery.json。"""
+    """合并 store config 与 mailbus/config/frameworks/opencode/delivery.json。"""
     cfg = dict(_delivery_cfg(config))
     so_t = MAILBUS_ROOT / "config" / "frameworks" / "opencode" / "delivery.json"
     if so_t.is_file() and not cfg:

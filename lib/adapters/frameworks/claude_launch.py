@@ -16,9 +16,10 @@ from pathlib import Path
 from typing import Optional
 
 from lib.domain.errors import Fatal
+from lib.infra.constants import PROJECT_ROOT_STR
 from lib.infra.utils import json_read, json_write, to_wsl_path
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = PROJECT_ROOT_STR
 
 PS_HELPER = "/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe"
 LAUNCH_QUEUE_PREFIX = "__launch_queue__:"
