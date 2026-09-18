@@ -57,6 +57,7 @@ def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
 
     p = sub.add_parser("search", help="消息/目录检索")
     p.add_argument("query", nargs="?", default="", help="检索词")
+    p.add_argument("--query", dest="query_opt", default="", help="检索词（同位置参数）")
     _add_data_dir_arg(p)
     p.add_argument("--scope", choices=("messages", "catalog", "all"), default="messages")
     p.add_argument("--limit", type=int, default=20)
@@ -105,7 +106,8 @@ def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
 
     p = sub.add_parser("ack", help="确认收到消息")
     _add_data_dir_arg(p)
-    p.add_argument("--msg-id", required=True)
+    p.add_argument("msg_id_pos", nargs="?", help="消息 ID（同 --msg-id）")
+    p.add_argument("--msg-id", dest="msg_id")
     p.add_argument("--agent", required=True)
     p.set_defaults(func=cmd_ack)
 

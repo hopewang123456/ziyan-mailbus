@@ -317,6 +317,20 @@ def scan_ack_files(data_dir: str, agents: dict) -> int:
     return _scan(data_dir, agents)
 
 
+def process_ack_entry(data_dir: str, agent_name: str, ack_data: dict) -> bool:
+    """单条 ack 立即处理（CLI ack 提交即生效，不等调度器）。"""
+    from lib.adapters.results.ack_handler import process_ack as _process
+
+    return _process(data_dir, agent_name, ack_data)
+
+
+def process_mark_read_entry(data_dir: str, agent_name: str, mark_data: dict) -> bool:
+    """单条 mark_read 立即处理。"""
+    from lib.adapters.results.ack_handler import process_mark_read as _process
+
+    return _process(data_dir, agent_name, mark_data)
+
+
 def scan_forward_files(data_dir: str, agents: dict) -> int:
     from lib.adapters.results.ack_handler import scan_forward_files as _scan
 

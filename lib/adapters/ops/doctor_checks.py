@@ -804,7 +804,21 @@ def run_doctor_checks(*, mail_root: Path | None = None, wsl_distro: str = "Ubunt
     if probe_http(api_url, headers=api_headers) or probe_http(
         api_url, accept_codes=frozenset({200, 401})
     ):
-        items.append(DoctorItem("ok", "services", f"mailbus API {api_url}", ""))
+        # 二次确认：WSL localhost 转发（wslrelay）可能时通时断，单次成功不足以报 OK
+        steady = all(
+            probe_http(api_url, accept_codes=frozenset({200, 401})) for _ in range(2)
+        )
+        if steady:
+            items.append(DoctorItem("ok", "services", f"mailbus API {api_url}", ""))
+        else:
+            items.append(
+                DoctorItem(
+                    "warn",
+                    "services",
+                    f"mailbus API 间歇可达 {api_url}",
+                    "WSL localhost 转发不稳：运行 python tools/mailbus.py portproxy 或 windows/fix-wsl-localhost.ps1 后复查",
+                )
+            )
     else:
         items.append(DoctorItem("fail", "services", f"mailbus API down: {api_url}", ""))
 

@@ -112,6 +112,50 @@ def handle_tasks(handler):
         })
 
 
+def _plan_task_with_deadline(envelope: dict, *, data_dir: str, config: dict, default_timeout: float = 45.0) -> dict:
+    """plan_task 带总超时闸。
+
+    internal LLM 慢/挂时同步 HTTP 请求会假死（实测 ~6 分钟）；超时后降级为
+    Tier-0 单步兜底链（role_type=1），建单立刻返回，plan_meta 标注
+    timeout_fallback。超时秒数可经 config.mailbus_internal_llm.plan_timeout_seconds 调整。
+    """
+    import threading
+    from lib.application.orchestration.router.planner import PlanError, plan_task
+
+    llm_cfg = (config or {}).get("mailbus_internal_llm") or {}
+    try:
+        timeout = float(llm_cfg.get("plan_timeout_seconds") or default_timeout)
+    except (TypeError, ValueError):
+        timeout = default_timeout
+
+    result: dict = {}
+
+    def _run():
+        try:
+            result["out"] = plan_task(envelope, data_dir=data_dir, config=config)
+        except PlanError as exc:
+            result["error"] = exc
+        except Exception as exc:  # planner 自身异常按 plan_failed 处理
+            result["error"] = PlanError("plan_failed", f"planner crashed: {exc}")
+
+    worker = threading.Thread(target=_run, daemon=True)
+    worker.start()
+    worker.join(timeout)
+    if "out" in result:
+        return result["out"]
+    if worker.is_alive():
+        return {
+            "planned_chain": [{"role_type": 1, "reason": "plan_timeout_fallback"}],
+            "plan_meta": {
+                "method": "timeout_fallback",
+                "task_type_guess": envelope.get("task_type"),
+                "confidence": 0.1,
+                "provider_used": "none",
+            },
+        }
+    raise result.get("error") or PlanError("plan_failed", "planner failed")
+
+
 def create_task_from_envelope(data_dir: str, body: dict) -> tuple[dict, int]:
     """从 A2A Envelope 创建任务。返回 (response_body, http_status)。"""
     from lib.application.orchestration.router.envelope_validate import is_legacy_create_body, validate_envelope
@@ -159,7 +203,7 @@ def create_task_from_envelope(data_dir: str, body: dict) -> tuple[dict, int]:
             planned = expand_planned_chain_for_collab(planned, body)
         else:
             config = json_read(os.path.join(data_dir, "config.json"), {})
-            out = plan_task(body, data_dir=data_dir, config=config)
+            out = _plan_task_with_deadline(body, data_dir=data_dir, config=config)
             planned = out["planned_chain"]
             plan_meta = out["plan_meta"]
             from lib.application.orchestration.dispatch.collab_plan import expand_planned_chain_for_collab
