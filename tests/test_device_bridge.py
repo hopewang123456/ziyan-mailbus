@@ -29,7 +29,7 @@ def _minimal_config(devices=None, **bridge_overrides):
         "max_retries": 3,
         "archive_days": 3,
         "archive_max_messages": 300,
-        "agents": {"lingzhao": {"type": "claude_code"}, "xiaoqi": {"type": "opencode"}},
+        "agents": {"agent-a": {"type": "claude_code"}, "agent-i": {"type": "opencode"}},
         "mailbus_device_bridge": {
             "enabled": True,
             "default_wait_ms": 100,
@@ -47,9 +47,9 @@ class TestConfigSection(unittest.TestCase):
         json_write(
             os.path.join(self.tmp, "config.json"),
             _minimal_config(
-                devices=[{"id": "phone-hope", "label": "希望的 iPhone",
+                devices=[{"id": "phone-1", "label": "Test phone",
                           "token_env": "MAILBUS_DEVICE_TOKEN_X", "tailscale_ips": ["100.1.2.3"],
-                          "agent_id": "lingzhao", "enabled": True}],
+                          "agent_id": "agent-a", "enabled": True}],
             ),
         )
 
@@ -61,7 +61,7 @@ class TestConfigSection(unittest.TestCase):
         self.assertEqual(out["section"], "mailbus_device_bridge")
         self.assertIn("enabled", out["data"])
         self.assertIn("devices", out["data"])
-        self.assertIn("lingzhao", out["agents"])
+        self.assertIn("agent-a", out["agents"])
         # token 不直接回传明文，仅回传是否配置
         dev = out["data"]["devices"][0]
         self.assertNotIn("token", dev)
@@ -71,7 +71,7 @@ class TestConfigSection(unittest.TestCase):
         patch_section(self.tmp, "mailbus_device_bridge", {
             "default_wait_ms": 60000,
             "devices": [
-                {"id": "phone-b", "label": "B", "token_env": "T_B", "agent_id": "xiaoqi", "enabled": True},
+                {"id": "phone-b", "label": "B", "token_env": "T_B", "agent_id": "agent-i", "enabled": True},
             ],
         })
         out = get_section(self.tmp, "mailbus_device_bridge")
@@ -84,10 +84,10 @@ class TestResolveDevice(unittest.TestCase):
         self.cfg = {
             "enabled": True,
             "devices": [
-                {"id": "a", "token_env": "T_A", "agent_id": "lingzhao", "enabled": True},
-                {"id": "b", "token": "inline-b", "agent_id": "xiaoqi", "enabled": True,
+                {"id": "a", "token_env": "T_A", "agent_id": "agent-a", "enabled": True},
+                {"id": "b", "token": "inline-b", "agent_id": "agent-i", "enabled": True,
                  "tailscale_ips": ["100.9.9.9"]},
-                {"id": "c", "token_env": "T_C", "agent_id": "lingzhao", "enabled": False},
+                {"id": "c", "token_env": "T_C", "agent_id": "agent-a", "enabled": False},
             ],
         }
 
@@ -121,15 +121,15 @@ class TestDeliverAndWait(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         json_write(os.path.join(self.tmp, "config.json"), _minimal_config())
-        self.device = {"id": "phone-hope", "agent_id": "lingzhao", "enabled": True}
-        self.agents = {"lingzhao": {"type": "claude_code"}, "xiaoqi": {"type": "opencode"}}
+        self.device = {"id": "phone-1", "agent_id": "agent-a", "enabled": True}
+        self.agents = {"agent-a": {"type": "claude_code"}, "agent-i": {"type": "opencode"}}
         self.agent_types = {}
 
     def tearDown(self):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_unknown_agent(self):
-        dev = {"id": "phone-hope", "agent_id": "ghost", "enabled": True}
+        dev = {"id": "phone-1", "agent_id": "ghost", "enabled": True}
         with self.assertRaises(DeviceBridgeError) as ctx:
             deliver_and_wait(self.tmp, self.agents, self.agent_types, dev, "hi", "s1", 100, {})
         self.assertEqual(ctx.exception.status, 404)
@@ -147,7 +147,7 @@ class TestDeliverAndWait(unittest.TestCase):
             )
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["reply"], "pong")
-        self.assertEqual(result["agent_id"], "lingzhao")
+        self.assertEqual(result["agent_id"], "agent-a")
         self.assertEqual(result["session_id"], "s1")
 
     def test_pending_then_resolve(self):
@@ -201,13 +201,13 @@ class TestDeliverAndWait(unittest.TestCase):
             )
 
         self.assertEqual(result["session_id"], "sess-42")
-        inbox_file = os.path.join(self.tmp, "inbox", "lingzhao", "inbox.json")
+        inbox_file = os.path.join(self.tmp, "inbox", "agent-a", "inbox.json")
         from lib.infra.utils import json_read
         inbox = json_read(inbox_file, {})
         msgs = inbox.get("messages") or []
         self.assertTrue(msgs)
         last = msgs[-1]
-        self.assertEqual(last["from"], "device:phone-hope")
+        self.assertEqual(last["from"], "device:phone-1")
         self.assertEqual(last["type"], "notice")
         self.assertNotIn("task", last)
 
@@ -217,22 +217,22 @@ class TestDeviceTaskEnvelope(unittest.TestCase):
         from lib.api.handlers_device import device_body_to_envelope
 
         env = device_body_to_envelope(
-            {"id": "phone-hope", "agent_id": "lingzhao"},
+            {"id": "phone-1", "agent_id": "agent-a"},
             {"text": "帮我建一个修登录的工单"},
         )
         self.assertEqual(env["mode"], "explicit")
         self.assertEqual(env["tier"], "S")
         self.assertIn("修登录", env["intent"])
-        self.assertTrue(str(env["task_id"]).startswith("dev-phone-hope-"))
-        self.assertEqual(env["planned_chain"][0]["pin_agent"], "lingzhao")
+        self.assertTrue(str(env["task_id"]).startswith("dev-phone-1-"))
+        self.assertEqual(env["planned_chain"][0]["pin_agent"], "agent-a")
         self.assertEqual(env["planned_chain"][0]["role_type"], 1)
-        self.assertEqual(env["initiator"], "device:phone-hope")
+        self.assertEqual(env["initiator"], "device:phone-1")
 
     def test_auto_mode_keeps_intent(self):
         from lib.api.handlers_device import device_body_to_envelope
 
         env = device_body_to_envelope(
-            {"id": "g", "agent_id": "lingzhao"},
+            {"id": "g", "agent_id": "agent-a"},
             {"intent": "写周报", "mode": "auto", "task_type": "doc"},
         )
         self.assertEqual(env["mode"], "auto")
@@ -250,7 +250,7 @@ class TestDeviceTaskEnvelope(unittest.TestCase):
         json_write(
             os.path.join(tmp, "config.json"),
             _minimal_config(devices=[{
-                "id": "phone-hope", "token": "secret-x", "agent_id": "lingzhao", "enabled": True,
+                "id": "phone-1", "token": "secret-x", "agent_id": "agent-a", "enabled": True,
             }]),
         )
         body = json.dumps({"text": "建工单"}).encode("utf-8")
@@ -281,7 +281,7 @@ class TestDeviceTaskEnvelope(unittest.TestCase):
         create_fn.assert_called_once()
         env = create_fn.call_args[0][1]
         self.assertEqual(env["intent"], "建工单")
-        self.assertEqual(env["planned_chain"][0]["pin_agent"], "lingzhao")
+        self.assertEqual(env["planned_chain"][0]["pin_agent"], "agent-a")
 
 
 if __name__ == "__main__":

@@ -9,6 +9,20 @@ import json
 import os
 from typing import Optional
 
+# 运行时校验与 JSON Schema enum 共用，避免 dsh 等类型只写进一处。
+AGENT_TYPES = (
+    "hermes",
+    "hermes_profile",
+    "openclaw",
+    "cline",
+    "opencode",
+    "codex",
+    "claude_code",
+    "cursor",
+    "dsh",
+    "none",
+)
+
 # ── Config JSON Schema ────────────────────────────────────────────────────
 
 CONFIG_SCHEMA = {
@@ -68,7 +82,7 @@ CONFIG_SCHEMA = {
                     "properties": {
                         "type": {
                             "type": "string",
-                            "enum": ["hermes", "hermes_profile", "openclaw", "cline", "opencode", "codex", "claude_code", "cursor", "none"]
+                            "enum": list(AGENT_TYPES)
                         },
                         "role": {"type": "string", "maxLength": 500},
                         "profile": {"type": "string"},
@@ -179,7 +193,7 @@ def validate_config(config: dict, config_path: str = "") -> list:
                 continue
             if "type" not in cfg:
                 errors.append(f"agents.{name}: 缺少必需字段 type")
-            elif cfg["type"] not in ("hermes", "hermes_profile", "openclaw", "cline", "opencode", "codex", "claude_code", "cursor", "dsh", "none"):
+            elif cfg["type"] not in AGENT_TYPES:
                 errors.append(f"agents.{name}.type: 不支持的 agent 类型 ({cfg['type']})")
             # 检查未知字段
             allowed = {"type", "role", "profile", "agent", "agent_id", "archetype", "provider",

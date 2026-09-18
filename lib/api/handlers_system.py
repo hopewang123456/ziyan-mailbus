@@ -936,7 +936,8 @@ def handle_agent_avatar(handler, agent: str, kind: str):
     handler.send_response(200)
     handler.send_header("Content-Type", mime)
     handler.send_header("Cache-Control", "no-cache")
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    if hasattr(handler, "_apply_cors_headers"):
+        handler._apply_cors_headers()
     handler.send_header("Content-Length", str(len(data)))
     handler.end_headers()
     handler.wfile.write(data)

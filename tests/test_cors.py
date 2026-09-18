@@ -24,6 +24,19 @@ class TestCors(unittest.TestCase):
         self.assertEqual(pick_cors_origin("http://app.test", cfg), "http://app.test")
         self.assertEqual(pick_cors_origin("", cfg), "*")
 
+    def test_api_handlers_do_not_hardcode_star(self):
+        from pathlib import Path
+
+        api = Path(__file__).resolve().parents[1] / "lib" / "api"
+        hits = []
+        needle = 'Access-Control-Allow-Origin", "*"'
+        needle2 = "Access-Control-Allow-Origin', '*'"
+        for p in api.glob("*.py"):
+            text = p.read_text(encoding="utf-8")
+            if needle in text or needle2 in text:
+                hits.append(p.name)
+        self.assertEqual(hits, [], msg=f"hardcoded CORS *: {hits}")
+
 
 if __name__ == "__main__":
     unittest.main()

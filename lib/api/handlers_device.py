@@ -186,7 +186,8 @@ def _begin_sse(handler) -> None:
     # 一轮一答：发完即关。声明 close 让客户端（尤其 Postman/iOS）明确响应边界，
     # 否则 HTTP/1.1 下无 Content-Length 会一直等，表现为「无返回」。
     handler.send_header("Connection", "close")
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    if hasattr(handler, "_apply_cors_headers"):
+        handler._apply_cors_headers()
     handler.send_header("X-Accel-Buffering", "no")
     handler.end_headers()
 
