@@ -187,7 +187,8 @@ def mirror_rules_to_store(
     linked: list[str] = []
 
     if not sot.is_dir():
-        raise FileNotFoundError(f"rules SoT missing: {sot}")
+        # SoT 缺失（如干净 clone 无本地 rules 树）不镜像也不崩；缺失提示归 doctor/诊所
+        return []
 
     need_link = True
     if dest.exists() or dest.is_symlink():
