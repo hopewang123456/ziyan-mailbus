@@ -31,6 +31,7 @@ from lib.application.commands.commands import (  # noqa: E402
     cmd_launch,
     cmd_mark_read,
     cmd_recover,
+    cmd_result,
     cmd_retry,
     cmd_review,
     cmd_scan,
@@ -38,6 +39,7 @@ from lib.application.commands.commands import (  # noqa: E402
     cmd_send,
     cmd_serve,
     cmd_status,
+    cmd_task_from_template,
 )
 
 
@@ -116,6 +118,26 @@ def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
     p.add_argument("--msg-ids", required=True)
     p.add_argument("--agent", required=True)
     p.set_defaults(func=cmd_mark_read)
+
+    p = sub.add_parser("result", help="提交工单执行回执（step-result）")
+    _add_data_dir_arg(p)
+    p.add_argument("task_id", help="任务 ID")
+    p.add_argument("--step", dest="step_id", required=True, help="步骤 ID（如 s1）")
+    p.add_argument("--agent", required=True, help="回执的 agent（需与该步 assignee 一致）")
+    p.add_argument("--conclusion", default="done",
+                   choices=("done", "pass", "approved", "fail", "blocked", "warning", "rejected", "need_research"),
+                   help="结论（done/pass/approved 视为成功）")
+    p.add_argument("--text", default="", help="结果摘要")
+    p.add_argument("--artifact", default="", help="产物文件路径（可选）")
+    p.set_defaults(func=cmd_result)
+
+    p = sub.add_parser("task-from-template", help="从流转模板发起工单")
+    _add_data_dir_arg(p)
+    p.add_argument("template", help="模板 ID（single-step / two-step-review / patrol-check）")
+    p.add_argument("--intent", required=True, help="任务意图（做什么）")
+    p.add_argument("--from", dest="from_agent", required=True, help="发起人 agent ID")
+    p.add_argument("--task-id", dest="task_id", default="", help="自定义任务 ID（可选）")
+    p.set_defaults(func=cmd_task_from_template)
 
     p = sub.add_parser("status", help="查看消息状态")
     _add_data_dir_arg(p)

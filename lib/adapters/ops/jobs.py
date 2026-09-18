@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from lib.infra.clock import now_dt, now_iso, now_ts, now_utc_dt
 import io
+import json
 import os
 import subprocess
 import sys
@@ -313,6 +314,96 @@ def _recent_patrol_notice(data_dir: str, agent: str = "", hours: float = 1.0) ->
     return False
 
 
+def fleet_health_lines(data_dir: str) -> list[str]:
+    """舰队健康快照（零 LLM、零外部依赖）。
+
+    数据源全部现成：agents 注册表、各收件箱积压、TaskTracker 工单状态分布、
+    errors/*.jsonl 近 24h 条数。供 patrol（小时级）与 daily_report（日报）共用。
+    """
+    from lib.composition import task_tracker_factory
+    from lib.domain.models import Inbox
+    from lib.infra.utils import parse_iso_dt
+
+    paths = resolve_paths(data_dir)
+    config = json_read(os.path.join(data_dir, "config.json"), {})
+    agents = config.get("agents") or {}
+    enabled = sum(1 for a in agents.values() if a.get("enabled", True))
+    lines = [f"agents: {len(agents)}（启用 {enabled}）"]
+
+    # 收件箱积压（未达 done/acknowledged 的消息数）
+    backlog = []
+    for name in agents:
+        inbox_data = json_read(f"{paths['inbox']}/{name}/inbox.json", {}, ttl=0)
+        if not inbox_data:
+            continue
+        inbox = Inbox.from_dict(inbox_data)
+        pending = 0
+        for m in inbox.messages:
+            st = (inbox.msg_field(m, "state", "") or inbox.msg_field(m, "status", "")).lower()
+            if st not in ("done", "closed", "archived", "acknowledged", "received", "pushed-acked"):
+                pending += 1
+        if pending:
+            backlog.append(f"{name}:{pending}")
+    lines.append("收件箱积压: " + (", ".join(backlog) if backlog else "无"))
+
+    # 工单状态分布 + 疑似停滞（running 超 6h 未更新）
+    try:
+        TaskTracker = task_tracker_factory()
+        tra = TaskTracker(data_dir)
+        dist: dict[str, int] = {}
+        stuck = 0
+        cutoff = now_utc_dt() - timedelta(hours=6)
+        for t in tra.list_all():
+            key = str(t.get("status") or "?")
+            dist[key] = dist.get(key, 0) + 1
+            if key == "running":
+                try:
+                    if parse_iso_dt(str(t.get("updated_at") or "")).astimezone(timezone.utc) < cutoff:
+                        stuck += 1
+                except Exception:
+                    stuck += 1
+        dist_s = ", ".join(f"{k}={v}" for k, v in sorted(dist.items())) or "无任务"
+        lines.append(f"工单: {dist_s}" + (f"；疑似停滞(>6h): {stuck}" if stuck else ""))
+    except Exception as exc:
+        lines.append(f"工单: 读取失败（{exc}）")
+
+    # 近 24h 错误记录
+    err_count = 0
+    err_dir = os.path.join(data_dir, "errors")
+    if os.path.isdir(err_dir):
+        cutoff = now_utc_dt() - timedelta(hours=24)
+        for fn in os.listdir(err_dir):
+            if not fn.endswith(".jsonl"):
+                continue
+            try:
+                with open(os.path.join(err_dir, fn), encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            e = json.loads(line)
+                            ts = str(e.get("ts") or "")
+                            if not ts or parse_iso_dt(ts).astimezone(timezone.utc) >= cutoff:
+                                err_count += 1
+                        except Exception:
+                            err_count += 1
+            except OSError:
+                continue
+    lines.append(f"近 24h 错误记录: {err_count}")
+
+    return lines
+
+
+def _write_report_file(data_dir: str, subdir: str, filename: str, content: str) -> str:
+    report_dir = os.path.join(data_dir, "reports", subdir)
+    os.makedirs(report_dir, exist_ok=True)
+    path = os.path.join(report_dir, filename)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return path
+
+
 def run_patrol(data_dir: str) -> int:
     agent = _patrol_target(data_dir)
     if _recent_patrol_notice(data_dir, agent, hours=1.0):
@@ -320,19 +411,21 @@ def run_patrol(data_dir: str) -> int:
         return 0
     from lib.infra.constants import DEFAULT_API_BASE
 
+    lines = fleet_health_lines(data_dir)
     content = (
-        "⏰ 执行定时巡检（零 LLM）\n"
+        "⏰ 定时巡检 · 舰队健康快照（零 LLM）\n"
         f"Dashboard: {DEFAULT_API_BASE}/\n"
-        "API: GET /api/status · GET /api/tasks\n"
-        "书面报告请人工在 Cursor 触发；mailbus 不 spawn CLI。"
+        + "\n".join(lines)
     )
     try:
+        ts = now_dt().strftime("%Y%m%d-%H%M%S")
+        path = _write_report_file(data_dir, "patrol", f"{ts}.md", content + f"\n\ngenerated: {_now_iso()}\n")
         _append_inbox_notice(
             data_dir, agent, content,
             msg_id=f"patrol-{int(now_ts())}",
             no_llm=True,
         )
-        mbus_log.info(f"[patrol] {agent} notice queued (no-llm) {_now_iso()}")
+        mbus_log.info(f"[patrol] {agent} notice queued (no-llm) {_now_iso()} → {path}")
         return 0
     except Exception as exc:
         mbus_log.warn(f"[patrol] error: {exc}")
@@ -562,18 +655,20 @@ def run_daily_report(data_dir: str) -> int:
 
     today = now_dt().strftime("%Y-%m-%d")
     agent = _patrol_target(data_dir)
+    lines = fleet_health_lines(data_dir)
     content = (
-        f"📊 生成日报提醒（零 LLM）— {today}\n"
+        f"📊 舰队健康日报 — {today}（零 LLM）\n"
         f"Dashboard: {DEFAULT_API_BASE}/\n"
-        f"如需 md 报告请人工写入 store/reports/daily/{today}.md"
+        + "\n".join(lines)
     )
     try:
+        path = _write_report_file(data_dir, "daily", f"{today}.md", content + f"\n\ngenerated: {_now_iso()}\n")
         _append_inbox_notice(
             data_dir, agent, content,
             msg_id=f"patrol-daily-{today.replace('-', '')}",
             no_llm=True,
         )
-        mbus_log.info(f"[daily-report] {agent} notice queued (no-llm) {today}")
+        mbus_log.info(f"[daily-report] {agent} notice queued (no-llm) {today} → {path}")
         return 0
     except Exception as exc:
         mbus_log.warn(f"[daily-report] error: {exc}")

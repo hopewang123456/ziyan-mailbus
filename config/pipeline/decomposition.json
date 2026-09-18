@@ -3,7 +3,7 @@
   "require_decomposition_gate": true,
   "design_role_types": [1],
   "coding_role_types": [8],
-  "require_for_tiers": ["L", "S"],
+  "require_for_tiers": ["L"],
   "min_planned_steps_for_complex": 3,
   "clarification_conclusions": [
     "clarifications_needed",

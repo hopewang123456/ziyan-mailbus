@@ -97,6 +97,35 @@ def append_task_event(
         del events[: len(events) - MAX_TASK_EVENTS]
 
 
+def _resolve_audit_reviewer(data_root: str, agents_cfg: dict, first_agent: str = "") -> tuple:
+    """审核人解析（防 P4：demo id 指向不存在 roster → 审核环节永久空缺）。
+
+    org_defaults.reviewer → audit_reviewers 列表 → 任意在册启用 agent（避开首步执行者）
+    → 均无则免审（requires_audit=False，事件留痕给 scan/诊所）。
+    """
+    from lib.infra.org_defaults import org_default
+
+    def _usable(a) -> bool:
+        if not a or not isinstance(a, str):
+            return False
+        cfg = agents_cfg.get(a)
+        return bool(cfg) and cfg.get("enabled", True)
+
+    cand = org_default(data_root, "reviewer")
+    if _usable(cand):
+        return True, cand
+    cands = org_default(data_root, "audit_reviewers")
+    if isinstance(cands, str):
+        cands = [cands]
+    for a in cands or []:
+        if _usable(a):
+            return True, a
+    for a, cfg in agents_cfg.items():
+        if a != first_agent and cfg.get("enabled", True):
+            return True, a
+    return False, ""
+
+
 class TaskTracker:
     """任务追踪器"""
 
@@ -130,9 +159,13 @@ class TaskTracker:
             "updated_at": _now_iso(),
         }
         if req_audit:
-            from lib.infra.org_defaults import org_default
-
-            task["audit_reviewer"] = org_default(os.path.dirname(self.tasks_dir), "reviewer")
+            data_root = os.path.dirname(self.tasks_dir)
+            agents_cfg = json_read(os.path.join(data_root, "config.json"), {}).get("agents") or {}
+            req_audit, reviewer = _resolve_audit_reviewer(
+                data_root, agents_cfg, task.get("assignee") or "")
+            task["requires_audit"] = req_audit
+            if reviewer:
+                task["audit_reviewer"] = reviewer
         get_fsm().ensure(task, default_priority=int(priority))
         json_write(self._task_path(task_id), task)
         return task
@@ -200,8 +233,10 @@ class TaskTracker:
             "updated_at": _now_iso(),
         }
         if task["requires_audit"]:
-            from lib.infra.org_defaults import org_default
-            task["audit_reviewer"] = org_default(os.path.dirname(self.tasks_dir), "reviewer")
+            task["requires_audit"], reviewer = _resolve_audit_reviewer(
+                data_root, agents_cfg, first_agent)
+            if reviewer:
+                task["audit_reviewer"] = reviewer
 
         get_fsm().ensure(task, default_priority=priority)
         fsm = task["fsm"]

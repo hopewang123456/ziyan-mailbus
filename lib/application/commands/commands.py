@@ -1292,6 +1292,104 @@ def cmd_errors(args) -> int:
     return 0
 
 
+def cmd_result(args) -> int:
+    """agent/人工提交 step-result（工单执行回执），提交后立即跑一轮 scan 推进 FSM。"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+
+    task_id = getattr(args, "task_id", None)
+    step_id = getattr(args, "step_id", None)
+    agent_name = getattr(args, "agent", None)
+    conclusion = getattr(args, "conclusion", "done") or "done"
+    if not (task_id and step_id and agent_name):
+        print("✗ 需要 task-id / --step / --agent")
+        return 1
+
+    from lib.core.a2a.step_result_io import write_step_result_file
+
+    positive = conclusion in ("done", "pass", "approved")
+    result = {
+        "status": "completed" if positive else "error",
+        "conclusion": conclusion,
+        "summary": getattr(args, "text", "") or "",
+        "agent": agent_name,
+    }
+    artifact = getattr(args, "artifact", "") or ""
+    if artifact:
+        result["artifacts"] = [artifact]
+    path = write_step_result_file(data_dir, task_id, step_id, result, agent=agent_name)
+
+    # 立即消化结果（与 ack 同哲学：不等调度器 180s）
+    try:
+        run_scan_once(data_dir, config, quiet=True)
+    except Exception as exc:
+        print(f"⚠ scan 推进失败（结果已落盘，调度器会再试）：{exc}")
+
+    print(f"✓ step-result 已提交: {path}")
+    print(f"  task={task_id} step={step_id} agent={agent_name} conclusion={conclusion}")
+    return 0
+
+
+def cmd_task_from_template(args) -> int:
+    """从流转模板发起工单：mailbus task-from-template single-step --intent "..." --from <agent>"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+
+    tpl_id = getattr(args, "template", "") or ""
+    intent = getattr(args, "intent", "") or ""
+    initiator = getattr(args, "from_agent", "") or ""
+    if not (tpl_id and intent and initiator):
+        print("✗ 需要 template / --intent / --from")
+        return 1
+
+    from lib.infra.constants import MAILBUS_ROOT as MAILBUS_ROOT_CONST
+    tpl_path = os.path.join(str(MAILBUS_ROOT_CONST), "config", "mailbus", "task-templates.json")
+    tpls = json_read(tpl_path, {}).get("templates") or []
+    tpl = next((t for t in tpls if t.get("id") == tpl_id), None)
+    if tpl is None:
+        print(f"✗ 模板不存在: {tpl_id}（可选: {', '.join(t.get('id','') for t in tpls)}）")
+        return 1
+
+    env = dict(tpl.get("envelope") or {})
+    task_id = getattr(args, "task_id", "") or f"tpl-{tpl_id}-{int(now_ts())}"
+    env.update({"task_id": task_id, "intent": intent, "initiator": initiator})
+
+    from lib.application.orchestration.router.envelope_validate import validate_envelope
+    from lib.application.orchestration.router.planner import plan_tier0
+    from lib.application.orchestration.tracker import TaskTracker
+    from lib.application.workflow.engine import bind_workflow
+    from lib.application.orchestration.router.dispatch import dispatch_first_step, start_executing
+
+    errors = validate_envelope(env, data_dir=data_dir)
+    if errors:
+        print(f"✗ 模板生成的 Envelope 不合法: {errors}")
+        return 1
+    try:
+        out = plan_tier0(env, data_dir=data_dir)
+        planned, plan_meta = out["planned_chain"], out["plan_meta"]
+    except Exception as exc:
+        print(f"✗ 规划失败: {exc}")
+        return 1
+
+    tracker = TaskTracker(data_dir)
+    if tracker.get(task_id):
+        print(f"✗ 任务已存在: {task_id}")
+        return 1
+    task = tracker.create_from_envelope(env, planned_chain=planned, plan_meta=plan_meta)
+    bind_workflow(task, env, data_dir=data_dir)
+    json_write(tracker._task_path(task_id), task)
+    start_executing(task)
+    dispatch_first_step(data_dir, task)
+
+    assignee = ((task.get("chain") or [{}])[0]).get("to_agent", "?")
+    print(f"✓ 工单已按模板发起: {tpl_id}（{tpl.get('title','')}）")
+    print(f"  task_id={task_id} 首步执行={assignee}")
+    print(f"  回执: mailbus result {task_id} --step s1 --agent {assignee} --conclusion done --text \"...\"")
+    return 0
+
+
 def cmd_agent_add(args) -> int:
     """注册新 agent"""
     config_path = _find_config(args)

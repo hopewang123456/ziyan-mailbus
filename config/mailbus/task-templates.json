@@ -1,0 +1,41 @@
+{
+  "templates": [
+    {
+      "id": "single-step",
+      "title": "单步执行",
+      "description": "发起 → 执行 → 回执归档（最简闭环）",
+      "envelope": {
+        "mode": "explicit",
+        "tier": "S",
+        "planned_chain": [
+          {"role_type": 8, "reason": "执行"}
+        ]
+      }
+    },
+    {
+      "id": "two-step-review",
+      "title": "串行两步（执行 + 审查）",
+      "description": "发起 → 开发工程师执行 → 审查官复核 → 归档",
+      "envelope": {
+        "mode": "explicit",
+        "tier": "M",
+        "planned_chain": [
+          {"role_type": 8, "reason": "执行"},
+          {"role_type": 5, "reason": "审查复核"}
+        ]
+      }
+    },
+    {
+      "id": "patrol-check",
+      "title": "定时巡检",
+      "description": "定时触发 → 巡检官执行 → 结论通知；异常进待裁决（配合调度器 patrol 任务）",
+      "envelope": {
+        "mode": "explicit",
+        "tier": "S",
+        "planned_chain": [
+          {"role_type": 7, "reason": "巡检执行"}
+        ]
+      }
+    }
+  ]
+}

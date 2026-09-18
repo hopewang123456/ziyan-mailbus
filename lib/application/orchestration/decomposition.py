@@ -14,7 +14,9 @@ from lib.infra.utils import _now_iso, json_read
 _DEFAULT_CFG = {
     "design_role_types": [1],
     "coding_role_types": [8],
-    "require_for_tiers": ["L", "S"],
+    # S 级（最简单步）不再强制 decomposition：普通回执即可闭环；
+    # L 级仍强制（复杂任务须给 subtasks 或显式 status=simple）
+    "require_for_tiers": ["L"],
     "min_planned_steps_for_complex": 3,
     "clarification_conclusions": [
         "clarifications_needed",
