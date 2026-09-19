@@ -6,8 +6,15 @@ from lib.application.orchestration.tracker import TaskTracker
 from lib.infra.utils import json_read
 
 
+def _seed_agents(td, ids):
+    """P4 审核回落链需要 config.agents：空 store 无可用审核人时按设计免审。"""
+    with open(os.path.join(td, "config.json"), "w", encoding="utf-8") as f:
+        json.dump({"agents": {a: {"type": "none", "enabled": True} for a in ids}}, f)
+
+
 def test_create():
     with tempfile.TemporaryDirectory() as td:
+        _seed_agents(td, ["agent-c", "agent-d"])
         t = TaskTracker(td)
         task = t.create("task-test-001", summary="测试", assignee="agent-c")
         assert task["task_id"] == "task-test-001"
@@ -264,6 +271,7 @@ def test_add_audit_with_new_fields():
 def test_audit_stats():
     """测试审计聚合统计"""
     with tempfile.TemporaryDirectory() as td:
+        _seed_agents(td, ["agent-g", "agent-e", "agent-f"])
         t = TaskTracker(td)
 
         # 创建任务并添加审计记录
@@ -299,6 +307,7 @@ def test_audit_stats():
 def test_list_pending_audit():
     """测试列出待审计任务"""
     with tempfile.TemporaryDirectory() as td:
+        _seed_agents(td, ["agent-g", "agent-e"])
         t = TaskTracker(td)
 
         t.create("task-pend-001", summary="已完成未审计", assignee="agent-g")
@@ -439,6 +448,7 @@ def test_truncate_to_period():
 def test_list_by_filters():
     """测试多条件过滤任务列表"""
     with tempfile.TemporaryDirectory() as td:
+        _seed_agents(td, ["agent-g", "agent-i", "agent-e"])
         t = TaskTracker(td)
 
         t.create("task-flt-001", summary="任务A", assignee="agent-g")

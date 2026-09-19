@@ -9,6 +9,9 @@ class _H(MailbusAPIHandler):
         self._buf = b""
         self._status = None
         self._headers = {}
+        # _send_json 会读 CORS Origin 与 data_dir（生产路径属性），fake 需提供
+        self.headers = {}
+        self.data_dir = ""
 
     def send_response(self, code, message=None):
         self._status = code

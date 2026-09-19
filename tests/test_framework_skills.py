@@ -178,6 +178,23 @@ def _env_content_gaps() -> list[str]:
             gaps.append(f"missing archetype skill for {aid} (archetype={rec['archetype']})")
         if "role_overlay" not in types:
             gaps.append(f"missing overlay skill for {aid}")
+
+    # 索引引用的技能实体文件（03-shared 等个人 Vault 内容）——缺失同样按
+    # 「Vault 是增强层」哲学跳过严格断言，而不是标红（内容在用户侧迁回后自动恢复严格）。
+    if INDEX.is_file():
+        try:
+            idx = json.loads(INDEX.read_text(encoding="utf-8"))
+        except Exception as e:  # noqa: BLE001
+            gaps.append(f"skills-index unreadable: {e}")
+            return gaps
+        missing: set[str] = set()
+        for rec in (idx.get("agents") or {}).values():
+            for sk in rec.get("skills") or []:
+                rel = str(sk.get("path") or "")
+                if rel and not _resolve_skill_path(rel).is_file():
+                    missing.add(rel)
+        if missing:
+            gaps.append(f"referenced skill files missing in Vault: {sorted(missing)[:3]}")
     return gaps
 
 

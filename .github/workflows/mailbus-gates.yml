@@ -49,7 +49,14 @@ jobs:
             tests/test_pipeline_trigger_p0.py \
             tests/test_launch_ports_settings.py \
             tests/test_sync_layers.py \
-            tests/test_device_bridge.py -q
+            tests/test_device_bridge.py \
+            tests/test_p10_dispatch_delivery.py \
+            tests/test_connection_test.py \
+            tests/test_push_budget.py \
+            tests/test_harness_production_wait.py \
+            tests/test_tracker.py \
+            tests/test_api_error_envelope.py \
+            tests/test_framework_skills.py -q
 
   web:
     runs-on: ubuntu-latest
