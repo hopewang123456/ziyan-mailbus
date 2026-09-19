@@ -357,6 +357,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/doctor": lambda: h["system"].handle_doctor(self),
             "/api/failover/metrics": lambda: h["system"].handle_failover_metrics(self),
             "/api/tokens/summary": lambda: h["system"].handle_token_summary(self),
+            "/api/demo/trace": lambda: h["system"].handle_demo_trace(self),
             "/api/locale/errors": lambda: h["system"].handle_locale_errors(self),
             "/api/workload": lambda: h["system"].handle_workload(self),
             "/api/send-msg": lambda: h["inbox"].handle_send_msg(self),
@@ -591,6 +592,10 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             h["lifecycle"].handle_agent_instance_discover(self)
         elif path == "/api/agent-instances/test-connection":
             h["lifecycle"].handle_agent_instance_test_connection(self)
+        elif path == "/api/demo/run":
+            h["system"].handle_demo_run(self)
+        elif path == "/api/demo/clean":
+            h["system"].handle_demo_clean(self)
         elif path == "/api/internal-llm/dry-run":
             h["internal_llm"].handle_internal_llm_dry_run(self)
         elif path == "/api/internal-llm/rebuild-rag":

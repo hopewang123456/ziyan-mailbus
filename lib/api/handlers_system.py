@@ -1461,3 +1461,68 @@ def handle_token_summary(handler):
         handler._send_json({"status": "ok", **today_summary(handler.data_dir)})
     except Exception as exc:
         handler._send_json({"status": "error", "error": str(exc)}, 500)
+
+
+def handle_demo_run(handler):
+    """POST /api/demo/run — 一键演示链（零依赖，隔离在 <store>/demo/）。"""
+    from lib.application.ops.demo_chain import run_demo
+
+    body = {}
+    try:
+        body = handler._read_post_body() or {}
+    except Exception:
+        body = {}
+    try:
+        result = run_demo(
+            handler.data_dir,
+            intent=str(body.get("intent") or "").strip() or "演示：整理目录并输出清单",
+        )
+        lines = [e.get("line") for e in result.get("trace") or [] if e.get("event") == "narrative"]
+        handler._send_json({
+            "status": "ok",
+            "ok": result.get("ok"),
+            "task_id": result.get("task_id"),
+            "task_status": result.get("status"),
+            "steps": result.get("steps"),
+            "lines": lines,
+        })
+    except Exception as exc:
+        handler._send_json({"status": "error", "error": str(exc)[:300]}, 500)
+
+
+def handle_demo_clean(handler):
+    """POST /api/demo/clean — 一键清除演示数据。"""
+    from lib.application.ops.demo_chain import clean_demo, demo_dir
+
+    try:
+        removed = clean_demo(handler.data_dir)
+        handler._send_json({"status": "ok", "removed": removed, "demo_dir": demo_dir(handler.data_dir)})
+    except Exception as exc:
+        handler._send_json({"status": "error", "error": str(exc)[:300]}, 500)
+
+
+def handle_demo_trace(handler):
+    """GET /api/demo/trace — 最近一次演示的流转叙事（向导/横幅共用）。"""
+    import os
+
+    from lib.application.ops.demo_chain import demo_dir
+    from lib.infra.utils import json_read
+
+    try:
+        d = demo_dir(handler.data_dir)
+        trace_path = os.path.join(d, "trace.json")
+        active = os.path.isdir(d)
+        trace = json_read(trace_path, {}) if active else {}
+        events = trace.get("events") or []
+        handler._send_json({
+            "status": "ok",
+            "active": active,
+            "task_id": trace.get("task_id") or "",
+            "lines": [e.get("line") for e in events if e.get("event") == "narrative"],
+            "events": [
+                {"event": e.get("event"), "agent": e.get("agent"), "ts": e.get("ts")}
+                for e in events if e.get("event") != "narrative"
+            ][:60],
+        })
+    except Exception as exc:
+        handler._send_json({"status": "error", "error": str(exc)[:300]}, 500)

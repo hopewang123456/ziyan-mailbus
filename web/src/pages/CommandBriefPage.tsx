@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { ErrorAlert } from "../components/ErrorAlert";
+import { DemoWizard } from "../components/DemoWizard";
 
 type StatusResp = {
   version?: string;
@@ -80,6 +81,7 @@ export function CommandBriefPage() {
 
   return (
     <div className="space-y-4" data-surface="fleet">
+      <DemoWizard />
       <header className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <p className="hud-label">Command</p>

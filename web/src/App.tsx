@@ -9,6 +9,7 @@ import { ManagerDeskPage } from "./pages/ManagerDeskPage";
 import { getUiMode, setUiMode } from "./lib/ui-mode";
 import { t } from "./lib/i18n";
 import { AuthTokenBanner } from "./components/AuthTokenBanner";
+import { DemoModeBanner } from "./components/DemoModeBanner";
 
 /**
  * 逃生舱侧栏：舰桥 + 配置/诊所/协调台（不再挂「首页」入口；/legacy 仍可直达排障页）。
@@ -135,6 +136,7 @@ export default function App() {
   return (
     <>
       <AuthTokenBanner />
+      <DemoModeBanner />
       <Routes>
         <Route path="/" element={<CockpitEntry />} />
         <Route path="/cockpit" element={<CockpitEntry />} />

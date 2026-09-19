@@ -8,21 +8,36 @@
 
 - Python ≥ 3.10
 - 可选：Docker、Ollama（本机路由）、AgentMemory
-- 至少一个 Agent CLI 或 A2A 端点
 
-## 快速开始
+## 快速开始（5 分钟，零依赖）
+
+不需要装任何 Agent 框架、不需要任何 API key——demo 角色是纯文件通信 + 预设回复：
 
 ```bash
 git clone https://github.com/hopewang123456/ziyan-mailbus.git
 cd mailbus
 pip install -e .
 
+# 一条命令：看到第一条工单完整流转
+#   建单 → 派工 → 投递 → 执行 → 回执 → 验收 → 归档
+mailbus demo
+
+# 演示数据独立隔离在 store/demo/，随时一键清除
+mailbus demo --clean
+```
+
+想在浏览器里看：`mailbus serve --port 9814` 后打开驾驶舱——首次启动会出现引导卡片（语言 → 一键 demo → 接入引导），演示进行中有「演示模式」横幅。
+
+## 接入你自己的 Agent（第二步）
+
+demo 跑通后，接入真实框架只需三个字段（详见下文「注册一个新 agent」）：
+
+```bash
 mailbus init --data-dir ./store
 mailbus serve --host 0.0.0.0 --port 9814 --data-dir ./store
-
-mailbus send agent-a --msg "你好" --from agent-b --data-dir ./store
-mailbus status --data-dir ./store
 ```
+
+设置页新建实例卡（`type / run_target / install_path`）→ 点「测试连接」：probe 可达 → 角色发现预览 → 试发等 ack，三段全绿即接好、角色自动上架。CLI 等价：`mailbus test-connection <instance_id>`。
 
 将 [`migrate/env.template`](migrate/env.template) 复制为 `.env` 并填写密钥/路径。**不要提交 `.env`。**
 

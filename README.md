@@ -6,32 +6,39 @@ No Redis / RabbitMQ required — messages are JSON files, CLI push, agent ack.
 
 ## Requirements
 
-**Required**（跑通最小闭环）：
-- Python ≥ 3.10
-- 一个 agent CLI 或一个远程 A2A endpoint。若两者都没有，`mailbus init` 会 seed 2 个纯文件示例角色（`type: none`），file_bus 即可闭环投递，随后删掉换成你自己的员工即可。
+- Python ≥ 3.10 (that's all you need for the demo)
 
-**Optional**：
-- Ollama（本机自动中转/路由）
-- Docker + Docker Compose（挂载 Agent 小节点 / n8n / ComfyUI）
-- AgentMemory、Obsidian Vault —— 增强层，未配置不影响 Core（诊所标灰/黄，不标红）
+**Optional**:
+- An agent CLI (Claude Code / Codex / Hermes / OpenClaw / OpenCode) or a remote A2A endpoint — only for connecting your own agents
+- Ollama (local routing), Docker + Compose, AgentMemory, Obsidian Vault — enhancement layers, never required for the demo
 
-## Quick start
+## Quick start (5 minutes, zero dependencies)
+
+No agent frameworks, no API keys — demo roles are pure file-based with scripted replies:
 
 ```bash
 git clone https://github.com/hopewang123456/ziyan-mailbus.git
 cd mailbus
 pip install -e .
 
-# Init store (seeds config.json; 2 example file-based roles when no transport roster present)
+# One command: watch your first work order flow end to end
+#   create -> dispatch -> deliver -> execute -> receipt -> accept -> archive
+mailbus demo
+
+# Demo data lives isolated in store/demo/ — wipe anytime
+mailbus demo --clean
+```
+
+Prefer a browser? `mailbus serve --port 9814`, open the cockpit — a first-run wizard walks you through language -> one-click demo -> connecting your own agents, and a "demo mode" banner stays visible while demo data exists.
+
+## Connect your own agents (step two)
+
+After the demo, connecting a real framework takes three fields on the settings page (`type / run_target / install_path`), then the **Test connection** button runs three stages — probe reachability -> role-discovery preview -> smoke send awaiting ack. All green means connected and roles auto-load. CLI equivalent: `mailbus test-connection <instance_id>`.
+
+```bash
 mailbus init --data-dir ./store
-
-# Or merge after editing templates
-mailbus init --merge --data-dir ./store
-
-# Serve API + built-in scheduler (default port 9814)
+mailbus init --merge --data-dir ./store   # merge after editing templates
 mailbus serve --host 0.0.0.0 --port 9814 --data-dir ./store
-
-# Send a message between the seeded example roles
 mailbus send agent-executor --msg "Hello" --from agent-dispatcher --data-dir ./store
 mailbus status --data-dir ./store
 ```
