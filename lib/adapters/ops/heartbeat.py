@@ -340,8 +340,8 @@ def heartbeat_scan(agents: dict, agent_types: dict, data_dir: str,
         if last_hb:
             try:
                 last_dt = datetime.strptime(last_hb, "%Y-%m-%dT%H:%M:%S%z")
-                now_dt = now_dt()
-                if (now_dt - last_dt).total_seconds() < interval:
+                now_val = now_dt()
+                if (now_val - last_dt).total_seconds() < interval:
                     continue
             except (ValueError, TypeError):
                 pass
@@ -369,8 +369,8 @@ def heartbeat_scan(agents: dict, agent_types: dict, data_dir: str,
     if last_health_check:
         try:
             last_dt = datetime.strptime(last_health_check, "%Y-%m-%dT%H:%M:%S%z")
-            now_dt = now_dt()
-            if (now_dt - last_dt).total_seconds() < full_health_interval:
+            now_val = now_dt()
+            if (now_val - last_dt).total_seconds() < full_health_interval:
                 do_health_check = False
         except (ValueError, TypeError):
             pass

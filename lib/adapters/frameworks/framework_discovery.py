@@ -76,6 +76,35 @@ def clear_framework_discovery_cache() -> None:
     _load_registry_json.cache_clear()
 
 
+def looks_like_wsl_path(path: str) -> bool:
+    r"""`\\mnt\x\...` / `/mnt/x/...`（WSL 内绝对路径，win32 侧不可直接 os.path 判存）。"""
+    p = (path or "").replace("\\", "/").strip()
+    return p.startswith("/mnt/") and len(p) > len("/mnt/x")
+
+
+def wsl_unc_candidates(path: str, distro: str = "Ubuntu") -> list[Path]:
+    """WSL 路径 → win32 UNC 候选（\\wsl.localhost 与 \\wsl$ 两种形态）。"""
+    p = (path or "").replace("\\", "/").strip()
+    if not p.startswith("/mnt/"):
+        return []
+    return [
+        Path(f"\\\\wsl.localhost\\{distro}" + p.replace("/", "\\")),
+        Path(f"\\\\wsl$\\{distro}" + p.replace("/", "\\")),
+    ]
+
+
+def path_exists_platform_aware(path: Path | None, *, is_dir: bool = True) -> bool:
+    """win32 上对 WSL 格式路径走 UNC 探测；其余直接 os 判存。"""
+    if path is None:
+        return False
+    if (path.is_dir() if is_dir else path.is_file()):
+        return True
+    s = str(path)
+    if os.name == "nt" and looks_like_wsl_path(s):
+        return any(c.is_dir() for c in wsl_unc_candidates(s))
+    return False
+
+
 def _resolve_probe_path(spec: dict[str, Any], paths: dict[str, str]) -> Path | None:
     env_key = (spec.get("path_env") or "").strip()
     probe = (spec.get("probe") or "dir").strip()
@@ -112,8 +141,8 @@ def _probe_exists(path: Path | None, spec: dict[str, Any]) -> bool:
         return False
     probe = (spec.get("probe") or "dir").strip()
     if probe.startswith("file:"):
-        return path.is_file()
-    return path.is_dir()
+        return path.is_file() or path_exists_platform_aware(path, is_dir=False)
+    return path.is_dir() or path_exists_platform_aware(path)
 
 
 def framework_run_targets(framework: str) -> list[str]:
@@ -169,6 +198,9 @@ def framework_status(*, mail_root: Path | None = None) -> dict[str, dict[str, An
         reason = ""
         if not enabled_cfg:
             reason = "disabled in registry"
+        elif probe_path is None:
+            env_key = (spec.get("path_env") or "").strip()
+            reason = f"未配置 {env_key or '安装路径'}（可选；CLI push 不依赖）"
         elif not exists:
             reason = f"path missing: {probe_path}"
         out[fw] = {

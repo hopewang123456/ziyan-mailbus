@@ -57,7 +57,9 @@ class TestAuthHardening(unittest.TestCase):
         self.assertTrue(any(i.level == "ok" and "CORS" in i.message for i in items))
         self.assertFalse(any(i.level == "warn" and "CORS" in i.message for i in items))
 
-    def test_openclaw_change_me_fail(self):
+    def test_openclaw_change_me_warn_not_fail(self):
+        # P10 batch: push (docker exec) does not need the gateway token, so a
+        # missing/default token must not fail doctor overall — it warns.
         with patch.dict(os.environ, {"OPENCLAW_GATEWAY_TOKEN": "change-me"}, clear=False):
             with patch(
                 "lib.adapters.config.browser_auth.openclaw_gateway_token",
@@ -70,8 +72,9 @@ class TestAuthHardening(unittest.TestCase):
                         }
                     }
                 )
-        fails = [i for i in items if i.level == "fail" and ("Token" in i.message or "change-me" in i.message)]
-        self.assertEqual(len(fails), 1)
+        self.assertFalse(any(i.level == "fail" and "Token" in i.message for i in items))
+        warns = [i for i in items if i.level == "warn" and "Token" in i.message]
+        self.assertEqual(len(warns), 1)
 
     def test_openclaw_real_token_ok(self):
         with patch(

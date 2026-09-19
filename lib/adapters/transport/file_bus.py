@@ -74,15 +74,46 @@ class FileBusMessageTransport:
         })
         json_write(inbox_path, inbox)
 
-        if not _truthy(h.get("wait")):
-            return TransportReceipt(
-                msg_id=msg_id,
-                accepted=True,
-                detail="inbox_written",
-                channel="file_bus",
-            )
+        if _truthy(h.get("wait")):
+            return self._wait_harness(message, h, data_dir, agent, msg_id)
+        if _truthy(h.get("notify")):
+            # P10：不阻塞等执行结果，但仍 spawn 通知 agent（fire-and-forget）。
+            self._notify_harness(h, data_dir, agent, msg_id, message)
+        return TransportReceipt(
+            msg_id=msg_id,
+            accepted=True,
+            detail="inbox_written" + ("+notified" if _truthy(h.get("notify")) else ""),
+            channel="file_bus",
+        )
 
-        return self._wait_harness(message, h, data_dir, agent, msg_id)
+    def _notify_harness(
+        self,
+        h: Mapping[str, str],
+        data_dir: str,
+        agent: str,
+        msg_id: str,
+        message: OutboundMessage,
+    ) -> None:
+        from lib.application.harness import get_harness
+
+        cfg = json_read(os.path.join(data_dir, "config.json"), {})
+        harness = get_harness(cfg)
+        agents = cfg.get("agents") or {}
+        agent_cfg = agents.get(agent) or {}
+        harness.spawn(
+            agent,
+            {
+                "data_dir": data_dir,
+                "task_id": h.get("task_id") or "",
+                "step_id": h.get("step_id") or "",
+                "msg_id": msg_id,
+                "prompt": h.get("intent") or h.get("content") or "",
+                "framework": agent_cfg.get("type") or "",
+                "transport_channel": "file_bus",
+                "allow_no_spawn": _truthy(h.get("allow_no_spawn")),
+                "contract_path": message.contract_path or "",
+            },
+        )
 
     def _wait_harness(
         self,

@@ -73,6 +73,7 @@ def send_via_message_port(
     wait: bool = False,
     allow_no_spawn: bool = False,
     wait_timeout_sec: int | None = None,
+    notify: bool = False,
     config: Optional[dict] = None,
 ) -> dict[str, Any]:
     """Wave3/W7c: MessageTransportPort 统一发送（可选 Harness wait）。"""
@@ -91,6 +92,7 @@ def send_via_message_port(
         wait=wait,
         allow_no_spawn=allow_no_spawn,
         wait_timeout_sec=wait_timeout_sec,
+        notify=notify,
         config=config,
     )
 
@@ -185,11 +187,10 @@ def _dispatch_via_message_port(
 ) -> dict[str, Any]:
     """W7c：调度经 MessageTransportPort（默认 file_bus + wait）。"""
     msg_id = f"msg-{task_id}-{step_id}"
-    timeout = int(
-        ((config.get("harness") or {}).get("file_bus") or {}).get("ack_timeout_sec")
-        or config.get("ack_timeout")
-        or 300
-    )
+    fb_cfg = ((config.get("harness") or {}).get("file_bus") or {})
+    timeout = int(fb_cfg.get("ack_timeout_sec") or config.get("ack_timeout") or 300)
+    # P10：默认投递即返回（inbox + spawn 通知）；wait_on_dispatch 显式开启才同步等。
+    wait_inline = bool(fb_cfg.get("wait_on_dispatch"))
     receipt = send_via_message_port(
         data_dir,
         to_agent=to_agent,
@@ -199,10 +200,11 @@ def _dispatch_via_message_port(
         task_id=task_id,
         step_id=step_id,
         role_type=role_type,
-        wait=True,
+        wait=wait_inline,
         allow_no_spawn=True,
         wait_timeout_sec=timeout,
         config=config,
+        notify=not wait_inline,
     )
     out: dict[str, Any] = {
         "ok": bool(receipt.get("ok")),

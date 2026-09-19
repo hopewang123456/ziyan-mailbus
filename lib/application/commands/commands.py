@@ -1381,9 +1381,13 @@ def cmd_task_from_template(args) -> int:
     bind_workflow(task, env, data_dir=data_dir)
     json_write(tracker._task_path(task_id), task)
     start_executing(task)
-    dispatch_first_step(data_dir, task)
+    dispatched = dispatch_first_step(data_dir, task)
 
     assignee = ((task.get("chain") or [{}])[0]).get("to_agent", "?")
+    if not dispatched:
+        print(f"✗ 工单已创建但首步投递失败: task_id={task_id} step=s1 → {assignee}")
+        print("  任务已标记 blocked；排查: mailbus errors / mailbus status")
+        return 1
     print(f"✓ 工单已按模板发起: {tpl_id}（{tpl.get('title','')}）")
     print(f"  task_id={task_id} 首步执行={assignee}")
     print(f"  回执: mailbus result {task_id} --step s1 --agent {assignee} --conclusion done --text \"...\"")

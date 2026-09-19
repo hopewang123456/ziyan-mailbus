@@ -108,6 +108,7 @@ class TestFileBusProductionWait(unittest.TestCase):
             cfg = json.load(f)
         cfg.setdefault("harness", {})["mode"] = "production"
         cfg.setdefault("harness", {}).setdefault("file_bus", {})["ack_timeout_sec"] = 3
+        cfg["harness"]["file_bus"]["wait_on_dispatch"] = True  # P10: sync wait is opt-in
         cfg.setdefault("transport", {})["use_router"] = True
         cfg.setdefault("agents", {})["agent-i"] = {
             "type": "opencode",

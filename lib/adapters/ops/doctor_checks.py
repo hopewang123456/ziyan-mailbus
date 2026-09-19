@@ -50,6 +50,25 @@ _THIN_DIRS_WARN_BELOW = {
 _DEMO_HERMES_AGENTS = tuple(hermes_demo_agents()) or ("agent-a", "agent-b", "agent-c", "agent-d")
 
 
+def _container_running(container: str, *, wsl_distro: str = "Ubuntu") -> bool:
+    """docker inspect .State.Running（win32 经 WSL 访问 docker）。"""
+    if detect_platform() == "win32":
+        wsl = wsl_exe()
+        if not wsl:
+            return False
+        cmd = [
+            wsl, "-d", wsl_distro, "-e", "bash", "-lc",
+            f"docker inspect -f '{{{{.State.Running}}}}' {container} 2>/dev/null || echo missing",
+        ]
+    else:
+        cmd = ["docker", "inspect", "-f", "{{.State.Running}}", container]
+    try:
+        r = run(cmd, timeout=15)
+    except Exception:
+        return False
+    return (r.stdout or "").strip() == "true"
+
+
 def expected_hermes_agents(data_dir: str) -> list[str]:
     """config.json 中 hermes_profile 类型 agents；缺失时回落到 demo 名单。"""
     import json
@@ -171,10 +190,13 @@ def check_auth_hardening(config: dict | None = None, *, data_dir: str = "") -> l
         if not resolved or resolved == "change-me":
             items.append(
                 DoctorItem(
-                    "fail",
+                    # 误报治理：push 走 docker exec 不依赖 gateway token；
+                    # token 只保护 openclaw 网页入口，未配不应让 doctor 整体 FAIL。
+                    "warn",
                     "auth",
                     "OpenClaw Gateway Token 未配置或仍为无效默认",
-                    f"agents={', '.join(openclaw_ids[:6])}；请在设置/密钥配置 OPENCLAW_GATEWAY_TOKEN",
+                    f"agents={', '.join(openclaw_ids[:6])}；push 不受影响，"
+                    "如需 openclaw 网页入口请在设置/密钥配置 OPENCLAW_GATEWAY_TOKEN",
                 )
             )
         else:
@@ -628,12 +650,34 @@ def check_hermes_readiness(
     if hermes_data.is_dir():
         items.append(DoctorItem("ok", "hermes", "HERMES_DATA 目录存在", str(hermes_data)))
     else:
-        items.append(DoctorItem(
-            "fail",
-            "hermes",
-            "HERMES_DATA 不存在",
-            f"{hermes_data}；典型路径 <HERMES_DATA>/.hermes",
-        ))
+        # 误报治理：HERMES_DATA 常为 WSL 内路径（\mnt\...），win32 不能直接判存。
+        # 依次回落：UNC 访问 WSL 文件系统 → 容器运行信号；都失败才算真缺。
+        from lib.adapters.frameworks.framework_discovery import (
+            looks_like_wsl_path,
+            path_exists_platform_aware,
+        )
+
+        resolved = False
+        detail = str(hermes_data)
+        if looks_like_wsl_path(str(hermes_data)) and path_exists_platform_aware(hermes_data):
+            items.append(DoctorItem(
+                "ok", "hermes", "HERMES_DATA 存在（WSL UNC 探测）", str(hermes_data),
+            ))
+            resolved = True
+        elif looks_like_wsl_path(str(hermes_data)) and docker_ready_flag:
+            container = os.environ.get("MAILBUS_HERMES_CONTAINER", "docker-agents-hermes-1")
+            if _container_running(container, wsl_distro=wsl_distro):
+                items.append(DoctorItem(
+                    "ok", "hermes", "HERMES_DATA 在 WSL/容器侧（win32 不直检），容器运行中", container,
+                ))
+                resolved = True
+        if not resolved:
+            items.append(DoctorItem(
+                "fail",
+                "hermes",
+                "HERMES_DATA 不存在",
+                f"{detail}；典型路径 <HERMES_DATA>/.hermes",
+            ))
 
     sync_root = root / "access" / "hermes" / ".sync"
     missing_sync = [

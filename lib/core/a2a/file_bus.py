@@ -42,6 +42,12 @@ class FileBusTransport:
             return int(fb["ack_timeout_sec"])
         return int(cfg.get("ack_timeout") or 300)
 
+    def _wait_on_dispatch(self, data_dir: str) -> bool:
+        """P10：派发默认「投递即返回」，同步等执行结果改为 opt-in。"""
+        cfg = json_read(os.path.join(data_dir, "config.json"), {})
+        fb = (cfg.get("harness") or {}).get("file_bus") or {}
+        return bool(fb.get("wait_on_dispatch"))
+
     def _audit_wait_timeout(
         self,
         ctx: DispatchContext,
@@ -102,9 +108,20 @@ class FileBusTransport:
             "task_id": ctx.task_id,
             "step_id": ctx.step_id,
             "msg_id": msg_id,
+            # P10：工单内容必须进 prompt——spawn 出的 CLI 只拿 contract 摘要时，
+            # agent 收到的是「怎么回执」而不是「做什么」。
+            "prompt": ctx.intent or f"【{ctx.task_id}】step {ctx.step_id}",
             "framework": agent_cfg.get("type") or "",
             "transport_channel": "file_bus",
         })
+        if not self._wait_on_dispatch(ctx.data_dir):
+            # P10：投递语义 at-least-once——inbox 落盘 + spawn 通知即成功；
+            # 执行结果由 scan/trigger 异步消化（派发不再同步阻塞 ack_timeout）。
+            return DispatchResult(
+                ok=True,
+                transport_used="file_bus",
+                error=None,
+            )
         outcome = self.harness.wait_completion(
             session, timeout=self._wait_timeout_sec(ctx.data_dir),
         )

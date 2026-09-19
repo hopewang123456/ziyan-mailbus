@@ -118,6 +118,20 @@ def dispatch_first_step(data_dir: str, task: dict) -> bool:
         step,
         summary=task.get("intent") or task.get("summary") or "",
     )
+    if not ok:
+        # P10：派发失败不能静默——任务落盘 blocked，避免「报 ok 但工单悬空」。
+        _fsm().ensure(task)
+        task["fsm"]["state"] = TaskFsmState.BLOCKED.value
+        task["fsm"]["reason"] = "first_step_dispatch_failed"
+        task["status"] = "blocked"
+        try:
+            from lib.application.orchestration.tracker import TaskTracker
+
+            tr = TaskTracker(data_dir)
+            json_write(tr._task_path(tid), task)
+        except Exception:
+            pass
+        return False
     if ok:
         _fsm().mark_step_dispatched(step)
         task["fsm"]["active_step_id"] = step.get("step_id")
