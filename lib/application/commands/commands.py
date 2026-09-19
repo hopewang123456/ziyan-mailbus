@@ -84,8 +84,9 @@ DEFAULT_CONFIG = {
 
 def load_config(config_path: str) -> dict:
     """加载配置，缺失字段用默认值填充，并校验合法性"""
-    config = json_read(config_path, {})
-    
+    raw = json_read(config_path, {})
+    config = dict(raw)
+
     # 版本升级迁移
     from lib.infra.constants import MAILBUS_VERSION
     old_version = config.get("version", "0.0.0")
@@ -93,9 +94,13 @@ def load_config(config_path: str) -> dict:
         _migrate_config(config, old_version, MAILBUS_VERSION)
         config["version"] = MAILBUS_VERSION
         json_write(config_path, config)
-    
+
     for k, v in DEFAULT_CONFIG.items():
         config.setdefault(k, v)
+    # 安全（Wave1）：config 自身缺 data_dir 时按 config 文件所在目录推导，
+    # 绝不因默认值回落到真实 store——`--data-dir` 指向的隔离 store 必须生效。
+    if not str(raw.get("data_dir") or "").strip():
+        config["data_dir"] = os.path.dirname(os.path.abspath(config_path))
     # 校验配置合法性
     errors = validate_config(config)
     if errors:
