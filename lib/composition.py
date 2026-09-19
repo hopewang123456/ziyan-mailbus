@@ -781,6 +781,46 @@ def discover_roles_for_instance(*args: Any, **kwargs: Any):
     return _impl(*args, **kwargs)
 
 
+
+def run_connection_test(*args: Any, **kwargs: Any):
+    """E1 三段式测试连接 — api/CLI 通过本函数拿到 adapter 服务。
+
+    实际实现见 `lib.adapters.ops.connection_test.run_connection_test`。
+    """
+    from lib.adapters.ops.connection_test import run_connection_test as _impl
+
+    return _impl(*args, **kwargs)
+
+
+def format_connection_text(*args: Any, **kwargs: Any):
+    """E1 测试连接的 CLI 文本渲染 — composition 门面（分层约束）。"""
+    from lib.adapters.ops.connection_test import format_connection_text as _impl
+
+    return _impl(*args, **kwargs)
+
+
+
+def push_gate(*args: Any, **kwargs: Any):
+    """E2 push 预算查询 — application 层经此访问（分层约束）。"""
+    from lib.adapters.orchestration.automation import push_gate as _impl
+
+    return _impl(*args, **kwargs)
+
+
+def bump_push_count(*args: Any, **kwargs: Any):
+    """E2 push 计数 — application 层经此访问（分层约束）。"""
+    from lib.adapters.orchestration.automation import bump_push_count as _impl
+
+    return _impl(*args, **kwargs)
+
+
+def push_budget_blocked(*args: Any, **kwargs: Any):
+    """E2 push 预算熔断 — application 层经此访问（分层约束）。"""
+    from lib.adapters.orchestration.automation import push_budget_blocked as _impl
+
+    return _impl(*args, **kwargs)
+
+
 def scan_agent_assets(*args: Any, **kwargs: Any):
     """Native scan agent assets — api/handlers_lifecycle 通过本函数拿到 adapter 服务。
 

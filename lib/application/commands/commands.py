@@ -1400,7 +1400,7 @@ def cmd_test_connection(args) -> int:
     config = load_config(config_path)
     data_dir = config["data_dir"]
 
-    from lib.adapters.ops.connection_test import format_connection_text, run_connection_test
+    from lib.composition import format_connection_text, run_connection_test
 
     iid = getattr(args, "instance", "") or ""
     if not iid:

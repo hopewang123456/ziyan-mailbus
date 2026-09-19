@@ -150,7 +150,7 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
                 step_id=current.get("step_id"),
                 result_ref=current.get("result_ref"),
             ):
-                from lib.adapters.orchestration.automation import bump_push_count
+                from lib.composition import bump_push_count
 
                 bump_push_count(t)
                 json_write(task_file, t)
@@ -216,7 +216,7 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
             warn(f"[fsm] dispatch failed rollback {task_id[:30]}")
             return {"ok": False, "error": "dispatch_failed"}
 
-        from lib.adapters.orchestration.automation import bump_push_count
+        from lib.composition import bump_push_count
 
         bump_push_count(t)
         f.mark_step_dispatched(nxt)
@@ -270,7 +270,7 @@ def _close_pipeline_inbox(data_dir: str, paths: dict, task_id: str, agents: dict
 
 def _budget_break(data_dir: str, task_file: str, t: dict) -> bool:
     """E2：单工单 push 预算熔断（真超限则置 blocked + 待裁决并落盘）。"""
-    from lib.adapters.orchestration.automation import push_budget_blocked
+    from lib.composition import push_budget_blocked
 
     if not push_budget_blocked(t, data_dir):
         return False

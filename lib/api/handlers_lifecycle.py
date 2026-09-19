@@ -229,7 +229,7 @@ def handle_agent_instance_test_connection(handler):
     body: { instance_id, role_id?, ack_timeout_sec?, auto_load_roles? }
     返回 { status, stages: {probe, discover, smoke}, ok, roles_loaded }。
     """
-    from lib.adapters.ops.connection_test import run_connection_test
+    from lib.composition import run_connection_test
 
     body = handler._read_post_body() or {}
     iid = str(body.get("instance_id") or "").strip()

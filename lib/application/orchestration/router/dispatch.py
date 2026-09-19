@@ -94,7 +94,7 @@ def _dispatch_collab_siblings(data_dir: str, task: dict) -> int:
 
 def _push_budget_blocked(task: dict, data_dir: str, tid: str) -> bool:
     """E2：单工单 push 预算熔断 — 超限转 blocked + 待裁决，不再自动派发。"""
-    from lib.adapters.orchestration.automation import push_budget_blocked
+    from lib.composition import push_budget_blocked
 
     return push_budget_blocked(task, data_dir)
 
@@ -149,7 +149,7 @@ def dispatch_first_step(data_dir: str, task: dict) -> bool:
         except Exception:
             pass
         return False
-    from lib.adapters.orchestration.automation import bump_push_count
+    from lib.composition import bump_push_count
 
     bump_push_count(task)
     if ok:
