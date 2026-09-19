@@ -92,6 +92,13 @@ def _dispatch_collab_siblings(data_dir: str, task: dict) -> int:
     return pushed
 
 
+def _push_budget_blocked(task: dict, data_dir: str, tid: str) -> bool:
+    """E2：单工单 push 预算熔断 — 超限转 blocked + 待裁决，不再自动派发。"""
+    from lib.adapters.orchestration.automation import push_budget_blocked
+
+    return push_budget_blocked(task, data_dir)
+
+
 def dispatch_first_step(data_dir: str, task: dict) -> bool:
     """Push chain[0] to assignee inbox; mark step dispatched."""
     chain = task.get("chain") or []
@@ -111,6 +118,16 @@ def dispatch_first_step(data_dir: str, task: dict) -> bool:
                 step["dispatch_meta"] = meta
         except Exception:
             pass
+
+    if _push_budget_blocked(task, data_dir, tid):
+        try:
+            from lib.application.orchestration.tracker import TaskTracker
+
+            tr = TaskTracker(data_dir)
+            json_write(tr._task_path(tid), task)
+        except Exception:
+            pass
+        return False
 
     ok = dispatch_fsm_step(
         data_dir,
@@ -132,6 +149,9 @@ def dispatch_first_step(data_dir: str, task: dict) -> bool:
         except Exception:
             pass
         return False
+    from lib.adapters.orchestration.automation import bump_push_count
+
+    bump_push_count(task)
     if ok:
         _fsm().mark_step_dispatched(step)
         task["fsm"]["active_step_id"] = step.get("step_id")

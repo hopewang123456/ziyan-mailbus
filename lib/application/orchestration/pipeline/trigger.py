@@ -140,6 +140,8 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
             archived = f.archive_step_result_for_retry(data_dir, task_id, current, result)
             t = outcome.get("task") or t
             json_write(task_file, t)
+            if _budget_break(data_dir, task_file, t):
+                return {"ok": False, "error": "push_budget_exceeded"}
             summary = result.get("summary", "") or outcome.get("message", "verify retry")
             if _send_task(
                 data_dir, paths, to_person, current.get("to_role", ""),
@@ -148,6 +150,10 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
                 step_id=current.get("step_id"),
                 result_ref=current.get("result_ref"),
             ):
+                from lib.adapters.orchestration.automation import bump_push_count
+
+                bump_push_count(t)
+                json_write(task_file, t)
                 info(f"[fsm] verify retry redispatch {task_id[:24]} -> {to_person}")
                 return {"ok": True, "action": "retry_same_step"}
             f.revert_failed_retry(data_dir, task_id, current, result, archived_path=archived)
@@ -196,6 +202,8 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
             f"next={nxt.get('step_id', '?')}"
         )
 
+        if _budget_break(data_dir, task_file, t):
+            return {"ok": False, "error": "push_budget_exceeded"}
         if not _send_task(
             data_dir, paths, to_person, current.get("to_role", ""),
             n_role, n_person, summary, task_id,
@@ -208,6 +216,9 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
             warn(f"[fsm] dispatch failed rollback {task_id[:30]}")
             return {"ok": False, "error": "dispatch_failed"}
 
+        from lib.adapters.orchestration.automation import bump_push_count
+
+        bump_push_count(t)
         f.mark_step_dispatched(nxt)
         t["assignee"] = n_person
         json_write(task_file, t)
@@ -255,6 +266,16 @@ def _close_pipeline_inbox(data_dir: str, paths: dict, task_id: str, agents: dict
     if closed:
         debug(f"[fsm] closed {closed} inbox msgs {task_id[:24]}")
     return closed
+
+
+def _budget_break(data_dir: str, task_file: str, t: dict) -> bool:
+    """E2：单工单 push 预算熔断（真超限则置 blocked + 待裁决并落盘）。"""
+    from lib.adapters.orchestration.automation import push_budget_blocked
+
+    if not push_budget_blocked(t, data_dir):
+        return False
+    json_write(task_file, t)
+    return True
 
 
 def _send_task(
