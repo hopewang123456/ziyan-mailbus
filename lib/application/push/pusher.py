@@ -461,7 +461,26 @@ def push_messages(
             update_message_status(data_dir, agent_name, mid, MsgStatus.FAILED)
             log_error(paths["errors"], mid, agent_name,
                       f"CLI 推送失败（{len(cli_commands)} 个模型均不可用）")
-    
+            # E2 DLQ：终局失败的消息进死信队列（快照可人工重放，不再自动派发）
+            try:
+                from lib.infra.dlq import dlq_append
+
+                entry = next(
+                    (m for m in messages if (m.get("id") if isinstance(m, dict) else m.id) == mid),
+                    {},
+                )
+                snap = entry if isinstance(entry, dict) else (entry.to_dict() if hasattr(entry, "to_dict") else {})
+                dlq_append(data_dir or "", {
+                    "reason": "push_exhausted",
+                    "msg_id": mid,
+                    "task_id": str(snap.get("task_id") or ""),
+                    "agent": agent_name,
+                    "error": f"CLI 推送失败（{len(cli_commands)} 个模型均不可用）",
+                    "snapshot": {"id": mid, "to": agent_name, "content": str(snap.get("content") or "")[:500]},
+                })
+            except Exception:
+                pass
+
     return msg_ids
 
 

@@ -53,6 +53,7 @@ jobs:
             tests/test_p10_dispatch_delivery.py \
             tests/test_connection_test.py \
             tests/test_push_budget.py \
+            tests/test_dlq_and_loops.py \
             tests/test_harness_production_wait.py \
             tests/test_tracker.py \
             tests/test_api_error_envelope.py \

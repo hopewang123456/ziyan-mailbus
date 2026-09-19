@@ -41,6 +41,7 @@ from lib.application.commands.commands import (  # noqa: E402
     cmd_status,
     cmd_task_from_template,
     cmd_test_connection,
+    cmd_dlq,
 )
 
 
@@ -139,6 +140,11 @@ def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
     p.add_argument("--from", dest="from_agent", required=True, help="发起人 agent ID")
     p.add_argument("--task-id", dest="task_id", default="", help="自定义任务 ID（可选）")
     p.set_defaults(func=cmd_task_from_template)
+
+    p = sub.add_parser("dlq", help="查看死信队列（push 终局失败 / 环路拦截）")
+    _add_data_dir_arg(p)
+    p.add_argument("--limit", type=int, default=20, help="显示最近 N 条（默认 20）")
+    p.set_defaults(func=cmd_dlq)
 
     p = sub.add_parser("test-connection", help="E1 三段式测试连接（probe/发现预览/试发等ack）")
     _add_data_dir_arg(p)

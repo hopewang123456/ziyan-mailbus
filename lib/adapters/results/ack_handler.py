@@ -146,7 +146,38 @@ def process_forward(data_dir: str, forward_data: dict) -> bool:
     to = forward_data.get("to")
     if not to:
         return False
-    
+
+    # E2 环路防护：同一 original_msg_id 的转发跳数上限（默认 8，可配
+    # mailbus_automation.forward_hops.max），超限拒转 + 写 DLQ——A↔B 互转
+    # 不再无限烧 token。
+    orig_id_for_guard = str(forward_data.get("original_msg_id", ""))
+    try:
+        from lib.infra.dlq import dlq_append, forward_hop_check
+
+        cfg = json_read(os.path.join(data_dir, "config.json"), {})
+        max_hops = int(((cfg.get("mailbus_automation") or {}).get("forward_hops") or {}).get("max") or 8)
+        allowed, hops = forward_hop_check(data_dir, orig_id_for_guard, max_hops=max_hops)
+        if not allowed:
+            warn(
+                f"[forward] loop guard: root={orig_id_for_guard} hops={hops}/{max_hops} "
+                f"{forward_data.get('from', '?')} -> {to} 拒转，已入 DLQ"
+            )
+            dlq_append(data_dir, {
+                "reason": "forward_loop",
+                "msg_id": orig_id_for_guard,
+                "task_id": "",
+                "agent": str(to),
+                "error": f"forward hops {hops} > max {max_hops}",
+                "snapshot": {
+                    "from": forward_data.get("from", ""),
+                    "to": to,
+                    "content": str(forward_data.get("content") or "")[:500],
+                },
+            })
+            return False
+    except Exception:
+        pass
+
     paths = resolve_paths(data_dir)
     target_inbox_file = f"{paths['inbox']}/{to}/inbox.json"
     

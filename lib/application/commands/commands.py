@@ -1421,6 +1421,34 @@ def cmd_test_connection(args) -> int:
     return 0 if report.get("ok") else 1
 
 
+def cmd_dlq(args) -> int:
+    """查看死信队列（push 终局失败 / forward 环路拦截），带快照可人工重放。"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+
+    from lib.infra.dlq import dlq_recent
+
+    limit = int(getattr(args, "limit", 20) or 20)
+    records = dlq_recent(data_dir, limit)
+    if not records:
+        print("死信队列为空（无 push 终局失败 / 环路拦截记录）")
+        return 0
+    print(f"最近 {len(records)} 条死信（重放: mailbus retry --msg-id <id>）:")
+    for r in records:
+        snap = r.get("snapshot") or {}
+        origin = snap.get("from") or ""
+        target = r.get("agent") or ""
+        arrow = f"{origin}→{target}" if origin or target else ""
+        err = r.get("error") or ""
+        print(
+            f"  [{str(r.get('ts') or '')[:19]}] {r.get('reason') or '?'}"
+            f" · {r.get('msg_id') or '-'}{(' · ' + arrow) if arrow else ''}"
+            + (f" · {err}" if err else "")
+        )
+    return 0
+
+
 def cmd_agent_add(args) -> int:
     """注册新 agent"""
     config_path = _find_config(args)
