@@ -1394,6 +1394,33 @@ def cmd_task_from_template(args) -> int:
     return 0
 
 
+def cmd_test_connection(args) -> int:
+    """E1 三段式测试连接：probe → 角色发现预览 → 试发等 ack。"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+
+    from lib.adapters.ops.connection_test import format_connection_text, run_connection_test
+
+    iid = getattr(args, "instance", "") or ""
+    if not iid:
+        print("✗ 需要 instance ID（设置页 → Agent 实例卡 id，或 config.json agent_instances 键）")
+        return 1
+    try:
+        report = run_connection_test(
+            data_dir,
+            iid,
+            role_id=getattr(args, "role", "") or "",
+            ack_timeout_sec=int(getattr(args, "timeout", 90) or 90),
+            auto_load_roles=not getattr(args, "no_load", False),
+        )
+    except ValueError as exc:
+        print(f"✗ {exc}")
+        return 1
+    print(format_connection_text(report))
+    return 0 if report.get("ok") else 1
+
+
 def cmd_agent_add(args) -> int:
     """注册新 agent"""
     config_path = _find_config(args)

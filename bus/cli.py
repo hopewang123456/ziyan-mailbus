@@ -40,6 +40,7 @@ from lib.application.commands.commands import (  # noqa: E402
     cmd_serve,
     cmd_status,
     cmd_task_from_template,
+    cmd_test_connection,
 )
 
 
@@ -138,6 +139,14 @@ def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
     p.add_argument("--from", dest="from_agent", required=True, help="发起人 agent ID")
     p.add_argument("--task-id", dest="task_id", default="", help="自定义任务 ID（可选）")
     p.set_defaults(func=cmd_task_from_template)
+
+    p = sub.add_parser("test-connection", help="E1 三段式测试连接（probe/发现预览/试发等ack）")
+    _add_data_dir_arg(p)
+    p.add_argument("instance", help="Agent 实例 ID（config.json agent_instances 键）")
+    p.add_argument("--role", default="", help="试发目标角色（默认自动选择）")
+    p.add_argument("--timeout", type=int, default=90, help="试发等 ack 超时秒数（默认 90）")
+    p.add_argument("--no-load", dest="no_load", action="store_true", help="不自动上架发现的角色")
+    p.set_defaults(func=cmd_test_connection)
 
     p = sub.add_parser("status", help="查看消息状态")
     _add_data_dir_arg(p)

@@ -588,6 +588,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             h["lifecycle"].handle_agent_instance_load_roles(self)
         elif path == "/api/agent-instances/discover":
             h["lifecycle"].handle_agent_instance_discover(self)
+        elif path == "/api/agent-instances/test-connection":
+            h["lifecycle"].handle_agent_instance_test_connection(self)
         elif path == "/api/internal-llm/dry-run":
             h["internal_llm"].handle_internal_llm_dry_run(self)
         elif path == "/api/internal-llm/rebuild-rag":

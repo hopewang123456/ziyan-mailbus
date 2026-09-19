@@ -144,6 +144,12 @@ export function AgentRuntimePanel() {
   const [busy, setBusy] = useState(false);
   const [scanMsg, setScanMsg] = useState("");
   const [scanResult, setScanResult] = useState<Record<string, unknown> | null>(null);
+  const [connBusy, setConnBusy] = useState(false);
+  const [connResult, setConnResult] = useState<{
+    ok?: boolean;
+    roles_loaded?: string[];
+    stages?: Record<string, { ok?: boolean; detail?: string; error?: string; count?: number; target?: string }>;
+  } | null>(null);
   const [draft, setDraft] = useState<Instance>({
     type: "hermes_profile",
     run_target: "docker",
@@ -237,6 +243,32 @@ export function AgentRuntimePanel() {
     return data.instance || null;
   }
 
+  async function testConnection() {
+    // E1 三段式测试连接：probe → 角色发现预览 → 试发等 ack（真验收）。
+    const iid = activeId || draft.id;
+    if (!iid) {
+      setMsg("先「保存实例」再测试连接");
+      return;
+    }
+    setConnBusy(true);
+    setConnResult(null);
+    const r = await api<{
+      ok?: boolean;
+      roles_loaded?: string[];
+      stages?: Record<string, { ok?: boolean; detail?: string; error?: string; count?: number; target?: string }>;
+    }>("/api/agent-instances/test-connection", {
+      method: "POST",
+      body: JSON.stringify({ instance_id: iid }),
+    });
+    setConnBusy(false);
+    if (!r.ok) {
+      setMsg(r.error);
+      return;
+    }
+    setConnResult(r.data || {});
+    await load();
+  }
+
   async function scanInstance() {
     // 实例级扫描验证：验证 install_path，写回实例级 install_path/run_target/distro/gate_passed。
     const iid = draft.id;
@@ -315,6 +347,7 @@ export function AgentRuntimePanel() {
     setMsg("");
     setScanMsg("");
     setScanResult(null);
+    setConnResult(null);
   }
 
   function setPath(key: string, v: string) {
@@ -557,12 +590,57 @@ export function AgentRuntimePanel() {
             >
               {busy ? "扫描中…" : "扫描验证"}
             </button>
+            <button
+              type="button"
+              className="hud-btn-amber"
+              disabled={connBusy || !activeId}
+              title={activeId ? "probe → 角色发现预览 → 试发等 ack；全绿才算接好" : "先保存实例"}
+              onClick={() => void testConnection()}
+            >
+              {connBusy ? "测试中…" : "测试连接"}
+            </button>
             <span className="text-[10px] text-mute">
               {draft.role_ids && draft.role_ids[0]
                 ? "验证 install_path 并写回实例级（gate/distro），不覆盖角色启停"
                 : "先保存实例并加载角色后可扫描"}
             </span>
           </div>
+          {connResult &&
+            (() => {
+              const st = connResult.stages || {};
+              const line = (key: string, label: string) => {
+                const s = st[key] || {};
+                const extra =
+                  key === "discover" && s.count != null
+                    ? `（${s.count} 个角色）`
+                    : key === "smoke" && s.target
+                      ? `（→ ${s.target}）`
+                      : "";
+                const detail = !s.ok && (s.detail || s.error) ? `：${s.detail || s.error}` : "";
+                return (
+                  <li className={s.ok ? "text-mint" : "text-flare"}>
+                    {s.ok ? "✓" : "✗"} {label}
+                    {extra}
+                    {detail}
+                  </li>
+                );
+              };
+              return (
+                <div className="rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2">
+                  <p className="text-[11px] font-medium text-frost">
+                    测试连接 {connResult.ok ? "— 三段全绿，接好了" : "— 未接通（见缺口）"}
+                  </p>
+                  <ul className="mt-1 space-y-0.5 text-[11px]">
+                    {line("probe", "probe 可达")}
+                    {line("discover", "角色发现预览")}
+                    {line("smoke", "试发等 ack")}
+                  </ul>
+                  {connResult.roles_loaded && connResult.roles_loaded.length > 0 && (
+                    <p className="mt-1 text-[10px] text-mute">已自动上架：{connResult.roles_loaded.join("、")}</p>
+                  )}
+                </div>
+              );
+            })()}
           {scanMsg && <p className="text-[11px] text-amber-signal">{scanMsg}</p>}
           {scanResult &&
             (() => {

@@ -223,6 +223,36 @@ def handle_agent_instance_discover(handler):
     handler._send_json({"status": "ok", "instance_id": iid, "roles": roles, "count": len(roles)})
 
 
+def handle_agent_instance_test_connection(handler):
+    """POST /api/agent-instances/test-connection — E1 三段式测试连接。
+
+    body: { instance_id, role_id?, ack_timeout_sec?, auto_load_roles? }
+    返回 { status, stages: {probe, discover, smoke}, ok, roles_loaded }。
+    """
+    from lib.adapters.ops.connection_test import run_connection_test
+
+    body = handler._read_post_body() or {}
+    iid = str(body.get("instance_id") or "").strip()
+    if not iid:
+        handler._send_json({"status": "error", "error": "instance_id required"}, 400)
+        return
+    try:
+        report = run_connection_test(
+            handler.data_dir,
+            iid,
+            role_id=str(body.get("role_id") or ""),
+            ack_timeout_sec=int(body.get("ack_timeout_sec") or 90),
+            auto_load_roles=bool(body.get("auto_load_roles", True)),
+        )
+    except ValueError as exc:
+        handler._send_json({"status": "error", "error": str(exc)}, 404)
+        return
+    except Exception as exc:
+        handler._send_json({"status": "error", "error": str(exc)[:300]}, 500)
+        return
+    handler._send_json({"status": "ok", **report})
+
+
 def handle_agent_scan(handler):
     """POST /api/agents/scan — 验证实例安装路径并扫描原生目录资产。
 
