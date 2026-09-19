@@ -680,6 +680,27 @@ def _invoke_cli(
         if agent_name:
             _register_cli_proc(agent_name, process)
 
+        # E3 token 台账：scan 推送路径每次拉起 agent CLI 记账
+        try:
+            from lib.infra.token_ledger import record_push
+
+            _entries = [
+                m if isinstance(m, dict) else (m.to_dict() if hasattr(m, "to_dict") else {})
+                for m in (messages or [])
+            ]
+            _task_id = next((str(e.get("task_id") or "") for e in _entries if e.get("task_id")), "")
+            _content_chars = sum(len(str(e.get("content") or "")) for e in _entries)
+            record_push(
+                data_dir,
+                agent=agent_name,
+                task_id=_task_id,
+                trigger="scan_push",
+                ok=True,
+                prompt_chars=_content_chars,
+            )
+        except Exception:
+            pass
+
         # 异步读取回复并保存
         if reply_file and agent_name:
             msg_entries = [

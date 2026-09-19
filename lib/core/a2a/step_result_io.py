@@ -29,6 +29,22 @@ def write_step_result_file(
     if not payload.get("timestamp"):
         payload["timestamp"] = _now_iso()
     json_write(path, payload)
+
+    # E3 token 台账：回执携带 usage 则入账（agent 上报口径，最高置信）
+    try:
+        from lib.infra.token_ledger import extract_usage_from_result, record_result_usage
+
+        usage = extract_usage_from_result(payload)
+        if usage:
+            record_result_usage(
+                data_dir,
+                task_id=task_id,
+                step_id=step_id,
+                agent=str(agent or payload.get("agent") or ""),
+                usage=usage,
+            )
+    except Exception:
+        pass
     return path
 
 

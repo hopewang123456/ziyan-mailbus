@@ -39,9 +39,10 @@ def route_next_step(task: dict, *, data_dir: str) -> dict:
             [{"role": "system", "content": system}, {"role": "user", "content": user}],
             cfg,
         )
-        record_call(data_dir, task_id, failed=False)
+        record_call(data_dir, task_id, failed=False, purpose="route",
+                    prompt_chars=len(system) + len(user))
     except LLMError as exc:
-        record_call(data_dir, task_id, failed=True)
+        record_call(data_dir, task_id, failed=True, purpose="route")
         raise PlanError("plan_failed", str(exc)) from exc
 
     parsed.setdefault("task_id", task_id)

@@ -37,7 +37,29 @@ def check_budget(data_dir: str, task_id: str, cfg: dict) -> str | None:
     return None
 
 
-def record_call(data_dir: str, task_id: str, *, failed: bool = False) -> None:
+def record_call(
+    data_dir: str,
+    task_id: str,
+    *,
+    failed: bool = False,
+    purpose: str = "",
+    provider: str = "",
+    prompt_chars: int = 0,
+) -> None:
+    # E3 token 台账：internal LLM 与 agent push 同本账（D5 归因完整）
+    try:
+        from lib.infra.token_ledger import record_internal_llm
+
+        record_internal_llm(
+            data_dir,
+            task_id=task_id,
+            purpose=purpose,
+            provider=provider,
+            ok=not failed,
+            prompt_chars=prompt_chars,
+        )
+    except Exception:
+        pass
     if failed:
         return
     path = _budget_path(data_dir)

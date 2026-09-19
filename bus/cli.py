@@ -42,6 +42,7 @@ from lib.application.commands.commands import (  # noqa: E402
     cmd_task_from_template,
     cmd_test_connection,
     cmd_dlq,
+    cmd_tokens,
 )
 
 
@@ -153,6 +154,12 @@ def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
     p.add_argument("--timeout", type=int, default=90, help="试发等 ack 超时秒数（默认 90）")
     p.add_argument("--no-load", dest="no_load", action="store_true", help="不自动上架发现的角色")
     p.set_defaults(func=cmd_test_connection)
+
+    p = sub.add_parser("tokens", help="E3 token 台账：今日消耗视图 / 工单下钻")
+    _add_data_dir_arg(p)
+    p.add_argument("--task", default="", help="单工单下钻（尖峰归因）")
+    p.add_argument("--limit", type=int, default=50, help="下钻条数（默认 50）")
+    p.set_defaults(func=cmd_tokens)
 
     p = sub.add_parser("status", help="查看消息状态")
     _add_data_dir_arg(p)

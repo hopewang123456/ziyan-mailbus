@@ -1429,3 +1429,35 @@ def handle_test_agents(handler):
     except Exception as exc:
         handler._send_json({"ok": False, "error": str(exc)})
 
+
+
+def handle_token_summary(handler):
+    """GET /api/tokens/summary — E3 token 台账今日视图（驾驶舱）。
+
+    query: ?task=<task_id> 单工单下钻；?limit=<n> 下钻条数（默认 50）。
+    """
+    from lib.infra.token_ledger import by_task, today_summary
+
+    try:
+        qs = handler.path.split("?", 1)[1] if "?" in handler.path else ""
+        params = dict(
+            part.split("=", 1) for part in qs.split("&") if "=" in part
+        )
+        task_id = params.get("task", "").strip()
+        if task_id:
+            limit = 50
+            try:
+                limit = max(1, min(500, int(params.get("limit", "50"))))
+            except ValueError:
+                pass
+            entries = by_task(handler.data_dir, task_id, limit=limit)
+            handler._send_json({
+                "status": "ok",
+                "task_id": task_id,
+                "entries": entries,
+                "count": len(entries),
+            })
+            return
+        handler._send_json({"status": "ok", **today_summary(handler.data_dir)})
+    except Exception as exc:
+        handler._send_json({"status": "error", "error": str(exc)}, 500)

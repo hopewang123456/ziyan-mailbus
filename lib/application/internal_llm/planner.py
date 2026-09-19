@@ -104,9 +104,10 @@ def plan_with_llm(envelope: dict, *, data_dir: str = "", config: dict | None = N
             [{"role": "system", "content": system}, {"role": "user", "content": user}],
             cfg,
         )
-        record_call(data_dir, task_id, failed=False)
+        record_call(data_dir, task_id, failed=False, purpose="plan",
+                    prompt_chars=len(system) + len(user))
     except LLMError as exc:
-        record_call(data_dir, task_id, failed=True)
+        record_call(data_dir, task_id, failed=True, purpose="plan")
         raise PlanError("plan_failed", str(exc)) from exc
 
     if not parsed.get("rag_citations") and citations:

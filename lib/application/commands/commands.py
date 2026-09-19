@@ -1454,6 +1454,55 @@ def cmd_dlq(args) -> int:
     return 0
 
 
+def cmd_tokens(args) -> int:
+    """E3 token 台账：今日消耗视图 / 单工单下钻（尖峰归因）。"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+
+    from lib.infra.token_ledger import by_task, today_summary
+
+    task_id = str(getattr(args, "task", "") or "").strip()
+    if task_id:
+        entries = by_task(data_dir, task_id, limit=int(getattr(args, "limit", 50) or 50))
+        if not entries:
+            print(f"工单 {task_id} 无 token 台账记录")
+            return 0
+        total = sum(int(e.get("est_tokens") or 0) for e in entries)
+        print(f"工单 {task_id} 台账（{len(entries)} 条 · 估算合计 {total} tokens）:")
+        for e in entries:
+            usage = e.get("usage") or {}
+            amt = str(usage.get("total") or e.get("est_tokens") or 0)
+            src = e.get("source") or ""
+            print(
+                f"  [{str(e.get('ts') or '')[:19]}] {e.get('kind')}"
+                f" · {e.get('agent') or '?'} · {amt} tok（{src}）"
+                f" · step={e.get('step_id') or '-'}"
+            )
+        return 0
+
+    s = today_summary(data_dir)
+    b = s.get("budget") or {}
+    print(f"今日 token 台账（{s.get('day')}）: {s.get('calls')} 次记账 · 估算合计 {s.get('est_tokens_total')} tokens")
+    for kind, v in (s.get("by_kind") or {}).items():
+        print(f"  · {kind}: {v}")
+    print("按 agent（估算）:")
+    for a, v in list((s.get("by_agent") or {}).items())[:8]:
+        print(f"  · {a}: {v}")
+    top = s.get("top_tasks") or []
+    if top:
+        print("按工单 Top5（尖峰归因入口: mailbus tokens --task <id>）:")
+        for t in top:
+            print(f"  · {t.get('task_id')}: {t.get('est_tokens')}")
+    peak = s.get("peak") or {}
+    if peak.get("minute"):
+        print(f"尖峰分钟: {peak.get('minute')} · {peak.get('est_tokens')} tokens")
+    if b.get("daily_est_tokens"):
+        flag = "⚠ 超预算" if b.get("exceeded") else "预算内"
+        print(f"日预算（估算口径）: {b.get('daily_est_tokens')} tokens · 已用 {b.get('used_pct')}% · {flag}")
+    return 0
+
+
 def cmd_agent_add(args) -> int:
     """注册新 agent"""
     config_path = _find_config(args)

@@ -175,6 +175,23 @@ class ProductionHarness(AgentHarness):
         except Exception as exc:
             session.framework = f"spawn_error:{exc}"
 
+        # E3 token 台账：dispatch 路径每次拉起 agent CLI 记账（prompt 估算口径）
+        try:
+            from lib.infra.token_ledger import record_push
+
+            record_push(
+                data_dir,
+                agent=agent_id,
+                task_id=task_id,
+                step_id=step_id,
+                framework=framework,
+                trigger="dispatch",
+                ok=cli_pid is not None or bool(payload.get("allow_no_spawn")),
+                prompt_chars=len(prompt or ""),
+            )
+        except Exception:
+            pass
+
         # stash pid on session via msg sidecar
         if data_dir and msg_id and cli_pid:
             json_write(
