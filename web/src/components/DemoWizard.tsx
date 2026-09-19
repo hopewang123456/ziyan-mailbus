@@ -30,10 +30,12 @@ export function DemoWizard() {
         api<TraceResp>("/api/demo/trace"),
       ]);
       if (cancelled) return;
-      setHasAgents((sR.data?.agent_count ?? 0) > 0);
-      setTrace(tR.ok ? tR.data : null);
-      setLines(tR.data?.lines || []);
-      setTaskId(tR.data?.task_id || "");
+      if (sR.ok) setHasAgents((sR.data.agent_count ?? 0) > 0);
+      if (tR.ok) {
+        setTrace(tR.data);
+        setLines(tR.data.lines || []);
+        setTaskId(tR.data.task_id || "");
+      }
     })();
     return () => {
       cancelled = true;

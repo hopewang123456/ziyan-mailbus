@@ -259,13 +259,11 @@ Non-sensitive shared seeds under `config/` (pipeline, agent-types, …) stay com
 
 `launch.template` 引用 `config/mailbus/agent-types.json` 里的 `launch_templates`（如 `claude_host`、`codex_docker`、`hermes_dashboard`、`openclaw_gateway`、`opencode_cli`），模板定义了 cli / browser / desktop 三种启动形态。
 
-### 注册一个新 agent（完整流程）
+### 注册一个新 agent（一步）
 
-1. 建 `access/transport/<your-id>/transport.json`（可复制 `examples/transport/agent-coder/transport.json` 改路径）。
-2. 建 `config/agents/<your-id>.override.json`（复制 `coder.override.example.json`）。
-3. 在 `config/mailbus/launch-ports.json` 给 `<your-id>` 映射端口（复制 `launch-ports.example.json`）。
-4. 在 `store/config.json` 的 `agents` 里登记 `<your-id>`（参考 `examples/config.example.json`）。
-5. 重跑 `mailbus init --merge --data-dir ./store`（或启动时自动发现），再到 Cockpit **设置**页确认/启用。
+设置页 → 新建**实例卡**（`type / run_target / install_path`）→ 点「测试连接」（probe → 角色发现预览 → 试发等 ack，三段全绿角色自动上架）→ 完成。
+
+原先的五步（手建 `transport.json` / `override.json` / `launch-ports.json` + 登记 + init merge）已由系统从实例卡**派生**：docker 服务/管线与 push 参数按框架默认派生并显式落角色卡（`docker._derived`），端口在角色加载时自动解析；`launch-ports.json` 仅作默认表。仅当容器服务名/端口与默认不同才需在角色卡覆盖。装配结果（最终加载的 skills/rules/人设、push 实际通道）见角色卡「装配结果」；CLI 等价 `mailbus test-connection <instance_id>`。
 
 ### 模型与 push 命令
 

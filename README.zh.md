@@ -265,13 +265,19 @@ mailbus search --data-dir ./store --query order-intake
 
 `launch.template` 引用 `config/mailbus/agent-types.json` 里的 `launch_templates`（如 `claude_host`、`codex_docker`、`hermes_dashboard`、`openclaw_gateway`、`opencode_cli`）。
 
-### 注册一个新 agent（完整流程）
+### 注册一个新 agent（一步）
 
-1. 建 `access/transport/<your-id>/transport.json`（可复制 `examples/transport/agent-coder/transport.json` 改路径）。
-2. 建 `config/agents/<your-id>.override.json`（复制 `coder.override.example.json`）。
-3. 在 `config/mailbus/launch-ports.json` 给 `<your-id>` 映射端口（复制 `launch-ports.example.json`）。
-4. 在 `store/config.json` 的 `agents` 里登记 `<your-id>`（参考 `examples/config.example.json`）。
-5. 重跑 `mailbus init --merge --data-dir ./store`（或启动时自动发现），再到驾驶舱 **设置** 页确认/启用。
+设置页 → 新建**实例卡**（三个字段：`type / run_target / install_path`）→ 点「测试连接」（probe → 角色发现预览 → 试发等 ack，三段全绿角色自动上架）→ 完成。
+
+原先的五步（手建 `transport.json` / `override.json` / `launch-ports.json` + 登记 + init merge）已由系统从实例卡**派生**：
+
+| 原手建文件 | 现在的来源 |
+|------------|-----------|
+| `transport.json`（docker 服务/管线、push cwd） | 框架默认 + 实例卡派生，显式落角色卡（`docker._derived` 标记），可在角色卡单点覆盖 |
+| `override.json`（launch/模型/超时） | 实例卡/角色卡字段；端口在角色加载时自动解析写入 |
+| `launch-ports.json` 端口映射 | 仅作默认表；角色卡 `launch.browser.*_port` 优先 |
+
+仅当容器服务名/端口与框架默认**不同**时才需要自定义（设置页角色卡或 `store/config.json` 覆盖对应字段即可）；CLI 侧等价 `mailbus test-connection <instance_id>`。装配结果（该角色最终加载哪些 skills/rules/人设、push 实际走哪条通道）见角色卡「装配结果」。
 
 ### 模型与 push 命令
 

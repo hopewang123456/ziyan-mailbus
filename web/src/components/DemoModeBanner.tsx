@@ -17,8 +17,10 @@ export function DemoModeBanner() {
     void (async () => {
       const r = await api<TraceResp>("/api/demo/trace");
       if (cancelled) return;
-      setActive(Boolean(r.ok && r.data?.active));
-      setTaskId(r.data?.task_id || "");
+      if (r.ok) {
+        setActive(Boolean(r.data.active));
+        setTaskId(r.data.task_id || "");
+      }
     })();
     return () => {
       cancelled = true;

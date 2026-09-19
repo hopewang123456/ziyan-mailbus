@@ -145,6 +145,8 @@ export function AgentRuntimePanel() {
   const [scanMsg, setScanMsg] = useState("");
   const [scanResult, setScanResult] = useState<Record<string, unknown> | null>(null);
   const [connBusy, setConnBusy] = useState(false);
+  const [assembly, setAssembly] = useState<{ id: string; card: Record<string, unknown> } | null>(null);
+  const [assemblyBusy, setAssemblyBusy] = useState(false);
   const [connResult, setConnResult] = useState<{
     ok?: boolean;
     roles_loaded?: string[];
@@ -241,6 +243,16 @@ export function AgentRuntimePanel() {
     }
     await load();
     return data.instance || null;
+  }
+
+  async function openAssembly(roleId: string) {
+    // E5 装配结果卡片：skills/rules/人设分层 + push 实际通道 + 上次实测投递成功时间
+    setAssemblyBusy(true);
+    setAssembly(null);
+    const r = await api<Record<string, unknown>>(`/api/agents/assembly?id=${encodeURIComponent(roleId)}`);
+    setAssemblyBusy(false);
+    if (r.ok) setAssembly({ id: roleId, card: r.data || {} });
+    else setMsg(r.error);
   }
 
   async function testConnection() {
@@ -880,6 +892,67 @@ export function AgentRuntimePanel() {
         <RoleFaceStack roleIds={active?.role_ids || roles.map((r) => r.id)} />
       </div>
       {msg && <p className="text-[13px] text-amber-signal">{msg}</p>}
+      {assemblyBusy && <p className="text-[12px] text-mute">装配结果计算中…</p>}
+      {assembly && (
+        <div className="soft-panel space-y-2 px-4 py-3 text-[12px]">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-display text-[0.95rem] text-frost">装配结果 · {assembly.id}</p>
+            <button type="button" className="hud-btn !px-2 !py-0.5 text-[11px]" onClick={() => setAssembly(null)}>
+              收起
+            </button>
+          </div>
+          {(() => {
+            const c = assembly.card as {
+              framework?: string;
+              skills?: { framework?: unknown[]; groups?: Record<string, unknown[]>; private?: unknown[]; final?: unknown[]; overrides?: string[] };
+              rules?: { framework?: string[]; personal?: string[] };
+              persona?: { scanned?: string[]; user?: string[]; persona_files_exist?: boolean };
+              push?: Record<string, unknown>;
+              last_smoke_ok_at?: string;
+              enabled?: boolean;
+            };
+            return (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="soft-inset px-3 py-2">
+                  <p className="text-[11px] text-mute">Skills（三层合并）</p>
+                  <p className="mt-1">
+                    框架 {c.skills?.framework?.length ?? 0} · 组 {Object.keys(c.skills?.groups || {}).length} · 私有 {c.skills?.private?.length ?? 0} → 最终 {c.skills?.final?.length ?? 0}
+                  </p>
+                  {(c.skills?.overrides || []).length > 0 ? (
+                    <p className="mt-1 text-[11px] text-amber-signal">覆盖: {(c.skills?.overrides || []).slice(0, 3).join("；")}</p>
+                  ) : null}
+                </div>
+                <div className="soft-inset px-3 py-2">
+                  <p className="text-[11px] text-mute">Rules / 人设</p>
+                  <p className="mt-1">rules 框架 {c.rules?.framework?.length ?? 0} + 个人 {c.rules?.personal?.length ?? 0}</p>
+                  <p className="mt-0.5 text-[11px] text-mute">
+                    人设: 扫描 {c.persona?.scanned?.length ?? 0} · 添加 {c.persona?.user?.length ?? 0}
+                    {c.persona?.persona_files_exist === false ? "（有路径缺失）" : ""}
+                  </p>
+                </div>
+                <div className="soft-inset px-3 py-2">
+                  <p className="text-[11px] text-mute">Push 实际通道（含派生默认）</p>
+                  <p className="mt-1 font-mono text-[11px]">
+                    {String(c.push?.channel || "-")} · {String(c.push?.container || "本机")}
+                    {c.push?.profile ? ` (profile ${String(c.push.profile)})` : ""}
+                  </p>
+                  <p className="mt-0.5 font-mono text-[11px] text-mute">model: {String(c.push?.model || "-")}</p>
+                </div>
+                <div className="soft-inset px-3 py-2">
+                  <p className="text-[11px] text-mute">装配 ≠ 生效：实测佐证</p>
+                  <p className="mt-1">
+                    {c.last_smoke_ok_at ? (
+                      <span className="text-mint">上次测试连接全绿: {String(c.last_smoke_ok_at).slice(0, 19)}</span>
+                    ) : (
+                      <span className="text-amber-signal">尚未实测——点实例「测试连接」取得三段全绿</span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
       {busy && roles.length === 0 ? (
         <div className="agent-empty-soft">
           <p className="font-display text-base text-frost">正在请来员工…</p>
@@ -921,6 +994,20 @@ export function AgentRuntimePanel() {
                   <p className="mt-0.5 truncate font-mono text-[10px] text-mute">{role.id}</p>
                 </div>
                 <span className="agent-chip">配置</span>
+                <span
+                  role="button"
+                  tabIndex={0}
+                  className="agent-chip cursor-pointer underline-offset-2 hover:underline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void openAssembly(role.id);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void openAssembly(role.id);
+                  }}
+                >
+                  装配
+                </span>
               </button>
             </li>
           ))}

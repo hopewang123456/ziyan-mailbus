@@ -800,6 +800,17 @@ def format_connection_text(*args: Any, **kwargs: Any):
 
 
 
+def assembly_card(*args: Any, **kwargs: Any):
+    """E5 装配结果卡片 — api/application 经此访问（分层约束）。
+
+    实际实现见 `lib.adapters.config.assembly_card.assembly_card`。
+    """
+    from lib.adapters.config.assembly_card import assembly_card as _impl
+
+    return _impl(*args, **kwargs)
+
+
+
 def push_gate(*args: Any, **kwargs: Any):
     """E2 push 预算查询 — application 层经此访问（分层约束）。"""
     from lib.adapters.orchestration.automation import push_gate as _impl

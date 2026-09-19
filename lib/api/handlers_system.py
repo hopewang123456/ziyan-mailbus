@@ -1526,3 +1526,22 @@ def handle_demo_trace(handler):
         })
     except Exception as exc:
         handler._send_json({"status": "error", "error": str(exc)[:300]}, 500)
+
+
+def handle_agent_assembly(handler):
+    """GET /api/agents/assembly?id=<agent_id> — E5 装配结果卡片。"""
+    qs = handler.path.split("?", 1)[1] if "?" in handler.path else ""
+    params = dict(part.split("=", 1) for part in qs.split("&") if "=" in part)
+    agent_id = params.get("id", "").strip()
+    if not agent_id:
+        handler._send_json({"status": "error", "error": "id required"}, 400)
+        return
+    from lib.composition import assembly_card
+
+    try:
+        card = assembly_card(handler.data_dir, agent_id)
+        handler._send_json({"status": "ok", **card})
+    except ValueError as exc:
+        handler._send_json({"status": "error", "error": str(exc)}, 404)
+    except Exception as exc:
+        handler._send_json({"status": "error", "error": str(exc)[:300]}, 500)

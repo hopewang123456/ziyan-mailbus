@@ -335,6 +335,21 @@ def load_roles_for_instance(data_dir: str, instance_id: str) -> dict[str, Any]:
 
         if not rec.get("auth") and isinstance(inst.get("auth"), dict):
             rec["auth"] = dict(inst["auth"])
+
+        # E4 五步并一步：docker 服务/管线从框架默认派生并显式落到角色卡
+        # （transport.json 的核心语义；运行时 resolve_container 本可兜底，
+        # 落卡让派生结果可见、可在此单点覆盖）。本机框架（claude_code 等）无容器跳过。
+        if not rec.get("docker"):
+            try:
+                from lib.adapters.frameworks import get_adapter
+
+                adapter = get_adapter(role_type)
+                svc = str(getattr(adapter, "container_service", "") or "").strip()
+                if svc:
+                    rec["docker"] = {"service": svc, "profile": rid, "_derived": True}
+            except Exception:
+                pass
+
         if rid not in agents:
             created.append(rid)
         else:

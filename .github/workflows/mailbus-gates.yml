@@ -57,6 +57,7 @@ jobs:
             tests/test_token_ledger.py \
             tests/test_demo_chain.py \
             tests/test_demo_api.py \
+            tests/test_wave3_onboarding.py \
             tests/test_harness_production_wait.py \
             tests/test_tracker.py \
             tests/test_api_error_envelope.py \

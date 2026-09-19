@@ -181,7 +181,7 @@ def run_connection_test(
                 "error": "load_roles_failed",
                 "detail": str(exc)[:200],
             }
-            return _finish(inst, atype, stages, roles_loaded)
+            return _finish(data_dir, inst, atype, stages, roles_loaded)
 
     if not target:
         if loaded:
@@ -201,16 +201,34 @@ def run_connection_test(
             data_dir, inst, target_role=target, ack_timeout_sec=ack_timeout_sec,
         )
 
-    return _finish(inst, atype, stages, roles_loaded)
+    return _finish(data_dir, inst, atype, stages, roles_loaded)
 
 
 def _finish(
+    data_dir: str,
     inst: dict[str, Any],
     atype: str,
     stages: dict[str, Any],
     roles_loaded: list[str],
 ) -> dict[str, Any]:
     ok = all(bool(s.get("ok")) for s in stages.values())
+    if ok:
+        # D2「装配 ≠ 生效」：三段全绿打点实例卡，装配结果卡片据此展示「上次实测投递成功时间」
+        try:
+            import os as _os
+
+            from lib.infra.utils import json_write as _jw, _now_iso as _now
+
+            cfg_path = _os.path.join(data_dir, "config.json")
+            cfg = json_read(cfg_path, {})
+            instances = dict(cfg.get("agent_instances") or {})
+            iid = str(inst.get("id") or "")
+            if iid in instances:
+                instances[iid]["last_smoke_ok_at"] = _now()
+                cfg["agent_instances"] = instances
+                _jw(cfg_path, cfg)
+        except Exception:
+            pass
     return {
         "instance_id": str(inst.get("id") or ""),
         "framework": atype,

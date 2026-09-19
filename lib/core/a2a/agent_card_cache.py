@@ -50,7 +50,12 @@ def enrich_agent_channels(agent_id: str, entry: dict) -> dict:
     """合并 agent-channels.json defaults（channels 深合并，保留 per-agent use_streaming 等）。"""
     merged = dict(entry)
     ch_doc = json_read(_channels_path(), {})
-    defaults = (ch_doc.get("defaults") or {}).get(merged.get("runtime") or merged.get("framework") or "") or {}
+    # E4：defaults 键按 runtime → framework → **type** 回落——角色卡常只有 type
+    # （此前 codex/claude_code/opencode 的 local_cli 默认因此从未生效）。
+    fw_key = merged.get("runtime") or merged.get("framework") or merged.get("type") or ""
+    defaults = (ch_doc.get("defaults") or {}).get(str(fw_key)) or {}
+    if not defaults and merged.get("type") in ("hermes", "hermes_profile"):
+        defaults = (ch_doc.get("defaults") or {}).get("hermes_profile") or {}
     if defaults.get("channels"):
         merged["channels"] = _merge_channel_defaults(defaults["channels"], merged.get("channels") or {})
     if defaults.get("endpoint") and not merged.get("endpoint"):
