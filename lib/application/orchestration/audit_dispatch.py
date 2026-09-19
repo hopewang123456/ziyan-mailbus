@@ -27,6 +27,7 @@ NO_AUDIT_PREFIXES = (
     "msg-",
     "game-lvup-",
     "smoke-",
+    "demo-",
     "test-",
     "pipeline-",
 ) + SKIP_TIMEOUT_PREFIXES

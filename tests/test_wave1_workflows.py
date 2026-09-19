@@ -35,9 +35,13 @@ class TestFleetHealthLines(unittest.TestCase):
         self.assertIn("agents: 1", joined)
 
     def test_recent_errors_counted(self):
+        from datetime import datetime, timedelta, timezone
+
         from lib.adapters.ops.jobs import fleet_health_lines
+        # ts 相对 now：硬编码日期会在跨午夜时滑出 24h 窗口（time-bomb）
+        recent = datetime.now(timezone(timedelta(hours=8))) - timedelta(hours=1)
         with open(os.path.join(self.data_dir, "errors", "e.jsonl"), "a", encoding="utf-8") as f:
-            f.write(json.dumps({"event": "x", "ts": "2026-09-19T00:00:00+0800"}) + "\n")
+            f.write(json.dumps({"event": "x", "ts": recent.strftime("%Y-%m-%dT%H:%M:%S+0800")}) + "\n")
             f.write(json.dumps({"event": "old", "ts": "2025-01-01T00:00:00+0800"}) + "\n")
         lines = fleet_health_lines(self.data_dir)
         self.assertIn("近 24h 错误记录: 1", "\n".join(lines))

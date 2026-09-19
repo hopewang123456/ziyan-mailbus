@@ -1503,6 +1503,39 @@ def cmd_tokens(args) -> int:
     return 0
 
 
+def cmd_demo(args) -> int:
+    """Wave 2 E-demo：零依赖演示链（建单→派工→执行→回执→验收→归档）。
+
+    mailbus demo            跑一条两步演示工单（demo 数据隔离在 <store>/demo/）
+    mailbus demo --clean    一键清除演示数据
+    """
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+
+    from lib.application.ops.demo_chain import clean_demo, demo_dir, run_demo
+
+    if getattr(args, "clean", False):
+        removed = clean_demo(data_dir)
+        print("✓ 演示数据已清除" if removed else "演示数据不存在（无需清理）")
+        print(f"  命名空间: {demo_dir(data_dir)}")
+        return 0
+
+    print("mailbus demo — 零依赖演示（不装框架、不配 key、零 LLM 消耗）")
+    print(f"  演示数据隔离在 {demo_dir(data_dir)}，一键清除: mailbus demo --clean\n")
+    result = run_demo(
+        data_dir,
+        intent=getattr(args, "intent", "") or "演示：整理目录并输出清单",
+        on_event=print,
+    )
+    if not result.get("ok"):
+        print(f"\n✗ 演示链未走完: status={result.get('status') or result.get('error')}")
+        return 1
+    print(f"\n✓ 演示完成（task={result['task_id']}）。")
+    print("  下一步：接入你自己的 agent —— 设置页新建实例卡后点「测试连接」，或 CLI mailbus test-connection <instance_id>")
+    return 0
+
+
 def cmd_agent_add(args) -> int:
     """注册新 agent"""
     config_path = _find_config(args)

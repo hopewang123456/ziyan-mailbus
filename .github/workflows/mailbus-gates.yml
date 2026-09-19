@@ -55,6 +55,7 @@ jobs:
             tests/test_push_budget.py \
             tests/test_dlq_and_loops.py \
             tests/test_token_ledger.py \
+            tests/test_demo_chain.py \
             tests/test_harness_production_wait.py \
             tests/test_tracker.py \
             tests/test_api_error_envelope.py \

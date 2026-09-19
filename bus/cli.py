@@ -42,6 +42,7 @@ from lib.application.commands.commands import (  # noqa: E402
     cmd_task_from_template,
     cmd_test_connection,
     cmd_dlq,
+    cmd_demo,
     cmd_tokens,
 )
 
@@ -160,6 +161,12 @@ def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
     p.add_argument("--task", default="", help="单工单下钻（尖峰归因）")
     p.add_argument("--limit", type=int, default=50, help="下钻条数（默认 50）")
     p.set_defaults(func=cmd_tokens)
+
+    p = sub.add_parser("demo", help="零依赖演示：一条工单完整流转（建单→派工→执行→回执→验收→归档）")
+    _add_data_dir_arg(p)
+    p.add_argument("--intent", default="", help="演示工单意图（默认内置）")
+    p.add_argument("--clean", action="store_true", help="一键清除演示数据（<store>/demo/）")
+    p.set_defaults(func=cmd_demo)
 
     p = sub.add_parser("status", help="查看消息状态")
     _add_data_dir_arg(p)
