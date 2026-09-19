@@ -107,17 +107,41 @@ def dispatch_first_step(data_dir: str, task: dict) -> bool:
     step = chain[0]
     tid = task.get("task_id") or task.get("id") or ""
     if not step.get("to_agent") and not step.get("to_person"):
-        try:
-            from lib.application.orchestration.dispatch.role_resolver import resolve_agent_for_role_type
+        # E7：工位步先按工位在岗解析；空缺 → blocked + 待裁决 + 零 token（不尝试投递）
+        if step.get("station"):
+            from lib.application.orchestration.dispatch.station_resolver import (
+                resolve_agent_for_station,
+                station_vacancy_blocked,
+            )
 
-            rt = int(step.get("role_type") or 0)
-            pin = step.get("pin_agent") or step.get("agent_id")
-            agent_id, meta = resolve_agent_for_role_type(data_dir, rt, pin_agent=pin)
+            agent_id, st_meta = resolve_agent_for_station(data_dir, str(step["station"]))
+            if not agent_id and st_meta.get("vacancy"):
+                station_vacancy_blocked(task, data_dir, str(step["station"]),
+                                        candidates=st_meta.get("candidates"))
+                try:
+                    from lib.application.orchestration.tracker import TaskTracker
+
+                    tr = TaskTracker(data_dir)
+                    json_write(tr._task_path(tid), task)
+                except Exception:
+                    pass
+                return False
             if agent_id:
                 step["to_agent"] = agent_id
-                step["dispatch_meta"] = meta
-        except Exception:
-            pass
+                step["to_person"] = agent_id
+                step["dispatch_meta"] = st_meta
+        if not step.get("to_agent") and not step.get("to_person"):
+            try:
+                from lib.application.orchestration.dispatch.role_resolver import resolve_agent_for_role_type
+
+                rt = int(step.get("role_type") or 0)
+                pin = step.get("pin_agent") or step.get("agent_id")
+                agent_id, meta = resolve_agent_for_role_type(data_dir, rt, pin_agent=pin)
+                if agent_id:
+                    step["to_agent"] = agent_id
+                    step["dispatch_meta"] = meta
+            except Exception:
+                pass
 
     if _push_budget_blocked(task, data_dir, tid):
         try:

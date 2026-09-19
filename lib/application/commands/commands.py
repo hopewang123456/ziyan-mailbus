@@ -1503,6 +1503,37 @@ def cmd_tokens(args) -> int:
     return 0
 
 
+def cmd_stations(args) -> int:
+    """Wave 4 工位注册表：list 查看 / migrate 从 role-types+org_defaults 迁移（幂等）。"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+
+    from lib.application.ops.stations_migrate import derive_stations, migrate_stations
+
+    action = getattr(args, "action", "list") or "list"
+    if action == "migrate":
+        out = migrate_stations(data_dir, force=bool(getattr(args, "force", False)))
+        print(f"✓ 工位注册表已写入 config.stations（v{out['version']}，共 {out['total']} 个工位）")
+        print(f"  新建 {len(out['created'])} · 更新 {len(out['updated'])} · 保留已有 {len(out['skipped_preserved'])}")
+        if out["created"]:
+            print(f"  新建: {', '.join(out['created'])}")
+        return 0
+
+    stations = derive_stations(data_dir) if getattr(args, "derived", False) else (
+        json_read(os.path.join(data_dir, "config.json"), {}).get("stations") or {}
+    )
+    if not stations:
+        print("工位注册表为空 — 先跑: mailbus stations migrate")
+        return 0
+    print(f"工位注册表（{len(stations)} 个；派工写工位 id，运行时解析到人）:")
+    for sid, st in sorted(stations.items()):
+        cands = ", ".join(st.get("candidates") or []) or "（空缺）"
+        rt = f" · role_type={st['role_type']}" if st.get("role_type") is not None else ""
+        print(f"  · {sid}（{st.get('title') or sid}）: {cands}{rt}")
+    return 0
+
+
 def cmd_demo(args) -> int:
     """Wave 2 E-demo：零依赖演示链（建单→派工→执行→回执→验收→归档）。
 

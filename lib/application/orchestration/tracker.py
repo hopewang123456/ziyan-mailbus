@@ -192,6 +192,15 @@ class TaskTracker:
         env_action = dispatch_action_from_envelope(envelope)
 
         def _resolve(rt, pin, planned_item=None):
+            # E7 工位优先：条目带 station 时按工位在岗解析（空缺回传 meta，
+            # 由派工边界 dispatch_first_step 进待裁决，不在建单时阻塞）
+            if (planned_item or {}).get("station"):
+                from lib.application.orchestration.dispatch.station_resolver import resolve_agent_for_station
+
+                agent, st_meta = resolve_agent_for_station(
+                    data_root, str(planned_item["station"]), agents_cfg=agents_cfg,
+                )
+                return agent, st_meta
             step_action = dispatch_action_from_step(planned_item or {}, envelope)
             merged = {**env_action, **step_action}
             return resolve_agent_for_role_type(

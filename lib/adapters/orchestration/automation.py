@@ -34,6 +34,8 @@ def push_budget_blocked(task: dict, data_dir: str, *, config: dict | None = None
         from lib.composition import enqueue_human_queue
 
         enqueue_human_queue(data_dir, {
+            "type": "push_budget",
+            "title": "push 预算熔断",
             "source": "push_budget",
             "task_id": tid,
             "reason": (

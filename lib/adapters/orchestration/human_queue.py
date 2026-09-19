@@ -110,6 +110,8 @@ def enqueue(data_dir: str, item: dict) -> str:
         for key in (
             "hint", "task_id", "intake_id", "workflow_id", "gate_id",
             "required_attachments_min", "require_brief", "require_select_field", "context",
+            # E8 统一待裁决：来源标签与裁决上下文（station_vacancy / push_budget / …）
+            "source", "station", "reason", "severity", "ts",
         ):
             if key in item and item[key] is not None:
                 entry[key] = item[key]

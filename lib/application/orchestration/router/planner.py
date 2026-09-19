@@ -81,7 +81,30 @@ def plan_tier0(envelope: dict, *, data_dir: str = "") -> dict:
 
     if mode == "explicit":
         planned = envelope.get("planned_chain") or []
-        chain = [int(x["role_type"]) for x in planned]
+        # E7 工位版：条目可写 station（工位）替代 role_type —— 工位在册则映射
+        # 其 role_type，并把 station 透传到 planned 条目（运行时按工位解析到人）。
+        resolved: List[dict] = []
+        for x in planned:
+            rt = x.get("role_type")
+            if rt is None and x.get("station"):
+                from lib.application.orchestration.dispatch.station_resolver import station_role_type
+
+                rt = station_role_type(data_dir, str(x["station"]))
+                if rt is None:
+                    raise PlanError(
+                        "schema_invalid",
+                        f"station '{x['station']}' 未注册或未关联 role_type — 先跑 mailbus stations migrate",
+                    )
+            if rt is None:
+                raise PlanError("schema_invalid", "planned_chain entry missing role_type/station")
+            item = {"role_type": int(rt), "reason": x.get("reason") or ""}
+            if x.get("station"):
+                item["station"] = str(x["station"])
+            if x.get("pin_agent"):
+                item["pin_agent"] = x["pin_agent"]
+            resolved.append(item)
+        planned_chain = resolved
+        chain = [int(x["role_type"]) for x in planned_chain]
         method = "rules"
         guess = task_type
     else:
@@ -105,10 +128,12 @@ def plan_tier0(envelope: dict, *, data_dir: str = "") -> dict:
         if rt not in valid_rt:
             raise PlanError("schema_invalid", f"invalid role_type={rt}")
 
-    planned_chain = [
-        {"role_type": rt, "reason": _tier0_reason(guess, rt)}
-        for rt in chain
-    ]
+    if mode != "explicit":
+        # auto 模式重建 planned；explicit 模式保留已解析条目（station 透传）
+        planned_chain = [
+            {"role_type": rt, "reason": _tier0_reason(guess, rt)}
+            for rt in chain
+        ]
     skipped = sorted(set(valid_rt) - set(chain))
 
     return {

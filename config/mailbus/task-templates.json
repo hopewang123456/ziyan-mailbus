@@ -8,7 +8,10 @@
         "mode": "explicit",
         "tier": "S",
         "planned_chain": [
-          {"role_type": 8, "reason": "执行"}
+          {
+            "role_type": 8,
+            "reason": "执行"
+          }
         ]
       }
     },
@@ -20,8 +23,14 @@
         "mode": "explicit",
         "tier": "M",
         "planned_chain": [
-          {"role_type": 8, "reason": "执行"},
-          {"role_type": 5, "reason": "审查复核"}
+          {
+            "role_type": 8,
+            "reason": "执行"
+          },
+          {
+            "role_type": 5,
+            "reason": "审查复核"
+          }
         ]
       }
     },
@@ -33,7 +42,70 @@
         "mode": "explicit",
         "tier": "S",
         "planned_chain": [
-          {"role_type": 7, "reason": "巡检执行"}
+          {
+            "role_type": 7,
+            "reason": "巡检执行"
+          }
+        ]
+      }
+    },
+    {
+      "id": "single-step-station",
+      "title": "单步执行（工位版）",
+      "description": "派工写工位 developer，运行时解析到在岗角色；全空缺进待裁决、零 token",
+      "envelope": {
+        "mode": "explicit",
+        "tier": "S",
+        "task_type": "custom",
+        "planned_chain": [
+          {
+            "station": "developer",
+            "reason": "执行"
+          }
+        ]
+      }
+    },
+    {
+      "id": "code-pipeline",
+      "title": "代码流水线（工位版 V2）",
+      "description": "developer 写码提交 → reviewer 复核（denied 则打回）→ notify 结论通知",
+      "envelope": {
+        "mode": "explicit",
+        "tier": "M",
+        "task_type": "custom",
+        "planned_chain": [
+          {
+            "station": "developer",
+            "reason": "写码提交"
+          },
+          {
+            "station": "reviewer",
+            "reason": "复核（pass/denied）"
+          },
+          {
+            "station": "notify",
+            "reason": "结论通知"
+          }
+        ]
+      }
+    },
+    {
+      "id": "external-trigger",
+      "title": "外部触发处理（工位版 V2）",
+      "description": "webhook / n8n 注入 → developer 处理 → notify 通知；配套入口见 API /api/send-msg",
+      "envelope": {
+        "mode": "explicit",
+        "tier": "S",
+        "task_type": "custom",
+        "planned_chain": [
+          {
+            "station": "developer",
+            "reason": "处理外部触发"
+          },
+          {
+            "station": "notify",
+            "reason": "结果通知"
+          }
         ]
       }
     }

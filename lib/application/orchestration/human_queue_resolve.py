@@ -84,6 +84,45 @@ def apply_human_queue_resolution(
             json_write(os.path.join(data_dir, "tasks", f"{task_id}.json"), task)
         return {"routed": qtype, **result}
 
+    if qtype == "station_vacancy" and task_id:
+        # E7 工位空缺裁决：denied=挂起；approved=补员后原工位重试 /
+        # body.agent=临时指名（direct）/ body.station=改派其他工位
+        from lib.domain.fsm import TaskFsmState
+        from lib.composition import get_fsm
+
+        tr = TaskTracker(data_dir)
+        task = tr.get(task_id)
+        if not task:
+            return {"routed": qtype, "error": "task_not_found"}
+        if decision == "denied":
+            return {"routed": qtype, "ok": True, "action": "vacancy_kept_blocked"}
+        chain = task.get("chain") or []
+        step = chain[0] if chain else {}
+        reassign = str(body.get("agent") or body.get("reviewer") or "").strip()
+        restation = str(body.get("station") or "").strip()
+        if reassign:
+            step["to_agent"] = reassign
+            step["to_person"] = reassign
+            step["dispatch_meta"] = {"source": "station_adjudicate_reassign", "agent": reassign}
+        elif restation:
+            step["station"] = restation
+            step.pop("to_agent", None)
+            step.pop("to_person", None)
+        get_fsm().ensure(task)
+        task["fsm"]["state"] = TaskFsmState.EXECUTING.value
+        task["fsm"].pop("reason", None)
+        task["fsm"].pop("human_queue_id", None)
+        task["status"] = "running"
+        from lib.application.orchestration.router.dispatch import dispatch_first_step
+
+        dispatched = dispatch_first_step(data_dir, task)
+        json_write(os.path.join(data_dir, "tasks", f"{task_id}.json"), task)
+        return {
+            "routed": qtype,
+            "ok": dispatched,
+            "action": "vacancy_redispatched" if dispatched else "vacancy_still_vacant",
+        }
+
     if qtype == "a2a_input_required" and task_id:
         from lib.core.a2a.dispatch_integration import build_router, merge_agent_transport_config
         from lib.core.a2a.step_result_io import write_step_result_file

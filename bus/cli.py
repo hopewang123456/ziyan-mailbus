@@ -43,6 +43,7 @@ from lib.application.commands.commands import (  # noqa: E402
     cmd_test_connection,
     cmd_dlq,
     cmd_demo,
+    cmd_stations,
     cmd_tokens,
 )
 
@@ -167,6 +168,17 @@ def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
     p.add_argument("--intent", default="", help="演示工单意图（默认内置）")
     p.add_argument("--clean", action="store_true", help="一键清除演示数据（<store>/demo/）")
     p.set_defaults(func=cmd_demo)
+
+    p = sub.add_parser("stations", help="Wave 4 工位注册表（list / migrate）")
+    _add_data_dir_arg(p)
+    sub2 = p.add_subparsers(dest="action")
+    pl = sub2.add_parser("list", help="查看工位注册表")
+    _add_data_dir_arg(pl)
+    pl.add_argument("--derived", action="store_true", help="显示将从 role-types 派生的表（未写盘）")
+    pm = sub2.add_parser("migrate", help="从 role-types + org_defaults 迁移生成（幂等）")
+    _add_data_dir_arg(pm)
+    pm.add_argument("--force", action="store_true", help="覆盖已存在的工位定义")
+    p.set_defaults(func=cmd_stations, action="list")
 
     p = sub.add_parser("status", help="查看消息状态")
     _add_data_dir_arg(p)

@@ -118,6 +118,8 @@ def init_chain_from_planned(
         rest_start = 2
 
     rest = [int(x["role_type"]) for x in planned_chain[rest_start:]]
+    # E7 工位：rest 条目的 station 与 planned_role_types 平行携带（advance 时按工位解析）
+    rest_stations = [str(x.get("station") or "") for x in planned_chain[rest_start:]]
 
     step = {
         "step": 1,
@@ -140,6 +142,10 @@ def init_chain_from_planned(
         step["pin_agent"] = pin0
     if first.get("collab_mode"):
         step["collab_mode"] = first["collab_mode"]
+    if first.get("station"):
+        step["station"] = str(first["station"])  # 审计：工位与最终 agent 同时留痕
+    if any(rest_stations):
+        step["planned_stations"] = rest_stations
 
     chain = [step]
 

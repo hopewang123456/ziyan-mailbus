@@ -37,8 +37,9 @@ def validate_envelope(body: dict, *, data_dir: str = "") -> List[str]:
             errors.append("explicit mode requires planned_chain")
         else:
             for i, step in enumerate(planned):
-                if not isinstance(step, dict) or "role_type" not in step:
-                    errors.append(f"planned_chain[{i}] missing role_type")
+                # E7：工位版条目可写 station 替代 role_type（planner 映射）
+                if not isinstance(step, dict) or ("role_type" not in step and not step.get("station")):
+                    errors.append(f"planned_chain[{i}] missing role_type/station")
 
     tier = body.get("tier")
     if tier not in ("S", "M", "L", None):

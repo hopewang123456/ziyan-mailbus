@@ -75,6 +75,10 @@ class TestTaskTemplates(unittest.TestCase):
             chain = (t.get("envelope") or {}).get("planned_chain") or []
             self.assertTrue(chain, t["id"])
             for st in chain:
+                # Wave 4：工位版条目写 station（planner 映射 role_type），二选一
+                if st.get("station"):
+                    self.assertIsInstance(st["station"], str, t["id"])
+                    continue
                 self.assertIn(st["role_type"], valid, f"{t['id']} role_type {st['role_type']}")
 
 

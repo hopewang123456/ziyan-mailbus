@@ -62,6 +62,35 @@ def _known_agent_ids(agents: Optional[dict], data_dir: str = "") -> Set[str]:
     return set(_agent_role_map(data_dir).keys())
 
 
+def _resolve_station_assignee(
+    chain: List[dict],
+    station: str,
+    *,
+    data_dir: str,
+    agents: Optional[dict],
+) -> Tuple[Optional[str], Optional[str]]:
+    """E7：下一步按工位解析到人；空缺 → 待裁决队列并返回无人（任务转 blocked，零 token）。"""
+    from lib.application.orchestration.dispatch.station_resolver import (
+        resolve_agent_for_station,
+        station_registry,
+        station_vacancy_blocked,
+    )
+
+    st = station_registry(data_dir).get(station) or {}
+    n_role = str(st.get("title") or station)
+    agent, meta = resolve_agent_for_station(
+        data_dir, station,
+        exclude=_persons_served(chain), agents_cfg=agents,
+    )
+    if agent:
+        return n_role, agent
+    if meta.get("vacancy"):
+        task_id = str((chain[0] if chain else {}).get("task_id") or "")
+        pseudo = {"task_id": task_id}
+        station_vacancy_blocked(pseudo, data_dir, station, candidates=meta.get("candidates"))
+    return n_role, None
+
+
 def _persons_served(chain: List[dict]) -> Set[str]:
     return {s.get("to_person") for s in chain if s.get("to_person")}
 
@@ -116,7 +145,14 @@ def resolve_next_assignee(
     prt = planned_role_types_remaining(chain)
     if prt and data_dir:
         rt = int(prt[0])
+        pst = head.get("planned_stations")
+        station = ""
+        if isinstance(pst, list) and pst:
+            station = str(pst[0] or "")
+            head["planned_stations"] = [str(x or "") for x in pst[1:]]
         head["planned_role_types"] = prt[1:]
+        if station:
+            return _resolve_station_assignee(chain, station, data_dir=data_dir, agents=agents)
         return _resolve_role_type_assignee(chain, rt, data_dir=data_dir, agents=agents)
 
     planned = head.get("planned_agents")
