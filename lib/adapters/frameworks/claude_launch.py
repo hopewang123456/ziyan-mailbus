@@ -782,6 +782,7 @@ def _claude_push_argv_parts(
     agent_types: dict,
     model_alias: Optional[str],
     prompt: str,
+    global_cfg: Optional[dict] = None,
 ) -> list[str]:
     """构建 claude -p 的 argv 片段（不含可执行文件路径）。"""
     claude_cfg = agent_cfg.get("claude") or {}
@@ -805,11 +806,18 @@ def _claude_push_argv_parts(
     max_turns = agent_cfg.get("max_turns")
     if max_turns is not None:
         parts.extend(["--max-turns", str(int(max_turns))])
-    extra = (claude_cfg.get("push_flags") or "").strip()
+    # push_flags / push_allowed_tools 回落链：agent.claude 段 > 全局 mailbus_claude 段
+    # （global_cfg 由调用方注入，函数保持纯函数——测试不读真实 store）
+    gcfg = global_cfg or {}
+    extra = (claude_cfg.get("push_flags") or gcfg.get("push_flags") or "").strip()
     if extra:
         parts.extend(shlex.split(extra, posix=False))
     elif permission == "dontAsk":
-        default_tools = (claude_cfg.get("push_allowed_tools") or "").strip()
+        default_tools = (
+            claude_cfg.get("push_allowed_tools")
+            or gcfg.get("push_allowed_tools")
+            or ""
+        ).strip()
         if not default_tools:
             default_tools = "Bash,Read,Glob,Grep"
         parts.extend(["--allowedTools", default_tools])

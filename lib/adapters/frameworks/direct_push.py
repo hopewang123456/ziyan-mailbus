@@ -85,6 +85,7 @@ def _claude_direct(
 
     argv = [claude_exe] + _claude_push_argv_parts(
         agent_name, agent_cfg, agent_types, model_alias, prompt,
+        global_cfg=global_cfg,
     )
     return {
         "argv": argv,
