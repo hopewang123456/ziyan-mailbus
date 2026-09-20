@@ -97,8 +97,8 @@ export function DemoWizard() {
         </div>
         <div className="soft-inset px-3 py-2">
           <p className="text-[11px] text-mute">③ 接入你的 agent</p>
-          <Link className="hud-btn mt-2 inline-block !px-3 text-xs" to="/config">
-            设置页 · 新建实例卡
+          <Link className="hud-btn mt-2 inline-block !px-3 text-xs" to="/">
+            舰桥 · 智能体旋钮 → 新建实例卡
           </Link>
           <p className="mt-1 text-[10px] text-mute">填 type/run_target/install_path 后点「测试连接」三段全绿即接好</p>
         </div>

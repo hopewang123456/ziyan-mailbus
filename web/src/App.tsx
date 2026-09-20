@@ -3,7 +3,6 @@ import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom"
 import { Shell } from "./components/Shell";
 import { CockpitPrototype } from "./components/CockpitPrototype";
 import { HomePage } from "./pages/HomePage";
-import { ConfigPage } from "./pages/ConfigPage";
 import { ClinicPage } from "./pages/ClinicPage";
 import { ManagerDeskPage } from "./pages/ManagerDeskPage";
 import { getUiMode, setUiMode } from "./lib/ui-mode";
@@ -16,7 +15,6 @@ import { DemoModeBanner } from "./components/DemoModeBanner";
  */
 const NAV = [
   { to: "/", labelKey: "cockpitUi" as const },
-  { to: "/config", label: "配置合页" },
   { to: "/clinic", label: "诊所" },
   { to: "/manager", label: "协调台" },
 ] as const;
@@ -90,7 +88,7 @@ function LegacyApp() {
       <Routes>
         <Route path="/legacy" element={<HomePage />} />
         <Route path="/showcase" element={<Navigate to="/" replace />} />
-        <Route path="/config" element={<ConfigPage variant="full" />} />
+        <Route path="/config" element={<ToCockpit />} />
         <Route path="/clinic" element={<ClinicPage />} />
         <Route path="/manager" element={<ManagerDeskPage />} />
         {/* 旧直链收口：回舰桥 */}

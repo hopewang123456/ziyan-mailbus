@@ -36,7 +36,7 @@ export function AuthTokenBanner() {
     };
   }, []);
 
-  if (loc.pathname.startsWith("/config")) return null;
+  if (loc.pathname.startsWith("/legacy")) return null;
   if (!visible) return null;
 
   const title = stale
@@ -51,8 +51,8 @@ export function AuthTokenBanner() {
       <p className="font-medium text-amber-signal">{title}</p>
       <p className="mt-1 text-[12px] leading-snug text-mute">{body}</p>
       <p className="mt-2 text-[12px]">
-        <Link className="underline decoration-amber-signal/60 underline-offset-2" to="/config">
-          打开配置合页 → API / Token
+        <Link className="underline decoration-amber-signal/60 underline-offset-2" to="/">
+          打开舰桥 → 齿轮旋钮（API / Token）
         </Link>
       </p>
     </div>

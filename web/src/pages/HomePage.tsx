@@ -36,7 +36,7 @@ export function HomePage() {
         <Link to="/" className="hud-btn hud-btn-primary">
           返回舰桥
         </Link>
-        <Link to="/config" className="hud-btn">
+        <Link to="/" className="hud-btn">
           配置合页
         </Link>
         <Link
@@ -50,7 +50,7 @@ export function HomePage() {
 
       <div className="mt-12 grid gap-3 sm:grid-cols-3">
         {[
-          ["配置合页", "/config", "与舰桥同面板"],
+          ["舰桥设置旋钮", "/", "智能体/总线/齿轮"],
           ["诊所", "/clinic", "doctor / tools"],
           ["协调台", "/manager", "待我处理"],
         ].map(([title, to, sub]) => (

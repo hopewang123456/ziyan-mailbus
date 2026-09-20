@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { Navigate } from "react-router-dom";
 import { api, getToken, setToken } from "../lib/api";
 import { DiscoverPage } from "./DiscoverPage";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { ModelConfigPanel } from "../components/ModelConfigPanel";
 import { AgentRuntimePanel } from "../components/AgentInstancePanel";
-import { AssetPathsPanel } from "../components/AssetPathsPanel";
 import { BusExtrasPanel } from "../components/BusExtrasPanel";
 import { SoftFold } from "../components/SoftFold";
 import { ComposeFilesPanel } from "../components/ComposeFilesPanel";
@@ -861,6 +861,12 @@ export function ConfigPage({ variant = "full" }: { variant?: ConfigVariant }) {
             <SoftFold title="框架运行时" hint="frameworks · Codex · Claude">
               <RuntimeFrameworkPanel />
             </SoftFold>
+      <SoftFold title="技能源 / 发现" hint="skills-index 分层 · 扫描发现">
+        <SkillsSourcePanel />
+        <div className="mt-3">
+          <DiscoverPage compact />
+        </div>
+      </SoftFold>
           </div>
         </div>
       </div>
@@ -895,64 +901,6 @@ export function ConfigPage({ variant = "full" }: { variant?: ConfigVariant }) {
     );
   }
 
-  // full = 驾驶舱三旋钮合页（agent + bus + gear），不再另起「全部 sections」心智
-  return (
-    <div className="space-y-4">
-      <header>
-        <p className="hud-label">Settings hub</p>
-        <h2 className="mt-1 font-display text-2xl tracking-wide text-frost">配置合页</h2>
-        <p className="mt-1 text-sm text-mute">
-          与舰桥「智能体 / 总线 / 齿轮」同面板；旧路由 <code className="font-mono">/config</code> 保留
-        </p>
-      </header>
-      <SoftFold title="齿轮 · API / Token / 鉴权" hint="与舰桥 Gear 一致" defaultOpen>
-        <GearPanel />
-        <div className="mt-3">
-          <AuthSecurityPanel />
-        </div>
-      </SoftFold>
-      <SoftFold title="智能体 · 模型 / 实例 / 框架运行时" hint="与舰桥 Agent 一致">
-        <ModelConfigPanel filter="provider" />
-        <ModelConfigPanel filter="routing" />
-        <ModelConfigPanel filter="internal" />
-        <ModelConfigPanel filter="services" />
-        <div className="mt-3">
-          <AgentRuntimePanel />
-        </div>
-        <div className="mt-3">
-          <RuntimeFrameworkPanel />
-        </div>
-        <div className="mt-3">
-          <AgentOpsPanel />
-        </div>
-      </SoftFold>
-      <SoftFold title="总线 · 资产 / Compose / 设备 / 调度" hint="与舰桥 Bus 一致">
-        <AssetPathsPanel />
-        <div className="mt-3">
-          <BusExtrasPanel />
-        </div>
-        <SoftFold title="调度 / Intake / 自动化">
-          <BusOpsPanel />
-        </SoftFold>
-        <SoftFold title="路由 / 端口">
-          <BusRoutesPanel />
-        </SoftFold>
-        <SoftFold title="工作流注册表" hint="只读浏览 / 轻量编辑">
-          <WorkflowBoardPage />
-        </SoftFold>
-        <SoftFold title="Compose YAML" hint="加载/编辑/保存 · 不含启停">
-          <ComposeFilesPanel />
-        </SoftFold>
-        <SoftFold title="外接设备桥">
-          <DeviceBridgePanel />
-        </SoftFold>
-      </SoftFold>
-      <SoftFold title="技能源 / 发现" hint="legacy 合页附加">
-        <SkillsSourcePanel />
-        <div className="mt-3">
-          <DiscoverPage />
-        </div>
-      </SoftFold>
-    </div>
-  );
+  // full 聚合视图已退役（与舰桥三旋钮 100% 重合）——统一入口为舰桥
+  return <Navigate to="/" replace />;
 }
