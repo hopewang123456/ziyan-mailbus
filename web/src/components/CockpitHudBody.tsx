@@ -13,6 +13,7 @@ import { InboxPage } from "../pages/InboxPage";
 import { CommandBriefPage } from "../pages/CommandBriefPage";
 import { ApiListPage } from "../pages/thin/ApiListPage";
 import { TokensTodayPage } from "../pages/thin/TokensTodayPage";
+import { TaskTracePage } from "../pages/thin/TaskTracePage";
 import { WorkflowBoardPage } from "../pages/thin/WorkflowBoardPage";
 import { getManagerPending } from "../lib/api";
 import { t, type I18nKey } from "../lib/i18n";
@@ -119,6 +120,7 @@ function OtherCards() {
         { id: "stats", titleKey: "stats", blurb: "审核统计" },
         { id: "patrol", titleKey: "patrol", blurb: "巡检报告" },
         { id: "tokens", titleKey: "tokens", blurb: "今日 Token · 尖峰归因" },
+        { id: "trace", titleKey: "trace", blurb: "工单回放 · 生命周期时序" },
         { id: "alerts", titleKey: "alerts", blurb: "告警日志" },
       ]}
       render={(id) => {
@@ -141,6 +143,8 @@ function OtherCards() {
             return <ApiListPage title={t("patrol")} path="/api/patrol-reports" variant="mail" />;
           case "tokens":
             return <TokensTodayPage />;
+          case "trace":
+            return <TaskTracePage />;
           case "alerts":
             return <ApiListPage title={t("alerts")} path="/api/alerts" listKey="alerts" variant="mail" />;
           default:

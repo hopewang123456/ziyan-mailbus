@@ -225,6 +225,8 @@ def resolve_human_queue_item(
         "selected_copy_id": resolution.get("selected_copy_id"),
         "brief": resolution.get("brief"),
         "action": resolution.get("action"),
+        "agent": resolution.get("agent"),
+        "station": resolution.get("station"),
     }
     side = apply_human_queue_resolution(data_dir, pending, body)
     return item, side

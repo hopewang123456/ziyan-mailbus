@@ -720,7 +720,8 @@ def handle_human_queue_resolve(handler, item_id: str):
         "comment": body.get("comment") or body.get("reason") or "",
         "reason": body.get("reason") or "",
     }
-    for key in ("attachments", "selected_copy_id", "brief", "action"):
+    for key in ("attachments", "selected_copy_id", "brief", "action",
+                "agent", "station"):  # station_vacancy 裁决：临时指名 / 改派工位
         if key in body:
             resolution[key] = body[key]
     orch = build_orchestration(handler.data_dir)
@@ -908,3 +909,21 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
         "next_step": outcome.get("next_step"),
         "dispatch_ok": dispatch_ok,
     })
+
+
+def handle_task_trace(handler):
+    """GET /api/tasks/trace?id=<task_id> — E9 生命周期回放时序。"""
+    qs = handler.path.split("?", 1)[1] if "?" in handler.path else ""
+    params = dict(part.split("=", 1) for part in qs.split("&") if "=" in part)
+    task_id = params.get("id", "").strip()
+    if not task_id:
+        handler._send_json({"status": "error", "error": "id required"}, 400)
+        return
+    from lib.application.ops.task_trace import task_trace
+
+    try:
+        handler._send_json({"status": "ok", **task_trace(handler.data_dir, task_id)})
+    except ValueError as exc:
+        handler._send_json({"status": "error", "error": str(exc)}, 404)
+    except Exception as exc:
+        handler._send_json({"status": "error", "error": str(exc)[:300]}, 500)

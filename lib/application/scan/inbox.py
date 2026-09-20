@@ -712,6 +712,15 @@ def run_housekeeping(data_dir: str, agents: dict):
     # 超时检测：检查所有 agent 的 inbox，超时未处理的消息自动催办
     _check_timeouts(data_dir, agents, paths['inbox'], paths)
 
+    # Wave 5 E10：token 日预算告警（首次超限动作一次，alerter 自带去重）
+    try:
+        from lib.application.ops.budget_alert import check_token_budget
+        out = check_token_budget(data_dir)
+        if out.get("action") == "alerted":
+            debug(f"[scanner] token budget alerted: {out.get('est_tokens_total')}/{out.get('limit')}")
+    except Exception as exc:
+        warn(f"[scanner] budget check error: {exc}")
+
     # Tracker 催办检测：检查 tracker 中 running 任务是否需要催办
     try:
         from lib.application.orchestration.tracker import TaskTracker

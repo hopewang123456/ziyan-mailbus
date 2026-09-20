@@ -45,6 +45,7 @@ from lib.application.commands.commands import (  # noqa: E402
     cmd_demo,
     cmd_stations,
     cmd_tokens,
+    cmd_trace,
 )
 
 
@@ -168,6 +169,11 @@ def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
     p.add_argument("--intent", default="", help="演示工单意图（默认内置）")
     p.add_argument("--clean", action="store_true", help="一键清除演示数据（<store>/demo/）")
     p.set_defaults(func=cmd_demo)
+
+    p = sub.add_parser("trace", help="E9 工单生命周期回放（时序留痕）")
+    _add_data_dir_arg(p)
+    p.add_argument("task_id", help="任务 ID")
+    p.set_defaults(func=cmd_trace)
 
     p = sub.add_parser("stations", help="Wave 4 工位注册表（list / migrate）")
     _add_data_dir_arg(p)

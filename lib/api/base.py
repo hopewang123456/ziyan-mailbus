@@ -359,6 +359,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/tokens/summary": lambda: h["system"].handle_token_summary(self),
             "/api/demo/trace": lambda: h["system"].handle_demo_trace(self),
             "/api/agents/assembly": lambda: h["system"].handle_agent_assembly(self),
+            "/api/tasks/trace": lambda: h["tasks"].handle_task_trace(self),
             "/api/locale/errors": lambda: h["system"].handle_locale_errors(self),
             "/api/workload": lambda: h["system"].handle_workload(self),
             "/api/send-msg": lambda: h["inbox"].handle_send_msg(self),

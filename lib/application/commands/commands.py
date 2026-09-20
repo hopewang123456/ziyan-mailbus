@@ -1503,6 +1503,27 @@ def cmd_tokens(args) -> int:
     return 0
 
 
+def cmd_trace(args) -> int:
+    """Wave 5 E9：工单生命周期回放（发起→派工→投递→执行→回执→验收→归档）。"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+
+    from lib.application.ops.task_trace import format_trace_text, task_trace
+
+    task_id = str(getattr(args, "task_id", "") or "").strip()
+    if not task_id:
+        print("✗ 需要 task_id（mailbus trace <task_id>）")
+        return 1
+    try:
+        trace = task_trace(data_dir, task_id)
+    except ValueError as exc:
+        print(f"✗ {exc}")
+        return 1
+    print(format_trace_text(trace))
+    return 0
+
+
 def cmd_stations(args) -> int:
     """Wave 4 工位注册表：list 查看 / migrate 从 role-types+org_defaults 迁移（幂等）。"""
     config_path = _find_config(args)

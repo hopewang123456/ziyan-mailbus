@@ -800,6 +800,16 @@ def format_connection_text(*args: Any, **kwargs: Any):
 
 
 
+def push_alert(*args: Any, **kwargs: Any):
+    """告警推送 — application 经此访问（分层约束）。
+
+    实际实现见 `lib.adapters.ops.alerter.push_alert`。
+    """
+    from lib.adapters.ops.alerter import push_alert as _impl
+
+    return _impl(*args, **kwargs)
+
+
 def assembly_card(*args: Any, **kwargs: Any):
     """E5 装配结果卡片 — api/application 经此访问（分层约束）。
 
