@@ -807,6 +807,8 @@ function GearPanel() {
   );
 }
 
+type ConfigVariant = "full" | "agent" | "llm" | "bus" | "gear";
+
 /** Settings surface for cockpit knobs + gear. `full` = hub composing the same panels. */
 export function ConfigPage({ variant = "full" }: { variant?: ConfigVariant }) {
   // llm 历史别名 → agent（舰桥模型旋钮）
@@ -946,7 +948,7 @@ export function ConfigPage({ variant = "full" }: { variant?: ConfigVariant }) {
         </SoftFold>
       </SoftFold>
       <SoftFold title="技能源 / 发现" hint="legacy 合页附加">
-        <SkillsSourceView />
+        <SkillsSourcePanel />
         <div className="mt-3">
           <DiscoverPage />
         </div>

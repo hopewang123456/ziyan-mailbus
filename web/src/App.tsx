@@ -72,7 +72,7 @@ function LegacyApp() {
             <NavLink
               key={item.to}
               to={item.to}
-              end={"end" in item ? item.end : false}
+              end={"end" in item ? Boolean(item.end) : false}
               className={({ isActive }) =>
                 [
                   "block rounded px-3 py-2 font-body text-[13px] transition",
