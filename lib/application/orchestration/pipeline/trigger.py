@@ -53,6 +53,12 @@ def trigger_task(data_dir: str, task_id: str, agents: dict, paths: dict) -> dict
 def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tra: TaskTracker) -> dict:
     """处理单个 pipeline 任务的 result → apply_submit → dispatch。"""
     f = _fsm()
+    # 状态复位（实验修复）：中断/旧路径把 status 标 failed 后流程继续走
+    # （fsm 仍活动态）时，以 fsm 为准复位 status，避免 failed/executing 不同步污染报表。
+    _fsm_state_pre = (t.get("fsm") or {}).get("state", "")
+    if t.get("status") == "failed" and _fsm_state_pre == TaskFsmState.EXECUTING.value:
+        t["status"] = "running"
+        t.pop("interrupted", None)
     task_id = t.get("task_id", t.get("id", ""))
     task_file = os.path.join(tra.tasks_dir, "%s.json" % task_id)
     raw_chain = t.get("chain")
