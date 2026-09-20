@@ -162,6 +162,10 @@ def _run_job(job: dict, data_dir: str, config: dict, sched_cfg: dict) -> None:
     _register_runners()
     runner = _JOB_RUNNERS.get(jid)
     if not runner:
+        # 静默空转会让人以为定时任务在跑（lingxun_patrol 事故）——显式告警
+        from lib.infra.mbus_log import warn
+
+        warn(f"[scheduler] job '{jid}' enabled but no runner registered — skipping (检查 job id)")
         return
 
     lock_name = job.get("lock", f"mailbus-job-{jid}")

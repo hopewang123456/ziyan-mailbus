@@ -922,7 +922,8 @@ def handle_task_trace(handler):
     from lib.application.ops.task_trace import task_trace
 
     try:
-        handler._send_json({"status": "ok", **task_trace(handler.data_dir, task_id)})
+        trace = task_trace(handler.data_dir, task_id)
+        handler._send_json({"status": "ok", "trace": trace})  # task 状态放 trace.status，不覆盖外层 ok
     except ValueError as exc:
         handler._send_json({"status": "error", "error": str(exc)}, 404)
     except Exception as exc:
