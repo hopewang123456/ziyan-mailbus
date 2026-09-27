@@ -70,6 +70,20 @@ def push_alert(data_dir: str, alert_type: str, severity: str,
 
     save_alerts(data_dir, alerts)
 
+    # M1 W2：critical/warn 告警外呼触达（desktop/IM 等渠道，config.notify）。
+    # dedupe 命中已提前 return，这里不会重复外呼；触达失败不影响告警落盘。
+    if alert["severity"] in ("critical", "warn"):
+        try:
+            from lib.adapters.ops.notifier import send_notification
+            send_notification(
+                data_dir,
+                f"mailbus 告警 [{alert['severity']}] {alert['type']}",
+                str(alert.get("message") or ""),
+                level="warn" if alert["severity"] == "warn" else "critical",
+            )
+        except Exception:
+            pass
+
     # 推送到第一个有 type=hermes 的 agent 的 inbox（管理员）
     # 如果找不到，不推送
     _notify_admin(data_dir, alert)

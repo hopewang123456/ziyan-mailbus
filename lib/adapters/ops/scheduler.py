@@ -27,7 +27,7 @@ DEFAULT_JOBS = [
     {"id": "pipeline_watchdog", "enabled": True, "interval_seconds": 300, "lock": "mailbus-watchdog"},
     {"id": "pipeline-repair", "enabled": True, "interval_seconds": 600, "lock": "mailbus-pipeline-repair"},
     {"id": "patrol", "enabled": True, "interval_seconds": 3600},
-    {"id": "daily_report", "enabled": True, "cron": "30 23 * * *"},
+    {"id": "daily_report", "enabled": True, "cron": "35 11 * * *"},
     {"id": "log_rotate", "enabled": True, "cron": "0 3 * * *"},
     {"id": "agent_cli_version_check", "enabled": True, "interval_seconds": 86400, "lock": "mailbus-agent-versions"},
     {"id": "a2a-spec-sync", "enabled": True, "interval_seconds": 604800, "lock": "mailbus-a2a-spec-sync"},
@@ -218,6 +218,33 @@ def _run_job_locked(job: dict, jid: str, runner, data_dir: str, config: dict, sc
             st["last_cron_minute"] = current_dt.strftime("%Y-%m-%d %H:%M")
         if rc != 0:
             _hub_state["last_error"] = {"job": jid, "at": _now_iso(), "rc": rc}
+            _alert_job_fail_streak(data_dir, jid, st, body)
+        else:
+            st.pop("fail_streak", None)  # 恢复即清零，再次连败会重新计数告警
+
+
+def _alert_job_fail_streak(data_dir: str, jid: str, st: dict, body: str) -> None:
+    """M1 W2：job 连败外呼（默认 3 次达阈值呼一次，notify.job_fail_alert_after 可调）。
+
+    2026-09 停摆事故的教训：scan 连败 3680 次无人知晓。
+    """
+    try:
+        streak = int(st.get("fail_streak") or 0) + 1
+        st["fail_streak"] = streak
+        cfg = json_read(os.path.join(data_dir, "config.json"), {})
+        threshold = int(((cfg.get("notify") or {}).get("job_fail_alert_after")) or 3)
+        if streak == threshold:
+            from lib.adapters.ops.notifier import send_notification
+            lines = [ln for ln in (body or "").strip().splitlines() if ln.strip()]
+            tail = lines[-1][:200] if lines else ""
+            send_notification(
+                data_dir,
+                f"mailbus scheduler: job '{jid}' failed {streak}x in a row",
+                f"job={jid} 连续失败 {streak} 次（cron.log 有全程留痕）。最后输出：\n{tail}",
+                level="critical",
+            )
+    except Exception:
+        pass  # 触达层异常不影响调度主流程
 
 
 def _scheduler_loop(data_dir: str, config: dict, sched_cfg: dict, stop: threading.Event):

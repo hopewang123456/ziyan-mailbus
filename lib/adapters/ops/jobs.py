@@ -669,6 +669,18 @@ def run_daily_report(data_dir: str) -> int:
             no_llm=True,
         )
         mbus_log.info(f"[daily-report] {agent} notice queued (no-llm) {today} → {path}")
+        # M1 W2：每日摘要外呼（digest 渠道：file/smtp）——告警/待裁决状态每天主动汇报
+        try:
+            from lib.adapters.ops.notifier import send_notification
+            from lib.adapters.ops.alerter import load_alerts
+            active = [a for a in load_alerts(data_dir).get("alerts", []) if a.get("status") == "active"]
+            send_notification(
+                data_dir, f"mailbus 日报 {today}",
+                f"舰队健康日报已生成（{path}）。active alerts: {len(active)}。\n\n{content}",
+                level="digest",
+            )
+        except Exception:
+            pass
         return 0
     except Exception as exc:
         mbus_log.warn(f"[daily-report] error: {exc}")

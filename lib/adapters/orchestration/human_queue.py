@@ -117,7 +117,29 @@ def enqueue(data_dir: str, item: dict) -> str:
                 entry[key] = item[key]
         doc.setdefault("items", []).append(entry)
         save_queue(data_dir, doc)
+        _alert_abnormal_entry(data_dir, entry)
         return iid
+
+
+# M1 W2：异常类待裁决外呼；final_acceptance 等正常流程条目不呼（进每日摘要）
+ABNORMAL_QUEUE_SOURCES = ("station_vacancy", "push_budget")
+
+
+def _alert_abnormal_entry(data_dir: str, entry: dict) -> None:
+    """异常类新待裁决条目外呼（station_vacancy / push_budget）——停摆/空缺类事件主动触达。"""
+    try:
+        source = str(entry.get("source") or entry.get("type") or "")
+        if source not in ABNORMAL_QUEUE_SOURCES:
+            return
+        from lib.adapters.ops.notifier import send_notification
+        send_notification(
+            data_dir,
+            f"mailbus 待裁决（{source}）: {entry.get('title') or entry.get('task_id') or ''}",
+            str(entry.get("reason") or entry.get("title") or ""),
+            level="critical",
+        )
+    except Exception:
+        pass
 
 
 def close_item(data_dir: str, item_id: str, resolution: dict) -> Optional[dict]:
