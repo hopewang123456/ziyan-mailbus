@@ -1538,6 +1538,34 @@ def cmd_trace(args) -> int:
     return 0
 
 
+def cmd_notify(args) -> int:
+    """M1 W1：外呼通知渠道测试（告警触达验收入口）。"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+
+    from lib.composition import send_notification
+
+    level = str(getattr(args, "level", "warn") or "warn")
+    title = f"mailbus notify test [{level}]"
+    body = str(getattr(args, "message", "") or "") or (
+        "This is a test notification from mailbus (M1-W1 reach layer)."
+    )
+    results = send_notification(data_dir, title, body, level=level)
+    print(f"\n📡 notify test (level={level})")
+    delivered = 0
+    for name, r in results.items():
+        mark = "✓" if r.get("ok") else "✗"
+        detail = r.get("skipped") or r.get("detail") or r.get("error") or "ok"
+        if r.get("ok") and not r.get("skipped"):
+            delivered += 1
+        print(f"  {mark} {name}: {detail}")
+    if delivered == 0:
+        print("  （无渠道实际送达：在 config.json 配置 notify.channels 后重试）")
+    print()
+    return 0 if delivered else 1
+
+
 def cmd_stations(args) -> int:
     """Wave 4 工位注册表：list 查看 / migrate 从 role-types+org_defaults 迁移（幂等）。"""
     config_path = _find_config(args)

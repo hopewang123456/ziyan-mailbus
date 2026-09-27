@@ -44,6 +44,7 @@ from lib.application.commands.commands import (  # noqa: E402
     cmd_dlq,
     cmd_demo,
     cmd_stations,
+    cmd_notify,
     cmd_tokens,
     cmd_trace,
 )
@@ -174,6 +175,13 @@ def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
     _add_data_dir_arg(p)
     p.add_argument("task_id", help="任务 ID")
     p.set_defaults(func=cmd_trace)
+
+    p = sub.add_parser("notify", help="M1 W1 外呼通知渠道测试（desktop/webhook/smtp/file）")
+    _add_data_dir_arg(p)
+    p.add_argument("--level", default="warn", choices=["critical", "warn", "digest"],
+                   help="测试级别（默认 warn 实时渠道；digest 走 smtp/file 摘要渠道）")
+    p.add_argument("--message", default="", help="自定义测试内容")
+    p.set_defaults(func=cmd_notify)
 
     p = sub.add_parser("stations", help="Wave 4 工位注册表（list / migrate）")
     _add_data_dir_arg(p)

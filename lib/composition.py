@@ -810,6 +810,16 @@ def push_alert(*args: Any, **kwargs: Any):
     return _impl(*args, **kwargs)
 
 
+def send_notification(*args: Any, **kwargs: Any):
+    """M1 W1 外呼通知（desktop/webhook/smtp/file 四渠道分发）— application/api 经此访问（分层约束）。
+
+    实际实现见 `lib.adapters.ops.notifier.send_notification`。
+    """
+    from lib.adapters.ops.notifier import send_notification as _impl
+
+    return _impl(*args, **kwargs)
+
+
 def assembly_card(*args: Any, **kwargs: Any):
     """E5 装配结果卡片 — api/application 经此访问（分层约束）。
 
