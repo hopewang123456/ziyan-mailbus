@@ -45,6 +45,7 @@ from lib.application.commands.commands import (  # noqa: E402
     cmd_demo,
     cmd_stations,
     cmd_notify,
+    cmd_acceptance,
     cmd_tokens,
     cmd_trace,
 )
@@ -182,6 +183,12 @@ def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
                    help="测试级别（默认 warn 实时渠道；digest 走 smtp/file 摘要渠道）")
     p.add_argument("--message", default="", help="自定义测试内容")
     p.set_defaults(func=cmd_notify)
+
+    p = sub.add_parser("acceptance", help="M1 W4 验收观察项对账（六项健康检查，哨兵每日摘要数据源）")
+    _add_data_dir_arg(p)
+    p.add_argument("--json", dest="json", action="store_true", help="输出 JSON（供宿主哨兵消费）")
+    p.add_argument("--api-base", dest="api_base", default="http://127.0.0.1:9814", help="serve API 探活地址")
+    p.set_defaults(func=cmd_acceptance)
 
     p = sub.add_parser("stations", help="Wave 4 工位注册表（list / migrate）")
     _add_data_dir_arg(p)

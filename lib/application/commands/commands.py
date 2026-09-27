@@ -1566,6 +1566,23 @@ def cmd_notify(args) -> int:
     return 0 if delivered else 1
 
 
+def cmd_acceptance(args) -> int:
+    """M1 W4：验收观察项对账（六项健康检查；--json 供宿主哨兵消费）。"""
+    config_path = _find_config(args)
+    config = load_config(config_path)
+    data_dir = config["data_dir"]
+
+    from lib.composition import acceptance_status, format_acceptance_text
+
+    api_base = str(getattr(args, "api_base", "") or "") or "http://127.0.0.1:9814"
+    report = acceptance_status(data_dir, api_base=api_base)
+    if getattr(args, "json", False):
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(format_acceptance_text(report))
+    return 0 if report.get("ok") else 1
+
+
 def cmd_stations(args) -> int:
     """Wave 4 工位注册表：list 查看 / migrate 从 role-types+org_defaults 迁移（幂等）。"""
     config_path = _find_config(args)

@@ -820,6 +820,23 @@ def send_notification(*args: Any, **kwargs: Any):
     return _impl(*args, **kwargs)
 
 
+def acceptance_status(*args: Any, **kwargs: Any):
+    """M1 W4 验收观察项对账（六项健康检查）— application/api/哨兵 经此访问（分层约束）。
+
+    实际实现见 `lib.adapters.ops.acceptance.acceptance_status`。
+    """
+    from lib.adapters.ops.acceptance import acceptance_status as _impl
+
+    return _impl(*args, **kwargs)
+
+
+def format_acceptance_text(*args: Any, **kwargs: Any):
+    """M1 W4 对账结果的人读渲染 — application 经此访问（分层约束）。"""
+    from lib.adapters.ops.acceptance import format_acceptance_text as _impl
+
+    return _impl(*args, **kwargs)
+
+
 def assembly_card(*args: Any, **kwargs: Any):
     """E5 装配结果卡片 — api/application 经此访问（分层约束）。
 

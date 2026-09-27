@@ -64,6 +64,8 @@ jobs:
             tests/test_scan_poison_isolation.py \
             tests/test_notify_channels.py \
             tests/test_alert_wiring.py \
+            tests/test_acceptance_status.py \
+            tests/test_sentinel.py \
             tests/test_tracker.py \
             tests/test_api_error_envelope.py \
             tests/test_framework_skills.py -q
