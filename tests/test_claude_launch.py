@@ -54,9 +54,15 @@ class TestClaudeLaunch(unittest.TestCase):
             r"<PROJECT_ROOT>",
         )
 
+    @patch(
+        "lib.adapters.frameworks.claude_launch._powershell_exe",
+        return_value="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
+    )
     @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="windows")
     @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="linux")
     def test_push_windows_from_wsl_uses_powershell(self, *_mocks):
+        # WSL 场景前提：/mnt/c 下 PowerShell 桥可达（容器等无桥环境走 host-only 跳过，
+        # 见 test_scan_poison_isolation）
         data_dir = os.path.join(os.path.dirname(__file__), "..", "store")
         cmd = build_push_command(
             "agent-h", AGENT_CFG, TYPES, "deepseek-flash", data_dir=data_dir,

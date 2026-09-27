@@ -880,6 +880,15 @@ def build_push_command(
     project_dir = resolve_project_dir(agent_cfg, plat_cfg, agent_name)
     flags = _claude_push_flags(agent_name, agent_cfg, agent_types, model_alias)
     if plat == "windows":
+        if not _powershell_exe():
+            # 无 PowerShell 的环境（mailbus serve 容器等）：windows 桥是宿主专属。
+            # 必须返回 None 让 scan 跳过该 agent、消息留队列待宿主 scan——
+            # raise Fatal 会炸死整个 scan 推送队列（2026-09-21 停摆事故根因）。
+            print(
+                f"   ⚠ {agent_name}: claude windows-bridge is host-only, "
+                "skipped (await host scan)"
+            )
+            return None
         return _build_windows_push(claude_bin, project_dir, flags, claude_home)
     return _build_linux_push(claude_bin, project_dir, flags, claude_home)
 

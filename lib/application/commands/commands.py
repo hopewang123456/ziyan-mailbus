@@ -721,6 +721,12 @@ def cmd_launch(args) -> int:
     return 0
 
 
+def _msg_id(m) -> str:
+    if isinstance(m, dict):
+        return m.get("id") or m.get("msg_id") or ""
+    return getattr(m, "id", "") or getattr(m, "msg_id", "")
+
+
 def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
     """推送一个队列（加急/普通）"""
     agent_types = config.get("agent_types", {})
@@ -730,7 +736,7 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
         if not agent_cfg:
             print(f"   ⚠ {agent_name}: 配置不存在，跳过")
             continue
-        
+
         webhook_url = agent_cfg.get("webhook_url", "")
         if webhook_url:
             print(f"   🌐 {agent_name} ({label}): {len(messages)} 条 [Webhook]")
@@ -740,15 +746,19 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
             auto_ack = should_auto_ack_message(
                 msg0, data_dir, agent_cfg.get("type", ""),
             ) if agent_cfg.get("type") in ("hermes", "hermes_profile", "openclaw") else False
-            failed = push_via_webhook(
-                data_dir=data_dir,
-                agent_name=agent_name,
-                messages=messages,
-                webhook_url=webhook_url,
-                webhook_secret=agent_cfg.get("webhook_secret", ""),
-                max_retries=config.get("max_retries", 3),
-                auto_ack=auto_ack,
-            )
+            try:
+                failed = push_via_webhook(
+                    data_dir=data_dir,
+                    agent_name=agent_name,
+                    messages=messages,
+                    webhook_url=webhook_url,
+                    webhook_secret=agent_cfg.get("webhook_secret", ""),
+                    max_retries=config.get("max_retries", 3),
+                    auto_ack=auto_ack,
+                )
+            except Exception as exc:  # 单 agent 推送异常不得炸死整个 scan 队列
+                print(f"     ✗ {agent_name}: webhook push error: {exc}")
+                failed = [_msg_id(m) for m in messages]
         else:
             integrations = get_integrations()
             from lib.application.scan import _get_primary_pipeline_task_id
@@ -776,28 +786,32 @@ def _push_queue(data_dir: str, config: dict, queue: dict, label: str) -> list:
                     continue
 
             msg0 = messages[0]
-            cli_cmd = resolve_cli_for_message(
-                agent_cfg, agent_types, msg0, agent_name,
-                primary_task_id=primary_tid, data_dir=data_dir,
-            )
-            if not cli_cmd:
-                print(f"   → {agent_name} ({label}): 跳过（无需 LLM）")
-                continue
-            print(f"   → {agent_name} ({label}): {len(messages)} 条")
-            auto_ack_types = ("hermes", "hermes_profile", "openclaw")
-            from lib.application.orchestration.pipeline.task import should_auto_ack_message
-            auto_ack = should_auto_ack_message(
-                msg0, data_dir, agent_cfg.get("type", ""),
-            )
-            failed = push_messages(
-                data_dir=data_dir,
-                agent_name=agent_name,
-                messages=messages,
-                cli_cmd=cli_cmd,
-                ack_timeout=config.get("ack_timeout", 30),
-                max_retries=config.get("max_retries", 3),
-                auto_ack=auto_ack,
-            )
+            try:
+                cli_cmd = resolve_cli_for_message(
+                    agent_cfg, agent_types, msg0, agent_name,
+                    primary_task_id=primary_tid, data_dir=data_dir,
+                )
+                if not cli_cmd:
+                    print(f"   → {agent_name} ({label}): 跳过（host-only/无需 LLM）")
+                    continue
+                print(f"   → {agent_name} ({label}): {len(messages)} 条")
+                auto_ack_types = ("hermes", "hermes_profile", "openclaw")
+                from lib.application.orchestration.pipeline.task import should_auto_ack_message
+                auto_ack = should_auto_ack_message(
+                    msg0, data_dir, agent_cfg.get("type", ""),
+                )
+                failed = push_messages(
+                    data_dir=data_dir,
+                    agent_name=agent_name,
+                    messages=messages,
+                    cli_cmd=cli_cmd,
+                    ack_timeout=config.get("ack_timeout", 30),
+                    max_retries=config.get("max_retries", 3),
+                    auto_ack=auto_ack,
+                )
+            except Exception as exc:  # 单 agent 推送异常不得炸死整个 scan 队列
+                print(f"     ✗ {agent_name}: push error: {exc}")
+                failed = [_msg_id(m) for m in messages]
         all_failed.extend(failed)
         
         if failed:
