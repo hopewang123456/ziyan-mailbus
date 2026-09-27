@@ -199,6 +199,7 @@ class TaskTracker:
 
                 agent, st_meta = resolve_agent_for_station(
                     data_root, str(planned_item["station"]), agents_cfg=agents_cfg,
+                    pin_agent=str((planned_item or {}).get("pin_agent") or ""),
                 )
                 return agent, st_meta
             step_action = dispatch_action_from_step(planned_item or {}, envelope)

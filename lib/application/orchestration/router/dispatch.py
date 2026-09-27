@@ -114,7 +114,10 @@ def dispatch_first_step(data_dir: str, task: dict) -> bool:
                 station_vacancy_blocked,
             )
 
-            agent_id, st_meta = resolve_agent_for_station(data_dir, str(step["station"]))
+            agent_id, st_meta = resolve_agent_for_station(
+                data_dir, str(step["station"]),
+                pin_agent=str(step.get("pin_agent") or ""),
+            )
             if not agent_id and st_meta.get("vacancy"):
                 station_vacancy_blocked(task, data_dir, str(step["station"]),
                                         candidates=st_meta.get("candidates"))

@@ -78,9 +78,11 @@ def _resolve_station_assignee(
 
     st = station_registry(data_dir).get(station) or {}
     n_role = str(st.get("title") or station)
+    head = chain[0] if chain else {}
     agent, meta = resolve_agent_for_station(
         data_dir, station,
         exclude=_persons_served(chain), agents_cfg=agents,
+        pin_agent=str(head.get("pin_agent") or ""),
     )
     if agent:
         return n_role, agent

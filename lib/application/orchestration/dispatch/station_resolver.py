@@ -49,6 +49,7 @@ def resolve_agent_for_station(
     *,
     exclude: Optional[set[str] | list[str]] = None,
     agents_cfg: Optional[dict] = None,
+    pin_agent: str = "",
 ) -> tuple[str, dict[str, Any]]:
     """工位 → 在岗角色（按序首个可用）。空缺返回 ("", {vacancy: ...})。
 
@@ -63,6 +64,10 @@ def resolve_agent_for_station(
         return "", {"error": "unknown_station", "station": station_id}
     candidates = [str(c) for c in (st.get("candidates") or []) if str(c).strip()]
     excluded = set(exclude or [])
+    # pin 语义与 role_resolver 一致：指定且在候选内且可用则优先（direct 意图）
+    pin = (pin_agent or "").strip()
+    if pin and pin in candidates and pin not in excluded and _candidate_available(agents_cfg, pin):
+        return pin, {"source": "station_pin", "station": station_id, "agent": pin, "candidates": candidates}
     for cand in candidates:
         if cand in excluded:
             continue
