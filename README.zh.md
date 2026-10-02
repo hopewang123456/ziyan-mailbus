@@ -22,6 +22,9 @@ pip install -e .
 #   建单 → 派工 → 投递 → 执行 → 回执 → 验收 → 归档
 mailbus demo
 
+# 装完先自诊一遍环境（Docker/路径/端口，有红灯给人话修复建议）
+mailbus doctor
+
 # 演示数据独立隔离在 store/demo/，随时一键清除
 mailbus demo --clean
 ```

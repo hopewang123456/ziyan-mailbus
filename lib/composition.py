@@ -1317,6 +1317,20 @@ def run_doctor_checks(*args: Any, **kwargs: Any):
     return _impl(*args, **kwargs)
 
 
+def format_doctor_text(*args: Any, **kwargs: Any):
+    """doctor 报告人读渲染 — application 经此访问（分层约束）。"""
+    from lib.adapters.ops.doctor_checks import format_doctor_text as _impl
+
+    return _impl(*args, **kwargs)
+
+
+def doctor_exit_code(*args: Any, **kwargs: Any):
+    """doctor 退出码（0 健康 / 非 0 有红灯）— application 经此访问（分层约束）。"""
+    from lib.adapters.ops.doctor_checks import doctor_exit_code as _impl
+
+    return _impl(*args, **kwargs)
+
+
 def locale_catalog(*args: Any, **kwargs: Any):
     """locale catalog — api/handlers_system 通过本函数拿到 adapter 服务。
 

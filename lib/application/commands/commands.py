@@ -1538,6 +1538,19 @@ def cmd_trace(args) -> int:
     return 0
 
 
+def cmd_doctor(args) -> int:
+    """M3 FRE：主 CLI 自诊（Docker/路径/AgentMemory/端口）——install 后第一步。
+
+    与 mailbus-ops doctor 同源（composition 门面）；README Quick Start 承诺
+    「装完即可 doctor 自诊」，此前只有 ops 二入口有此命令。
+    """
+    from lib.composition import doctor_exit_code, format_doctor_text, run_doctor_checks
+
+    report = run_doctor_checks()
+    print(format_doctor_text(report))
+    return doctor_exit_code(report)
+
+
 def cmd_notify(args) -> int:
     """M1 W1：外呼通知渠道测试（告警触达验收入口）。"""
     config_path = _find_config(args)

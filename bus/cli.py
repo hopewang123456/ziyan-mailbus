@@ -25,6 +25,7 @@ from lib.application.commands.commands import (  # noqa: E402
     cmd_backup,
     cmd_broadcast,
     cmd_errors,
+    cmd_doctor,
     cmd_heartbeat,
     cmd_init,
     cmd_iteration,
@@ -60,6 +61,9 @@ def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
     p.add_argument("--fresh", action="store_true", help="从 SoT 重建 store")
     p.add_argument("--merge", action="store_true", help="合并 SoT override 到已有 store/config.json")
     p.set_defaults(func=cmd_init)
+
+    p = sub.add_parser("doctor", help="自诊：Docker/路径/AgentMemory/端口（同 mailbus-ops doctor）")
+    p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("scan", help="扫描 inbox 并推送")
     _add_data_dir_arg(p)
