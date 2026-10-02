@@ -81,6 +81,25 @@ class TestTaskTemplates(unittest.TestCase):
                     continue
                 self.assertIn(st["role_type"], valid, f"{t['id']} role_type {st['role_type']}")
 
+    def test_production_line_template(self):
+        """M2c：game-delivery 实证链固化为产线模板（策划→开发→复核→联调→测试→文档）。"""
+        from lib.infra.constants import MAILBUS_ROOT
+        path = os.path.join(str(MAILBUS_ROOT), "config", "mailbus", "task-templates.json")
+        with open(path, encoding="utf-8") as f:
+            tpls = {t["id"]: t for t in (json.load(f).get("templates") or [])}
+        t = tpls.get("production-line")
+        self.assertIsNotNone(t)
+        chain = t["envelope"]["planned_chain"]
+        stations = [st["station"] for st in chain]
+        self.assertEqual(
+            stations,
+            ["planner", "developer", "reviewer", "developer", "tech_researcher",
+             "qa_tester", "reviewer", "content_ops"],
+        )
+        # 实证链关键语义：开发步可重复（多开发面）、复核两次（中期+交付）、文档收尾
+        self.assertEqual(stations.count("developer"), 2)
+        self.assertEqual(stations[-1], "content_ops")
+
 
 if __name__ == "__main__":
     unittest.main()

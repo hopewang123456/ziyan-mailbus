@@ -108,6 +108,50 @@
           }
         ]
       }
+    },
+    {
+      "id": "production-line",
+      "title": "多 agent 产线（工位版 V2，game-delivery 实证链）",
+      "description": "策划方案 → 核心开发 → 中期复核 → 扩展开发 → 集成联调 → 测试验收 → 交付复核 → 交付文档；来自 GridBalance 产线实验（G0-G10）的实证流转，返工步命名遵循 s<步序>a<n>（如 s2a2）",
+      "envelope": {
+        "mode": "explicit",
+        "tier": "L",
+        "task_type": "custom",
+        "planned_chain": [
+          {
+            "station": "planner",
+            "reason": "方案与任务拆解"
+          },
+          {
+            "station": "developer",
+            "reason": "核心实现"
+          },
+          {
+            "station": "reviewer",
+            "reason": "中期复核（denied 打回上一步）"
+          },
+          {
+            "station": "developer",
+            "reason": "扩展实现（第二个开发面）"
+          },
+          {
+            "station": "tech_researcher",
+            "reason": "集成联调（真机起服务逐端点核验）"
+          },
+          {
+            "station": "qa_tester",
+            "reason": "质量验收（测试报告）"
+          },
+          {
+            "station": "reviewer",
+            "reason": "交付复核"
+          },
+          {
+            "station": "content_ops",
+            "reason": "交付文档（RELEASE/RUNBOOK）"
+          }
+        ]
+      }
     }
   ]
 }
