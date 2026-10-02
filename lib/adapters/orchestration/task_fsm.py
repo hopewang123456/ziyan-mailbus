@@ -362,7 +362,9 @@ def result_applies_to_step(
         return False, "wrong_agent"
 
     c = (result.get("conclusion") or "").lower()
-    if c not in _DONE_CONCLUSIONS and result.get("status") != "completed":
+    # status=done 与 completed 同为终态口径（msg-results 契约回执常只有 status；
+    # G10/yige 实锤：status=done+无 conclusion 被判 inconclusive → 回执永远不消化）
+    if c not in _DONE_CONCLUSIONS and str(result.get("status") or "").lower() not in ("completed", "done"):
         return False, "inconclusive"
 
     if not result_mtime_ok:

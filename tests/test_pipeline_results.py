@@ -32,7 +32,11 @@ class TestPipelineResults(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             step = {"step_id": "s2"}
             paths = result_paths_to_try(td, "t1", step, config={"mailbus_automation": {}})
-            self.assertEqual(paths, [step_result_path(td, "t1", "s2")])
+            # 规范 per-task 路径 + 平铺契约兜底（msg-<task>-<step>.json，G10 实锤新增）
+            self.assertEqual(paths, [
+                step_result_path(td, "t1", "s2"),
+                os.path.join(td, "msg-results", "msg-t1-s2.json"),
+            ])
             self.assertFalse(any(p.endswith("t1.json") for p in paths))
 
     def test_read_result_from_paths_order(self):

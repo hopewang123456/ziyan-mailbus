@@ -44,6 +44,10 @@ def result_paths_to_try(
             paths.append(ref)
     if sid:
         paths.append(step_result_path(data_dir, task_id, sid))
+        # 平铺交付兜底：一次性 CLI / 外部 agent 常按 msg-<task>-<step>.json 命名写
+        # （G10/yige 实锤：契约给的 per-task 路径被写成 msg-results/msg-<tid>-<sid>.json，
+        # 读端不认 → 回执躺平任务卡 running）
+        paths.append(os.path.join(data_dir, "msg-results", f"msg-{task_id}-{sid}.json"))
     seen = set()
     out: List[str] = []
     for p in paths:

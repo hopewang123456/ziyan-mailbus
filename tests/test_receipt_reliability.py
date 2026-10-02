@@ -107,10 +107,52 @@ class TestTimeoutEscalation(unittest.TestCase):
             self.assertEqual(len(entries), 1)
             self.assertEqual(entries[0]["task_id"], "task-esc-001")
 
+class TestTaskTimeoutSourcePagesOwner(unittest.TestCase):
     def test_task_timeout_source_pages_owner(self):
         from lib.adapters.orchestration.human_queue import ABNORMAL_QUEUE_SOURCES
 
         self.assertIn("task_timeout", ABNORMAL_QUEUE_SOURCES)
+
+
+class TestFlatDeliveryTolerance(unittest.TestCase):
+    """G10/yige 实锤回归：平铺交付路径 + status=done 无 conclusion 的回执必须被消化。"""
+
+    def test_result_paths_include_flat_contract(self):
+        from lib.infra.pipeline_results import result_paths_to_try
+
+        paths = result_paths_to_try("/tmp/x", "task-t", {"step_id": "s1"})
+        self.assertTrue(any(p.endswith(os.path.join("msg-results", "msg-task-t-s1.json")) for p in paths))
+
+    def test_status_done_without_conclusion_applies(self):
+        from lib.adapters.orchestration.task_fsm import result_applies_to_step
+
+        ok, reason = result_applies_to_step(
+            {"agent": "yige", "status": "done", "summary": "wrote docs"},
+            "task-t",
+            {"step_id": "s1", "to_agent": "yige"},
+            [],
+        )
+        self.assertTrue(ok, reason)
+
+    def test_read_step_result_finds_flat_delivery(self):
+        """读端回归：read_step_result 必须能取到平铺契约回执（G10 病灶本尊）。
+
+        不走 trigger 全链（fsm 会在单步任务上尝试派发下一步，测试环境必失败
+        且与本案无关）——G10 的真实推进由容器 scan 实证。
+        """
+        import tempfile as _tempfile
+
+        from lib.adapters.orchestration.task_fsm import read_step_result
+
+        with _tempfile.TemporaryDirectory() as td:
+            flat = os.path.join(td, "msg-results", "msg-task-flat-001-s1.json")
+            os.makedirs(os.path.dirname(flat), exist_ok=True)
+            with open(flat, "w", encoding="utf-8") as fh:
+                json.dump({"agent": "agent-a", "msg_id": "msg-task-flat-001-s1",
+                           "status": "done", "summary": "flat delivery"}, fh)
+            r = read_step_result(td, "task-flat-001", {"step_id": "s1"})
+            self.assertIsNotNone(r, "平铺回执必须可读")
+            self.assertEqual(r.get("status"), "done")
 
 
 if __name__ == "__main__":
