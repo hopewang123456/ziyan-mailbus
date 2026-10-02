@@ -22,10 +22,15 @@ def _report(warns):
 
 class TestSentinel(unittest.TestCase):
     def _run(self, tmp, warns, **kw):
+        # 哨兵内部取真实 now——过午（>=12 点）会触发 digest 干扰动作断言，
+        # 与 wave1 午夜定时炸弹同类：一律钉在上午
+        from lib.infra.clock import now_dt
+        fake_now = now_dt().replace(hour=9, minute=0, second=0, microsecond=0)
+        sent = []
         with patch.object(sentinel, "acceptance_status", return_value=_report(warns)), \
              patch.object(sentinel, "send_notification",
-                          side_effect=lambda d, t, b, level="warn": sent.append((level, t))):
-            sent = getattr(self, "_sent", [])
+                          side_effect=lambda d, t, b, level="warn": sent.append((level, t))), \
+             patch("lib.infra.clock.now_dt", return_value=fake_now):
             try:
                 r = sentinel.run_sentinel(tmp, **kw)
             finally:
@@ -50,13 +55,14 @@ class TestSentinel(unittest.TestCase):
     def test_remind_after_window(self):
         tmp = _tmp()
         self._run(tmp, {"scheduler"})
-        # 把 last_alert_at 拨回 25h 前
+        # last_alert_at 拨回 25h 前——以 _run 钉死的「今天 09:00」为基准（同一时钟）
         import json
         state_path = os.path.join(tmp, sentinel.STATE_FILE)
         state = json.load(open(state_path, encoding="utf-8"))
         from datetime import timedelta
         from lib.infra.clock import now_dt
-        state["last_alert_at"] = (now_dt() - timedelta(hours=25)).isoformat()
+        pinned = now_dt().replace(hour=9, minute=0, second=0, microsecond=0)
+        state["last_alert_at"] = (pinned - timedelta(hours=25)).isoformat()
         json.dump(state, open(state_path, "w", encoding="utf-8"))
         self._sent = []
         r, sent = self._run(tmp, {"scheduler"})

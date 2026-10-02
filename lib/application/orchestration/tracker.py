@@ -544,6 +544,20 @@ class TaskTracker:
                     "code": "TIMEOUT",
                     "reason": f"超过{max_reminders}次催办（间隔{reminder_minutes}分钟）未响应",
                 })
+                # M2b：超时升级进待裁决（重推 / 改派 / 挂起由 owner 裁）；
+                # human_queue 侧 W2 接线对 source=task_timeout 自动外呼。
+                try:
+                    from lib.composition import enqueue_human_queue
+                    enqueue_human_queue(os.path.dirname(self.tasks_dir), {
+                        "type": "task_timeout",
+                        "task_id": task_id,
+                        "source": "task_timeout",
+                        "severity": "warn",
+                        "title": f"超时裁决 · {task_id}",
+                        "reason": f"assignee={task.get('assignee', '')} 催办 {max_reminders} 次无回执",
+                    })
+                except Exception:
+                    pass  # 升级入队失败不改变超时语义（任务已可见 timeout）
 
         return escalated
 

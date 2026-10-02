@@ -122,7 +122,7 @@ def enqueue(data_dir: str, item: dict) -> str:
 
 
 # M1 W2：异常类待裁决外呼；final_acceptance 等正常流程条目不呼（进每日摘要）
-ABNORMAL_QUEUE_SOURCES = ("station_vacancy", "push_budget")
+ABNORMAL_QUEUE_SOURCES = ("station_vacancy", "push_budget", "task_timeout")
 
 
 def _alert_abnormal_entry(data_dir: str, entry: dict) -> None:

@@ -114,6 +114,11 @@ class FileBusTransport:
             "framework": agent_cfg.get("type") or "",
             "transport_channel": "file_bus",
         })
+        # M2：首派 spawn 即占住推送槽（state=pushed）——scan 不再二次推送同一条
+        # 消息（game 实验实锤的「首派 spawn + scan 二次推送重复消费」）。
+        # CLI 死亡无回执时由 recover_inbox_stale_states 僵尸回收回 pending 重推，
+        # 语义仍为 at-least-once；spawn 抛错则不标记，scan 是兜底推送方。
+        self._mark_inbox_dispatched(inbox_path, msg_id)
         if not self._wait_on_dispatch(ctx.data_dir):
             # P10：投递语义 at-least-once——inbox 落盘 + spawn 通知即成功；
             # 执行结果由 scan/trigger 异步消化（派发不再同步阻塞 ack_timeout）。
@@ -142,6 +147,21 @@ class FileBusTransport:
             transport_used="file_bus",
             error=f"retryable:{err}",
         )
+
+    def _mark_inbox_dispatched(self, inbox_path: str, msg_id: str) -> None:
+        """spawn 成功后把该 inbox 消息标为 pushed（幂等标记，见上方 M2 注释）。"""
+        try:
+            with open(inbox_path, encoding="utf-8") as f:
+                inbox = json.load(f)
+            for m in reversed(inbox.get("messages", [])):
+                if isinstance(m, dict) and m.get("id") == msg_id:
+                    m["state"] = "pushed"
+                    m["pushed_at"] = _now_iso()
+                    m["pushed_via"] = "file_bus_dispatch"
+                    break
+            json_write(inbox_path, inbox)
+        except (OSError, ValueError):
+            pass  # 标记失败不阻断派发：最坏情况回到二推，agent 侧仍有 task 幂等
 
     def _dispatch_stub(self, ctx: DispatchContext, fixture_name: Optional[str]) -> DispatchResult:
         name = fixture_name or "path-d-agent-i-opencode.json"
