@@ -27,6 +27,7 @@ const ACTION_ZH: Record<string, string> = {
 function actionBody(action: string): Record<string, unknown> {
   const base = { reason: "manager_desk" } as Record<string, unknown>;
   if (action === "approve-plan") return { ...base, decision: "approved" };
+  if (action === "accept") return { ...base, decision: "approved", reviewer: "ziyan" };
   if (action === "approve-join") return { ...base, reviewer: "manager" };
   if (action === "priority") {
     const raw = window.prompt("新优先级（数字，越大越低优先）", "50");
@@ -69,11 +70,18 @@ export function ManagerDeskPage() {
   async function act(item: ManagerPendingItem, action: string) {
     const id = String(item.task_id || "");
     if (!id) return;
-    const body = actionBody(action);
+    // accepting 态的「回退」必须走 accept-denied：fsm 专用 rollback 仅适用运行态，
+    // 且 apply_accept 必需 decision 字段（此前 accept/rollback 请求一律 400 invalid_decision）
+    const acceptance = (item.bucket || "") === "acceptance";
+    const endpoint = acceptance && action === "rollback" ? "accept" : action;
+    const body =
+      acceptance && action === "rollback"
+        ? { ...actionBody(action), decision: "denied" }
+        : actionBody(action);
     if (action === "priority" && Object.keys(body).length === 0) return;
     setBusy(`${id}:${action}`);
     setMsg("");
-    const r = await postTaskFsm(id, action, body);
+    const r = await postTaskFsm(id, endpoint, body);
     setBusy("");
     if (r.ok) {
       setMsg(`${id} → ${ACTION_ZH[action] || action} 成功`);
