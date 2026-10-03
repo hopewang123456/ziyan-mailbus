@@ -8,6 +8,7 @@ import { ManagerDeskPage } from "./pages/ManagerDeskPage";
 import { getUiMode, setUiMode } from "./lib/ui-mode";
 import { t } from "./lib/i18n";
 import { AuthTokenBanner } from "./components/AuthTokenBanner";
+import { WriteFailToast } from "./components/WriteFailToast";
 import { DemoModeBanner } from "./components/DemoModeBanner";
 
 /**
@@ -134,6 +135,7 @@ export default function App() {
   return (
     <>
       <AuthTokenBanner />
+      <WriteFailToast />
       <DemoModeBanner />
       <Routes>
         <Route path="/" element={<CockpitEntry />} />

@@ -117,11 +117,29 @@ export async function api<T = unknown>(
         );
       }
       const formatted = formatApiError(data, res.status);
+      // M3 UX 债：写操作失败必须可见（此前 400/500 只落到页面角落的小字，
+      // 驾驶舱验收按钮曾因此被当作「点了没反应」）
+      if (!isRead && typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("mailbus:write-failed", {
+            detail: { path, status: res.status, error: formatted.error, method },
+          }),
+        );
+      }
       return { ok: false, error: formatted.error, status: res.status, data, errorCode: formatted.errorCode };
     }
     return { ok: true, data: data as T, status: res.status };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "network_error", status: 0 };
+    const method = String(init.method || "GET").toUpperCase();
+    const msg = e instanceof Error ? e.message : "network_error";
+    if (method !== "GET" && method !== "HEAD" && typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("mailbus:write-failed", {
+          detail: { path, status: 0, error: msg, method },
+        }),
+      );
+    }
+    return { ok: false, error: msg, status: 0 };
   }
 }
 
