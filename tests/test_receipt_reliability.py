@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from unittest import mock
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -112,6 +113,80 @@ class TestTaskTimeoutSourcePagesOwner(unittest.TestCase):
         from lib.adapters.orchestration.human_queue import ABNORMAL_QUEUE_SOURCES
 
         self.assertIn("task_timeout", ABNORMAL_QUEUE_SOURCES)
+
+
+class TestPlannedResumeAndReminderGuard(unittest.TestCase):
+    """第二产线实锤的两个恢复链 bug 回归。"""
+
+    def test_resume_planned_advance_after_consumed(self):
+        """s1 completed+result_consumed、planned 残余、executing → trigger 应补出 s2。"""
+        import tempfile as _tempfile
+
+        from lib.application.orchestration.pipeline.trigger import trigger_task
+        from lib.application.orchestration.tracker import TaskTracker
+        from lib.infra.utils import json_write
+
+        with _tempfile.TemporaryDirectory() as td:
+            # 种工位（须带 role_type，否则规划校验/解析拒）
+            with open(os.path.join(td, "config.json"), "w", encoding="utf-8") as fh:
+                json.dump({"stations": {
+                    "developer": {"title": "开发工程师", "role_type": 8,
+                                  "candidates": ["agent-b"], "vacancy_policy": "queue"},
+                }}, fh)
+            t = TaskTracker(td)
+            t.create("task-resume-001", assignee="agent-a")
+            t.update_status("task-resume-001", "running")
+            task = t.get("task-resume-001")
+            chain = task.get("chain") or []
+            self.assertTrue(chain)
+            # 复刻产线现场：s1 completed+consumed，链头挂 planned 残余，fsm=executing
+            chain[0].update({
+                "to_agent": "agent-a", "to_person": "agent-a",
+                "status": "completed", "fsm_state": "completed",
+                "result_consumed": True,
+                "planned_role_types": [8],
+                "planned_stations": ["developer"],
+            })
+            task["fsm"]["state"] = "executing"
+            task["fsm"]["active_step_id"] = chain[0]["step_id"]
+            json_write(t._task_path("task-resume-001"), task)
+
+            # agents 里放一个可用候选；patch 工位解析走 role_type 直派
+            agents = {"agent-a": {"type": "hermes"}, "agent-b": {"type": "hermes"}}
+            with patch("lib.application.orchestration.pipeline.trigger._send_task", return_value=True) as ms:
+                r = trigger_task(
+                    td, "task-resume-001", agents,
+                    {"tasks": td, "inbox": os.path.join(td, "inbox")},
+                )
+            self.assertTrue(r.get("ok"), r)
+            self.assertEqual(r.get("action"), "resume_advance")
+            after = t.get("task-resume-001")
+            self.assertEqual(len(after["chain"]), 2)
+            self.assertEqual(after["chain"][1]["fsm_state"], "dispatched")
+            ms.assert_called_once()
+
+    def test_blocked_task_not_reminded(self):
+        """blocked（等 owner/裁决）任务不催办、不 timeout（第二产线空催 12 次实锤）。"""
+        from lib.application.orchestration.tracker import TaskTracker
+        from lib.infra.utils import json_write
+        from datetime import timedelta
+        from lib.infra.clock import now_dt
+
+        with tempfile.TemporaryDirectory() as td:
+            t = TaskTracker(td)
+            t.create("task-block-001", assignee="agent-a")
+            t.update_status("task-block-001", "running")
+            task = t.get("task-block-001")
+            task["chain"] = []
+            task["updated_at"] = (now_dt() - timedelta(hours=30)).strftime("%Y-%m-%dT%H:%M:%S")
+            json_write(t._task_path("task-block-001"), task)
+            # 现场是 fsm.blocked + status blocked（owner_confirmation 等裁决门）
+            t.update_status("task-block-001", "blocked")
+
+            escalated = t.check_reminders({"agent-a": {"name": "agent-a"}}, reminder_minutes=0)
+            self.assertEqual(escalated, [])
+            # 也不该被标 timeout
+            self.assertEqual(t.get("task-block-001")["status"], "blocked")
 
 
 class TestFlatDeliveryTolerance(unittest.TestCase):

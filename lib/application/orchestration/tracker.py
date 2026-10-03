@@ -581,6 +581,12 @@ class TaskTracker:
         summary = (task.get("summary") or "")[:80]
         if summary.startswith("⚠️ 超时提醒") or summary.startswith("⏰ 催办提醒"):
             return True
+        # blocked=等待人工裁决（owner_confirmation/工位空缺/预算…）：assignee 无事可做，
+        # 催办与 timeout 均无意义且会误发 task_timeout 裁决（第二产线实锤：等 owner
+        # 确认时被空催 12 次进超时队列）
+        fsm = task.get("fsm") or {}
+        if task.get("status") == "blocked" or fsm.get("state") == "blocked":
+            return True
         return False
 
     @staticmethod

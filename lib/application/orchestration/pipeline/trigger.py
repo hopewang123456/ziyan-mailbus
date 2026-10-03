@@ -95,6 +95,16 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
                 enter_accepting_or_succeed(t, {}, data_dir=data_dir)
                 json_write(task_file, t)
                 info(f"[fsm] accepting {task_id[:30]}")
+            return {"ok": True, "skipped": "step_completed"}
+        # M2 恢复推进：步骤已完成、回执已消费，但链头仍有 planned 残余且任务在
+        # executing——owner_confirmation approve 等恢复路径只拨状态不续链，回执又
+        # 不会二次消费，链会僵死（第二产线 tpl-production-line 实锤：停 17h）。
+        # 按 apply_submit 的 advance 路径补出下一步。
+        if (
+            fsm_state == TaskFsmState.EXECUTING.value
+            and (planned_role_types_remaining(chain) or planned_agents_remaining(chain))
+        ):
+            return _resume_planned_advance(t, current, chain, task_file, data_dir, agents, paths)
         return {"ok": True, "skipped": "step_completed"}
 
     if not f.is_executable(t):
@@ -235,6 +245,68 @@ def _process_task_pipeline(t: dict, data_dir: str, agents: dict, paths: dict, tr
 
 def _result_mtime_ok(data_dir: str, task_id: str, current: dict, result: dict) -> bool:
     return _fsm().result_mtime_ok(data_dir, task_id, current, result)
+
+
+def _resume_planned_advance(
+    t: dict, current: dict, chain: list, task_file: str,
+    data_dir: str, agents: dict, paths: dict,
+) -> dict:
+    """步骤完成但 planned 残余未展开时的恢复续步（对齐 apply_submit 的 advance 路径）。"""
+    from lib.composition import create_next_step, resolve_transition, zh_to_role_type
+    from lib.application.orchestration.pipeline.step import step_agent
+
+    task_id = t.get("task_id", t.get("id", ""))
+    f = _fsm()
+    cur_role = current.get("to_role") or "方案设计师"
+    cur_person = step_agent(current) or ""
+    n_role, n_person, kind = resolve_transition(
+        chain, {"conclusion": "done", "summary": t.get("summary", "")},
+        cur_role, "done", agents, data_dir=data_dir,
+    )
+    if kind != "advance" or not n_role or not n_person:
+        t["fsm"]["state"] = TaskFsmState.BLOCKED.value
+        json_write(task_file, t)
+        warn(f"[fsm] resume no assignee, blocked {task_id[:30]}")
+        return {"ok": False, "error": "resume_no_assignee"}
+
+    nxt = create_next_step(
+        t, to_role=n_role, to_person=n_person,
+        from_role=cur_role, from_person=cur_person,
+        reason=f"resume planned line after {current.get('step_id')}",
+        role_type=zh_to_role_type(n_role, data_dir),
+    )
+    chain.append(nxt)
+    t["fsm"]["state"] = TaskFsmState.EXECUTING.value
+    t["fsm"]["active_step_id"] = nxt["step_id"]
+    t["status"] = "running"
+    f.append_history(t, "advance", {
+        "from_step": current.get("step_id"),
+        "to_step": nxt["step_id"],
+        "kind": "resume_planned",
+    })
+
+    if _budget_break(data_dir, task_file, t):
+        return {"ok": False, "error": "push_budget_exceeded"}
+    if not _send_task(
+        data_dir, paths, cur_person, current.get("to_role", ""),
+        n_role, n_person, t.get("summary", ""), task_id,
+        step_num=nxt.get("step") or len(chain),
+        step_id=nxt.get("step_id"),
+        result_ref=nxt.get("result_ref"),
+    ):
+        f.revert_failed_advance(t, current, nxt)
+        json_write(task_file, t)
+        warn(f"[fsm] resume dispatch failed rollback {task_id[:30]}")
+        return {"ok": False, "error": "dispatch_failed"}
+
+    from lib.composition import bump_push_count
+
+    bump_push_count(t)
+    f.mark_step_dispatched(nxt)
+    t["assignee"] = n_person
+    json_write(task_file, t)
+    info(f"[fsm] resumed {task_id[:24]} -> {n_role}/{n_person} next={nxt.get('step_id')}")
+    return {"ok": True, "action": "resume_advance"}
 
 
 def _close_pipeline_inbox(data_dir: str, paths: dict, task_id: str, agents: dict) -> int:

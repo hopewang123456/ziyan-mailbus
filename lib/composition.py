@@ -820,6 +820,27 @@ def send_notification(*args: Any, **kwargs: Any):
     return _impl(*args, **kwargs)
 
 
+def resolve_transition(*args: Any, **kwargs: Any):
+    """fsm 步骤转移解析（role/person/kind）— application 经此访问（分层约束）。"""
+    from lib.adapters.orchestration.task_fsm import resolve_transition as _impl
+
+    return _impl(*args, **kwargs)
+
+
+def create_next_step(*args: Any, **kwargs: Any):
+    """fsm 创建下一步骤 — application 经此访问（分层约束）。"""
+    from lib.adapters.orchestration.task_fsm import create_next_step as _impl
+
+    return _impl(*args, **kwargs)
+
+
+def zh_to_role_type(*args: Any, **kwargs: Any):
+    """中文角色名 → role_type — application 经此访问（分层约束）。"""
+    from lib.adapters.locale.role_labels import zh_to_role_type as _impl
+
+    return _impl(*args, **kwargs)
+
+
 def acceptance_status(*args: Any, **kwargs: Any):
     """M1 W4 验收观察项对账（六项健康检查）— application/api/哨兵 经此访问（分层约束）。
 
