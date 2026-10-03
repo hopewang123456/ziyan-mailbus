@@ -422,6 +422,56 @@ def trim_stale_notices(data_dir: str, agents: dict, max_age_days: int = 3) -> in
     return trimmed
 
 
+def heal_pipeline_inbox_content(data_dir: str, agents: dict) -> int:
+    """M2 修复单：pipeline 工单消息 content 被回写污染时的自愈。
+
+    实锤案例（tpl-production-line s5）：CLI stderr 文本覆盖了消息 content
+    且 task_id 丢失，导致 pipeline 匹配失败、消息永远不进推送队列。
+    本修复不追写手，做防御：运行中产线任务的收件箱消息若
+    content 缺【task_id】头或 task_id 字段丢失 → 从任务文件重建
+    content=【tid】intent 并回填 task_id。
+    """
+    paths = resolve_paths(data_dir)
+    healed = 0
+    for t in TaskTracker(data_dir).list_all():
+        if t.get("status") != "running":
+            continue
+        tid = str(t.get("task_id") or t.get("id") or "")
+        if not tid:
+            continue
+        tag = f"【{tid}】"
+        intent = str(t.get("intent") or t.get("summary") or "")
+        if not intent:
+            continue
+        for name in agents:
+            inbox_file = f"{paths['inbox']}/{name}/inbox.json"
+            inbox_data = json_read(inbox_file, {})
+            if not inbox_data:
+                continue
+            changed = False
+            for m_raw in inbox_data.get("messages") or []:
+                mid = m_raw.get("id", "") if isinstance(m_raw, dict) else ""
+                if tid not in str(mid):
+                    continue
+                if not isinstance(m_raw, dict):
+                    continue
+                state = str(m_raw.get("state") or m_raw.get("status") or "")
+                if state in ("done", "closed", "rejected", "archived"):
+                    continue
+                content = str(m_raw.get("content") or "")
+                missing_tag = tag not in content
+                missing_tid = not m_raw.get("task_id")
+                if not (missing_tag or missing_tid):
+                    continue
+                m_raw["content"] = f"{tag}{intent}"
+                m_raw["task_id"] = tid
+                changed = True
+                healed += 1
+            if changed:
+                json_write(inbox_file, inbox_data)
+    return healed
+
+
 def run_self_heal(data_dir: str, agents: dict, *, phase: str = "full") -> dict:
     """scan 内置自愈入口。pre=推送前，full=含审计归档。"""
     out = {}
@@ -435,6 +485,9 @@ def run_self_heal(data_dir: str, agents: dict, *, phase: str = "full") -> dict:
     n = recover_replies_to_msg_results(data_dir, agents)
     if n:
         out["reply_recovered"] = n
+    n = heal_pipeline_inbox_content(data_dir, agents)
+    if n:
+        out["pipeline_content_healed"] = n
     sync = sync_tracker_and_inbox(data_dir, agents)
     out.update({k: v for k, v in sync.items() if v})
     try:

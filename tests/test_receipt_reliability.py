@@ -189,6 +189,69 @@ class TestPlannedResumeAndReminderGuard(unittest.TestCase):
             self.assertEqual(t.get("task-block-001")["status"], "blocked")
 
 
+class TestInboxContentHeal(unittest.TestCase):
+    """污染案例③回归：CLI stderr 覆盖 inbox content + task_id 丢失 → scan 自愈重建。"""
+
+    def test_heal_pipeline_inbox_content(self):
+        from lib.application.ops.self_heal import heal_pipeline_inbox_content
+        from lib.application.orchestration.tracker import TaskTracker
+        from lib.infra.utils import json_write
+
+        with tempfile.TemporaryDirectory() as td:
+            t = TaskTracker(td)
+            t.create("task-heal-001", assignee="agent-a", summary="do the rated thing")
+            t.update_status("task-heal-001", "running")
+
+            inbox_file = os.path.join(td, "inbox", "agent-a", "inbox.json")
+            os.makedirs(os.path.dirname(inbox_file), exist_ok=True)
+            polluted = {
+                "agent": "agent-a",
+                "messages": [
+                    # 健康消息：不受影响
+                    {"id": "m-ok", "type": "task", "state": "pending",
+                     "content": "【task-heal-001】clean", "task_id": "task-heal-001"},
+                    # 被污染：content 是 ANSI stderr、task_id 丢失
+                    {"id": "msg-task-heal-001-s2", "type": "task", "state": "processing",
+                     "content": "\x1b[91mError: {\"name\": \"UnknownError\"}", "task_id": None},
+                    # 已终态：不重建
+                    {"id": "msg-task-heal-001-s3", "type": "task", "state": "done",
+                     "content": "garbage", "task_id": None},
+                ],
+            }
+            json.dump(polluted, open(inbox_file, "w", encoding="utf-8"))
+
+            healed = heal_pipeline_inbox_content(td, {"agent-a": {"type": "hermes"}})
+            self.assertEqual(healed, 1)  # 只修 processing 那条
+            after = json.load(open(inbox_file, encoding="utf-8"))["messages"]
+            ok = next(m for m in after if m["id"] == "m-ok")
+            self.assertEqual(ok["content"], "【task-heal-001】clean")  # 健康的不动
+            fixed = next(m for m in after if "s2" in m["id"])
+            self.assertIn("【task-heal-001】", fixed["content"])
+            self.assertEqual(fixed["task_id"], "task-heal-001")
+            done = next(m for m in after if "s3" in m["id"])
+            self.assertEqual(done["content"], "garbage")  # 终态不重建
+
+    def test_heal_wired_into_self_heal(self):
+        from lib.application.ops.self_heal import run_self_heal
+
+        with tempfile.TemporaryDirectory() as td:
+            from lib.application.orchestration.tracker import TaskTracker
+            from lib.infra.utils import json_write
+
+            t = TaskTracker(td)
+            t.create("task-heal-002", assignee="agent-a", summary="heal me")
+            t.update_status("task-heal-002", "running")
+            inbox_file = os.path.join(td, "inbox", "agent-a", "inbox.json")
+            os.makedirs(os.path.dirname(inbox_file), exist_ok=True)
+            json.dump({"agent": "agent-a", "messages": [
+                {"id": "msg-task-heal-002-s1", "type": "task", "state": "pending",
+                 "content": "error noise", "task_id": None},
+            ]}, open(inbox_file, "w", encoding="utf-8"))
+            run_self_heal(td, {"agent-a": {"type": "hermes"}}, phase="pre")
+            after = json.load(open(inbox_file, encoding="utf-8"))["messages"][0]
+            self.assertIn("【task-heal-002】", after["content"])
+
+
 class TestFlatDeliveryTolerance(unittest.TestCase):
     """G10/yige 实锤回归：平铺交付路径 + status=done 无 conclusion 的回执必须被消化。"""
 
