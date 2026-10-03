@@ -52,8 +52,18 @@ from lib.application.commands.commands import (  # noqa: E402
 )
 
 
+def _cli_version() -> str:
+    try:
+        from importlib.metadata import version as _pkg_version
+
+        return _pkg_version("mailbus")
+    except Exception:
+        return "mailbus (source tree, version unknown)"
+
+
 def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog=prog, description="mailbus CLI")
+    ap.add_argument("--version", action="version", version=_cli_version())
     sub = ap.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("init", help="初始化 store")
