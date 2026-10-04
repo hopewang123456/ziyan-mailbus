@@ -118,19 +118,28 @@ class WindowsProbe(PlatformProbeAdapter):
 
     platform_name = "win32"
 
+    # 框架类型名 → CLI 二进制名（probe 拿类型名当可执行名会永远找不到：
+    # `where claude_code` 不存在，实际 CLI 是 claude——E1 实测实锤）
+    CLI_BIN_NAMES = {
+        "claude_code": "claude",
+        "hermes_profile": "hermes",
+        "hermes": "hermes",
+    }
+
     def list_instances(self, config=None) -> list[str]:
         return sorted(_config_agents(config).keys())
 
     def probe(self, framework: str, instance: str = "") -> FrameworkProbe:
         inst = instance or framework
-        if _command_in_path(framework):
-            return FrameworkProbe(framework, inst, self.platform_name, True, f"{framework} in PATH")
-        if _command_in_wsl(framework):
-            return FrameworkProbe(framework, inst, self.platform_name, True, f"wsl: {framework}")
+        binary = self.CLI_BIN_NAMES.get(framework, framework)
+        if _command_in_path(binary):
+            return FrameworkProbe(framework, inst, self.platform_name, True, f"{binary} in PATH")
+        if _command_in_wsl(binary):
+            return FrameworkProbe(framework, inst, self.platform_name, True, f"wsl: {binary}")
         container = _container_for(config=None, framework=framework, instance=inst)
-        if container and docker_ready() and _command_in_container(framework, container):
+        if container and docker_ready() and _command_in_container(binary, container):
             return FrameworkProbe(framework, inst, self.platform_name, True, f"docker:{container}")
-        return FrameworkProbe(framework, inst, self.platform_name, False, "not found in win32/wsl/docker")
+        return FrameworkProbe(framework, inst, self.platform_name, False, f"not found in win32/wsl/docker (binary: {binary})")
 
 
 class WslProbe(PlatformProbeAdapter):

@@ -57,6 +57,30 @@ class TestProbeAndDiscover(_Store):
             run_connection_test(self.tmp, "no-such", auto_load_roles=False)
 
 
+class TestProbeBinaryNames(unittest.TestCase):
+    """E1 实测实锤回归：probe 必须拿 CLI 二进制名探测，不是框架类型名。"""
+
+    def test_claude_code_maps_to_claude(self):
+        from lib.adapters.ops.platform_probe import WindowsProbe
+
+        self.assertEqual(WindowsProbe.CLI_BIN_NAMES.get("claude_code"), "claude")
+        self.assertEqual(WindowsProbe.CLI_BIN_NAMES.get("hermes_profile"), "hermes")
+        # 未知框架回退原样（opencode/codex/openclaw 本身就是二进制名）
+        self.assertEqual(WindowsProbe.CLI_BIN_NAMES.get("opencode", "opencode"), "opencode")
+
+    def test_probe_uses_binary_name_in_lookup(self):
+        from unittest.mock import patch
+
+        from lib.adapters.ops.platform_probe import WindowsProbe
+
+        probed = []
+        with patch("lib.adapters.ops.platform_probe._command_in_path",
+                   side_effect=lambda name: probed.append(name) or name == "claude"):
+            r = WindowsProbe().probe("claude_code", "lingyan")
+        self.assertEqual(probed, ["claude"])  # 不得拿 claude_code 去探测
+        self.assertTrue(r.ok)
+
+
 class TestSmokeAck(_Store):
     def test_smoke_waits_for_agent_ack(self):
         def _ack_later():

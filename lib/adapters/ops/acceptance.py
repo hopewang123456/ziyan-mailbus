@@ -76,6 +76,16 @@ def _daily_status(data_dir: str, now) -> dict:
         os.path.basename(p)[: -len(".md")]
         for p in glob.glob(os.path.join(data_dir, "reports", "daily", "*.md"))
     }
+    # 观察基线：标记文件里的日期之前的历史缺口（如已定案的事故期）不再计入 missing，
+    # 避免哨兵每天重复提醒已知历史。写 store/reports/daily/.observation-start（YYYY-MM-DD）。
+    baseline = ""
+    baseline_path = os.path.join(data_dir, "reports", "daily", ".observation-start")
+    if os.path.isfile(baseline_path):
+        try:
+            with open(baseline_path, encoding="utf-8") as fh:
+                baseline = fh.read().strip()
+        except OSError:
+            baseline = ""
     missing = []
     for i in range(7):
         d = (now - timedelta(days=i)).strftime("%Y-%m-%d")
@@ -84,9 +94,14 @@ def _daily_status(data_dir: str, now) -> dict:
         # 当天 11:35（daily_report cron）之前不算缺
         if i == 0 and (now.hour, now.minute) < (11, 35):
             continue
+        if baseline and d < baseline:
+            continue
         missing.append(d)
     status = _OK if not missing else (_INFO if len(missing) <= 2 else _WARN)
-    return {"status": status, "detail": f"missing {missing or 'none'} in last 7d", "missing": missing}
+    detail = f"missing {missing or 'none'} in last 7d"
+    if baseline:
+        detail += f" (baseline {baseline})"
+    return {"status": status, "detail": detail, "missing": missing}
 
 
 def _ledger_status(data_dir: str, now) -> dict:
