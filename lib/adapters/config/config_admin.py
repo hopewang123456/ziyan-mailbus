@@ -113,6 +113,7 @@ AGENT_TYPE_META = {
     "codex": {"label": "Codex CLI", "note": "codex exec · codex Docker"},
     "claude_code": {"label": "Claude Code CLI", "note": "宿主机 claude -p · Windows/Linux 可选"},
     "cursor": {"label": "Cursor", "note": "Windows Cursor IDE / cursor-agent CLI"},
+    "zcode": {"label": "ZCode CLI", "note": "宿主机 zcode -p · GLM 后端（Z.AI OAuth）"},
     "dsh": {"label": "DeepSeek Harness", "note": "dsh headless · mailbus-dsh 容器"},
     "none": {"label": "纯文件", "note": "无 CLI 推送"},
 }
@@ -350,6 +351,7 @@ def get_section(data_dir: str, section: str) -> dict:
             },
             "runtime_notes": {
                 "claude_code": "已注册 · 宿主机 Claude CLI（mailbus_claude 平台配置）",
+                "zcode": "已注册 · 宿主机 ZCode CLI（mailbus_zcode 平台配置）",
                 "codex": "已注册 · Docker codex exec · skills 可挂载 .codex/skills",
                 "dispatch_tier": (
                     "开发工程师派发：pro→高能力模型 agent、flash→快速 agent（least_load+RR）；"

@@ -13,6 +13,7 @@ from lib.adapters.frameworks.registry import (  # noqa: F401
     NoneAdapter,
     OpenClawAdapter,
     OpenCodeAdapter,
+    ZcodeAdapter,
     _flag_value,
     _push_cwd,
     agent_cli_active,

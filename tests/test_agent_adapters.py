@@ -194,8 +194,79 @@ class TestAgentAdapters(unittest.TestCase):
         self.assertIn("--profile agent-a", cmd)
 
     def test_all_types_have_adapter(self):
-        for t in ("hermes_profile", "openclaw", "cline", "opencode", "codex", "claude_code", "none"):
+        for t in ("hermes_profile", "openclaw", "cline", "opencode", "codex", "claude_code", "zcode", "none"):
             self.assertIsNotNone(get_adapter(t))
+
+    def test_zcode_push_shell_template(self):
+        cfg = {"type": "zcode", "models": ["glm"], "push": {"cwd": r"E:\ws\lingzhu"}}
+        with patch(
+            "lib.adapters.frameworks.zcode_launch.resolve_zcode_cli",
+            return_value=["node", r"D:\Zcode\resources\glm\zcode.cjs"],
+        ):
+            cmd = resolve_push_cli("lingzhu", cfg, TYPES, data_dir="")
+        self.assertIn("zcode.cjs", cmd)
+        self.assertIn("-p 'MSG'", cmd)
+        self.assertIn("--mode yolo", cmd)
+        self.assertNotIn("docker exec", cmd)
+
+    def test_zcode_push_argv_direct(self):
+        from lib.adapters.frameworks.direct_push import try_build_push_direct
+
+        cfg = {"type": "zcode", "models": ["glm"], "push": {"cwd": r"E:\ws\lingzhu"}}
+        with patch(
+            "lib.adapters.frameworks.zcode_launch.resolve_zcode_cli",
+            return_value=["node", r"D:\Zcode\resources\glm\zcode.cjs"],
+        ):
+            spec = try_build_push_direct(
+                "lingzhu", cfg, TYPES,
+                data_dir="", prompt="执行任务", pipeline=True,
+            )
+        self.assertIsNotNone(spec)
+        self.assertIn("-p", spec["argv"])
+        self.assertIn("执行任务", spec["argv"])
+        self.assertIn("--mode", spec["argv"])
+        self.assertEqual(spec["env"]["ZCODE_HOME"], os.path.normpath(os.path.expanduser("~/.zcode-lingzhu")))
+        self.assertTrue(spec["cwd"].endswith("lingzhu"))
+
+    def test_zcode_push_no_binary_returns_none(self):
+        from lib.adapters.frameworks.direct_push import try_build_push_direct
+
+        cfg = {"type": "zcode", "models": ["glm"], "push": {"cwd": r"E:\ws\lingzhu"}}
+        with patch(
+            "lib.adapters.frameworks.zcode_launch.resolve_zcode_cli",
+            return_value=None,
+        ):
+            spec = try_build_push_direct(
+                "lingzhu", cfg, TYPES,
+                data_dir="", prompt="x", pipeline=True,
+            )
+        self.assertIsNone(spec)
+
+    def test_zcode_cli_active(self):
+        adapter = get_adapter("zcode")
+        ps = "node.exe zcode.cjs -p 'task' --mode yolo\n"
+        self.assertTrue(adapter.cli_active_in_ps("lingzhu", {}, ps))
+        self.assertFalse(adapter.cli_active_in_ps("lingzhu", {}, "node.exe server.js\n"))
+
+    def test_zcode_mode_whitelisted(self):
+        from lib.adapters.frameworks.zcode_launch import build_push_argv
+
+        cfg = {"type": "zcode", "models": ["glm"], "zcode": {"mode": "plan"},
+               "push": {"cwd": r"E:\ws"}}
+        with patch(
+            "lib.adapters.frameworks.zcode_launch.resolve_zcode_cli",
+            return_value=["node", "zcode.cjs"],
+        ):
+            spec = build_push_argv("lingzhu", cfg, prompt="x")
+        self.assertIn("--mode", spec["argv"])
+        self.assertEqual(spec["argv"][spec["argv"].index("--mode") + 1], "plan")
+        cfg_bad = {**cfg, "zcode": {"mode": "rm-rf"}}
+        with patch(
+            "lib.adapters.frameworks.zcode_launch.resolve_zcode_cli",
+            return_value=["node", "zcode.cjs"],
+        ):
+            spec_bad = build_push_argv("lingzhu", cfg_bad, prompt="x")
+        self.assertEqual(spec_bad["argv"][spec_bad["argv"].index("--mode") + 1], "yolo")
 
 
 if __name__ == "__main__":

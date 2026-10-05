@@ -235,6 +235,20 @@ def _opencode_direct(
     return {"argv": argv, "env": {}, "cwd": None}
 
 
+def _zcode_direct(
+    agent_name: str,
+    agent_cfg: dict,
+    agent_types: dict,
+    *,
+    data_dir: str,
+    prompt: str,
+    model_name: str | None,
+) -> dict | None:
+    from lib.adapters.frameworks.zcode_launch import build_push_argv
+
+    return build_push_argv(agent_name, agent_cfg, data_dir=data_dir, prompt=prompt)
+
+
 def try_build_push_direct(
     agent_name: str,
     agent_cfg: dict,
@@ -287,6 +301,11 @@ def try_build_push_direct(
         built = _opencode_direct(
             agent_name, agent_cfg, agent_types,
             prompt=prompt, model_name=model_name,
+        )
+    elif atype == "zcode":
+        built = _zcode_direct(
+            agent_name, agent_cfg, agent_types,
+            data_dir=data_dir, prompt=prompt, model_name=model_name,
         )
     if not built or not built.get("argv"):
         return built

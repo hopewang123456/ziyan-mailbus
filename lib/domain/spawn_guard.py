@@ -35,7 +35,9 @@ def assert_spawn_argv_allowed(argv: list[str], cfg: dict | None = None) -> None:
         raise Fatal("empty spawn argv", code="fatal")
     binary = Path(argv[0]).name
     allowed = allowed_binaries(cfg)
-    if binary not in allowed and argv[0] not in allowed:
+    # Windows 文件系统大小写不敏感：shutil.which 可能返回 node.EXE / CLAUDE.EXE
+    allowed_low = {a.lower() for a in allowed}
+    if binary.lower() not in allowed_low and argv[0] not in allowed:
         raise Fatal(f"spawn binary not on whitelist: {argv[0]}", code="fatal")
     if os.name == "nt":
         low = binary.lower()

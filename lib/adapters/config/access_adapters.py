@@ -13,6 +13,7 @@ FRAMEWORK_ACCESS_DIR: dict[str, str] = {
     "hermes": "hermes",
     "codex": "codex",
     "claude_code": "claude_code",
+    "zcode": "zcode",
     "opencode": "opencode",
     "openclaw": "openclaw",
     "cline": "cline",

@@ -75,6 +75,7 @@ DEFAULT_MODELS: dict[str, list[str]] = {
     "hermes_profile": ["deepseek-flash"],
     "codex": ["deepseek-flash"],
     "claude_code": ["deepseek-flash"],
+    "zcode": ["glm"],
     "openclaw": ["deepseek-flash"],
     "opencode": ["deepseek-flash", "qwen-max", "zhipu-4"],
 }

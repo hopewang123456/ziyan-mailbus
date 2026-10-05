@@ -29,6 +29,7 @@ _IDENTITY_FILENAME = {
     "claude_code": "CLAUDE.md",
     "cursor": "CLAUDE.md",
     "cline": "CLAUDE.md",
+    "zcode": "AGENTS.md",
     "dsh": "SOUL.md",
 }
 

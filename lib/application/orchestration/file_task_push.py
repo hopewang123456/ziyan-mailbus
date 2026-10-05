@@ -7,7 +7,7 @@ from typing import Any, Optional, Tuple
 
 from lib.infra.utils import json_read
 
-FILE_TASK_AGENT_TYPES = frozenset({"cline", "opencode", "codex", "claude_code"})
+FILE_TASK_AGENT_TYPES = frozenset({"cline", "opencode", "codex", "claude_code", "zcode"})
 
 
 def agent_uses_file_task_push(agent_type: str, agent_cfg: dict | None = None) -> bool:

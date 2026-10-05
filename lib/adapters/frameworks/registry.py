@@ -560,6 +560,41 @@ class ClaudeCodeAdapter(BaseAdapter):
         return []
 
 
+class ZcodeAdapter(BaseAdapter):
+    """ZCode CLI：宿主机 `zcode -p` headless（GLM 内置后端，Z.AI OAuth），非 Docker。
+
+    隔离经 ZCODE_HOME per-agent（实测 OAuth 认证跟随）；二进制缺失时 direct
+    返回 None → 消息留 pending 待宿主 scan（与 claude PowerShell-skip 同机制）。
+    """
+
+    type_name = "zcode"
+    container_service = ""
+    mark_processing_on_task_push = True
+
+    def push_timeout_seconds(self, *, pipeline: bool = False, agent_cfg: dict | None = None) -> int:
+        if agent_cfg and agent_cfg.get("push_timeout_seconds") is not None:
+            return int(agent_cfg["push_timeout_seconds"])
+        return 900 if pipeline else 300
+
+    def build_push_cli(self, agent_name, agent_cfg, agent_types, model_alias=None, *, data_dir=None):
+        from lib.adapters.frameworks.zcode_launch import build_push_command
+
+        return build_push_command(agent_name, agent_cfg, agent_types, data_dir=data_dir or "")
+
+    def build_interactive_cli(self, agent_name, agent_cfg, agent_types) -> str:
+        from lib.adapters.frameworks.zcode_launch import build_interactive_command
+
+        return build_interactive_command(agent_name, agent_cfg)
+
+    def cli_active_in_ps(self, agent_name, agent_cfg, ps_output) -> bool:
+        from lib.adapters.frameworks.zcode_launch import host_cli_active
+
+        return host_cli_active(ps_output)
+
+    def validate(self, agent_name, agent_cfg) -> list[str]:
+        return []
+
+
 def shlex_quote(s: str) -> str:
     """Shell 单引号转义（供 docker exec bash -lc 使用）。"""
     if not s:
@@ -696,6 +731,7 @@ ADAPTERS: dict[str, BaseAdapter] = {
     "a2a_remote": A2ARemoteAdapter(),
     "cursor": CursorAdapter(),
     "dsh": DshAdapter(),
+    "zcode": ZcodeAdapter(),
     "none": NoneAdapter(),
 }
 
@@ -753,6 +789,10 @@ def resolve_push_cli(
                 agent_name, agent_cfg, agent_types, model_alias, pipeline=pipeline,
             )
         if atype == "claude_code" and data_dir:
+            return adapter.build_push_cli(
+                agent_name, agent_cfg, agent_types, model_alias, data_dir=data_dir,
+            )
+        if atype == "zcode" and data_dir:
             return adapter.build_push_cli(
                 agent_name, agent_cfg, agent_types, model_alias, data_dir=data_dir,
             )
