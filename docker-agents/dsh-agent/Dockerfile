@@ -4,6 +4,7 @@ ARG PROXY=
 ENV HTTP_PROXY=$PROXY HTTPS_PROXY=$PROXY NO_PROXY=localhost,127.0.0.1,::1
 
 ARG DSH_VERSION=
+ARG npm_config_registry=
 RUN if [ -n "$DSH_VERSION" ]; then \
       npm install -g "@deepseek-ai/dsh@${DSH_VERSION}"; \
     else \

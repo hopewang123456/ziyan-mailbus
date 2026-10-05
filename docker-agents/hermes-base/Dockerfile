@@ -12,7 +12,12 @@ RUN if [ -n "$HERMES_VERSION" ]; then \
     fi
 
 # 预装 Chromium / Node / 编译链（MemOS better-sqlite3）
-RUN apt-get update && apt-get install -y -qq chromium nodejs npm build-essential python3-setuptools g++ make curl 2>&1 | tail -8; \
+ARG APT_MIRROR=
+ARG npm_config_registry=
+RUN if [ -n "$APT_MIRROR" ]; then \
+      sed -i "s|deb.debian.org|$APT_MIRROR|g; s|security.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources 2>/dev/null || true; \
+    fi; \
+    apt-get update && apt-get install -y -qq chromium nodejs npm build-essential python3-setuptools g++ make curl 2>&1 | tail -8; \
     if ! which node >/dev/null 2>&1; then \
         echo "=== nodejs not found via apt, trying nodesource ===" && \
         apt-get install -y -qq curl gnupg && \
@@ -40,7 +45,7 @@ RUN set -eux; \
     tar -xzf memtensor-memos-local-plugin-*.tgz; \
     cp -a package/. /opt/memos-local-plugin/; \
     cd /opt/memos-local-plugin; \
-    npm install --omit=dev --no-fund --no-audit --ignore-scripts; \
+    npm install --omit=dev --no-fund --no-audit --ignore-scripts --legacy-peer-deps; \
     cd node_modules/better-sqlite3; \
     /usr/bin/node /usr/share/nodejs/node-gyp/bin/node-gyp.js rebuild --release; \
     cd /opt/memos-local-plugin; \

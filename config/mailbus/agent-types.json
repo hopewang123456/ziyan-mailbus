@@ -152,6 +152,20 @@
         "url": "http://127.0.0.1:{port}/chat",
         "start_wait_seconds": 5
       }
+    },
+    "zcode_cli": {
+      "cli": {
+        "kind": "shell",
+        "start_wait_seconds": 0
+      },
+      "browser": {
+        "kind": "none",
+        "enabled": false
+      },
+      "desktop": {
+        "enabled": false,
+        "kind": "zcode_tui"
+      }
     }
   }
 }

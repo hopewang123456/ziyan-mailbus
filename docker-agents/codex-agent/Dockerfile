@@ -3,12 +3,22 @@ FROM node:22
 ARG PROXY=
 ENV HTTP_PROXY=$PROXY HTTPS_PROXY=$PROXY
 ARG CODEX_VERSION=
+ARG npm_config_registry=
 RUN if [ -n "$PROXY" ]; then export HTTP_PROXY="$PROXY" HTTPS_PROXY="$PROXY"; fi; \
     apt-get update && apt-get install -y --no-install-recommends curl tmux ca-certificates && rm -rf /var/lib/apt/lists/* && \
     if [ -n "$CODEX_VERSION" ]; then \
       npm install -g "@openai/codex@${CODEX_VERSION}" @galaxy-yearn/codex-deepseek-gateway codexapp; \
     else \
       npm install -g @openai/codex @galaxy-yearn/codex-deepseek-gateway codexapp; \
+    fi
+
+# cline CLI（lingxing 用）：ClineAdapter container_service 默认 codex-web，
+# 之前从未装过——lingxing 实际不可跑。推送时经 -k 读容器 env 的 API key。
+ARG CLINE_VERSION=
+RUN if [ -n "$CLINE_VERSION" ]; then \
+      npm install -g "cline@${CLINE_VERSION}"; \
+    else \
+      npm install -g cline; \
     fi
 
 ENV HTTP_PROXY= HTTPS_PROXY=
