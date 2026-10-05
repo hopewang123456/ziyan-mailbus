@@ -106,5 +106,66 @@ class TestDailyDigestWiring(unittest.TestCase):
         self.assertEqual(sent, ["digest"])
 
 
+class TestDailyBackfill(unittest.TestCase):
+    """10-04/10-05 日报缺失回归：cron 错过（宿主睡眠）时 patrol 补账。"""
+
+    def _setup(self, tmp):
+        import os
+
+        daily = os.path.join(tmp, "reports", "daily")
+        os.makedirs(daily, exist_ok=True)
+        return daily
+
+    def _run_ensure(self, tmp, hour, minute):
+        from unittest.mock import patch
+
+        from lib.adapters.ops import jobs
+
+        fake_now = None
+        from lib.infra.clock import now_dt
+
+        base = now_dt().replace(hour=hour, minute=minute, second=0, microsecond=0)
+        with patch("lib.adapters.ops.jobs.now_dt", return_value=base), \
+             patch("lib.adapters.ops.jobs.run_daily_report") as mrun, \
+             patch("lib.adapters.ops.jobs._now_iso", return_value="x"):
+            r = jobs.ensure_daily_report(tmp)
+        return r, mrun
+
+    def test_backfills_when_missing_after_grace(self):
+        from lib.adapters.ops.jobs import ensure_daily_report
+        import os
+
+        tmp = _tmp()
+        daily = self._setup(tmp)
+        r, mrun = self._run_ensure(tmp, 14, 0)
+        self.assertTrue(r)
+        mrun.assert_called_once()
+        # run_daily_report 真跑会写当日文件（这里被 mock，验证判定逻辑即可）
+
+    def test_skips_when_report_exists(self):
+        from lib.adapters.ops.jobs import ensure_daily_report
+        from datetime import timedelta
+        from lib.infra.clock import now_dt
+        import os
+
+        tmp = _tmp()
+        daily = self._setup(tmp)
+        today = now_dt().strftime("%Y-%m-%d")
+        with open(os.path.join(daily, f"{today}.md"), "w", encoding="utf-8") as fh:
+            fh.write("x")
+        r, mrun = self._run_ensure(tmp, 14, 0)
+        self.assertFalse(r)
+        mrun.assert_not_called()
+
+    def test_skips_before_cron_window(self):
+        from lib.adapters.ops.jobs import ensure_daily_report
+
+        tmp = _tmp()
+        self._setup(tmp)
+        r, mrun = self._run_ensure(tmp, 9, 0)
+        self.assertFalse(r)
+        mrun.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

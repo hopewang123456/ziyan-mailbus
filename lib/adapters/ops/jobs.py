@@ -274,9 +274,17 @@ def _append_inbox_notice(
 
 
 def _patrol_target(data_dir: str) -> str:
-    """巡检通知目标 agent：org_defaults.notify_agent，回落到 demo。"""
+    """巡检通知目标 agent：org_defaults.notify_agents 首位（复数名单，尸检修复时已配真实值）
+    → notify_agent 单数 → demo 兜底。
+
+    不得在单数键未配时直接落 demo 幽灵 id（尸检案例#1 同族：226 条通知堆积无人消费）。
+    """
     try:
-        from lib.infra.org_defaults import org_default
+        from lib.infra.org_defaults import org_default, org_default_list
+
+        agents = [str(a).strip() for a in (org_default_list(data_dir, "notify_agents") or []) if str(a).strip()]
+        if agents:
+            return agents[0]
         return org_default(data_dir, "notify_agent") or first_demo_agent()
     except Exception:
         return first_demo_agent()
@@ -404,7 +412,30 @@ def _write_report_file(data_dir: str, subdir: str, filename: str, content: str) 
     return path
 
 
+def ensure_daily_report(data_dir: str) -> bool:
+    """M1 收口：daily_report 错过 cron（宿主睡眠/关机）时由 patrol 补账。
+
+    cron 错过即跳过（10-04/10-05 实锤：11:35 主机睡眠 → 两天无日报）。
+    今天已生成 → False；已过 11:35+10min 宽限且缺失 → 补跑并返回 True。
+    """
+    now = now_dt()
+    today = now.strftime("%Y-%m-%d")
+    daily_dir = os.path.join(data_dir, "reports", "daily")
+    if os.path.isfile(os.path.join(daily_dir, f"{today}.md")):
+        return False
+    if (now.hour, now.minute) < (11, 45):
+        return False
+    mbus_log.info(f"[daily-backfill] {today} daily report missing past 11:35 — backfilling")
+    try:
+        run_daily_report(data_dir)
+        return True
+    except Exception as exc:
+        mbus_log.warn(f"[daily-backfill] error: {exc}")
+        return False
+
+
 def run_patrol(data_dir: str) -> int:
+    ensure_daily_report(data_dir)
     agent = _patrol_target(data_dir)
     if _recent_patrol_notice(data_dir, agent, hours=1.0):
         mbus_log.info(f"[patrol] skip — recent patrol notice exists {_now_iso()}")
