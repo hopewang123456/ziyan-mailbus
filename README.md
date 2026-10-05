@@ -25,6 +25,10 @@ pip install -e .
 #   create -> dispatch -> deliver -> execute -> receipt -> accept -> archive
 mailbus demo
 
+# Self-check the environment right after install (Docker/paths/ports,
+# plain-language fix hints on red lights)
+mailbus doctor
+
 # Demo data lives isolated in store/demo/ — wipe anytime
 mailbus demo --clean
 ```
