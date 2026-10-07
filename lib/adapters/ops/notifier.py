@@ -53,6 +53,9 @@ def send_notification(data_dir: str, title: str, body: str, level: str = "warn")
         return {"skipped": {"ok": True, "reason": "no notify channels configured"}}
     for idx, ch in enumerate(channels):
         ctype = str(ch.get("type") or "").strip()
+        if ch.get("enabled") is False:
+            results[f"{ctype}#{idx}"] = {"ok": True, "skipped": "channel disabled"}
+            continue
         levels = ch.get("levels")
         # 默认：digest 渠道收 digest；实时渠道收 critical/warn
         if not levels:

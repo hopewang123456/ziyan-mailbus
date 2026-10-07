@@ -159,6 +159,16 @@ class TestDispatch(unittest.TestCase):
         res2 = notifier.send_notification(tmp2, "t", "b")
         self.assertIn("no notify channels", res2["skipped"]["reason"])
 
+    def test_per_channel_disabled(self):
+        tmp = _write_config(tempfile.mkdtemp(prefix="mb-notify-"), {"channels": [
+            {"type": "file", "enabled": False},
+            {"type": "file"},
+        ]})
+        res = notifier.send_notification(tmp, "t", "b", level="digest")
+        self.assertTrue(res["file#0"]["skipped"])
+        self.assertIn("disabled", res["file#0"]["skipped"])
+        self.assertTrue(res["file#1"]["ok"])
+
     def test_composition_facade(self):
         from lib.composition import send_notification
 
