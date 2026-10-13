@@ -11,12 +11,26 @@ import shutil
 import copy
 import time
 import contextlib
+import subprocess
 import tempfile
 import threading
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Any
 
 from lib.infra.clock import now_dt, now_iso, now_ts, now_utc_dt
+
+
+def no_window_creationflags() -> int:
+    """Windows 下 spawn 控制台程序（powershell/wsl/docker/tasklist 等）时防弹黑窗。
+
+    无控制台父进程（pythonw：计划任务 host-scan/sentinel）启动控制台子进程，
+    Windows 会强制新建控制台窗口——所有从 scan/sentinel 链路可达的叶子
+    subprocess 调用都必须带上（CREATE_NO_WINDOW 不跨层继承，逐点盖）。
+    非 Windows 返回 0（无该 flag）。
+    """
+    if os.name == "nt":
+        return subprocess.CREATE_NO_WINDOW
+    return 0
 if sys.platform == "win32":
     import msvcrt
 else:

@@ -19,6 +19,8 @@ def docker_exec_ps(container: str, *, timeout: int = 8) -> str:
         attempts.append([wsl, "-e", "docker", "exec", container, "ps", "aux"])
     for argv in attempts:
         try:
+            from lib.infra.utils import no_window_creationflags
+
             r = subprocess.run(
                 argv,
                 capture_output=True,
@@ -26,6 +28,7 @@ def docker_exec_ps(container: str, *, timeout: int = 8) -> str:
                 encoding="utf-8",
                 errors="replace",
                 timeout=timeout,
+                creationflags=no_window_creationflags(),
             )
             if r.returncode == 0 and r.stdout:
                 return r.stdout

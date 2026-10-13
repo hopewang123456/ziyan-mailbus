@@ -340,6 +340,8 @@ def try_build_push_direct(
 
 def run_push_direct(spec: dict, *, wait: bool = True) -> int:
     """独立运维：执行 direct push 并可选等待。"""
+    from lib.infra.utils import no_window_creationflags
+
     env = os.environ.copy()
     env.update(spec.get("env") or {})
     proc = subprocess.Popen(
@@ -349,6 +351,7 @@ def run_push_direct(spec: dict, *, wait: bool = True) -> int:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         close_fds=True,
+        creationflags=no_window_creationflags(),
     )
     if not wait:
         return 0

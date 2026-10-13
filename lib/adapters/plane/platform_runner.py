@@ -108,6 +108,8 @@ def run(
     merged = os.environ.copy()
     if env:
         merged.update(env)
+    from lib.infra.utils import no_window_creationflags
+
     proc = subprocess.run(
         list(cmd),
         capture_output=True,
@@ -118,6 +120,7 @@ def run(
         env=merged,
         encoding="utf-8",
         errors="replace",
+        creationflags=no_window_creationflags(),
     )
     return RunResult(proc.returncode, proc.stdout or "", proc.stderr or "")
 

@@ -182,11 +182,14 @@ def _sync_claude_agent_context(agent_name: str, data_dir: str) -> None:
     if not os.path.isfile(sync_py):
         return
     try:
+        from lib.infra.utils import no_window_creationflags
+
         subprocess.run(
             [sys.executable, sync_py, agent_name, "--data-dir", data_dir],
             capture_output=True,
             timeout=45,
             check=False,
+            creationflags=no_window_creationflags(),
         )
     except (subprocess.TimeoutExpired, OSError):
         pass
@@ -226,6 +229,8 @@ def resolve_windows_claude_bin(plat_cfg: dict) -> str:
             "if($c -and $c.Source){Write-Output $c.Source}"
         )
         try:
+            from lib.infra.utils import no_window_creationflags
+
             r = subprocess.run(
                 [ps, "-NoProfile", "-Command", script],
                 capture_output=True,
@@ -233,6 +238,7 @@ def resolve_windows_claude_bin(plat_cfg: dict) -> str:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
+                creationflags=no_window_creationflags(),
             )
             for line in (r.stdout or "").splitlines():
                 path = _normalize_windows_path(line.strip())
@@ -860,11 +866,14 @@ def build_push_command(
     sync_py = os.path.join(ROOT, "tools", "sync-claude-agent-context.py")
     if os.path.isfile(sync_py):
         try:
+            from lib.infra.utils import no_window_creationflags
+
             subprocess.run(
                 [sys.executable, sync_py, agent_name, "--data-dir", dd],
                 capture_output=True,
                 timeout=45,
                 check=False,
+                creationflags=no_window_creationflags(),
             )
         except (subprocess.TimeoutExpired, OSError):
             pass
@@ -982,6 +991,8 @@ def resolve_ttyd_bin() -> str:
         wsl = shutil.which("wsl.exe") or shutil.which("wsl")
         if wsl:
             try:
+                from lib.infra.utils import no_window_creationflags
+
                 r = subprocess.run(
                     [wsl, "-e", "bash", "-lc", "command -v ttyd 2>/dev/null || true"],
                     capture_output=True,
@@ -989,6 +1000,7 @@ def resolve_ttyd_bin() -> str:
                     timeout=15,
                     encoding="utf-8",
                     errors="replace",
+                    creationflags=no_window_creationflags(),
                 )
                 path = (r.stdout or "").strip().splitlines()
                 path = path[-1].strip() if path else ""
@@ -1008,6 +1020,8 @@ def resolve_ttyd_bin() -> str:
 
 
 def host_ps_output() -> str:
+    from lib.infra.utils import no_window_creationflags
+
     try:
         if sys.platform == "win32":
             ps = _powershell_exe()
@@ -1020,6 +1034,7 @@ def host_ps_output() -> str:
                     timeout=12,
                     encoding="utf-8",
                     errors="replace",
+                    creationflags=no_window_creationflags(),
                 )
                 if r.returncode == 0:
                     return r.stdout or ""

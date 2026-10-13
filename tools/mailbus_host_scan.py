@@ -23,10 +23,11 @@ def main():
     env = dict(os.environ, PYTHONUTF8="1")
     t0 = time.time()
     try:
+        flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         r = subprocess.run(
             [sys.executable, "-m", "bus.cli", "scan"],
             capture_output=True, text=True, timeout=280, env=env,
-            encoding="utf-8", errors="replace",
+            encoding="utf-8", errors="replace", creationflags=flags,
         )
         rc = r.returncode
         tail = (r.stdout or "").strip().splitlines()
