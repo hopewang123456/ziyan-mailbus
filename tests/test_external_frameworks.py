@@ -11,7 +11,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.infra.framework_spec import FRAMEWORKS
+from lib.adapters.frameworks.spec import FRAMEWORKS
 
 CODEBUDDY_LIKE = {
     "type_name": "testbuddy",

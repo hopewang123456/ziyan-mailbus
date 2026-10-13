@@ -8,7 +8,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from lib.infra.utils import json_read, json_write
-from lib.infra.framework_spec import FRAMEWORKS
+from lib.adapters.frameworks.spec import FRAMEWORKS
 from .config_schema import validate_config
 from lib.infra.env_bootstrap import load_mailbus_env
 from lib.adapters.integrations.model_router import TIER_OLLAMA

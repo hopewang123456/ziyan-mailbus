@@ -9,7 +9,7 @@ import json
 import os
 from typing import Optional
 
-from lib.infra.framework_spec import FRAMEWORKS
+from lib.adapters.frameworks.spec import FRAMEWORKS
 
 # 运行时校验与 JSON Schema enum 共用——派生自 FRAMEWORKS 单一事实源。
 AGENT_TYPES = tuple(fw for fw, spec in FRAMEWORKS.items() if spec.in_agent_types)

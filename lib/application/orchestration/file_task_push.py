@@ -6,11 +6,7 @@ import os
 from typing import Any, Optional, Tuple
 
 from lib.infra.utils import json_read
-from lib.infra.framework_spec import FRAMEWORKS, file_task_agent_types
-
-# 内置框架的静态集（W1a 前的既有消费面，含部分 import 方）；运行时判定走
-# FRAMEWORKS（外部框架 store/frameworks/*.json 注入后动态生效，W2）。
-FILE_TASK_AGENT_TYPES = file_task_agent_types()
+from lib.composition import get_framework_spec
 
 
 def agent_uses_file_task_push(agent_type: str, agent_cfg: dict | None = None) -> bool:
@@ -20,10 +16,9 @@ def agent_uses_file_task_push(agent_type: str, agent_cfg: dict | None = None) ->
 
 
 def _uses_file_task(agent_type: str) -> bool:
-    """内置静态集 ∪ 运行时 FRAMEWORKS（外部框架 file_task=true 动态生效）。"""
-    t = (agent_type or "").strip()
-    spec = FRAMEWORKS.get(t)
-    return (spec.file_task if spec else False) or t in FILE_TASK_AGENT_TYPES
+    """按 FrameworkSpec 判定（含运行时注入的外部框架，走 composition 门面）。"""
+    spec = get_framework_spec(agent_type)
+    return bool(spec.file_task) if spec else False
 
 
 def should_file_task_push(

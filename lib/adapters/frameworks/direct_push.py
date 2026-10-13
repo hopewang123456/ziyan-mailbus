@@ -12,12 +12,6 @@ import sys
 from typing import Optional
 
 from lib.adapters.frameworks import (
-    ClineAdapter,
-    CodexAdapter,
-    HermesAdapter,
-    HermesProfileAdapter,
-    OpenClawAdapter,
-    OpenCodeAdapter,
     _flag_value,
     _push_cwd,
     get_adapter,
@@ -105,7 +99,7 @@ def _codex_direct(
     model_name: str | None = None,
     pipeline: bool = False,
 ) -> dict | None:
-    adapter = CodexAdapter()
+    adapter = get_adapter("codex")
     service = adapter._service(agent_name, agent_cfg)
     container = resolve_container(agent_cfg, agent_name, service)
     if not container:
@@ -137,7 +131,7 @@ def _hermes_direct(
     pipeline: bool = False,
     profile: bool = False,
 ) -> dict | None:
-    adapter = HermesProfileAdapter() if profile else HermesAdapter()
+    adapter = get_adapter("hermes_profile" if profile else "hermes")
     container = resolve_container(agent_cfg, agent_name, adapter.container_service)
     if not container:
         return None
@@ -164,7 +158,7 @@ def _openclaw_direct(
     model_name: str | None = None,
     pipeline: bool = False,
 ) -> dict | None:
-    adapter = OpenClawAdapter()
+    adapter = get_adapter("openclaw")
     container = resolve_container(agent_cfg, agent_name, adapter.container_service)
     if not container:
         return None
@@ -197,7 +191,7 @@ def _cline_direct(
     model_name: str | None = None,
     pipeline: bool = False,
 ) -> dict | None:
-    adapter = ClineAdapter()
+    adapter = get_adapter("cline")
     container = resolve_container(agent_cfg, agent_name, adapter.container_service)
     if not container:
         return None
@@ -227,7 +221,7 @@ def _opencode_direct(
     model_name: str | None = None,
     pipeline: bool = False,
 ) -> dict | None:
-    adapter = OpenCodeAdapter()
+    adapter = get_adapter("opencode")
     container = resolve_container(agent_cfg, agent_name, adapter.container_service)
     if not container:
         return None

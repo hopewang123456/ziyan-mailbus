@@ -9,7 +9,7 @@ from typing import Any
 
 from lib.infra.constants import MAILBUS_ROOT
 from lib.infra.env_bootstrap import load_mailbus_env, mailbus_paths
-from lib.infra.framework_spec import FRAMEWORKS
+from lib.adapters.frameworks.spec import FRAMEWORKS
 
 
 def _registry_path(mail_root: Path | None = None) -> Path:

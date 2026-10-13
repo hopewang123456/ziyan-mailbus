@@ -1717,18 +1717,18 @@ def cmd_agent_add(args) -> int:
         ensure_framework_plugins_loaded(data_dir=data_dir, config=config)
     except Exception:
         pass
-    from lib.infra.framework_spec import FRAMEWORKS
+    from lib.composition import get_framework_spec, list_framework_types
 
-    if atype != "none" and atype not in FRAMEWORKS:
-        builtin = [fw for fw, s in FRAMEWORKS.items() if s.in_agent_types]
-        external = [fw for fw, s in FRAMEWORKS.items() if not s.in_agent_types]
+    builtin, all_types = list_framework_types()
+    if atype != "none" and atype not in all_types:
+        external = [fw for fw in all_types if fw not in builtin]
         print(f"✗ 未知类型 '{atype}'")
         print(f"  可用内置类型: {', '.join(builtin)}")
         if external:
             print(f"  已加载外部框架: {', '.join(external)}")
         return 1
 
-    spec = FRAMEWORKS.get(atype)
+    spec = get_framework_spec(atype)
     if not models and spec is not None and spec.default_models:
         models = list(spec.default_models)
     run_target = (spec.run_targets[0] if spec is not None and spec.run_targets else "windows")

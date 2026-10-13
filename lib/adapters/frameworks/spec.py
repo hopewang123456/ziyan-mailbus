@@ -8,7 +8,7 @@
 - access_adapters.FRAMEWORK_ACCESS_DIR   access/{dir}/ 目录映射
 - init_store.DEFAULT_MODELS          init-store 生成 agent 卡默认模型
 - native_scan._IDENTITY_FILENAME     原生身份文件扫描
-- file_task_push.FILE_TASK_AGENT_TYPES   工单推送集合
+- file_task_push._uses_file_task        工单推送判定（composition 门面动态查询）
 - platform_probe.WindowsProbe.CLI_BIN_NAMES  probe 二进制名
 - framework_discovery.FRAMEWORK_RUN_TARGETS  运行端适用性矩阵
 - registry.DOCKER_SERVICE_TYPE       compose 服务名 → type
@@ -16,11 +16,8 @@
 行为类知识（Adapter 类的 build_push_cli 等）仍在 registry.py；本模块只收敛
 数据。Adapter 类属性与 spec 的一致性由 tests/test_framework_spec.py 钉死。
 
-放 lib/infra 的原因：config 包（access_adapters 等）与 frameworks 包
-（registry 等）互有依赖，若本模块放 frameworks 会经 frameworks/__init__
-→ registry → access_adapters 构成 import 环；infra 是两者共同的底层
-（registry 本就 import lib.infra.agent_demo 的框架数据），application 层
-import infra 也不违反分层守卫。
+落位 frameworks 包（2026-10-13 环已解：registry 不再 import
+config.access_adapters，config → frameworks.spec 单向无环）。
 """
 from __future__ import annotations
 

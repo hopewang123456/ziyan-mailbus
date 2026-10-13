@@ -16,7 +16,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, List
 
-from lib.infra.framework_spec import FRAMEWORKS
+from lib.adapters.frameworks.spec import FRAMEWORKS
 from lib.adapters.plane.platform_runner import (
     docker_ready,
     run,

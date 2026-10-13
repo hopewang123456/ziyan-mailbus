@@ -13,7 +13,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from lib.infra.framework_spec import FRAMEWORKS, FrameworkSpec, file_task_agent_types
+from lib.adapters.frameworks.spec import FRAMEWORKS, FrameworkSpec, file_task_agent_types
 
 
 class TestSpecCompleteness(unittest.TestCase):
@@ -76,10 +76,11 @@ class TestGoldenDerivedTables(unittest.TestCase):
         )
 
     def test_cli_bin_names(self):
+        # 子集断言：运行时注册的外部框架（真实 store codebuddy 等）合法进入
         from lib.adapters.ops.platform_probe import WindowsProbe
-        self.assertEqual(WindowsProbe.CLI_BIN_NAMES, {
+        self.assertTrue({
             "claude_code": "claude", "hermes_profile": "hermes", "hermes": "hermes",
-        })
+        }.items() <= WindowsProbe.CLI_BIN_NAMES.items())
 
     def test_docker_service_type(self):
         from lib.adapters.frameworks.registry import DOCKER_SERVICE_TYPE
@@ -96,10 +97,14 @@ class TestGoldenDerivedTables(unittest.TestCase):
         self.assertNotIn("a2a_remote", FRAMEWORK_RUN_TARGETS)
 
     def test_file_task_types(self):
-        from lib.application.orchestration.file_task_push import FILE_TASK_AGENT_TYPES
-        self.assertEqual(FILE_TASK_AGENT_TYPES,
+        from lib.adapters.frameworks.spec import file_task_agent_types
+        from lib.application.orchestration.file_task_push import agent_uses_file_task_push
+        self.assertEqual(file_task_agent_types(),
                          frozenset({"cline", "opencode", "codex", "claude_code", "zcode"}))
-        self.assertEqual(file_task_agent_types(), FILE_TASK_AGENT_TYPES)
+        for fw in ("cline", "opencode", "codex", "claude_code", "zcode"):
+            self.assertTrue(agent_uses_file_task_push(fw), fw)
+        self.assertFalse(agent_uses_file_task_push("hermes_profile"))
+        self.assertFalse(agent_uses_file_task_push("none"))
 
     def test_dispatch_flags(self):
         """resolve_push_cli kwargs 分派金标准：codex 收 pipeline，claude/zcode 收 data_dir。"""

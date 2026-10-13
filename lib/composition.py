@@ -418,6 +418,23 @@ def framework_push_template(framework: str) -> str:
     return getattr(adapter, "push_template", "") or ""
 
 
+def get_framework_spec(framework: str):
+    """FrameworkSpec 单条查询（application 层读 descriptor 走此门面）。"""
+    from lib.adapters.frameworks.spec import FRAMEWORKS
+
+    return FRAMEWORKS.get((framework or "").strip())
+
+
+def list_framework_types() -> tuple[tuple, tuple]:
+    """(内置类型 tuple, 全部类型 tuple)——type 校验/提示用。"""
+    from lib.adapters.frameworks.spec import FRAMEWORKS
+
+    return (
+        tuple(fw for fw, s in FRAMEWORKS.items() if s.in_agent_types),
+        tuple(FRAMEWORKS),
+    )
+
+
 def resolve_push_cli(*args: Any, **kwargs: Any) -> Any:
     from lib.adapters.frameworks import resolve_push_cli as _fn
 

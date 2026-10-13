@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from lib.infra.constants import AGENT_VAULT_ROOT
-from lib.infra.framework_spec import FRAMEWORKS
+from lib.adapters.frameworks.spec import FRAMEWORKS
 from lib.adapters.frameworks.framework_discovery import framework_run_targets
 
 __all__ = ["scan_agent_assets", "path_map_mounts_for", "identity_file_candidates"]

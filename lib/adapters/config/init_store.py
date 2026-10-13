@@ -20,7 +20,7 @@ from lib.infra.constants import (
     _now_iso,
 )
 from lib.infra.utils import json_write
-from lib.infra.framework_spec import FRAMEWORKS
+from lib.adapters.frameworks.spec import FRAMEWORKS
 
 ORG_JSON_MIRROR = (
     "roster.json",

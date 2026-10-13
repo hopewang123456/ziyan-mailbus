@@ -21,10 +21,11 @@ from typing import Any, Optional
 
 from lib.adapters.frameworks.registry import (
     BaseAdapter,
+    _push_cwd,
     model_flag,
     register_framework,
 )
-from lib.infra.framework_spec import FRAMEWORKS, FrameworkSpec
+from lib.adapters.frameworks.spec import FRAMEWORKS, FrameworkSpec
 
 # JSON descriptor 允许的字段（FrameworkSpec 投影 + 模板字段）。
 _ALLOWED_FIELDS = {
@@ -46,13 +47,29 @@ class TemplateAdapter(BaseAdapter):
 
     def __init__(self, spec: FrameworkSpec, push_template: str, interactive_template: str = ""):
         self.spec = spec
-        self.type_name = spec.type_name
-        self.container_service = spec.container_service
-        self.supports_auto_ack = spec.supports_auto_ack
-        self.mark_processing_on_task_push = spec.mark_processing_on_task_push
-        self.allow_no_push_cli = spec.allow_no_push_cli
         self.push_template = push_template
         self.interactive_template = interactive_template
+
+    # 类属性全部委托 spec（单一来源，杜绝 spec/adapter 双写漂移）
+    @property
+    def type_name(self) -> str:
+        return self.spec.type_name
+
+    @property
+    def container_service(self) -> str:
+        return self.spec.container_service
+
+    @property
+    def supports_auto_ack(self) -> bool:
+        return self.spec.supports_auto_ack
+
+    @property
+    def mark_processing_on_task_push(self) -> bool:
+        return self.spec.mark_processing_on_task_push
+
+    @property
+    def allow_no_push_cli(self) -> bool:
+        return self.spec.allow_no_push_cli
 
     def build_push_cli(
         self,
@@ -122,7 +139,6 @@ def _argv_direct_builder(push_argv: list[str]):
         model_name: str | None = None,
         pipeline: bool = False,
     ) -> dict | None:
-        from lib.adapters.frameworks.registry import _push_cwd
 
         argv = [prompt if el == "{MSG}" else el for el in push_argv]
         if not prompt and "{MSG}" in push_argv:

@@ -6,7 +6,7 @@ from pathlib import Path
 
 from lib.adapters.config.agent_registry import list_agents_by_framework, load_all_agents
 from lib.infra.constants import MAILBUS_ROOT
-from lib.infra.framework_spec import FRAMEWORKS
+from lib.adapters.frameworks.spec import FRAMEWORKS
 
 # agent.json framework → access/ subdirectory（派生自 FRAMEWORKS，空 access_dir = 无 SPEC）
 FRAMEWORK_ACCESS_DIR: dict[str, str] = {

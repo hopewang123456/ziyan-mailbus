@@ -11,7 +11,7 @@ from lib.adapters.config.access_adapters import (
     load_adapter_spec,
     validate_access_adapters,
 )
-from lib.adapters.frameworks import framework_adapter_spec
+from lib.adapters.config.access_adapters import load_adapter_spec as framework_adapter_spec
 from lib.adapters.integrations.agentmemory_config import (
     agentmemory_url,
     load_integration_config,
