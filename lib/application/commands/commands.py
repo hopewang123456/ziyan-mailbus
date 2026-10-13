@@ -34,6 +34,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from lib.domain.models import (
     Message, MsgStatus, Priority, MsgType, Inbox, AgentConfig, BusConfig,
+    get_msg_state,
 )
 from lib.infra import mbus_log
 from lib.infra.constants import PROJECT_ROOT_STR
@@ -217,6 +218,13 @@ def run_scan_once(data_dir: str, config: dict, *, quiet: bool = False) -> int:
             if not quiet:
                 mbus_log.info("scan skipped — mailbus-scan lock held")
             return 0
+        # W2 配置化接入：外部框架 descriptor 幂等加载（store/frameworks/*.json），
+        # 保证 CLI/scheduler 路径与 serve 一致（毒文件隔离，失败不阻断 scan）。
+        try:
+            from lib.composition import ensure_framework_plugins_loaded
+            ensure_framework_plugins_loaded(data_dir=data_dir, config=config)
+        except Exception as _exc:  # noqa: BLE001 — 加载失败不阻断 scan 主流程
+            mbus_log.warning("external frameworks load failed: %s", _exc)
         return _run_scan_once_body(data_dir, config, quiet=quiet)
 
 
@@ -1172,7 +1180,7 @@ def cmd_retry(args) -> int:
     data_dir = config["data_dir"]
     agents = config.get("agents", {})
     paths = resolve_paths(data_dir)
-    
+
     if args.msg_id:
         # 重试单条 — 需要找到它在哪个 agent 的 inbox
         found = False
@@ -1184,9 +1192,17 @@ def cmd_retry(args) -> int:
             inbox = Inbox.from_dict(inbox_data)
             for m in inbox.messages:
                 if inbox.msg_field(m, "id") == args.msg_id:
-                    inbox.set_msg_status(args.msg_id, MsgStatus.PENDING, pushed_count=0)
+                    # scan 筛选/跳过一律 state 优先（get_msg_state/_should_skip），
+                    # 只拨 status 不动 state 时任务型消息（state=done/processing/
+                    # rejected）永远不会被 scan 重新选中。重置必须双字段同步并清
+                    # 终态残留，与 scan 自愈分支的重置范式一致。
+                    inbox.set_msg_status(
+                        args.msg_id, MsgStatus.PENDING, state=MsgStatus.PENDING,
+                        pushed_count=0, reminded_count=0,
+                        done_at=None, done_note=None,
+                    )
                     json_write(inbox_file, inbox.to_dict())
-                    print(f"✓ {args.msg_id} 已重置为 pending，下个 cron 将重试")
+                    print(f"✓ {args.msg_id} 已重置为 pending（status+state），下个 scan 周期将重推")
                     found = True
                     break
             if found:
@@ -1194,8 +1210,8 @@ def cmd_retry(args) -> int:
         if not found:
             print(f"✗ 未找到消息: {args.msg_id}")
         return 0
-    
-    # 重试所有 failed
+
+    # 重试所有失败/退回消息
     count = 0
     for name in agents:
         inbox_file = f"{paths['inbox']}/{name}/inbox.json"
@@ -1205,16 +1221,24 @@ def cmd_retry(args) -> int:
         inbox = Inbox.from_dict(inbox_data)
         changed = False
         for m in inbox.messages:
-            if inbox.msg_field(m, "status") == MsgStatus.FAILED:
-                inbox.set_msg_status(inbox.msg_field(m, "id"), MsgStatus.RESENDING, pushed_count=0)
+            # 匹配用 get_msg_state（state 优先回退 status）：任务型消息的终态在
+            # state（failed/rejected）而 status 可能仍是 acknowledged/pushed，
+            # 按 status 匹配会漏（rejected 清不掉的根因）。done/closed 不在此列：
+            # 重跑已完成的产线步走 recover/改派，误重置会触发幽灵重跑。
+            if get_msg_state(m) in (MsgStatus.FAILED, MsgStatus.REJECTED):
+                inbox.set_msg_status(
+                    inbox.msg_field(m, "id"), MsgStatus.PENDING, state=MsgStatus.PENDING,
+                    pushed_count=0, reminded_count=0,
+                    done_at=None, done_note=None,
+                )
                 changed = True
                 count += 1
         if changed:
             json_write(inbox_file, inbox.to_dict())
-    
-    print(f"✓ 重置了 {count} 条失败消息为待重试")
+
+    print(f"✓ 重置了 {count} 条失败/退回消息为待重试")
     if count > 0:
-        print("  运行 bus.py scan 即可重新推送")
+        print("  下个 scan 周期将自动重推（或手动 python -m bus.cli scan）")
     return 0
 
 
@@ -1661,11 +1685,14 @@ def cmd_demo(args) -> int:
 
 
 def cmd_agent_add(args) -> int:
-    """注册新 agent"""
+    """注册新 agent（W3 升格：备份 + 外部框架放行 + 通用卡补齐 + workspace/home 目录）"""
+    import shutil
+    import time as _time
+
     config_path = _find_config(args)
     config = load_config(config_path)
     data_dir = config["data_dir"]
-    
+
     # register
     name = args.agent
     atype = args.type or "none"
@@ -1673,36 +1700,95 @@ def cmd_agent_add(args) -> int:
     agent_id = getattr(args, 'agent_id', None) or name
     profile = getattr(args, 'profile', None)
     cli = getattr(args, "cli", "") or ""
+    display_name = getattr(args, "display_name", None) or name
+    archetype = getattr(args, "archetype", None) or ""
+    models = [m for m in (getattr(args, "models", None) or []) if m]
+    push_cwd = getattr(args, "push_cwd", None) or ""
+    home_dir = getattr(args, "home_dir", None) or ""
 
     if name in config["agents"]:
         print(f"✗ agent '{name}' 已存在")
         print("  如需修改，请直接编辑配置文件")
         return 1
-    
-    if atype != "none" and atype not in config.get("agent_types", {}):
+
+    # 外部框架 descriptor 幂等加载（codebuddy 等纯配置框架需先进 FRAMEWORKS 才认 type）
+    try:
+        from lib.composition import ensure_framework_plugins_loaded
+        ensure_framework_plugins_loaded(data_dir=data_dir, config=config)
+    except Exception:
+        pass
+    from lib.infra.framework_spec import FRAMEWORKS
+
+    if atype != "none" and atype not in FRAMEWORKS:
+        builtin = [fw for fw, s in FRAMEWORKS.items() if s.in_agent_types]
+        external = [fw for fw, s in FRAMEWORKS.items() if not s.in_agent_types]
         print(f"✗ 未知类型 '{atype}'")
-        print(f"  可用类型: {', '.join(config.get('agent_types', {}).keys())}")
+        print(f"  可用内置类型: {', '.join(builtin)}")
+        if external:
+            print(f"  已加载外部框架: {', '.join(external)}")
         return 1
-    
-    # 注册到配置
+
+    spec = FRAMEWORKS.get(atype)
+    if not models and spec is not None and spec.default_models:
+        models = list(spec.default_models)
+    run_target = (spec.run_targets[0] if spec is not None and spec.run_targets else "windows")
+
+    # 备份（改真实 store 前必备份的口径）
+    backup_path = f"{config_path}.bak-agent-add-{_time.strftime('%Y%m%d-%H%M%S')}"
+    try:
+        shutil.copy2(config_path, backup_path)
+    except OSError:
+        backup_path = ""
+
+    # agent_types fallback：store 表缺条目时补（adapter 在位时 push 模板仅作文档，
+    # 无 adapter 的读取端不缺上下文）；外部框架用 descriptor 的 push_template。
+    agent_types_tbl = config.setdefault("agent_types", {})
+    if atype != "none" and atype not in agent_types_tbl:
+        push_tmpl = ""
+        if spec is not None and not spec.in_agent_types:
+            from lib.composition import framework_push_template as _fpt
+            push_tmpl = _fpt(atype)
+        agent_types_tbl[atype] = {
+            "push": push_tmpl,
+            "description": (spec.label if spec is not None else atype),
+        }
+
+    # 注册到配置（通用最小卡：内置/外部框架一致；per-framework 段如 zcode.mode
+    # 属怪癖域，注册后按需手补）
     agent_entry = {
-        "name": name,
+        "name": display_name,
         "role": role,
         "type": atype,
+        "agent_id": agent_id,
+        "max_concurrency": 1,
         "inbox": f"{data_dir}/inbox/{name}/inbox.json",
+        "available": True,
+        "enabled": True,
+        "run_target": run_target,
     }
+    if models:
+        agent_entry["models"] = models
+    if archetype:
+        agent_entry["archetype"] = archetype
     if atype == "hermes_profile":
         agent_entry["profile"] = profile or name
     if atype == "openclaw":
         agent_entry["agent"] = agent_id
+    if push_cwd:
+        agent_entry["push"] = {"cwd": push_cwd}
     config["agents"][name] = agent_entry
     save_config(config_path, config)
-    
+
     # 创建 inbox 目录
     paths = resolve_paths(data_dir)
     inbox_dir = f"{paths['inbox']}/{name}"
     _ensure_dir(inbox_dir)
-    
+
+    # workspace / per-agent home（显式给了才创建；zcode 类 OAuth 隔离依赖 home）
+    for d in (push_cwd, home_dir):
+        if d:
+            _ensure_dir(d)
+
     # 写一条系统欢迎消息
     sys_msg = get_system_message(name)
     sys_msg["system_info"]["registered_agents"] = list(config["agents"].keys())
@@ -1712,9 +1798,17 @@ def cmd_agent_add(args) -> int:
         "messages": [sys_msg],
         "since": _now_iso(),
     })
-    
-    print(f"✓ agent '{name}' 已注册")
+
+    print(f"✓ agent '{name}' 已注册（type={atype}）")
     print(f"  收件箱: {inbox_dir}/inbox.json")
+    if models:
+        print(f"  模型: {', '.join(models)}")
+    if push_cwd:
+        print(f"  工作区: {push_cwd}")
+    if home_dir:
+        print(f"  HOME: {home_dir}")
+    if backup_path:
+        print(f"  配置备份: {backup_path}")
     print(f"  CLI: {cli or '未设置（仅文件级通信）'}")
     print(f"  首条系统消息已写入 inbox")
     return 0

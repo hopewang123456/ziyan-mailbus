@@ -15,22 +15,16 @@ from pathlib import Path
 from typing import Any
 
 from lib.infra.constants import AGENT_VAULT_ROOT
+from lib.infra.framework_spec import FRAMEWORKS
 from lib.adapters.frameworks.framework_discovery import framework_run_targets
 
 __all__ = ["scan_agent_assets", "path_map_mounts_for", "identity_file_candidates"]
 
-# 各框架身份文件名（原生目录内）
+# 各框架身份文件名（原生目录内）——派生自 FRAMEWORKS，空值 = 不做身份扫描
 _IDENTITY_FILENAME = {
-    "hermes": "SOUL.md",
-    "hermes_profile": "SOUL.md",
-    "openclaw": "SOUL.md",
-    "opencode": "SOUL.md",
-    "codex": "IDENTITY.md",
-    "claude_code": "CLAUDE.md",
-    "cursor": "CLAUDE.md",
-    "cline": "CLAUDE.md",
-    "zcode": "AGENTS.md",
-    "dsh": "SOUL.md",
+    fw: spec.identity_filename
+    for fw, spec in FRAMEWORKS.items()
+    if spec.identity_filename
 }
 
 

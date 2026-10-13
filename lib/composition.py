@@ -410,6 +410,14 @@ def agent_cli_active_for(*args: Any, **kwargs: Any) -> bool:
     return bool(_fn(*args, **kwargs))
 
 
+def framework_push_template(framework: str) -> str:
+    """外部框架（TemplateAdapter）的 push 模板原文——application 层取模板走此门面。"""
+    from lib.adapters.frameworks.registry import get_adapter
+
+    adapter = get_adapter(framework)
+    return getattr(adapter, "push_template", "") or ""
+
+
 def resolve_push_cli(*args: Any, **kwargs: Any) -> Any:
     from lib.adapters.frameworks import resolve_push_cli as _fn
 

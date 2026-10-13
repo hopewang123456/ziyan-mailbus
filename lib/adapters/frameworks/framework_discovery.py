@@ -9,6 +9,7 @@ from typing import Any
 
 from lib.infra.constants import MAILBUS_ROOT
 from lib.infra.env_bootstrap import load_mailbus_env, mailbus_paths
+from lib.infra.framework_spec import FRAMEWORKS
 
 
 def _registry_path(mail_root: Path | None = None) -> Path:
@@ -40,16 +41,11 @@ _ENV_TO_PATHS_KEY = {
 
 # 四端运行端适用性矩阵：docker 框架含 windows/wsl/linux/docker；claude/cursor/cline 无容器端。
 # docker_sandbox 为 claude_code 实验端，默认不启用（能力预留）。
+# 派生自 FRAMEWORKS；run_targets 为空的框架（a2a_remote）不进矩阵，读取端走默认兜底。
 FRAMEWORK_RUN_TARGETS: dict[str, list[str]] = {
-    "hermes": ["windows", "wsl", "linux", "docker"],
-    "hermes_profile": ["windows", "wsl", "linux", "docker"],
-    "openclaw": ["windows", "wsl", "linux", "docker"],
-    "codex": ["windows", "wsl", "linux", "docker"],
-    "opencode": ["windows", "wsl", "linux", "docker"],
-    "claude_code": ["windows", "wsl", "linux"],
-    "cursor": ["windows"],
-    "cline": ["windows", "wsl", "linux"],
-    "dsh": ["docker"],
+    fw: list(spec.run_targets)
+    for fw, spec in FRAMEWORKS.items()
+    if spec.run_targets
 }
 
 RUN_TARGET_LABELS: dict[str, str] = {

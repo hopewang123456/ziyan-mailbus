@@ -308,6 +308,9 @@ class TestAgentConfigValidation(unittest.TestCase):
         store_cfg = os.path.join(root, "store", "config.json")
         if not os.path.isfile(store_cfg):
             self.skipTest("store/config.json not in repo")
+        # 模拟真实运行时：外部框架 descriptor 先加载（lingcb/codebuddy 实弹注册后必需）
+        from lib.adapters.frameworks.external import load_external_frameworks
+        load_external_frameworks(os.path.join(root, "store"))
         full = json.load(open(store_cfg, encoding="utf-8"))
         agents = full.get("agents", {})
         agent_types = full.get("agent_types", {})

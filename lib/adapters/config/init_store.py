@@ -20,6 +20,7 @@ from lib.infra.constants import (
     _now_iso,
 )
 from lib.infra.utils import json_write
+from lib.infra.framework_spec import FRAMEWORKS
 
 ORG_JSON_MIRROR = (
     "roster.json",
@@ -72,12 +73,9 @@ ARCHETYPE_ROLE_ZH: dict[str, str] = {
 }
 
 DEFAULT_MODELS: dict[str, list[str]] = {
-    "hermes_profile": ["deepseek-flash"],
-    "codex": ["deepseek-flash"],
-    "claude_code": ["deepseek-flash"],
-    "zcode": ["glm"],
-    "openclaw": ["deepseek-flash"],
-    "opencode": ["deepseek-flash", "qwen-max", "zhipu-4"],
+    fw: list(spec.default_models)
+    for fw, spec in FRAMEWORKS.items()
+    if spec.default_models
 }
 
 

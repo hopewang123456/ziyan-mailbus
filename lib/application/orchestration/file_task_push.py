@@ -6,14 +6,24 @@ import os
 from typing import Any, Optional, Tuple
 
 from lib.infra.utils import json_read
+from lib.infra.framework_spec import FRAMEWORKS, file_task_agent_types
 
-FILE_TASK_AGENT_TYPES = frozenset({"cline", "opencode", "codex", "claude_code", "zcode"})
+# 内置框架的静态集（W1a 前的既有消费面，含部分 import 方）；运行时判定走
+# FRAMEWORKS（外部框架 store/frameworks/*.json 注入后动态生效，W2）。
+FILE_TASK_AGENT_TYPES = file_task_agent_types()
 
 
 def agent_uses_file_task_push(agent_type: str, agent_cfg: dict | None = None) -> bool:
-    if (agent_type or "").strip() in FILE_TASK_AGENT_TYPES:
+    if _uses_file_task(agent_type):
         return True
     return bool((agent_cfg or {}).get("file_task_for_executable"))
+
+
+def _uses_file_task(agent_type: str) -> bool:
+    """内置静态集 ∪ 运行时 FRAMEWORKS（外部框架 file_task=true 动态生效）。"""
+    t = (agent_type or "").strip()
+    spec = FRAMEWORKS.get(t)
+    return (spec.file_task if spec else False) or t in FILE_TASK_AGENT_TYPES
 
 
 def should_file_task_push(
@@ -25,7 +35,7 @@ def should_file_task_push(
     """可执行任务是否走 msg-files 工单推送（Codex/Cline 全量；Hermes 超阈值）。"""
     if not is_executable_task(entry_dict):
         return False
-    if (agent_type or "").strip() in FILE_TASK_AGENT_TYPES:
+    if _uses_file_task(agent_type):
         return True
     if (agent_cfg or {}).get("file_task_for_executable"):
         return True

@@ -45,4 +45,11 @@ def discover_and_register_frameworks(
 
 
 def ensure_framework_plugins_loaded(*, data_dir: str = "", config: dict | None = None) -> list[dict[str, Any]]:
-    return discover_and_register_frameworks(data_dir=data_dir, config=config)
+    results = discover_and_register_frameworks(data_dir=data_dir, config=config)
+    # W2 配置化接入：store/frameworks/*.json 纯 descriptor（Python 插件之外的
+    # 数据域来源），同一入口挂载，serve / CLI scan 两条路径都经此触发。
+    from lib.adapters.frameworks.external import load_external_frameworks
+
+    for row in load_external_frameworks(data_dir):
+        results.append(row)
+    return results

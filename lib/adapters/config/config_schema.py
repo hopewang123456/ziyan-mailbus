@@ -9,20 +9,23 @@ import json
 import os
 from typing import Optional
 
-# 运行时校验与 JSON Schema enum 共用，避免 dsh 等类型只写进一处。
-AGENT_TYPES = (
-    "hermes",
-    "hermes_profile",
-    "openclaw",
-    "cline",
-    "opencode",
-    "codex",
-    "claude_code",
-    "zcode",
-    "cursor",
-    "dsh",
-    "none",
-)
+from lib.infra.framework_spec import FRAMEWORKS
+
+# 运行时校验与 JSON Schema enum 共用——派生自 FRAMEWORKS 单一事实源。
+AGENT_TYPES = tuple(fw for fw, spec in FRAMEWORKS.items() if spec.in_agent_types)
+
+
+def _try_load_external_frameworks(config: dict) -> None:
+    """惰性加载 store/frameworks/*.json（幂等；失败静默——校验不因加载炸）。"""
+    ddir = str((config or {}).get("data_dir") or "").strip()
+    if not ddir:
+        return
+    try:
+        from lib.adapters.frameworks.external import load_external_frameworks
+
+        load_external_frameworks(ddir)
+    except Exception:
+        pass
 
 # ── Config JSON Schema ────────────────────────────────────────────────────
 
@@ -194,8 +197,14 @@ def validate_config(config: dict, config_path: str = "") -> list:
                 continue
             if "type" not in cfg:
                 errors.append(f"agents.{name}: 缺少必需字段 type")
-            elif cfg["type"] not in AGENT_TYPES:
-                errors.append(f"agents.{name}.type: 不支持的 agent 类型 ({cfg['type']})")
+            elif cfg["type"] not in AGENT_TYPES and cfg["type"] not in FRAMEWORKS:
+                # load_config 的校验可能先于 scan/serve 的外部框架加载（W2 时序）：
+                # 惰性幂等加载一次再判——正常路径（内置类型）零开销。
+                _try_load_external_frameworks(config)
+                if cfg["type"] not in AGENT_TYPES and cfg["type"] not in FRAMEWORKS:
+                    # FRAMEWORKS 含运行时注入的外部框架（store/frameworks/*.json，W2）；
+                    # AGENT_TYPES（静态内置集）继续供 JSON Schema enum 使用。
+                    errors.append(f"agents.{name}.type: 不支持的 agent 类型 ({cfg['type']})")
             # 检查未知字段
             allowed = {"type", "role", "profile", "agent", "agent_id", "archetype", "provider",
                        "models", "webhook_url", "webhook_secret", "available", "enabled",

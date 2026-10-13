@@ -16,6 +16,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, List
 
+from lib.infra.framework_spec import FRAMEWORKS
 from lib.adapters.plane.platform_runner import (
     docker_ready,
     run,
@@ -119,11 +120,10 @@ class WindowsProbe(PlatformProbeAdapter):
     platform_name = "win32"
 
     # 框架类型名 → CLI 二进制名（probe 拿类型名当可执行名会永远找不到：
-    # `where claude_code` 不存在，实际 CLI 是 claude——E1 实测实锤）
+    # `where claude_code` 不存在，实际 CLI 是 claude——E1 实测实锤）。
+    # 派生自 FRAMEWORKS；显式条目保留（含与 type_name 相同的，不依赖 .get 兜底）。
     CLI_BIN_NAMES = {
-        "claude_code": "claude",
-        "hermes_profile": "hermes",
-        "hermes": "hermes",
+        fw: spec.cli_bin for fw, spec in FRAMEWORKS.items() if spec.cli_bin
     }
 
     def list_instances(self, config=None) -> list[str]:

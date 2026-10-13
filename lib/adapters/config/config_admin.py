@@ -8,6 +8,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from lib.infra.utils import json_read, json_write
+from lib.infra.framework_spec import FRAMEWORKS
 from .config_schema import validate_config
 from lib.infra.env_bootstrap import load_mailbus_env
 from lib.adapters.integrations.model_router import TIER_OLLAMA
@@ -105,17 +106,9 @@ AGENT_PATCH_KEYS = frozenset({
 })
 
 AGENT_TYPE_META = {
-    "hermes": {"label": "Hermes Agent", "note": "统一 Hermes 容器"},
-    "hermes_profile": {"label": "Hermes Profile", "note": "Hermes --profile 多角色"},
-    "openclaw": {"label": "OpenClaw Gateway", "note": "OpenClaw 本地 Gateway"},
-    "cline": {"label": "Cline CLI", "note": "类 Claude Code 工作流 · codex 容器"},
-    "opencode": {"label": "OpenCode CLI", "note": "OpenCode run · opencode 容器"},
-    "codex": {"label": "Codex CLI", "note": "codex exec · codex Docker"},
-    "claude_code": {"label": "Claude Code CLI", "note": "宿主机 claude -p · Windows/Linux 可选"},
-    "cursor": {"label": "Cursor", "note": "Windows Cursor IDE / cursor-agent CLI"},
-    "zcode": {"label": "ZCode CLI", "note": "宿主机 zcode -p · GLM 后端（Z.AI OAuth）"},
-    "dsh": {"label": "DeepSeek Harness", "note": "dsh headless · mailbus-dsh 容器"},
-    "none": {"label": "纯文件", "note": "无 CLI 推送"},
+    fw: {"label": spec.label, "note": spec.note}
+    for fw, spec in FRAMEWORKS.items()
+    if spec.in_agent_types
 }
 
 

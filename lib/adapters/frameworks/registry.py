@@ -19,6 +19,7 @@ from lib.adapters.container.resolver import (  # noqa: F401 — re-export for ca
     resolve_container,
 )
 from lib.infra.agent_demo import openclaw_gateway_ports, openclaw_state_dirs
+from lib.infra.framework_spec import FRAMEWORKS
 
 # ── 模型参数 ──────────────────────────────────────────────────────
 
@@ -98,14 +99,9 @@ def _push_cwd(agent_cfg: dict, default: str = "/mailbus/store") -> str:
 # Cline / OpenCode 与 Hermes / OpenClaw 推送语义不同：
 # - Hermes/OpenClaw: -q/--message 单次查询，notice 可 auto_ack
 # - Cline/OpenCode:  positional prompt + run 子命令，须等 CLI 落盘 msg-results，永不 auto_ack
-# Docker compose 服务名 → 推荐 agent type
+# Docker compose 服务名 → 推荐 agent type（派生自 FRAMEWORKS.docker_services 反转）
 DOCKER_SERVICE_TYPE = {
-    "codex-web": "codex",
-    "codex-review": "codex",
-    "opencode": "opencode",
-    "hermes": "hermes_profile",
-    "openclaw": "openclaw",
-    "dsh": "dsh",
+    svc: fw for fw, spec in FRAMEWORKS.items() for svc in spec.docker_services
 }
 
 # type=cline 仅保留 WSL 直连场景；Docker 内 codex 服务应使用 codex
@@ -784,15 +780,15 @@ def resolve_push_cli(
 
     adapter = get_adapter(atype)
     if adapter:
-        if atype == "codex":
+        # kwargs 分派由 FRAMEWORKS spec 声明（pass_pipeline / needs_data_dir），
+        # 不再 per-type 特判——spec 与 Adapter.build_push_cli 签名的耦合由
+        # tests/test_framework_spec.py 的签名一致性测试钉住。
+        spec = FRAMEWORKS.get(atype)
+        if spec and spec.pass_pipeline:
             return adapter.build_push_cli(
                 agent_name, agent_cfg, agent_types, model_alias, pipeline=pipeline,
             )
-        if atype == "claude_code" and data_dir:
-            return adapter.build_push_cli(
-                agent_name, agent_cfg, agent_types, model_alias, data_dir=data_dir,
-            )
-        if atype == "zcode" and data_dir:
+        if spec and spec.needs_data_dir and data_dir:
             return adapter.build_push_cli(
                 agent_name, agent_cfg, agent_types, model_alias, data_dir=data_dir,
             )

@@ -243,8 +243,17 @@ def build_parser(prog: str = "mailbus") -> argparse.ArgumentParser:
     _add_data_dir_arg(p)
     p.add_argument("--type", default="none")
     p.add_argument("--role", default="")
+    p.add_argument("--name", dest="display_name", default=None,
+                   help="显示名（默认=agent id）")
+    p.add_argument("--archetype", default=None, help="原型（如 coding-executor）")
+    p.add_argument("--model", dest="models", action="append", default=None,
+                   help="模型（可多次；缺省取框架默认）")
     p.add_argument("--agent-id", default=None)
     p.add_argument("--profile", default=None)
+    p.add_argument("--cwd", dest="push_cwd", default=None,
+                   help="推送工作区目录（自动创建）")
+    p.add_argument("--home", dest="home_dir", default=None,
+                   help="per-agent HOME 目录（CLI 状态隔离，自动创建）")
     p.add_argument("--cli", default="")
     p.set_defaults(func=cmd_agent_add)
 

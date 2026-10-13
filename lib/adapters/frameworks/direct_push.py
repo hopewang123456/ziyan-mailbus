@@ -44,9 +44,10 @@ def _claude_direct(
     agent_cfg: dict,
     agent_types: dict,
     *,
-    data_dir: str,
-    prompt: str,
-    model_name: str | None,
+    data_dir: str = "",
+    prompt: str = "",
+    model_name: str | None = None,
+    pipeline: bool = False,
 ) -> dict | None:
     from lib.adapters.frameworks.claude_launch import (
         _claude_push_argv_parts,
@@ -99,9 +100,10 @@ def _codex_direct(
     agent_cfg: dict,
     agent_types: dict,
     *,
-    prompt: str,
-    model_name: str | None,
-    pipeline: bool,
+    data_dir: str = "",
+    prompt: str = "",
+    model_name: str | None = None,
+    pipeline: bool = False,
 ) -> dict | None:
     adapter = CodexAdapter()
     service = adapter._service(agent_name, agent_cfg)
@@ -129,9 +131,11 @@ def _hermes_direct(
     agent_cfg: dict,
     agent_types: dict,
     *,
-    prompt: str,
-    model_name: str | None,
-    profile: bool,
+    data_dir: str = "",
+    prompt: str = "",
+    model_name: str | None = None,
+    pipeline: bool = False,
+    profile: bool = False,
 ) -> dict | None:
     adapter = HermesProfileAdapter() if profile else HermesAdapter()
     container = resolve_container(agent_cfg, agent_name, adapter.container_service)
@@ -155,8 +159,10 @@ def _openclaw_direct(
     agent_cfg: dict,
     agent_types: dict,
     *,
-    prompt: str,
-    model_name: str | None,
+    data_dir: str = "",
+    prompt: str = "",
+    model_name: str | None = None,
+    pipeline: bool = False,
 ) -> dict | None:
     adapter = OpenClawAdapter()
     container = resolve_container(agent_cfg, agent_name, adapter.container_service)
@@ -186,8 +192,10 @@ def _cline_direct(
     agent_cfg: dict,
     agent_types: dict,
     *,
-    prompt: str,
-    model_name: str | None,
+    data_dir: str = "",
+    prompt: str = "",
+    model_name: str | None = None,
+    pipeline: bool = False,
 ) -> dict | None:
     adapter = ClineAdapter()
     container = resolve_container(agent_cfg, agent_name, adapter.container_service)
@@ -214,8 +222,10 @@ def _opencode_direct(
     agent_cfg: dict,
     agent_types: dict,
     *,
-    prompt: str,
-    model_name: str | None,
+    data_dir: str = "",
+    prompt: str = "",
+    model_name: str | None = None,
+    pipeline: bool = False,
 ) -> dict | None:
     adapter = OpenCodeAdapter()
     container = resolve_container(agent_cfg, agent_name, adapter.container_service)
@@ -240,13 +250,58 @@ def _zcode_direct(
     agent_cfg: dict,
     agent_types: dict,
     *,
-    data_dir: str,
-    prompt: str,
-    model_name: str | None,
+    data_dir: str = "",
+    prompt: str = "",
+    model_name: str | None = None,
+    pipeline: bool = False,
 ) -> dict | None:
     from lib.adapters.frameworks.zcode_launch import build_push_argv
 
     return build_push_argv(agent_name, agent_cfg, data_dir=data_dir, prompt=prompt)
+
+
+# hermes / hermes_profile 共用 _hermes_direct，仅 profile 之差——闭包固定。
+def _hermes_builder(profile: bool):
+    def _fn(
+        agent_name: str,
+        agent_cfg: dict,
+        agent_types: dict,
+        *,
+        data_dir: str = "",
+        prompt: str = "",
+        model_name: str | None = None,
+        pipeline: bool = False,
+    ) -> dict | None:
+        return _hermes_direct(
+            agent_name, agent_cfg, agent_types,
+            prompt=prompt, model_name=model_name, profile=profile,
+        )
+    return _fn
+
+
+# type → argv 直启构建器（统一签名：位置参数 + data_dir/prompt/model_name/pipeline）。
+# 新框架的 direct 构建就地写本模块并在此注册一行；纯配置框架（W2）可不注册，
+# pusher 自动回落 adapter shell 模板。
+DIRECT_BUILDERS: dict[str, object] = {
+    "claude_code": _claude_direct,
+    "codex": _codex_direct,
+    "hermes": _hermes_builder(profile=False),
+    "hermes_profile": _hermes_builder(profile=True),
+    "openclaw": _openclaw_direct,
+    "cline": _cline_direct,
+    "opencode": _opencode_direct,
+    "zcode": _zcode_direct,
+}
+
+
+def register_direct_builder(name: str, fn, *, replace: bool = False) -> None:
+    """运行时注册 direct 构建器（与 registry.register_framework 配套，W2 扩展点）。"""
+    key = (name or "").strip().lower()
+    if not key:
+        raise ValueError("empty framework name")
+    if key in DIRECT_BUILDERS and not replace:
+        raise ValueError(f"direct builder already registered: {key}")
+    DIRECT_BUILDERS[key] = fn
 
 
 def try_build_push_direct(
@@ -266,46 +321,12 @@ def try_build_push_direct(
     if not atype or not get_adapter(atype):
         return None
 
+    builder = DIRECT_BUILDERS.get(atype)
     built = None
-    if atype == "claude_code":
-        built = _claude_direct(
+    if builder is not None:
+        built = builder(
             agent_name, agent_cfg, agent_types,
-            data_dir=data_dir, prompt=prompt, model_name=model_name,
-        )
-    elif atype == "codex":
-        built = _codex_direct(
-            agent_name, agent_cfg, agent_types,
-            prompt=prompt, model_name=model_name, pipeline=pipeline,
-        )
-    elif atype == "hermes_profile":
-        built = _hermes_direct(
-            agent_name, agent_cfg, agent_types,
-            prompt=prompt, model_name=model_name, profile=True,
-        )
-    elif atype == "hermes":
-        built = _hermes_direct(
-            agent_name, agent_cfg, agent_types,
-            prompt=prompt, model_name=model_name, profile=False,
-        )
-    elif atype == "openclaw":
-        built = _openclaw_direct(
-            agent_name, agent_cfg, agent_types,
-            prompt=prompt, model_name=model_name,
-        )
-    elif atype == "cline":
-        built = _cline_direct(
-            agent_name, agent_cfg, agent_types,
-            prompt=prompt, model_name=model_name,
-        )
-    elif atype == "opencode":
-        built = _opencode_direct(
-            agent_name, agent_cfg, agent_types,
-            prompt=prompt, model_name=model_name,
-        )
-    elif atype == "zcode":
-        built = _zcode_direct(
-            agent_name, agent_cfg, agent_types,
-            data_dir=data_dir, prompt=prompt, model_name=model_name,
+            data_dir=data_dir, prompt=prompt, model_name=model_name, pipeline=pipeline,
         )
     if not built or not built.get("argv"):
         return built

@@ -17,6 +17,7 @@ BUILTIN_ALLOWED_BINARIES = {
     "claude", "claude.exe", "node", "node.exe", "python", "python.exe",
     "opencode", "opencode.exe", "cursor", "cursor.exe", "cursor-agent",
     "cursor-agent.exe", "wsl", "wsl.exe", "bash", "bash.exe",
+    "codebuddy", "codebuddy.exe", "cbc", "cbc.exe",
 }
 
 

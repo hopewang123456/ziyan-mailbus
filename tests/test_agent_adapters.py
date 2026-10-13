@@ -184,6 +184,10 @@ class TestAgentAdapters(unittest.TestCase):
         root = os.path.join(os.path.dirname(__file__), "..", "store", "config.json")
         if not os.path.isfile(root):
             self.skipTest("no store config")
+        # 模拟真实运行时：外部框架 descriptor（store/frameworks/*.json）先加载，
+        # 否则 validate_agents 不认外部 type（lingcb/codebuddy 实弹注册后必需）
+        from lib.adapters.frameworks.external import load_external_frameworks
+        load_external_frameworks(os.path.dirname(root))
         data = json.load(open(root, encoding="utf-8"))
         errors = validate_agents(data.get("agents", {}), data.get("agent_types", {}))
         self.assertEqual(errors, [])
