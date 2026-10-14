@@ -243,7 +243,9 @@ def compose_file_args() -> list[str]:
     load_mailbus_env()
     from pathlib import Path
 
-    root = Path(os.environ.get("MAILBUS_ROOT", Path(__file__).resolve().parents[3]))
+    from lib.infra.constants import MAILBUS_ROOT
+
+    root = Path(MAILBUS_ROOT)
     compose_dir = root / "docker-agents"
     files = ["-f", str(compose_dir / "docker-compose.yml")]
     override = compose_dir / "docker-compose.override.yml"

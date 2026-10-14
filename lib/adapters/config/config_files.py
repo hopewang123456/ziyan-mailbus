@@ -105,7 +105,9 @@ def ensure_sensitive_config_files(mail_root: Path | str | None = None) -> list[s
 
     Never overwrites existing local files. Returns list of created relative paths.
     """
-    root = Path(mail_root) if mail_root else Path(__file__).resolve().parents[3]
+    from lib.infra.constants import PROJECT_ROOT
+
+    root = Path(mail_root) if mail_root else PROJECT_ROOT
     created: list[str] = []
     pairs = [
         root / "config" / "mailbus" / "launch-ports.json",

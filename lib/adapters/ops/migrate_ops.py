@@ -5,7 +5,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-MIGRATE_DIR = Path(__file__).resolve().parents[3] / "migrate"
+from lib.infra.constants import PROJECT_ROOT
+
+MIGRATE_DIR = PROJECT_ROOT / "migrate"
 if str(MIGRATE_DIR) not in sys.path:
     sys.path.insert(0, str(MIGRATE_DIR))
 

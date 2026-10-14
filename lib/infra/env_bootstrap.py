@@ -43,6 +43,10 @@ def load_mailbus_env() -> None:
     if _LOADED:
         return
     _LOADED = True
+    # 收口豁免：此处必须用物理推导、不得 import lib.infra.constants ——
+    # constants 的 AGENT_VAULT_ROOT 等 env 派生值在 import 时刻求值，
+    # 本函数必须先把 .env 灌入 os.environ 再让 constants 首次加载。
+    # monorepo 迁移（python/ 子树）时本行 parents[2] → parents[3] 同步改。
     root = Path(__file__).resolve().parents[2]
     _parse_env_file(root / ".env")
     _parse_env_file(root / "docker-agents" / ".env")

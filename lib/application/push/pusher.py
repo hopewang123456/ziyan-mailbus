@@ -92,7 +92,9 @@ def _load_env():
     _ALL_ENV_KEYS.update({k: v for k, v in os.environ.items() if k.endswith("_API_KEY")})
 
     # 搜索路径：项目 .env → 容器内 Hermes → HERMES_DATA → ~/.hermes/.env
-    bus_dir = Path(__file__).resolve().parents[3]  # application/push → mail repo root
+    from lib.infra.constants import PROJECT_ROOT
+
+    bus_dir = PROJECT_ROOT  # 物理 repo 根（收口于 constants，monorepo 迁移单点改）
     hermes_data = os.environ.get("HERMES_DATA", "").strip()
     candidates = [
         bus_dir / ".env",

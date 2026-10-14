@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Optional
 
 from lib.infra.agent_demo import hermes_demo_dashboards
+from lib.infra.constants import PROJECT_ROOT
 
 # ── 编制内全部 dashboard（与 entrypoint.sh / ORGANIZATION.md 一致）──
 # 从 store/config.json 的 hermes_profile 类型 agents 读取，demo 名作为 fallback
@@ -32,9 +33,7 @@ _DEMO_DASHBOARDS: list[tuple[str, int]] = hermes_demo_dashboards() or [
 
 
 def _data_dir() -> str:
-    return os.environ.get("MAILBUS_DATA_DIR") or os.environ.get("DATA_DIR") or str(
-        Path(__file__).resolve().parents[3] / "store"
-    )
+    return os.environ.get("MAILBUS_DATA_DIR") or os.environ.get("DATA_DIR") or str(PROJECT_ROOT / "store")
 
 
 def dashboards() -> list[tuple[str, int]]:
