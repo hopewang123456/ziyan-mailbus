@@ -215,7 +215,8 @@ def validate_config(config: dict, config_path: str = "") -> list:
                        "file_task_content_threshold", "cli_msg_max_chars", "processing_stale_minutes",
                        "smart_routing", "native_config_path", "install_path", "run_target",
                        "host", "port", "instance_id", "topology_note",
-                       "paths", "custom_paths", "skill_groups", "persona_files"}
+                       "paths", "custom_paths", "skill_groups", "persona_files",
+                       "default_person"}
             extra = set(cfg.keys()) - allowed
             if extra:
                 errors.append(f"agents.{name}: 未知字段 {extra}")
