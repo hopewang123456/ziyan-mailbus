@@ -156,7 +156,7 @@ class TestAgentAdapters(unittest.TestCase):
                 "minimax-m2": {"claude_code": "--model MiniMax-M2.7"},
             },
         }
-        with patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="windows"):
+        with patch("lib.adapters.frameworks.claude_env.resolve_claude_platform", return_value="windows"):
             cmd = resolve_push_cli("agent-h", cfg, types, "minimax-m2")
         self.assertIn("claude", cmd)
         self.assertIn("-p", cmd)

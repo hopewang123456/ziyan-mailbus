@@ -41,9 +41,9 @@ class TestClaudeHostOnlyBridge(unittest.TestCase):
         from lib.adapters.frameworks.claude_launch import build_push_command
         return build_push_command("agent-h", AGENT_CFG, TYPES, "deepseek-flash")
 
-    @patch("lib.adapters.frameworks.claude_launch._powershell_exe", return_value="")
+    @patch("lib.adapters.frameworks.claude_env._powershell_exe", return_value="")
     @patch(
-        "lib.adapters.frameworks.claude_launch.load_mailbus_claude",
+        "lib.adapters.frameworks.claude_env.load_mailbus_claude",
         return_value={"platform": "windows"},
     )
     def test_windows_bridge_without_powershell_returns_none(self, *_mocks):
@@ -51,11 +51,11 @@ class TestClaudeHostOnlyBridge(unittest.TestCase):
         self.assertIsNone(cmd)
 
     @patch(
-        "lib.adapters.frameworks.claude_launch._powershell_exe",
+        "lib.adapters.frameworks.claude_env._powershell_exe",
         return_value="/fake/powershell.exe",
     )
     @patch(
-        "lib.adapters.frameworks.claude_launch.load_mailbus_claude",
+        "lib.adapters.frameworks.claude_env.load_mailbus_claude",
         return_value={"platform": "windows"},
     )
     def test_windows_bridge_with_powershell_still_builds(self, *_mocks):

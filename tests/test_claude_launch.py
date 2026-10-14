@@ -58,8 +58,9 @@ class TestClaudeLaunch(unittest.TestCase):
         "lib.adapters.frameworks.claude_launch._powershell_exe",
         return_value="/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
     )
-    @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="windows")
-    @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="linux")
+    @patch("lib.adapters.frameworks.claude_env._powershell_exe", return_value="/fake/powershell.exe")
+    @patch("lib.adapters.frameworks.claude_env.resolve_claude_platform", return_value="windows")
+    @patch("lib.adapters.frameworks.claude_env._runtime_os", return_value="linux")
     def test_push_windows_from_wsl_uses_powershell(self, *_mocks):
         # WSL 场景前提：/mnt/c 下 PowerShell 桥可达（容器等无桥环境走 host-only 跳过，
         # 见 test_scan_poison_isolation）
@@ -75,9 +76,9 @@ class TestClaudeLaunch(unittest.TestCase):
         self.assertIn("deepseek-v4-flash", cmd)
         self.assertNotIn("-it", cmd)
 
-    @patch("lib.adapters.frameworks.claude_launch._platform_enabled", return_value=True)
-    @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="linux")
-    @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="linux")
+    @patch("lib.adapters.frameworks.claude_env._platform_enabled", return_value=True)
+    @patch("lib.adapters.frameworks.claude_env.resolve_claude_platform", return_value="linux")
+    @patch("lib.adapters.frameworks.claude_env._runtime_os", return_value="linux")
     def test_push_linux_native_bash(self, *_mocks):
         cfg = dict(AGENT_CFG)
         cfg["push"] = {"cwd": "/mnt/mailbus"}
@@ -87,8 +88,8 @@ class TestClaudeLaunch(unittest.TestCase):
         self.assertIn("claude", cmd)
         self.assertIn("-p", cmd)
 
-    @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="windows")
-    @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="windows")
+    @patch("lib.adapters.frameworks.claude_env.resolve_claude_platform", return_value="windows")
+    @patch("lib.adapters.frameworks.claude_env._runtime_os", return_value="windows")
     def test_interactive_windows_no_exit(self, *_mocks):
         data_dir = os.path.join(os.path.dirname(__file__), "..", "store")
         cmd = build_interactive_command("agent-h", AGENT_CFG, TYPES, data_dir=data_dir)
@@ -158,8 +159,8 @@ class TestClaudeLaunch(unittest.TestCase):
         self.assertTrue(host_cli_active(ps))
         self.assertFalse(host_cli_active("user 1 tail -f /dev/null\n"))
 
-    @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="windows")
-    @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="windows")
+    @patch("lib.adapters.frameworks.claude_env.resolve_claude_platform", return_value="windows")
+    @patch("lib.adapters.frameworks.claude_env._runtime_os", return_value="windows")
     def test_try_build_push_direct_on_windows_native(self, *_mocks):
         if sys.platform != "win32":
             self.skipTest("Windows-only direct push")

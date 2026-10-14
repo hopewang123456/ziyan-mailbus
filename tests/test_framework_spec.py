@@ -48,13 +48,14 @@ class TestGoldenDerivedTables(unittest.TestCase):
         })
 
     def test_default_models(self):
+        # 子集断言：运行时注册的外部框架（default_models 非空）合法进入
         from lib.adapters.config.init_store import DEFAULT_MODELS
-        self.assertEqual(DEFAULT_MODELS, {
+        self.assertTrue({
             "hermes_profile": ["deepseek-flash"], "codex": ["deepseek-flash"],
             "claude_code": ["deepseek-flash"], "zcode": ["glm"],
             "openclaw": ["deepseek-flash"],
             "opencode": ["deepseek-flash", "qwen-max", "zhipu-4"],
-        })
+        }.items() <= DEFAULT_MODELS.items())
 
     def test_identity_filenames(self):
         from lib.adapters.config.native_scan import _IDENTITY_FILENAME
