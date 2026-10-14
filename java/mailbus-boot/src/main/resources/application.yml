@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: mailbus-j
+  datasource:
+    # Default profile = SQLite (zero-dependency). MySQL switch = config-only:
+    #   url: jdbc:mysql://host:3306/mailbus?useSSL=false
+    #   driver-class-name: com.mysql.cj.jdbc.Driver  (+ credentials)
+    url: jdbc:sqlite:${mailbus.data-dir:./store}/metadata.db
+    driver-class-name: org.sqlite.JDBC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/sqlite
+  threads:
+    virtual:
+      enabled: false  # flip to true on JDK 21 (M2 scheduler)
+
+server:
+  port: 9815          # 9814 is the Python serve; parallel-run friendly
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

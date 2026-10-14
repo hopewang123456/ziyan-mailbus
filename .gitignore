@@ -144,3 +144,6 @@ docker-agents/migrate-hermes-home-to-e.sh
 /_*.ps1
 /_*.sh
 /_*.json
+
+# mailbus-j build artifacts
+java/**/target/

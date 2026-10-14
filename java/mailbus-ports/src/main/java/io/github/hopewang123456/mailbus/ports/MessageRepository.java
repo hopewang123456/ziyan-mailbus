@@ -1,0 +1,27 @@
+package io.github.hopewang123456.mailbus.ports;
+
+import io.github.hopewang123456.mailbus.domain.message.MessageState;
+import io.github.hopewang123456.mailbus.domain.message.MsgRecord;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * Message repository port — application depends on this interface only;
+ * concrete storage (SQLite via Flyway schema, in-memory for tests/demo)
+ * binds in mailbus-boot (the single composition root).
+ */
+public interface MessageRepository {
+
+    void save(MsgRecord record);
+
+    Optional<MsgRecord> findById(String id);
+
+    List<MsgRecord> findByAgentAndState(String agent, MessageState state);
+
+    /** Messages pending beyond the threshold — the timeout scan query (SQLite-indexed). */
+    List<MsgRecord> findStalePending(String agent, Instant cutoff);
+
+    long countUnread(String agent);
+}
