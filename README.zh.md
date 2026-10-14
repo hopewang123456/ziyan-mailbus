@@ -15,7 +15,7 @@
 
 ```bash
 git clone https://github.com/hopewang123456/ziyan-mailbus.git
-cd mailbus
+cd mailbus/python   # monorepo：Python 实现
 pip install -e .
 
 # 一条命令：看到第一条工单完整流转

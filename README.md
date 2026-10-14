@@ -18,7 +18,7 @@ No agent frameworks, no API keys — demo roles are pure file-based with scripte
 
 ```bash
 git clone https://github.com/hopewang123456/ziyan-mailbus.git
-cd mailbus
+cd mailbus/python   # monorepo: Python implementation
 pip install -e .
 
 # One command: watch your first work order flow end to end

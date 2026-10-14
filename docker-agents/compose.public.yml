@@ -81,7 +81,7 @@ services:
     volumes:
       - hermes-data:/home/hermes/.hermes
       - mailbus-store:/mailbus/store
-      - ../tools:/mailbus/tools:ro
+      - ../python/tools:/mailbus/python/tools:ro
     environment:
       - HERMES_HOME=/home/hermes/.hermes
       - AGENTMEMORY_URL=http://iii-engine:3111
@@ -107,8 +107,8 @@ services:
     volumes:
       - openclaw-workspace:/workspace
       - mailbus-store:/mailbus/store
-      - ../tools:/mailbus/tools:ro
-      - ../lib:/mailbus/lib:ro
+      - ../python/tools:/mailbus/python/tools:ro
+      - ../python/lib:/mailbus/python/lib:ro
     environment:
       - TZ=UTC
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}

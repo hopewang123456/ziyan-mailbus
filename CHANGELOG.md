@@ -3,6 +3,24 @@
 All notable changes to mailbus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [1.1.0] — 2026-10-15
+
+Monorepo restructure: one product, two implementations, pick either.
+
+- The Python implementation moved into `python/` (git mv, history preserved).
+  **Breaking for editable installs**: `pip install -e .` now runs inside
+  `mailbus/python/`, not the repo root. Language-neutral assets (skills/,
+  rules/, access/, docker-agents/, docs/) and store/ stay at the root.
+- `java/` scaffold added (mailbus-j, M1 in progress; JDK 17-compatible build,
+  ArchUnit layering gates, Flyway V1 on SQLite).
+- `web/` cockpit unchanged, shared by both backends via the API contract.
+- Root-derivation split: `PROJECT_ROOT` (python tree) vs `REPO_ROOT`
+  (repo root; MAILBUS_ROOT default) — all consumers re-pointed.
+- Container image rebuilt (WORKDIR /mailbus/python); compose mounts updated.
+- Known tail: ~15 path-semantics test failures remain from the move
+  (plus the usual Windows file-lock flakes); tracked for follow-up.
+  Production acceptance (six checks) and doctor are green.
+
 ## [1.0.0] — 2026-10-03
 
 First stable release: the bus survived a week of real production-line

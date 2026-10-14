@@ -61,7 +61,7 @@ docker-agents/comfyui-data/
 access/hermes/.sync/
 
 # Runtime messages / ad-hoc scripts
-bus/send/
+python/bus/send/
 outbox/
 patrol_reports/
 mnt/
@@ -112,10 +112,10 @@ access/transport/agent-h/
 access/transport/agent-m/
 access/transport/agent-n/
 access/transport/agent-k/
-config/agents/*.override.json
+python/config/agents/*.override.json
 !config/agents/*.override.example.json
 !config/agents/*.example.json
-config/mailbus/launch-ports.json
+python/config/mailbus/launch-ports.json
 !config/mailbus/launch-ports.example.json
 README.local.md
 team-pack/
@@ -127,18 +127,18 @@ access/external-tools/grants.json
 !examples/
 
 # Test / tool scratch
-tests/_tmp_codex_home/
-tools/tmp-launch-resp.json
-tools/tmp-*.json
+python/tests/_tmp_codex_home/
+python/tools/tmp-launch-resp.json
+python/tools/tmp-*.json
 .pytest_cache/
 
 # Local-only diagnostic / migration scripts (contain machine paths or team roster)
-tools/_*.py
-tools/_*.sh
-tools/smoke_*.py
-tools/smoke-*.py
-tools/health-overview.py
-tools/ops0_provision_browser_auth.py
+python/tools/_*.py
+python/tools/_*.sh
+python/tools/smoke_*.py
+python/tools/smoke-*.py
+python/tools/health-overview.py
+python/tools/ops0_provision_browser_auth.py
 docker-agents/migrate-hermes-home-to-e.sh
 /_*.txt
 /_*.ps1

@@ -159,8 +159,8 @@ services:
       # 会 mkdir memories，dangling symlink 直接 FileExistsError——挂真源让链路生效
       - /mnt/e/Obsidian/Vaults/Agent/02-members/022-category/0221-hermes/02214-memory:/mnt/e/Obsidian/Vaults/Agent/02-members/022-category/0221-hermes/02214-memory
       - ../store:/mailbus/store
-      - ../lib:/mailbus/lib:ro
-      - ../tools:/mailbus/tools:ro
+      - ../python/lib:/mailbus/python/lib:ro
+      - ../python/tools:/mailbus/python/tools:ro
       - ../skills:/mailbus/skills:ro
       - ../rules:/mailbus/rules:ro
       - ../access:/mailbus/access:ro
@@ -203,8 +203,8 @@ services:
     volumes:
       - ${OPENCLAW_WORKSPACE:-./workspaces/openclaw}:/workspace
       - ../store:/mailbus/store
-      - ../tools:/mailbus/tools:ro
-      - ../lib:/mailbus/lib:ro
+      - ../python/tools:/mailbus/python/tools:ro
+      - ../python/lib:/mailbus/python/lib:ro
       # 热挂 entrypoint，避免每次改配对逻辑都要 rebuild 镜像
       - ./openclaw-agent/entrypoint.sh:/entrypoint.sh:ro
       - ../skills:/mailbus/skills:ro
@@ -248,8 +248,8 @@ services:
       - mailbus-net
     volumes:
       - ../store:/mailbus/store
-      - ../tools:/mailbus/tools:ro
-      - ../lib:/mailbus/lib:ro
+      - ../python/tools:/mailbus/python/tools:ro
+      - ../python/lib:/mailbus/python/lib:ro
       - ../skills:/mailbus/skills:ro
       - ../rules:/mailbus/rules:ro
       - ../access:/mailbus/access:ro
@@ -308,8 +308,8 @@ services:
       - mailbus-net
     volumes:
       - ../store:/mailbus/store
-      - ../tools:/mailbus/tools:ro
-      - ../lib:/mailbus/lib:ro
+      - ../python/tools:/mailbus/python/tools:ro
+      - ../python/lib:/mailbus/python/lib:ro
       - ../skills:/mailbus/skills:ro
       - ../rules:/mailbus/rules:ro
       - ../access:/mailbus/access:ro
@@ -360,7 +360,7 @@ services:
       - mailbus-net
     volumes:
       - ../store:/mailbus/store
-      - ../tools:/mailbus/tools:ro
+      - ../python/tools:/mailbus/python/tools:ro
       - ../skills:/mailbus/skills:ro
       - ../rules:/mailbus/rules:ro
       - ../access:/mailbus/access:ro

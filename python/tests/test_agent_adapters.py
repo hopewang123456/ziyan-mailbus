@@ -1,0 +1,278 @@
+"""agent_adapters 适配层单元测试。"""
+import json
+import re
+import os
+from lib.infra.constants import PROJECT_ROOT
+import sys
+import unittest
+from unittest.mock import patch
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from lib.adapters.frameworks import (
+    ADAPTERS,
+    resolve_push_cli,
+    resolve_interactive_cli,
+    validate_agents,
+    get_adapter,
+)
+from lib.application.push.pusher import resolve_cli
+
+
+TYPES = {
+    "hermes_profile": {"push": "legacy"},
+    "openclaw": {"push": "legacy"},
+    "opencode": {"push": "legacy"},
+    "cline": {"push": "legacy"},
+    "models": {
+        "deepseek-flash": {
+            "hermes_profile": "--model deepseek-chat",
+            "openclaw": "--model deepseek/deepseek-chat",
+            "opencode": "--model deepseek/deepseek-chat",
+            "cline": "--provider openai-compatible",
+        },
+    },
+}
+
+
+class TestAgentAdapters(unittest.TestCase):
+    def test_hermes_profiles_same_structure(self):
+        profiles = ["agent-a", "agent-b", "agent-c", "agent-e", "agent-h", "agent-d", "agent-j", "agent-k"]
+        cmds = []
+        for p in profiles:
+            cfg = {"type": "hermes_profile", "profile": p, "models": ["deepseek-flash"]}
+            cmd = resolve_push_cli(p, cfg, TYPES, "deepseek-flash")
+            cmds.append(cmd)
+            from lib.adapters.config.compose_registry import resolve_compose_service
+            from lib.adapters.frameworks.registry import container_for_service
+            expected = container_for_service(resolve_compose_service(p, {"service": "hermes"}) or "hermes")
+            self.assertIn(expected, cmd)
+            self.assertIn(f"--profile {p}", cmd)
+            self.assertNotIn("--skills", cmd)
+            self.assertNotIn("-it", cmd)
+        # 除 profile 外结构一致
+        normalized = [
+            re.sub(r"docker-agents-[\w-]+-1", "docker-agents-CONTAINER-1",
+                   c.replace(f"--profile {p}", "--profile PROFILE"))
+            for c, p in zip(cmds, profiles)
+        ]
+        self.assertEqual(len(set(normalized)), 1)
+
+    def test_openclaw_push_uses_agent_id(self):
+        cfg = {"type": "openclaw", "agent": "agent-m", "models": ["deepseek-flash"]}
+        cmd = resolve_push_cli("agent-m", cfg, TYPES)
+        self.assertIn("docker-agents-openclaw-1", cmd)
+        self.assertIn("--agent agent-m", cmd)
+        self.assertIn("OPENCLAW_STATE_DIR=/workspace/data/.openclaw-agent-m", cmd)
+
+    def test_opencode_push(self):
+        cfg = {"type": "opencode", "models": ["deepseek-flash"]}
+        cmd = resolve_push_cli("agent-i", cfg, TYPES, "deepseek-flash")
+        self.assertIn("docker-agents-opencode-1", cmd)
+        self.assertIn("opencode run", cmd)
+        self.assertIn("--dangerously-skip-permissions", cmd)
+        self.assertIn("--dir /mailbus/store", cmd)
+        self.assertNotIn("-it", cmd)
+
+    def test_cline_push(self):
+        cfg = {
+            "type": "cline",
+            "provider": "--provider openai-compatible",
+            "models": ["deepseek-flash"],
+        }
+        cmd = resolve_push_cli("agent-g", cfg, TYPES, "deepseek-flash")
+        self.assertIn("docker-agents-codex-web-1", cmd)
+        self.assertIn("bash -lc", cmd)
+        self.assertIn("cline", cmd)
+        self.assertIn("-P openai-compatible", cmd)
+        self.assertIn("-m deepseek-chat", cmd)
+        self.assertIn("-c /mailbus/store", cmd)
+        self.assertNotIn("-q", cmd)
+        self.assertNotIn("hermes", cmd)
+
+    def test_cline_cli_active_detects_push_not_hub(self):
+        adapter = get_adapter("cline")
+        ps = (
+            "root 55 cline-hub-daemon\n"
+            "root 99 /usr/local/bin/cline 'mailbus task' -P openai-compatible -m deepseek-chat -t 300\n"
+        )
+        self.assertTrue(adapter.cli_active_in_ps("agent-g", {}, ps))
+        self.assertFalse(adapter.cli_active_in_ps("agent-g", {}, "root 55 cline-hub-daemon\n"))
+
+    def test_opencode_cli_active_detects_run(self):
+        adapter = get_adapter("opencode")
+        ps = "root 88 opencode run 'MSG' --dangerously-skip-permissions\n"
+        self.assertTrue(adapter.cli_active_in_ps("agent-i", {}, ps))
+        self.assertFalse(adapter.cli_active_in_ps("agent-i", {}, "root 1 tail -f /dev/null\n"))
+
+    def test_legacy_cline_override_no_hermes_q(self):
+        cfg = {
+            "type": "cline",
+            "launch": {"cli": {"command": "docker exec docker-agents-codex-web-1 cline -P openai-compatible"}},
+        }
+        cmd = resolve_push_cli("agent-g", cfg, TYPES)
+        self.assertIn("'MSG'", cmd)
+        self.assertNotIn("-q 'MSG'", cmd)
+
+    def test_interactive_has_tty(self):
+        cfg = {"type": "hermes_profile", "profile": "agent-a"}
+        cmd = resolve_interactive_cli("agent-a", cfg, TYPES)
+        self.assertIn("-it", cmd)
+        self.assertIn("--profile agent-a", cmd)
+
+    def test_codex_interactive_cli(self):
+        cfg = {
+            "type": "codex",
+            "model": "deepseek-v4-flash",
+            "docker": {"service": "codex-agent"},
+            "push": {"cwd": "/mailbus/store"},
+        }
+        cmd = resolve_interactive_cli("agent-g", cfg, TYPES)
+        self.assertIn("-it", cmd)
+        self.assertIn("docker-agents-codex-web-1", cmd)
+        self.assertIn("codex", cmd)
+        self.assertIn("deepseek-v4-flash", cmd)
+
+    def test_codex_review_interactive_cli(self):
+        cfg = {
+            "type": "codex",
+            "model": "deepseek-v4-flash",
+            "docker": {"service": "codex-review-agent"},
+            "push": {"cwd": "/mailbus/store"},
+        }
+        cmd = resolve_interactive_cli("agent-e", cfg, TYPES)
+        self.assertIn("docker-agents-codex-review-1", cmd)
+        self.assertIn("codex", cmd)
+
+    def test_claude_code_push_windows(self):
+        cfg = {
+            "type": "claude_code",
+            "models": ["minimax-m2"],
+            "push": {"cwd": r"<PROJECT_ROOT>"},
+        }
+        types = {
+            **TYPES,
+            "models": {
+                **TYPES.get("models", {}),
+                "minimax-m2": {"claude_code": "--model MiniMax-M2.7"},
+            },
+        }
+        with patch("lib.adapters.frameworks.claude_env.resolve_claude_platform", return_value="windows"):
+            cmd = resolve_push_cli("agent-h", cfg, types, "minimax-m2")
+        self.assertIn("claude", cmd)
+        self.assertIn("-p", cmd)
+        self.assertIn("'MSG'", cmd)
+        self.assertIn("acceptEdits", cmd)
+        self.assertNotIn("docker exec", cmd)
+        self.assertNotIn("-it", cmd)
+
+    def test_claude_code_cli_active(self):
+        adapter = get_adapter("claude_code")
+        ps = "user 42 claude -p 'task' --permission-mode acceptEdits\n"
+        self.assertTrue(adapter.cli_active_in_ps("agent-h", {}, ps))
+        self.assertFalse(adapter.cli_active_in_ps("agent-h", {}, "user 1 bash\n"))
+
+    def test_legacy_override_still_works(self):
+        cfg = {
+            "type": "hermes_profile",
+            "profile": "agent-a",
+            "launch": {"cli": {"command": "docker exec docker-agents-hermes-1 hermes chat --profile agent-a --yolo"}},
+        }
+        cmd = resolve_push_cli("agent-a", cfg, TYPES)
+        self.assertIn("-q 'MSG'", cmd)
+
+    def test_store_config_valid(self):
+        root = os.path.join(os.path.dirname(__file__), "..", "store", "config.json")
+        if not os.path.isfile(root):
+            self.skipTest("no store config")
+        # 模拟真实运行时：外部框架 descriptor（store/frameworks/*.json）先加载，
+        # 否则 validate_agents 不认外部 type（lingcb/codebuddy 实弹注册后必需）
+        from lib.adapters.frameworks.external import load_external_frameworks
+        load_external_frameworks(os.path.dirname(root))
+        data = json.load(open(root, encoding="utf-8"))
+        errors = validate_agents(data.get("agents", {}), data.get("agent_types", {}))
+        self.assertEqual(errors, [])
+
+    def test_resolve_cli_wrapper(self):
+        cfg = {"type": "hermes_profile", "profile": "agent-a"}
+        cmd = resolve_cli(cfg, TYPES, agent_name="agent-a")
+        self.assertIn("--profile agent-a", cmd)
+
+    def test_all_types_have_adapter(self):
+        for t in ("hermes_profile", "openclaw", "cline", "opencode", "codex", "claude_code", "zcode", "none"):
+            self.assertIsNotNone(get_adapter(t))
+
+    def test_zcode_push_shell_template(self):
+        cfg = {"type": "zcode", "models": ["glm"], "push": {"cwd": r"E:\ws\lingzhu"}}
+        with patch(
+            "lib.adapters.frameworks.zcode_launch.resolve_zcode_cli",
+            return_value=["node", r"D:\Zcode\resources\glm\zcode.cjs"],
+        ):
+            cmd = resolve_push_cli("lingzhu", cfg, TYPES, data_dir="")
+        self.assertIn("zcode.cjs", cmd)
+        self.assertIn("-p 'MSG'", cmd)
+        self.assertIn("--mode yolo", cmd)
+        self.assertNotIn("docker exec", cmd)
+
+    def test_zcode_push_argv_direct(self):
+        from lib.adapters.frameworks.direct_push import try_build_push_direct
+
+        cfg = {"type": "zcode", "models": ["glm"], "push": {"cwd": r"E:\ws\lingzhu"}}
+        with patch(
+            "lib.adapters.frameworks.zcode_launch.resolve_zcode_cli",
+            return_value=["node", r"D:\Zcode\resources\glm\zcode.cjs"],
+        ):
+            spec = try_build_push_direct(
+                "lingzhu", cfg, TYPES,
+                data_dir="", prompt="执行任务", pipeline=True,
+            )
+        self.assertIsNotNone(spec)
+        self.assertIn("-p", spec["argv"])
+        self.assertIn("执行任务", spec["argv"])
+        self.assertIn("--mode", spec["argv"])
+        self.assertEqual(spec["env"]["ZCODE_HOME"], os.path.normpath(os.path.expanduser("~/.zcode-lingzhu")))
+        self.assertTrue(spec["cwd"].endswith("lingzhu"))
+
+    def test_zcode_push_no_binary_returns_none(self):
+        from lib.adapters.frameworks.direct_push import try_build_push_direct
+
+        cfg = {"type": "zcode", "models": ["glm"], "push": {"cwd": r"E:\ws\lingzhu"}}
+        with patch(
+            "lib.adapters.frameworks.zcode_launch.resolve_zcode_cli",
+            return_value=None,
+        ):
+            spec = try_build_push_direct(
+                "lingzhu", cfg, TYPES,
+                data_dir="", prompt="x", pipeline=True,
+            )
+        self.assertIsNone(spec)
+
+    def test_zcode_cli_active(self):
+        adapter = get_adapter("zcode")
+        ps = "node.exe zcode.cjs -p 'task' --mode yolo\n"
+        self.assertTrue(adapter.cli_active_in_ps("lingzhu", {}, ps))
+        self.assertFalse(adapter.cli_active_in_ps("lingzhu", {}, "node.exe server.js\n"))
+
+    def test_zcode_mode_whitelisted(self):
+        from lib.adapters.frameworks.zcode_launch import build_push_argv
+
+        cfg = {"type": "zcode", "models": ["glm"], "zcode": {"mode": "plan"},
+               "push": {"cwd": r"E:\ws"}}
+        with patch(
+            "lib.adapters.frameworks.zcode_launch.resolve_zcode_cli",
+            return_value=["node", "zcode.cjs"],
+        ):
+            spec = build_push_argv("lingzhu", cfg, prompt="x")
+        self.assertIn("--mode", spec["argv"])
+        self.assertEqual(spec["argv"][spec["argv"].index("--mode") + 1], "plan")
+        cfg_bad = {**cfg, "zcode": {"mode": "rm-rf"}}
+        with patch(
+            "lib.adapters.frameworks.zcode_launch.resolve_zcode_cli",
+            return_value=["node", "zcode.cjs"],
+        ):
+            spec_bad = build_push_argv("lingzhu", cfg_bad, prompt="x")
+        self.assertEqual(spec_bad["argv"][spec_bad["argv"].index("--mode") + 1], "yolo")
+
+
+if __name__ == "__main__":
+    unittest.main()

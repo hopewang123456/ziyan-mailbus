@@ -13,7 +13,8 @@ RUN apt-get update \
 
 RUN pip install --no-cache-dir PyYAML
 
-WORKDIR /mailbus
+# monorepo: python tree root (repo root stays at /mailbus)
+WORKDIR /mailbus/python
 
 EXPOSE 9814
 
