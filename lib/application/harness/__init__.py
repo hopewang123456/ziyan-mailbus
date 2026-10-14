@@ -89,15 +89,15 @@ def get_harness(config: Optional[dict] = None) -> AgentHarness:
     cfg = (config or {}).get("harness") or {}
     mode = cfg.get("mode", "production")
     if mode == "stub":
-        from tests.harness_fixtures.stub import StubHarness
+        from .fixtures.stub import StubHarness
 
         return StubHarness(_resolve_fixtures_dir(cfg))
     if mode == "replay":
-        from tests.harness_fixtures.replay import ReplayHarness
+        from .fixtures.replay import ReplayHarness
 
         return ReplayHarness(_resolve_fixtures_dir(cfg))
     if mode == "record":
-        from tests.harness_fixtures.record import RecordHarness
+        from .fixtures.record import RecordHarness
 
         record_dir = cfg.get("record_dir") or os.path.join(str(MAILBUS_ROOT), "store", "harness-recordings")
         if not os.path.isabs(record_dir):

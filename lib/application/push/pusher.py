@@ -286,10 +286,12 @@ def push_messages(
     cfg = json_read(os.path.join(data_dir, "config.json"), {})
     agents_cfg = cfg.get("agents", {})
     from lib.application.integrations.token_budget import load_token_budget
-    from lib.composition import store_path_for_agent
+    from lib.composition import framework_get_adapter, store_path_for_agent
     from lib.infra.utils import format_push_content_for_agent
 
     agent_cfg_entry = agents_cfg.get(agent_name) or {}
+    _adapter = framework_get_adapter(agent_cfg_entry.get("type", ""))
+    _container_service = getattr(_adapter, "container_service", None) if _adapter else None
     tb = load_token_budget(cfg)
     rules_dir = store_path_for_agent(data_dir, f"{data_dir}/rules", agent_cfg_entry)
     inbox_path = store_path_for_agent(data_dir, f"{data_dir}/inbox/{agent_name}/inbox.json", agent_cfg_entry)
@@ -315,7 +317,9 @@ def push_messages(
         entry_dict = msg_entry if isinstance(msg_entry, dict) else msg_entry.to_dict()
         agent_cfg_entry = agents_cfg.get(agent_name) or {}
         raw_content = content or ""
-        raw_content = format_push_content_for_agent(data_dir, raw_content, agent_cfg_entry)
+        raw_content = format_push_content_for_agent(
+            data_dir, raw_content, agent_cfg_entry, container_service=_container_service
+        )
         content = _truncate_cli_text(raw_content, max_chars=per_msg_max)
         msg_id = msg_entry.get("id", "") if isinstance(msg_entry, dict) else msg_entry.id
         action_raw = msg_entry.get("action", {}) if isinstance(msg_entry, dict) else (msg_entry.action or MsgType.default_action(msg_entry.type))

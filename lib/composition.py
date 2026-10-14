@@ -1659,6 +1659,7 @@ def build_fake_ports() -> dict[str, Any]:
         FakeOps,
         FakeResultStore,
         FakeRuntime,
+        FakeMessageTransport,
     )
 
     return {
@@ -1668,6 +1669,7 @@ def build_fake_ports() -> dict[str, Any]:
         "bridged": FakeBridgedAgent(),
         "ops": FakeOps(),
         "integrations": FakeIntegrations(),
+        "messages": FakeMessageTransport(),
     }
 
 

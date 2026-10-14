@@ -18,6 +18,7 @@ tools/ · lib/api/  →  lib/application/  →  lib/interfaces/  ←  lib/adapte
 - `domain` MUST NOT import application / adapters / api.
 - `composition.py` is the **only** Composition Root.
 - Prefer package `Overview.md` files as in-tree maps.
+- **infra 启动装配豁免（2026-10-14 成文）**：`lib/infra/` 的启动编排模块（`internal_llm/ollama_ensure.py`、`internal_llm/startup.py`、`skills_index_startup.py`）允许**惰性** import `adapters` 的可选增强构建逻辑，且必须 try/except ImportError 优雅降级（enhancement layers never required 理念）。横切工具（`utils.py` 等）引用具体 adapter 一律参数注入：调用方（application 层）经 composition 门面查询后传入，infra 不直接 import `adapters.frameworks`（先例：`rewrite_host_store_refs(container_service=...)` ← `pusher` 经 `framework_get_adapter`）。
 
 ## 网络模型（跨环境接入）
 

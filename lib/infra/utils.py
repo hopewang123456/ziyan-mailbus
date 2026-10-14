@@ -148,14 +148,26 @@ def to_container_store_path(data_dir: str, path: str) -> str:
     return path
 
 
-def rewrite_host_store_refs(data_dir: str, text: str, agent_cfg: dict) -> str:
-    """推送正文内宿主机 store 路径 → /mailbus/store（Docker agent）。"""
+def rewrite_host_store_refs(
+    data_dir: str,
+    text: str,
+    agent_cfg: dict,
+    *,
+    container_service: str | None = None,
+) -> str:
+    """推送正文内宿主机 store 路径 → /mailbus/store（Docker agent）。
+
+    container_service 由调用方（application 层）经 composition 门面查 adapter 后注入；
+    未注入时回退惰性自查（兼容测试与旧调用），infra 不再无条件 import adapters。
+    """
     if not text:
         return text or ""
-    from lib.adapters.frameworks import get_adapter
+    if container_service is None:
+        from lib.adapters.frameworks import get_adapter
 
-    adapter = get_adapter((agent_cfg or {}).get("type", ""))
-    if not adapter or not adapter.container_service:
+        adapter = get_adapter((agent_cfg or {}).get("type", ""))
+        container_service = getattr(adapter, "container_service", None) if adapter else None
+    if not container_service:
         return text
     out = text
     dd_abs = os.path.abspath(data_dir)
@@ -174,9 +186,17 @@ def rewrite_host_store_refs(data_dir: str, text: str, agent_cfg: dict) -> str:
     return out
 
 
-def format_push_content_for_agent(data_dir: str, content: str, agent_cfg: dict) -> str:
+def format_push_content_for_agent(
+    data_dir: str,
+    content: str,
+    agent_cfg: dict,
+    *,
+    container_service: str | None = None,
+) -> str:
     """推送正文框架入口：容器 agent 路径统一 rewrite。"""
-    return rewrite_host_store_refs(data_dir, content or "", agent_cfg or {})
+    return rewrite_host_store_refs(
+        data_dir, content or "", agent_cfg or {}, container_service=container_service
+    )
 
 
 def resolve_mailbus_path(data_dir: str, ref: str) -> str:
