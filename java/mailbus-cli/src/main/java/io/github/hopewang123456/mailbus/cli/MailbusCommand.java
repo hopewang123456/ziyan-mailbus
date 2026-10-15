@@ -24,7 +24,7 @@ import java.util.concurrent.Callable;
                 MailbusCommand.AckCommand.class, MailbusCommand.MigrateCommand.class,
                 MailbusCommand.DemoCommand.class, MailbusCommand.ArchiveCommand.class,
                 MailbusCommand.TraceCommand.class, MailbusCommand.AcceptanceCommand.class, MailbusCommand.AgentAddCommand.class,
-                MailbusCommand.AgentsCommand.class, MailbusCommand.PushCommand.class})
+                MailbusCommand.AgentsCommand.class, MailbusCommand.PushCommand.class, MailbusCommand.TestConnectionCommand.class})
 public class MailbusCommand {
 
     @Component
@@ -266,6 +266,40 @@ public class MailbusCommand {
             var r = push.pushPending(agent);
             System.out.printf("pushed=%d failed=%d%n", r.pushed(), r.failed());
             return r.failed() == 0 ? 0 : 1;
+        }
+    }
+
+    @Component
+    @Command(name = "test-connection", description = "Probe an agent card: executable reachability + test push")
+    public static class TestConnectionCommand implements Callable<Integer> {
+
+        private final io.github.hopewang123456.mailbus.ports.AgentDirectory directory;
+
+        public TestConnectionCommand(io.github.hopewang123456.mailbus.ports.AgentDirectory directory) {
+            this.directory = directory;
+        }
+
+        @Parameters(index = "0", description = "agent id") String agent;
+
+        @Override
+        public Integer call() {
+            var card = directory.findById(agent).orElse(null);
+            if (card == null) {
+                System.err.println("no agent card: " + agent);
+                return 1;
+            }
+            // stage 1: probe
+            var probe = directory.probe(card);
+            System.out.println("[1/2] probe  " + (probe.ok() ? "OK  " : "FAIL") + " " + probe.error());
+            if (!probe.ok()) {
+                return 1;
+            }
+            // stage 2: test push (tiny message; role discovery = stage 3, arrives with MD cards)
+            var send = directory.launch(agent, "MAILBUS-J connection test — reply briefly.");
+            String digest = send.outputDigest().replace('\n', ' ');
+            System.out.println("[2/2] push   " + (send.ok() ? "OK  " : "FAIL") + " "
+                    + (send.ok() ? digest : send.error()));
+            return send.ok() ? 0 : 1;
         }
     }
 }

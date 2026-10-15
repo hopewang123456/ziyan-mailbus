@@ -25,10 +25,15 @@ public interface AgentDirectory {
     /** Push a message to the agent's CLI. Returns process exit + output digest. */
     LaunchResult launch(String agentId, String message);
 
+    /** test-connection stage 1: executable reachability on the card's run_target. */
+    LaunchResult probe(AgentCard card);
+
     record LaunchResult(boolean ok, int exitCode, String outputDigest, String error) {}
 
     /** framework presets — argv templates per type (supersonic-style registry). */
     Map<String, List<String>> PRESETS = Map.of(
             "claude_code", List.of("claude", "-p", "{MSG}", "--output-format", "text"),
-            "codex", List.of("codex", "exec", "{MSG}"));
+            "codex", List.of("codex", "exec", "{MSG}"),
+            "hermes", List.of("hermes", "-p", "{MSG}"),
+            "opencode", List.of("opencode", "run", "{MSG}"));
 }

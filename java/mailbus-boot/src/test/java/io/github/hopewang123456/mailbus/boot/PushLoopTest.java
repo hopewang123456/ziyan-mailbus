@@ -73,6 +73,46 @@ class PushLoopTest {
     }
 
     @Test
+    void runTargetDispatchWrapsArgvCorrectly() {
+        // windows/linux: untouched
+        assertEquals(List.of("a", "b"),
+                CliAgentDirectory.wrapForRunTarget("windows", List.of("a", "b")));
+        assertEquals(List.of("a", "b"),
+                CliAgentDirectory.wrapForRunTarget("linux", List.of("a", "b")));
+        // wsl: wsl -e prefix
+        assertEquals(List.of("wsl", "-e", "a", "b"),
+                CliAgentDirectory.wrapForRunTarget("wsl", List.of("a", "b")));
+        // docker: first token = container by convention
+        assertEquals(List.of("docker", "exec", "ctr", "run", "x"),
+                CliAgentDirectory.wrapForRunTarget("docker", List.of("ctr", "run", "x")));
+    }
+
+    @Test
+    void wslAgentPushesThroughWslExe() {
+        // real WSL on this host runs the production line — verify the wrapper end to end
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                java.nio.file.Path.of("C:/Windows/System32/wsl.exe").toFile().exists(),
+                "wsl not present");
+        var jdbc = new JdbcTemplate(ds);
+        var events = new SqliteEventLog(jdbc, Clock.systemUTC());
+        var repo = new FileMessageStore.FileIndexedMessages(
+                new FileMessageStore(tmp), new SqliteMessageRepository(jdbc));
+        var directory = new CliAgentDirectory(jdbc, Clock.systemUTC());
+        var inbox = new InboxService(repo, events, Clock.systemUTC());
+        var push = new PushService(repo, directory, events);
+
+        new PushService.Cards(directory).add("agent-wsl", "cli", "wsl", Map.of(
+                "push_argv", List.of("echo", "wsl-pushed:{MSG}"), "timeout_s", 30));
+        inbox.send("agent-wsl", "tester", "cross-boundary");
+        var r = push.pushPending("agent-wsl");
+
+        assertEquals(1, r.pushed(), "wsl -e echo must run via the dispatcher");
+        assertTrue(events.eventsOf(
+                        repo.findByAgentAndState("agent-wsl", MessageState.PUSHED).get(0).id())
+                .stream().anyMatch(e -> "pushed".equals(e.kind())));
+    }
+
+    @Test
     void failedSpawnStaysPendingAndLogsEvent() {
         var jdbc = new JdbcTemplate(ds);
         var events = new SqliteEventLog(jdbc, Clock.systemUTC());

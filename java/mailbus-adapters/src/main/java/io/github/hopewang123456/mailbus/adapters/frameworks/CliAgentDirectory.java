@@ -86,6 +86,7 @@ public class CliAgentDirectory implements AgentDirectory {
             argv.add(s);
         }
         long timeoutSec = ((Number) cfg.getOrDefault("timeout_s", 300)).longValue();
+        argv = wrapForRunTarget(card.runTarget(), argv);
         try {
             Process p = new ProcessBuilder(argv)
                     .redirectErrorStream(true)
@@ -105,6 +106,79 @@ public class CliAgentDirectory implements AgentDirectory {
             Thread.currentThread().interrupt();
             return new LaunchResult(false, -1, "", "interrupted");
         }
+    }
+
+    /**
+     * run_target dispatch (python runtime_net counterpart, minimal): the argv
+     * stays declarative; the wrapper adapts WHERE it runs, never rewrites it.
+     *  - windows/linux: direct
+     *  - wsl:           wsl -e <argv...>          (Ubuntu per project convention)
+     *  - docker:        docker exec <container> <argv...>  (container from adapter_config)
+     */
+    public static List<String> wrapForRunTarget(String runTarget, List<String> argv) {
+        if (runTarget == null || runTarget.isBlank() || "windows".equalsIgnoreCase(runTarget)
+                || "linux".equalsIgnoreCase(runTarget)) {
+            return argv;
+        }
+        if ("wsl".equalsIgnoreCase(runTarget)) {
+            List<String> out = new ArrayList<>();
+            out.add("wsl");
+            out.add("-e");
+            out.addAll(argv);
+            return out;
+        }
+        if ("docker".equalsIgnoreCase(runTarget)) {
+            // container name comes via adapter_config {"container": "..."} pre-merged
+            // into argv[0] slot by the caller; here we only add the exec prefix
+            List<String> out = new ArrayList<>();
+            out.add("docker");
+            out.add("exec");
+            out.add(argv.get(0)); // first token = container id by convention
+            out.addAll(argv.subList(1, argv.size()));
+            return out;
+        }
+        return argv;
+    }
+
+    /** Probe: does the push executable exist on the card's run_target? (test-connection stage 1) */
+    public LaunchResult probe(AgentCard card) {
+        Map<String, Object> cfg = card.adapterConfig();
+        Object rawArgv = cfg.get("push_argv");
+        if (!(rawArgv instanceof List<?> list) || list.isEmpty()) {
+            return new LaunchResult(false, -1, "", "no push_argv configured");
+        }
+        String exe = String.valueOf(list.get(0));
+        String target = card.runTarget() == null ? "windows" : card.runTarget();
+        // absolute/relative path with separators: check the file directly, no PATH lookup
+        boolean hasSep = exe.contains("/") || exe.contains("\\") || exe.contains(java.io.File.separator);
+        if (hasSep && !"wsl".equalsIgnoreCase(target) && !"docker".equalsIgnoreCase(target)) {
+            java.nio.file.Path p = java.nio.file.Path.of(exe);
+            return java.nio.file.Files.isRegularFile(p)
+                    ? new LaunchResult(true, 0, exe, "")
+                    : new LaunchResult(false, -1, "", "executable not found: " + exe);
+        }
+        List<String> check = switch (target) {
+            case "wsl" -> List.of("wsl", "-e", "sh", "-c", "command -v " + shellQuote(exe));
+            case "docker" -> List.of("docker", "exec", String.valueOf(list.get(0)), "sh", "-c", "command -v " + shellQuote(String.valueOf(list.get(1))));
+            default -> List.of("cmd", "/C", "where", exe); // windows; linux callers use which
+        };
+        if ("linux".equalsIgnoreCase(target)) {
+            check = List.of("sh", "-c", "command -v " + shellQuote(exe));
+        }
+        try {
+            Process p = new ProcessBuilder(check).redirectErrorStream(true).start();
+            boolean fin = p.waitFor(20, TimeUnit.SECONDS);
+            String out = new String(p.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+            boolean ok = fin && p.exitValue() == 0;
+            return new LaunchResult(ok, fin ? p.exitValue() : -1, out,
+                    ok ? "" : "executable not found: " + exe);
+        } catch (Exception e) {
+            return new LaunchResult(false, -1, "", "probe failed: " + e.getMessage());
+        }
+    }
+
+    private static String shellQuote(String s) {
+        return "'" + s.replace("'", "'''") + "'";
     }
 
     private AgentCard map(java.sql.ResultSet rs, int i) throws java.sql.SQLException {
