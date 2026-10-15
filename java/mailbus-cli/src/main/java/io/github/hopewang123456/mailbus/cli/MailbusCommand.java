@@ -24,7 +24,8 @@ import java.util.concurrent.Callable;
                 MailbusCommand.AckCommand.class, MailbusCommand.MigrateCommand.class,
                 MailbusCommand.DemoCommand.class, MailbusCommand.ArchiveCommand.class,
                 MailbusCommand.TraceCommand.class, MailbusCommand.AcceptanceCommand.class, MailbusCommand.AgentAddCommand.class,
-                MailbusCommand.AgentsCommand.class, MailbusCommand.PushCommand.class, MailbusCommand.TestConnectionCommand.class})
+                MailbusCommand.AgentsCommand.class, MailbusCommand.PushCommand.class, MailbusCommand.TestConnectionCommand.class, MailbusCommand.AgentsImportCommand.class,
+                MailbusCommand.AgentEnableCommand.class})
 public class MailbusCommand {
 
     @Component
@@ -300,6 +301,70 @@ public class MailbusCommand {
             System.out.println("[2/2] push   " + (send.ok() ? "OK  " : "FAIL") + " "
                     + (send.ok() ? digest : send.error()));
             return send.ok() ? 0 : 1;
+        }
+    }
+
+    @Component
+    @Command(name = "agents-import", description = "Import python transport cards (access/transport) as agent cards")
+    public static class AgentsImportCommand implements Callable<Integer> {
+
+        private final io.github.hopewang123456.mailbus.ports.AgentDirectory directory;
+        private final io.github.hopewang123456.mailbus.ports.AgentCardImporter.Factory importerFactory;
+
+        public AgentsImportCommand(io.github.hopewang123456.mailbus.ports.AgentDirectory directory,
+                                   io.github.hopewang123456.mailbus.ports.AgentCardImporter.Factory importerFactory) {
+            this.directory = directory;
+            this.importerFactory = importerFactory;
+        }
+
+        @Parameters(index = "0", description = "python repo root (contains access/transport)") String repoRoot;
+
+        @Override
+        public Integer call() {
+            var imports = importerFactory.forRoot(java.nio.file.Path.of(repoRoot)).importFrom(java.nio.file.Path.of(repoRoot));
+            for (var im : imports) {
+                directory.upsert(im.card()); // verbatim card: disabled until push wired
+                System.out.printf("imported %-12s type=%-12s run=%-8s (%s, disabled until push wired)%n",
+                        im.card().id(), im.card().type(), im.card().runTarget(), im.note());
+            }
+            System.out.println(imports.size() + " card(s) imported");
+            return 0;
+        }
+    }
+
+    @Component
+    @Command(name = "agent-enable", description = "Enable an agent card (optionally set push_argv)")
+    public static class AgentEnableCommand implements Callable<Integer> {
+
+        private final io.github.hopewang123456.mailbus.app.PushService.Cards cards;
+        private final io.github.hopewang123456.mailbus.ports.AgentDirectory directory;
+
+        public AgentEnableCommand(io.github.hopewang123456.mailbus.app.PushService.Cards cards,
+                                  io.github.hopewang123456.mailbus.ports.AgentDirectory directory) {
+            this.cards = cards;
+            this.directory = directory;
+        }
+
+        @Parameters(index = "0") String id;
+        @Option(names = "--push-argv", split = ",", description = "argv with {MSG} slot") List<String> pushArgv;
+
+        @Override
+        public Integer call() {
+            var existing = directory.findById(id).orElse(null);
+            if (existing == null) {
+                System.err.println("no agent card: " + id);
+                return 1;
+            }
+            java.util.Map<String, Object> cfg = new java.util.HashMap<>(existing.adapterConfig());
+            if (pushArgv != null && !pushArgv.isEmpty()) {
+                cfg.put("push_argv", pushArgv);
+                cfg.put("timeout_s", 300);
+            }
+            directory.upsert(new io.github.hopewang123456.mailbus.ports.AgentDirectory.AgentCard(
+                    id, existing.type(), existing.runTarget(), true, cfg));
+            System.out.printf("enabled %s (type=%s run=%s argv=%s)%n", id, existing.type(),
+                    existing.runTarget(), cfg.containsKey("push_argv") ? "wired" : "unchanged");
+            return 0;
         }
     }
 }

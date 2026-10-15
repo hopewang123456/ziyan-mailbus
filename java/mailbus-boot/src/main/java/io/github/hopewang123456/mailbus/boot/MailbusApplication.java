@@ -113,6 +113,11 @@ public class MailbusApplication {
     }
 
     @Bean
+    io.github.hopewang123456.mailbus.ports.AgentCardImporter.Factory agentCardImporterFactory() {
+        return new io.github.hopewang123456.mailbus.adapters.frameworks.TransportCardImporter.Factory();
+    }
+
+    @Bean
     io.github.hopewang123456.mailbus.ports.MessageEventLog messageEventLog(
             org.springframework.jdbc.core.JdbcTemplate jdbc, Clock clock) {
         return new io.github.hopewang123456.mailbus.adapters.sqlite.SqliteEventLog(jdbc, clock);
