@@ -30,6 +30,7 @@ import java.time.Clock;
  * config only (spring.datasource.*), same repository code.
  */
 @SpringBootApplication(scanBasePackages = "io.github.hopewang123456.mailbus")
+@org.springframework.scheduling.annotation.EnableScheduling
 public class MailbusApplication {
 
     public static void main(String[] args) {
@@ -91,6 +92,28 @@ public class MailbusApplication {
     }
 
     @Bean
+    io.github.hopewang123456.mailbus.ports.MessageEventLog messageEventLog(
+            org.springframework.jdbc.core.JdbcTemplate jdbc, Clock clock) {
+        return new io.github.hopewang123456.mailbus.adapters.sqlite.SqliteEventLog(jdbc, clock);
+    }
+
+    @Bean
+    io.github.hopewang123456.mailbus.app.PatrolService patrolService(
+            @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
+            io.github.hopewang123456.mailbus.ports.MessageRepository repo,
+            io.github.hopewang123456.mailbus.ports.MessageEventLog events) {
+        return new io.github.hopewang123456.mailbus.app.PatrolService(repo, events);
+    }
+
+    @Bean
+    io.github.hopewang123456.mailbus.app.AcceptanceService acceptanceService(
+            @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
+            io.github.hopewang123456.mailbus.ports.MessageRepository repo,
+            io.github.hopewang123456.mailbus.ports.MessageEventLog events) {
+        return new io.github.hopewang123456.mailbus.app.AcceptanceService(repo, events);
+    }
+
+    @Bean
     StoreMigrator.Factory storeMigratorFactory() {
         return new PythonStoreReader.Factory();
     }
@@ -108,8 +131,9 @@ public class MailbusApplication {
 
     @Bean
     ArchiveService archiveService(@org.springframework.beans.factory.annotation.Qualifier("messageRepository")
-                                  MessageRepository repo, MessageArchiver archiver) {
-        return new ArchiveService(repo, archiver);
+                                  MessageRepository repo, FileMessageStore files,
+                                  io.github.hopewang123456.mailbus.ports.MessageEventLog events) {
+        return new ArchiveService(repo, files, events);
     }
 
     @Bean
@@ -119,7 +143,9 @@ public class MailbusApplication {
 
     @Bean
     InboxService inboxService(@org.springframework.beans.factory.annotation.Qualifier("messageRepository")
-                               MessageRepository messages, Clock clock) {
-        return new InboxService(messages, clock);
+                               MessageRepository messages,
+                               io.github.hopewang123456.mailbus.ports.MessageEventLog events,
+                               Clock clock) {
+        return new InboxService(messages, events, clock);
     }
 }

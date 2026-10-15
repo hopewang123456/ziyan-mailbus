@@ -19,10 +19,14 @@ import java.util.Optional;
 public class InboxService {
 
     private final MessageRepository messages;
+    private final io.github.hopewang123456.mailbus.ports.MessageEventLog events;
     private final Clock clock;
 
-    public InboxService(MessageRepository messages, Clock clock) {
+    public InboxService(MessageRepository messages,
+                        io.github.hopewang123456.mailbus.ports.MessageEventLog events,
+                        Clock clock) {
         this.messages = messages;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -33,6 +37,7 @@ public class InboxService {
                 toAgent, fromAgent, "notice", content,
                 MsgRecord.Priority.NORMAL, MessageState.PENDING, now, now);
         messages.save(record);
+        events.append(record.id(), toAgent, "created", null, MessageState.PENDING.name(), "send");
         return record;
     }
 
@@ -43,8 +48,12 @@ public class InboxService {
             MsgRecord acked = r.state() == MessageState.PENDING
                     ? r.withState(MessageState.PROCESSING, now)
                     : r;
+            events.append(r.id(), r.toAgent(), "state", r.state().name(),
+                    MessageState.PROCESSING.name(), "ack");
             acked = acked.withState(MessageState.DONE, now);
             messages.save(acked);
+            events.append(r.id(), r.toAgent(), "state", MessageState.PROCESSING.name(),
+                    MessageState.DONE.name(), "ack");
             return acked;
         });
     }

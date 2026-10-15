@@ -22,7 +22,7 @@ import java.util.concurrent.Callable;
         subcommands = {MailbusCommand.SendCommand.class, MailbusCommand.InboxCommand.class,
                 MailbusCommand.AckCommand.class, MailbusCommand.MigrateCommand.class,
                 MailbusCommand.DemoCommand.class, MailbusCommand.ArchiveCommand.class,
-                MailbusCommand.TraceCommand.class})
+                MailbusCommand.TraceCommand.class, MailbusCommand.AcceptanceCommand.class})
 public class MailbusCommand {
 
     @Component
@@ -173,6 +173,26 @@ public class MailbusCommand {
         public Integer call() {
             archive.trace(messageId).forEach(System.out::println);
             return 0;
+        }
+    }
+
+    @Component
+    @Command(name = "acceptance", description = "Run acceptance checks (storage/scheduler/patrol/serve)")
+    public static class AcceptanceCommand implements Callable<Integer> {
+
+        private final io.github.hopewang123456.mailbus.app.AcceptanceService acceptance;
+
+        public AcceptanceCommand(io.github.hopewang123456.mailbus.app.AcceptanceService acceptance) {
+            this.acceptance = acceptance;
+        }
+
+        @Override
+        public Integer call() {
+            var items = acceptance.check();
+            items.forEach((k, v) -> System.out.printf("%-10s %-5s %s%n", k, v.status(), v.detail()));
+            boolean ok = items.values().stream().allMatch(i -> "ok".equals(i.status()));
+            System.out.println(ok ? "acceptance: OK" : "acceptance: WARNINGS/SKIPS present");
+            return ok ? 0 : 1;
         }
     }
 }

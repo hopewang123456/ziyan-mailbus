@@ -84,7 +84,9 @@ class MigrationFlowTest {
         assertEquals(0, second.filesWritten());
 
         // archive settles the DONE message: file moves, index flips
-        ArchiveService archive = new ArchiveService(repo, files);
+        ArchiveService archive = new ArchiveService(repo, files,
+                new io.github.hopewang123456.mailbus.adapters.sqlite.SqliteEventLog(
+                        new JdbcTemplate(ds), Clock.systemUTC()));
         ArchiveService.Outcome out = archive.archiveSettled("agent-a");
         assertEquals(1, out.archived());
         assertEquals("ARCHIVED", repo.findById("msg-m2").orElseThrow().state().name());
