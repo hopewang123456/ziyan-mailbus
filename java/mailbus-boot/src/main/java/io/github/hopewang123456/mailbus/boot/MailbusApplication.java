@@ -98,11 +98,21 @@ public class MailbusApplication {
     }
 
     @Bean
+    io.github.hopewang123456.mailbus.ports.Notifier notifier(FileMessageStore files,
+            org.springframework.core.env.Environment env, Clock clock) {
+        String webhook = env.getProperty("mailbus.notify.webhook-url", "");
+        return io.github.hopewang123456.mailbus.ports.Notifier.fanOut(
+                new io.github.hopewang123456.mailbus.adapters.notify.WebhookNotifier(webhook, clock),
+                new io.github.hopewang123456.mailbus.adapters.notify.FileDigestNotifier(files.root(), clock));
+    }
+
+    @Bean
     io.github.hopewang123456.mailbus.app.PatrolService patrolService(
             @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
             io.github.hopewang123456.mailbus.ports.MessageRepository repo,
-            io.github.hopewang123456.mailbus.ports.MessageEventLog events) {
-        return new io.github.hopewang123456.mailbus.app.PatrolService(repo, events);
+            io.github.hopewang123456.mailbus.ports.MessageEventLog events,
+            io.github.hopewang123456.mailbus.ports.Notifier notifier) {
+        return new io.github.hopewang123456.mailbus.app.PatrolService(repo, events, notifier);
     }
 
     @Bean

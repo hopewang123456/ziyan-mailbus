@@ -19,10 +19,20 @@ public class AcceptanceService {
 
     private final MessageRepository repository;
     private final MessageEventLog events;
+    private final String apiBase; // optional probe target, e.g. http://127.0.0.1:9815
 
     public AcceptanceService(MessageRepository repository, MessageEventLog events) {
+        this(repository, events, null);
+    }
+
+    public AcceptanceService(MessageRepository repository, MessageEventLog events, String apiBase) {
         this.repository = repository;
         this.events = events;
+        this.apiBase = apiBase;
+    }
+
+    public Map<String, Item> check(String apiBaseOverride) {
+        return new AcceptanceService(repository, events, apiBaseOverride != null ? apiBaseOverride : apiBase).check();
     }
 
     public Map<String, Item> check() {
@@ -49,8 +59,23 @@ public class AcceptanceService {
                     "latest event " + age.toMinutes() + " min ago"));
         }
 
-        items.put("serve_api", new Item("serve_api", "skip",
-                "probe from CLI not wired yet — check http://<host>:9815/actuator/health"));
+        if (apiBase == null || apiBase.isBlank()) {
+            items.put("serve_api", new Item("serve_api", "skip",
+                    "no --api-base given — check http://<host>:9815/actuator/health"));
+        } else {
+            try {
+                var resp = java.net.http.HttpClient.newHttpClient().send(
+                        java.net.http.HttpRequest.newBuilder(
+                                        java.net.URI.create(apiBase.replaceAll("/$", "") + "/actuator/health"))
+                                .timeout(java.time.Duration.ofSeconds(5)).GET().build(),
+                        java.net.http.HttpResponse.BodyHandlers.ofString());
+                boolean up = resp.statusCode() == 200 && resp.body().contains("UP");
+                items.put("serve_api", new Item("serve_api", up ? "ok" : "warn",
+                        "HTTP " + resp.statusCode() + " from " + apiBase));
+            } catch (Exception e) {
+                items.put("serve_api", new Item("serve_api", "warn", "unreachable: " + apiBase));
+            }
+        }
         return items;
     }
 

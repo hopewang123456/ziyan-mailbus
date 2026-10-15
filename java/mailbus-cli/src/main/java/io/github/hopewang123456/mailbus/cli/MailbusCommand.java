@@ -186,9 +186,12 @@ public class MailbusCommand {
             this.acceptance = acceptance;
         }
 
+        @picocli.CommandLine.Option(names = "--api-base", description = "probe this serve base, e.g. http://127.0.0.1:9815")
+        String apiBase;
+
         @Override
         public Integer call() {
-            var items = acceptance.check();
+            var items = acceptance.check(apiBase);
             items.forEach((k, v) -> System.out.printf("%-10s %-5s %s%n", k, v.status(), v.detail()));
             boolean ok = items.values().stream().allMatch(i -> "ok".equals(i.status()));
             System.out.println(ok ? "acceptance: OK" : "acceptance: WARNINGS/SKIPS present");
