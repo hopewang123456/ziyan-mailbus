@@ -7,6 +7,11 @@
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # python 树根自举（monorepo 后不依赖 editable 安装）
+
 from lib.infra.constants import MAILBUS_ROOT
 import shlex
 import subprocess

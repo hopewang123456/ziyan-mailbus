@@ -63,7 +63,7 @@ class TestInitStore(unittest.TestCase):
 
     def test_run_init_store_fresh(self):
         with tempfile.TemporaryDirectory() as tmp:
-            rc = run_init_store(tmp, fresh=True, mail_root=PROJECT_ROOT, quiet=True)
+            rc = run_init_store(tmp, fresh=True, mail_root=MAILBUS_ROOT, quiet=True)
             self.assertEqual(rc, 0)
             config_path = os.path.join(tmp, "config.json")
             self.assertTrue(os.path.isfile(config_path))
@@ -78,7 +78,7 @@ class TestInitStore(unittest.TestCase):
 
     def test_run_merge_store_config_updates_agents(self):
         with tempfile.TemporaryDirectory() as tmp:
-            rc = run_init_store(tmp, fresh=True, mail_root=PROJECT_ROOT, quiet=True)
+            rc = run_init_store(tmp, fresh=True, mail_root=MAILBUS_ROOT, quiet=True)
             self.assertEqual(rc, 0)
             config_path = os.path.join(tmp, "config.json")
             cfg = json.load(open(config_path, encoding="utf-8"))

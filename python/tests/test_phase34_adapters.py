@@ -33,7 +33,7 @@ class TestAccessAdapters(unittest.TestCase):
         self.assertIn("hermes_profile", text.lower())
 
     def test_validate_all_frameworks(self):
-        errors = validate_access_adapters(mail_root=PROJECT_ROOT)
+        errors = validate_access_adapters(mail_root=MAILBUS_ROOT)
         self.assertEqual(errors, [], msg=str(errors))
 
     def test_agent_adapters_wrapper(self):

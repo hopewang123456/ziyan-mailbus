@@ -10,7 +10,7 @@ import subprocess
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]  # monorepo repo root (.gitignore / git scope)
 
 # High-confidence secret material (not model names / env var *names* in code)
 SECRET_RES = [

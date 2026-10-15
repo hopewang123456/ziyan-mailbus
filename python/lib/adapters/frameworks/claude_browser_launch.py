@@ -21,7 +21,7 @@ from .claude_launch import (
 )
 from lib.infra.utils import json_read, to_wsl_path
 
-# lib/adapters/frameworks/ → repo root
+# lib/adapters/frameworks/ → python 树根（tools 随实现树）
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 START_SCRIPT = os.path.join(ROOT, "tools", "start-claude-web.py")
 

@@ -11,8 +11,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-LIB = ROOT / "lib"
+ROOT = Path(__file__).resolve().parents[2]  # monorepo repo root (.gitignore / git scope)
+LIB = ROOT / "python" / "lib"  # monorepo: python tree
 TOOLS = ROOT / "tools"
 APP = LIB / "application"
 

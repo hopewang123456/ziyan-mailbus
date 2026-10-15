@@ -10,7 +10,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # python 树(tools/harness)
+REPO = os.path.dirname(ROOT)  # monorepo 仓库根(store/examples)
 sys.path.insert(0, ROOT)
 
 _GENERATE_REPORT_PATH = os.path.join(ROOT, "tools", "harness", "generate-report.py")
@@ -28,7 +29,7 @@ _write_baseline = _gr._write_baseline
 
 class TestQualityHarnessPipeline(unittest.TestCase):
     def test_code_review_report_example_schema(self):
-        path = os.path.join(ROOT, "store", "examples", "code-review-report.example.json")
+        path = os.path.join(REPO, "store", "examples", "code-review-report.example.json")
         with open(path, encoding="utf-8") as f:
             doc = json.load(f)
         self.assertEqual(doc.get("schema"), "code-review-report-v1")
@@ -36,7 +37,7 @@ class TestQualityHarnessPipeline(unittest.TestCase):
         self.assertIn(doc.get("aggregate_status"), ("pass", "warn", "fail", "error"))
 
     def test_publish_report_dry_run(self):
-        report = os.path.join(ROOT, "store", "examples", "code-review-report.example.json")
+        report = os.path.join(REPO, "store", "examples", "code-review-report.example.json")
         script = os.path.join(ROOT, "tools", "harness", "publish-report.py")
         proc = subprocess.run(
             [sys.executable, script, "--report", report, "--dry-run"],

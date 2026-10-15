@@ -15,10 +15,10 @@ import os
 from functools import lru_cache
 from typing import Any
 
-from lib.infra.constants import MAILBUS_ROOT
+from lib.infra.constants import PROJECT_ROOT
 from lib.infra.utils import json_read
 
-_DEMO_PATH = os.path.join(str(MAILBUS_ROOT), "config", "mailbus", "agent-demo.json")
+_DEMO_PATH = os.path.join(str(PROJECT_ROOT), "config", "mailbus", "agent-demo.json")
 
 
 @lru_cache(maxsize=1)

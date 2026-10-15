@@ -27,12 +27,14 @@ def _read_json(path: Path) -> dict[str, Any]:
 @lru_cache(maxsize=2)
 def load_integration_config(mail_root_s: str = "") -> dict[str, Any]:
     root = Path(mail_root_s) if mail_root_s else MAILBUS_ROOT
-    # Prefer legacy access path; fall back to config/services after Wave4 move
-    for rel in (
-        ("access", "agentmemory", "integration.json"),
-        ("config", "services", "agentmemory.json"),
+    from lib.infra.constants import PROJECT_ROOT
+
+    # Prefer legacy access path (repo root); fall back to config/services (python tree)
+    for base, rel in (
+        (root, ("access", "agentmemory", "integration.json")),
+        (PROJECT_ROOT, ("config", "services", "agentmemory.json")),
     ):
-        data = _read_json(root.joinpath(*rel))
+        data = _read_json(base.joinpath(*rel))
         if data:
             data.setdefault("schema", "mailbus-agentmemory-v1")
             return data

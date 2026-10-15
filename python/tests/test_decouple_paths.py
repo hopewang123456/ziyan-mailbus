@@ -94,9 +94,9 @@ class TestPublishedExampleTemplates(unittest.TestCase):
     """Sample files referenced by README / settings seed must exist and stay decoupled."""
 
     def test_compose_env_example(self):
-        from lib.infra.constants import PROJECT_ROOT
+        from lib.infra.constants import REPO_ROOT
 
-        p = Path(PROJECT_ROOT) / "docker-agents" / ".env.example"
+        p = Path(REPO_ROOT) / "docker-agents" / ".env.example"
         self.assertTrue(p.is_file(), "missing docker-agents/.env.example")
         text = p.read_text(encoding="utf-8")
         for key in (
@@ -121,16 +121,15 @@ class TestPublishedExampleTemplates(unittest.TestCase):
             self.assertNotIn(":-change-me", s)
 
     def test_override_and_repo_env_templates(self):
-        from lib.infra.constants import PROJECT_ROOT
+        from lib.infra.constants import PROJECT_ROOT, REPO_ROOT
 
-        root = Path(PROJECT_ROOT)
-        for rel in (
-            "docker-agents/docker-compose.override.example.yml",
-            "migrate/env.template",
-            "config/env.template",
+        for root, rel in (
+            (REPO_ROOT, "docker-agents/docker-compose.override.example.yml"),
+            (PROJECT_ROOT, "migrate/env.template"),
+            (PROJECT_ROOT, "config/env.template"),
         ):
             self.assertTrue((root / rel).is_file(), f"missing {rel}")
-        override = (root / "docker-agents/docker-compose.override.example.yml").read_text(
+        override = (Path(REPO_ROOT) / "docker-agents/docker-compose.override.example.yml").read_text(
             encoding="utf-8"
         )
         self.assertIn("DSH_WORKSPACE", override)

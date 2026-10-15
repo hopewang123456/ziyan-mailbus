@@ -23,14 +23,14 @@ class TestSyncLayers(unittest.TestCase):
         clear_agent_registry_cache()
 
     def test_thirteen_syncable_agents(self):
-        agents = list(iter_syncable_agents(mail_root=PROJECT_ROOT))
+        agents = list(iter_syncable_agents(mail_root=MAILBUS_ROOT))
         if not agents:
             self.skipTest("no transport files in this checkout (access/transport is gitignored)")
         self.assertGreaterEqual(len(agents), 1)
 
     def _syncable_by_framework(self, fw: str):
         return [
-            a for a in iter_syncable_agents(mail_root=PROJECT_ROOT)
+            a for a in iter_syncable_agents(mail_root=MAILBUS_ROOT)
             if (a[1] or "").startswith(fw)
         ]
 
@@ -39,7 +39,7 @@ class TestSyncLayers(unittest.TestCase):
         if not hermes:
             self.skipTest("no hermes_profile agent configured")
         agent_id = hermes[0][0]
-        fw, target = sync_target_for_agent(agent_id, mail_root=PROJECT_ROOT)
+        fw, target = sync_target_for_agent(agent_id, mail_root=MAILBUS_ROOT)
         self.assertEqual(fw, "hermes_profile")
         self.assertIsNotNone(target)
         self.assertIn("access", str(target).replace("\\", "/"))
@@ -50,14 +50,14 @@ class TestSyncLayers(unittest.TestCase):
         if not opencode:
             self.skipTest("no opencode agent configured")
         agent_id = opencode[0][0]
-        fw, target = sync_target_for_agent(agent_id, mail_root=PROJECT_ROOT)
+        fw, target = sync_target_for_agent(agent_id, mail_root=MAILBUS_ROOT)
         self.assertEqual(fw, "opencode")
         self.assertIsNotNone(target)
         self.assertTrue(str(target).replace("\\", "/").endswith("/opencode/skills"))
 
     @unittest.skipUnless(os.name == "nt", "Windows-only: /mnt/<drive> normalizes to a Windows drive Path")
     def test_normalize_mnt_path_windows(self):
-        p = normalize_host_path("/mnt/z/tools/opencode", mail_root=PROJECT_ROOT)
+        p = normalize_host_path("/mnt/z/tools/opencode", mail_root=MAILBUS_ROOT)
         self.assertEqual(p.drive.upper(), "Z:")
         self.assertTrue(p.name == "opencode" or str(p).endswith("opencode"))
 
@@ -67,7 +67,7 @@ class TestSyncLayers(unittest.TestCase):
 
     def test_mirror_rules_to_store(self):
         with tempfile.TemporaryDirectory() as tmp:
-            copied = mirror_rules_to_store(tmp, mail_root=PROJECT_ROOT)
+            copied = mirror_rules_to_store(tmp, mail_root=MAILBUS_ROOT)
             if not copied:
                 self.skipTest("no rules source in this checkout")
             self.assertGreater(len(copied), 0)
@@ -90,14 +90,14 @@ class TestSyncLayers(unittest.TestCase):
                 "type": "shared_skill",
                 "path": str(src_dir / "SKILL.md"),
             }
-            ok = install_skill_spec(spec, skills_root, mail_root=PROJECT_ROOT, use_symlink=True)
+            ok = install_skill_spec(spec, skills_root, mail_root=MAILBUS_ROOT, use_symlink=True)
             self.assertTrue(ok)
             dest = skills_root / "demo-skill"
             self.assertTrue(dest.is_dir())
             self.assertTrue((dest / "SKILL.md").exists())
             self.assertTrue((dest / "references" / "ref.md").exists())
             # 重复安装（dest 已是链接）应成功
-            ok2 = install_skill_spec(spec, skills_root, mail_root=PROJECT_ROOT, use_symlink=True)
+            ok2 = install_skill_spec(spec, skills_root, mail_root=MAILBUS_ROOT, use_symlink=True)
             self.assertTrue(ok2)
 
     def test_install_skill_cleans_junction_dest(self):
@@ -116,16 +116,16 @@ class TestSyncLayers(unittest.TestCase):
                 "type": "shared_skill",
                 "path": str(src_dir / "SKILL.md"),
             }
-            ok = install_skill_spec(spec, skills_root, mail_root=PROJECT_ROOT, use_symlink=False)
+            ok = install_skill_spec(spec, skills_root, mail_root=MAILBUS_ROOT, use_symlink=False)
             self.assertTrue(ok)
             dest = skills_root / "agent-universal" / "SKILL.md"
             self.assertTrue(dest.is_file())
-            ok2 = install_skill_spec(spec, skills_root, mail_root=PROJECT_ROOT, use_symlink=False)
+            ok2 = install_skill_spec(spec, skills_root, mail_root=MAILBUS_ROOT, use_symlink=False)
             self.assertTrue(ok2)
             self.assertTrue(dest.is_file())
 
     def test_build_skills_index_from_registry(self):
-        index = build_skills_index_from_registry(mail_root=PROJECT_ROOT)
+        index = build_skills_index_from_registry(mail_root=MAILBUS_ROOT)
         agents = index.get("agents") or {}
         if not agents:
             self.skipTest("no agents in registry for this checkout (transport/skill assets are local-only)")
@@ -175,7 +175,7 @@ class TestSyncLayers(unittest.TestCase):
 
         rel = framework_skill_path_rel("dsh")
         self.assertTrue(rel.endswith("access/dsh/adapter/SKILL.md"))
-        src = resolve_skill_src(rel, mail_root=PROJECT_ROOT)
+        src = resolve_skill_src(rel, mail_root=MAILBUS_ROOT)
         self.assertTrue(Path(src).is_file(), msg=str(src))
 
 

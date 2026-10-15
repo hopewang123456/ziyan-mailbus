@@ -78,7 +78,7 @@ def test_cmd_init_fresh_agents():
     from lib.adapters.config.init_store import run_init_store
 
     with tempfile.TemporaryDirectory() as tmp:
-        rc = run_init_store(tmp, fresh=True, mail_root=PROJECT_ROOT, quiet=True)
+        rc = run_init_store(tmp, fresh=True, mail_root=MAILBUS_ROOT, quiet=True)
         assert rc == 0
         cfg = json.load(open(os.path.join(tmp, "config.json"), encoding="utf-8"))
         assert len(cfg.get("agents") or {}) >= 14

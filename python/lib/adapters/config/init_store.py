@@ -372,7 +372,7 @@ def build_agents_from_registry(
     overrides: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     clear_agent_registry_cache()
-    registry = load_all_agents(mail_root=mail_root, refresh=True)
+    registry = load_all_agents(refresh=True)  # access 卡语义恒 repo 根（agent_registry 默认）
     roster = load_roster(mail_root)
     overrides = overrides or {}
     agents: dict[str, dict[str, Any]] = {}
@@ -717,9 +717,11 @@ def run_init_store(
     config = build_store_config(data_dir=data_dir, mail_root=mail_root)
     json_write(config_path, config)
 
-    copied = mirror_org_json(data_dir, mail_root=mail_root)
-    rules_copied = mirror_rules_to_store(data_dir, mail_root=mail_root)
-    wf_copied = mirror_workflows_to_store(data_dir, mail_root=mail_root)
+    from lib.infra.constants import PROJECT_ROOT as _PY_ROOT
+
+    copied = mirror_org_json(data_dir, mail_root=_PY_ROOT)  # org/workflows: config 消费 → python 树
+    rules_copied = mirror_rules_to_store(data_dir, mail_root=mail_root)  # rules: repo 根资产
+    wf_copied = mirror_workflows_to_store(data_dir, mail_root=_PY_ROOT)
     write_runtime_seed_files(data_dir, config.get("agents") or {})
 
     if not quiet:
