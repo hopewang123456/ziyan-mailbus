@@ -140,6 +140,11 @@ public class FileMessageStore implements io.github.hopewang123456.mailbus.ports.
             return index.countUnread(agent);
         }
 
+        @Override
+        public java.util.List<AgentStateCount> countByAgentAndState() {
+            return index.countByAgentAndState(); // delegate aggregations to the index
+        }
+
         public List<Path> filesOf(String agent) {
             Path dir = files.storeRoot.resolve("inbox").resolve(agent);
             if (!Files.isDirectory(dir)) {

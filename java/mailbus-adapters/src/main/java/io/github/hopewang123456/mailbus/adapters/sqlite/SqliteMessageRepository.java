@@ -99,6 +99,13 @@ public class SqliteMessageRepository implements MessageRepository {
         return n == null ? 0 : n;
     }
 
+    @Override
+    public java.util.List<AgentStateCount> countByAgentAndState() {
+        return jdbc.query(
+                "SELECT to_agent AS agent, state AS state, COUNT(*) AS n FROM msg_index GROUP BY to_agent, state ORDER BY to_agent, state",
+                (rs, i) -> new AgentStateCount(rs.getString("agent"), rs.getString("state"), rs.getLong("n")));
+    }
+
     private static String filePathOf(MsgRecord r) {
         // Relative store path — files-as-SoT layout: inbox/<agent>/<id>.json
         return "inbox/" + r.toAgent() + "/" + r.id() + ".json";

@@ -27,15 +27,28 @@ public class OpsController {
     private final AcceptanceService acceptance;
     private final InboxService inbox;
     private final MessageEventLog events;
+    private final io.github.hopewang123456.mailbus.app.StatusService status;
 
     public OpsController(PatrolService patrol, ArchiveService archive,
                          AcceptanceService acceptance, InboxService inbox,
-                         MessageEventLog events) {
+                         MessageEventLog events,
+                         io.github.hopewang123456.mailbus.app.StatusService status) {
         this.patrol = patrol;
         this.archive = archive;
         this.acceptance = acceptance;
         this.inbox = inbox;
         this.events = events;
+        this.status = status;
+    }
+
+    @GetMapping("/api/status")
+    public Map<String, Object> status() {
+        return status.status();
+    }
+
+    @GetMapping("/api/stats")
+    public Map<String, Object> stats() {
+        return status.stats();
     }
 
     @GetMapping("/api/agents")

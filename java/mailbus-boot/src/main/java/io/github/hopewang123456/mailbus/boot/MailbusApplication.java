@@ -116,6 +116,13 @@ public class MailbusApplication {
     }
 
     @Bean
+    io.github.hopewang123456.mailbus.app.StatusService statusService(
+            @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
+            io.github.hopewang123456.mailbus.ports.MessageRepository repo) {
+        return new io.github.hopewang123456.mailbus.app.StatusService(repo);
+    }
+
+    @Bean
     io.github.hopewang123456.mailbus.app.AcceptanceService acceptanceService(
             @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
             io.github.hopewang123456.mailbus.ports.MessageRepository repo,

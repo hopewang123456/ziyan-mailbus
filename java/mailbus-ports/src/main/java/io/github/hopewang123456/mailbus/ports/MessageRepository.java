@@ -33,4 +33,11 @@ public interface MessageRepository {
     List<MsgRecord> findStalePending(String agent, Instant cutoff);
 
     long countUnread(String agent);
+
+    /** Aggregated counts for status/stats endpoints (M2). */
+    record AgentStateCount(String agent, String state, long count) {}
+
+    default java.util.List<AgentStateCount> countByAgentAndState() {
+        return java.util.List.of(); // indexes without aggregation support
+    }
 }
