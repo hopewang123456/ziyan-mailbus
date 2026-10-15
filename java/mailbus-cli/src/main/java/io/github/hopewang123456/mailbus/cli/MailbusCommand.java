@@ -2,6 +2,7 @@ package io.github.hopewang123456.mailbus.cli;
 
 import io.github.hopewang123456.mailbus.app.InboxService;
 import io.github.hopewang123456.mailbus.domain.message.MsgRecord;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -9,23 +10,25 @@ import picocli.CommandLine.Parameters;
 import java.util.concurrent.Callable;
 
 /**
- * mailbus-j CLI skeleton — mirrors the Python command surface
- * (send / inbox / ack / status ...). Runs standalone or inside the Spring app.
+ * mailbus-j CLI — mirrors the Python command surface (send / inbox / ack).
+ * Subcommands are Spring beans (constructor-injected InboxService), wired by
+ * the picocli-spring boot starter in mailbus-boot.
  */
+@Component
 @Command(name = "mailbus", mixinStandardHelpOptions = true, version = "mailbus-j 0.1.0-SNAPSHOT",
-        subcommands = {MailbusCommand.SendCommand.class, MailbusCommand.InboxCommand.class, MailbusCommand.AckCommand.class})
+        subcommands = {MailbusCommand.SendCommand.class, MailbusCommand.InboxCommand.class,
+                MailbusCommand.AckCommand.class})
 public class MailbusCommand {
 
-    public static class BaseCommand {
-        protected InboxService inbox;
+    @Component
+    @Command(name = "send", description = "Push a message into an agent's inbox")
+    public static class SendCommand implements Callable<Integer> {
 
-        public void setInbox(InboxService inbox) {
+        private final InboxService inbox;
+
+        public SendCommand(InboxService inbox) {
             this.inbox = inbox;
         }
-    }
-
-    @Command(name = "send", description = "Push a message into an agent's inbox")
-    public static class SendCommand extends BaseCommand implements Callable<Integer> {
 
         @Parameters(index = "0", description = "target agent id") String agent;
         @Option(names = "--msg", required = true, description = "message content") String msg;
@@ -39,8 +42,15 @@ public class MailbusCommand {
         }
     }
 
+    @Component
     @Command(name = "inbox", description = "List pending messages of an agent")
-    public static class InboxCommand extends BaseCommand implements Callable<Integer> {
+    public static class InboxCommand implements Callable<Integer> {
+
+        private final InboxService inbox;
+
+        public InboxCommand(InboxService inbox) {
+            this.inbox = inbox;
+        }
 
         @Parameters(index = "0") String agent;
 
@@ -52,8 +62,15 @@ public class MailbusCommand {
         }
     }
 
+    @Component
     @Command(name = "ack", description = "Acknowledge a message by id")
-    public static class AckCommand extends BaseCommand implements Callable<Integer> {
+    public static class AckCommand implements Callable<Integer> {
+
+        private final InboxService inbox;
+
+        public AckCommand(InboxService inbox) {
+            this.inbox = inbox;
+        }
 
         @Parameters(index = "0") String messageId;
 

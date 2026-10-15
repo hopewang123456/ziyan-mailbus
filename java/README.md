@@ -24,7 +24,7 @@ to JDK 21, flip `<java.version>` in the root `pom.xml` and set
 | `mailbus-domain` | Domain | `MessageState` FSM, `MsgRecord` (UTC-only timestamps, single state field) |
 | `mailbus-ports` | Ports | `MessageRepository` interface (SQLite/in-memory bind in boot) |
 | `mailbus-app` | Application | `InboxService` use case — zero framework deps |
-| `mailbus-adapters` | Adapters | `InMemoryMessageRepository` (fake/demo); SQLite adapter lands in M1 |
+| `mailbus-adapters` | Adapters | `SqliteMessageRepository` (msg_index via JdbcTemplate), `FileMessageStore` (files-as-SoT, atomic writes) + composite, `InMemoryMessageRepository` (demo) |
 | `mailbus-infra` | Infra | cross-cutting (clock, logging) — placeholder |
 | `mailbus-api` | API | thin REST (`/api/inbox`), grows toward the M2 OpenAPI contract |
 | `mailbus-cli` | CLI | picocli `send` / `inbox` / `ack` |
@@ -39,8 +39,19 @@ to JDK 21, flip `<java.version>` in the root `pom.xml` and set
 - Search/semantics/graph: FTS5 + sqlite-vec + recursive CTE inside the same
   SQLite file (upgrade trigger lines in the plan §5.3).
 
-## Run (once M1 wires the boot jar)
+## Run
 
 ```bash
-mvn -pl mailbus-boot spring-boot:run   # serves :9815 (9814 stays with Python serve)
-```
+mvn -pl mailbus-boot -am package -DskipTests
+
+# CLI mode (mirrors the Python surface)
+java -jar mailbus-boot/target/mailbus-boot-0.1.0-SNAPSHOT.jar send agent-x --msg "hello"
+java -jar mailbus-boot/target/mailbus-boot-0.1.0-SNAPSHOT.jar inbox agent-x
+java -jar mailbus-boot/target/mailbus-boot-0.1.0-SNAPSHOT.jar ack <msg-id>
+
+# Serve mode (bare run) — :9815 (9814 stays with the Python serve)
+java -jar mailbus-boot/target/mailbus-boot-0.1.0-SNAPSHOT.jar
+
+Storage: mailbus.storage=sqlite (default; Flyway V1+V2, files under
+<data-dir>/inbox/<agent>/<id>.json + metadata.db index) | memory (demo).
+Dotted long options (--mailbus.data-dir=...) go to Spring, not the CLI.

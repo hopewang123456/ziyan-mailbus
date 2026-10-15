@@ -1,3 +1,7 @@
+mailbus:
+  storage: sqlite   # sqlite (default: Flyway + file store) | memory (demo)
+  data-dir: ./store
+
 spring:
   application:
     name: mailbus-j
