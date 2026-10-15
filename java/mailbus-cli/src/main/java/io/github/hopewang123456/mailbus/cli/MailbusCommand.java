@@ -1,6 +1,9 @@
 package io.github.hopewang123456.mailbus.cli;
 
+import io.github.hopewang123456.mailbus.app.ArchiveService;
+import io.github.hopewang123456.mailbus.app.DemoService;
 import io.github.hopewang123456.mailbus.app.InboxService;
+import io.github.hopewang123456.mailbus.app.MigrationService;
 import io.github.hopewang123456.mailbus.domain.message.MsgRecord;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -17,7 +20,9 @@ import java.util.concurrent.Callable;
 @Component
 @Command(name = "mailbus", mixinStandardHelpOptions = true, version = "mailbus-j 0.1.0-SNAPSHOT",
         subcommands = {MailbusCommand.SendCommand.class, MailbusCommand.InboxCommand.class,
-                MailbusCommand.AckCommand.class})
+                MailbusCommand.AckCommand.class, MailbusCommand.MigrateCommand.class,
+                MailbusCommand.DemoCommand.class, MailbusCommand.ArchiveCommand.class,
+                MailbusCommand.TraceCommand.class})
 public class MailbusCommand {
 
     @Component
@@ -83,6 +88,91 @@ public class MailbusCommand {
                 System.err.println("not found: " + messageId);
                 return 1;
             });
+        }
+    }
+
+    @Component
+    @Command(name = "migrate", description = "Migrate a Python mailbus store into the Java layout (idempotent)")
+    public static class MigrateCommand implements Callable<Integer> {
+
+        private final MigrationService migration;
+        private final io.github.hopewang123456.mailbus.ports.StoreMigrator.Factory migratorFactory;
+        private final MigrationService.ShardWriter shards;
+
+        public MigrateCommand(MigrationService migration,
+                              io.github.hopewang123456.mailbus.ports.StoreMigrator.Factory migratorFactory,
+                              MigrationService.ShardWriter shards) {
+            this.migration = migration;
+            this.migratorFactory = migratorFactory;
+            this.shards = shards;
+        }
+
+        @Parameters(index = "0", description = "path to the python store (contains inbox/)") String pythonStore;
+
+        @Override
+        public Integer call() {
+            MigrationService.Report r = migration.migrate(java.nio.file.Path.of(pythonStore), migratorFactory.forRoot(java.nio.file.Path.of(pythonStore)), shards);
+            System.out.printf("migrated: agents=%d messages=%d written=%d skipped=%d warnings=%d%n",
+                    r.agents(), r.messages(), r.filesWritten(), r.filesSkipped(), r.warnings().size());
+            r.warnings().stream().limit(10).forEach(w -> System.out.println("  warn: " + w));
+            return 0;
+        }
+    }
+
+    @Component
+    @Command(name = "demo", description = "Run the zero-dependency full-lifecycle demo chain")
+    public static class DemoCommand implements Callable<Integer> {
+
+        private final DemoService demo;
+
+        public DemoCommand(DemoService demo) {
+            this.demo = demo;
+        }
+
+        @Override
+        public Integer call() {
+            demo.run().forEach(System.out::println);
+            return 0;
+        }
+    }
+
+    @Component
+    @Command(name = "archive", description = "Archive settled (DONE/ACKNOWLEDGED) messages of an agent")
+    public static class ArchiveCommand implements Callable<Integer> {
+
+        private final ArchiveService archive;
+
+        public ArchiveCommand(ArchiveService archive) {
+            this.archive = archive;
+        }
+
+        @Parameters(index = "0") String agent;
+
+        @Override
+        public Integer call() {
+            ArchiveService.Outcome out = archive.archiveSettled(agent);
+            System.out.printf("archived %d message(s) of %s%n", out.archived(), agent);
+            out.ids().forEach(id -> System.out.println("  " + id));
+            return 0;
+        }
+    }
+
+    @Component
+    @Command(name = "trace", description = "Show a message's lifecycle trace")
+    public static class TraceCommand implements Callable<Integer> {
+
+        private final ArchiveService archive;
+
+        public TraceCommand(ArchiveService archive) {
+            this.archive = archive;
+        }
+
+        @Parameters(index = "0") String messageId;
+
+        @Override
+        public Integer call() {
+            archive.trace(messageId).forEach(System.out::println);
+            return 0;
         }
     }
 }

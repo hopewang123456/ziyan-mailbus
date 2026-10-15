@@ -25,7 +25,7 @@ import java.util.List;
  * This class owns the FILES; the Sqlite index is kept in sync by the
  * composite {@link FileIndexedMessages} — never by callers.
  */
-public class FileMessageStore {
+public class FileMessageStore implements io.github.hopewang123456.mailbus.ports.MessageArchiver {
 
     private final Path storeRoot;
 
@@ -33,13 +33,32 @@ public class FileMessageStore {
         this.storeRoot = storeRoot;
     }
 
+    public Path root() {
+        return storeRoot;
+    }
+
     public Path write(MsgRecord r) {
+        return write(r, null);
+    }
+
+    /** Target shard path (inbox/<agent>/<id>.json) — used for idempotency checks. */
+    public Path shardPath(MsgRecord r) {
+        return storeRoot.resolve("inbox").resolve(r.toAgent()).resolve(r.id() + ".json");
+    }
+
+    /** Shard path by coordinates (no record needed). */
+    public Path shardPathById(String id, String agent) {
+        return storeRoot.resolve("inbox").resolve(agent).resolve(id + ".json");
+    }
+
+    /** Write with the preserved raw source body (migration provenance). */
+    public Path write(MsgRecord r, String rawJson) {
         Path dir = storeRoot.resolve("inbox").resolve(r.toAgent());
         Path target = dir.resolve(r.id() + ".json");
         try {
             Files.createDirectories(dir);
             Path tmp = dir.resolve(r.id() + ".json.tmp");
-            Files.writeString(tmp, toJson(r), StandardCharsets.UTF_8,
+            Files.writeString(tmp, toJson(r, rawJson), StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
             try {
                 Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
@@ -49,6 +68,26 @@ public class FileMessageStore {
             return target;
         } catch (IOException e) {
             throw new UncheckedIOException("write failed for " + r.id(), e);
+        }
+    }
+
+    @Override
+    public Path archive(MsgRecord r) {
+        String day = r.updatedAt().toString().substring(0, 10); // UTC date, ISO-8601 prefix
+        Path dir = storeRoot.resolve("archive").resolve(r.toAgent()).resolve(day);
+        Path src = storeRoot.resolve("inbox").resolve(r.toAgent()).resolve(r.id() + ".json");
+        try {
+            Files.createDirectories(dir);
+            if (Files.exists(src)) {
+                Files.move(src, dir.resolve(r.id() + ".json"),
+                        StandardCopyOption.REPLACE_EXISTING);
+            } else {
+                // message never had a file (e.g. migrated index-only) — materialize the archive copy
+                Files.writeString(dir.resolve(r.id() + ".json"), toJson(r), StandardCharsets.UTF_8);
+            }
+            return dir.resolve(r.id() + ".json");
+        } catch (IOException e) {
+            throw new UncheckedIOException("archive failed for " + r.id(), e);
         }
     }
 
@@ -69,7 +108,15 @@ public class FileMessageStore {
 
         @Override
         public void save(MsgRecord record) {
-            files.write(record);
+            files.write(record); // regular upsert: file reflects latest state
+            index.save(record);
+        }
+
+        @Override
+        public void save(MsgRecord record, String rawJson) {
+            if (!Files.isRegularFile(files.shardPath(record))) {
+                files.write(record, rawJson); // import: write once, with provenance
+            }
             index.save(record);
         }
 
@@ -112,6 +159,10 @@ public class FileMessageStore {
 
     /** Minimal stable JSON serialization (no Jackson dep in this layer). */
     static String toJson(MsgRecord r) {
+        return toJson(r, null);
+    }
+
+    static String toJson(MsgRecord r, String rawJson) {
         StringBuilder sb = new StringBuilder(256);
         sb.append("{\n  \"schema\": \"msg-v1\",\n");
         sb.append("  \"id\": ").append(q(r.id())).append(",\n");
@@ -122,7 +173,11 @@ public class FileMessageStore {
         sb.append("  \"priority\": ").append(q(r.priority().name())).append(",\n");
         sb.append("  \"state\": ").append(q(r.state().name())).append(",\n");
         sb.append("  \"created_at\": ").append(q(r.createdAt().toString())).append(",\n");
-        sb.append("  \"updated_at\": ").append(q(r.updatedAt().toString())).append("\n}\n");
+        sb.append("  \"updated_at\": ").append(q(r.updatedAt().toString()));
+        if (rawJson != null && !rawJson.isBlank()) {
+            sb.append(",\n  \"raw\": ").append(rawJson); // verbatim source body (migration provenance)
+        }
+        sb.append("\n}\n");
         return sb.toString();
     }
 

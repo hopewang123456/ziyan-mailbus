@@ -16,6 +16,15 @@ public interface MessageRepository {
 
     void save(MsgRecord record);
 
+    /**
+     * Import semantics: persist with preserved raw provenance; implementations
+     * that own files must NOT overwrite an existing shard (migration idempotency).
+     * Default forwards to plain save for indexes without raw support.
+     */
+    default void save(MsgRecord record, String rawJson) {
+        save(record);
+    }
+
     Optional<MsgRecord> findById(String id);
 
     List<MsgRecord> findByAgentAndState(String agent, MessageState state);

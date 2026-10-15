@@ -2,7 +2,14 @@ package io.github.hopewang123456.mailbus.boot;
 
 import io.github.hopewang123456.mailbus.adapters.filestore.FileMessageStore;
 import io.github.hopewang123456.mailbus.adapters.memory.InMemoryMessageRepository;
+import io.github.hopewang123456.mailbus.adapters.migration.PythonStoreReader;
 import io.github.hopewang123456.mailbus.adapters.sqlite.SqliteMessageRepository;
+import io.github.hopewang123456.mailbus.app.ArchiveService;
+import io.github.hopewang123456.mailbus.app.DemoService;
+import io.github.hopewang123456.mailbus.app.MigrationService;
+import io.github.hopewang123456.mailbus.domain.message.MsgRecord;
+import io.github.hopewang123456.mailbus.ports.MessageArchiver;
+import io.github.hopewang123456.mailbus.ports.StoreMigrator;
 import io.github.hopewang123456.mailbus.app.InboxService;
 import io.github.hopewang123456.mailbus.ports.MessageRepository;
 import org.springframework.beans.factory.ObjectProvider;
@@ -81,6 +88,33 @@ public class MailbusApplication {
             throw new IllegalStateException("no storage index bean matched (mailbus.storage=?)");
         }
         return new FileMessageStore.FileIndexedMessages(files, index);
+    }
+
+    @Bean
+    StoreMigrator.Factory storeMigratorFactory() {
+        return new PythonStoreReader.Factory();
+    }
+
+    @Bean
+    MigrationService.ShardWriter shardWriter(FileMessageStore files) {
+        return record -> java.nio.file.Files.isRegularFile(files.shardPath(record));
+    }
+
+    @Bean
+    MigrationService migrationService(@org.springframework.beans.factory.annotation.Qualifier("messageRepository")
+                                      MessageRepository repo, FileMessageStore files, Clock clock) {
+        return new MigrationService(repo, files.root(), clock);
+    }
+
+    @Bean
+    ArchiveService archiveService(@org.springframework.beans.factory.annotation.Qualifier("messageRepository")
+                                  MessageRepository repo, MessageArchiver archiver) {
+        return new ArchiveService(repo, archiver);
+    }
+
+    @Bean
+    DemoService demoService(InboxService inbox, ArchiveService archive) {
+        return new DemoService(inbox, archive);
     }
 
     @Bean

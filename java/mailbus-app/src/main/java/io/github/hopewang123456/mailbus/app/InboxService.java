@@ -38,7 +38,12 @@ public class InboxService {
 
     public Optional<MsgRecord> acknowledge(String messageId) {
         return messages.findById(messageId).map(r -> {
-            MsgRecord acked = r.withState(MessageState.DONE, Instant.now(clock));
+            Instant now = Instant.now(clock);
+            // FSM: PENDING must pass through PROCESSING before DONE (skip-execute ack)
+            MsgRecord acked = r.state() == MessageState.PENDING
+                    ? r.withState(MessageState.PROCESSING, now)
+                    : r;
+            acked = acked.withState(MessageState.DONE, now);
             messages.save(acked);
             return acked;
         });
