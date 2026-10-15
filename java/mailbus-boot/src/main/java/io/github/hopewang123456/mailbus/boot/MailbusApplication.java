@@ -92,6 +92,27 @@ public class MailbusApplication {
     }
 
     @Bean
+    io.github.hopewang123456.mailbus.ports.AgentDirectory agentDirectory(
+            org.springframework.jdbc.core.JdbcTemplate jdbc, Clock clock) {
+        return new io.github.hopewang123456.mailbus.adapters.frameworks.CliAgentDirectory(jdbc, clock);
+    }
+
+    @Bean
+    io.github.hopewang123456.mailbus.app.PushService pushService(
+            @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
+            io.github.hopewang123456.mailbus.ports.MessageRepository repo,
+            io.github.hopewang123456.mailbus.ports.AgentDirectory directory,
+            io.github.hopewang123456.mailbus.ports.MessageEventLog events) {
+        return new io.github.hopewang123456.mailbus.app.PushService(repo, directory, events);
+    }
+
+    @Bean
+    io.github.hopewang123456.mailbus.app.PushService.Cards agentCards(
+            io.github.hopewang123456.mailbus.ports.AgentDirectory directory) {
+        return new io.github.hopewang123456.mailbus.app.PushService.Cards(directory);
+    }
+
+    @Bean
     io.github.hopewang123456.mailbus.ports.MessageEventLog messageEventLog(
             org.springframework.jdbc.core.JdbcTemplate jdbc, Clock clock) {
         return new io.github.hopewang123456.mailbus.adapters.sqlite.SqliteEventLog(jdbc, clock);

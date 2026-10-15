@@ -10,6 +10,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+import java.util.List;
 import java.util.concurrent.Callable;
 
 /**
@@ -22,7 +23,8 @@ import java.util.concurrent.Callable;
         subcommands = {MailbusCommand.SendCommand.class, MailbusCommand.InboxCommand.class,
                 MailbusCommand.AckCommand.class, MailbusCommand.MigrateCommand.class,
                 MailbusCommand.DemoCommand.class, MailbusCommand.ArchiveCommand.class,
-                MailbusCommand.TraceCommand.class, MailbusCommand.AcceptanceCommand.class})
+                MailbusCommand.TraceCommand.class, MailbusCommand.AcceptanceCommand.class, MailbusCommand.AgentAddCommand.class,
+                MailbusCommand.AgentsCommand.class, MailbusCommand.PushCommand.class})
 public class MailbusCommand {
 
     @Component
@@ -196,6 +198,74 @@ public class MailbusCommand {
             boolean ok = items.values().stream().allMatch(i -> "ok".equals(i.status()));
             System.out.println(ok ? "acceptance: OK" : "acceptance: WARNINGS/SKIPS present");
             return ok ? 0 : 1;
+        }
+    }
+
+    @Component
+    @Command(name = "agent-add", description = "Register an agent card (type preset or custom push_argv)")
+    public static class AgentAddCommand implements Callable<Integer> {
+
+        private final io.github.hopewang123456.mailbus.app.PushService.Cards cards;
+
+        public AgentAddCommand(io.github.hopewang123456.mailbus.app.PushService.Cards cards) {
+            this.cards = cards;
+        }
+
+        @Parameters(index = "0", description = "agent id") String id;
+        @Parameters(index = "1", description = "framework type (claude_code|codex|cli|none)") String type;
+        @Option(names = "--run-target", defaultValue = "windows", description = "windows|wsl|linux|docker") String runTarget;
+        @Option(names = "--push-argv", split = ",", description = "custom argv with {MSG} slot, e.g. --push-argv=node,cli.js,-p,{MSG}") List<String> pushArgv;
+
+        @Override
+        public Integer call() {
+            java.util.Map<String, Object> cfg = new java.util.HashMap<>();
+            if (pushArgv != null && !pushArgv.isEmpty()) {
+                cfg.put("push_argv", pushArgv);
+                cfg.put("timeout_s", 300);
+            }
+            cards.add(id, type, runTarget, cfg);
+            System.out.printf("registered %s (type=%s, run_target=%s)%n", id, type, runTarget);
+            return 0;
+        }
+    }
+
+    @Component
+    @Command(name = "agents", description = "List registered agent cards")
+    public static class AgentsCommand implements Callable<Integer> {
+
+        private final io.github.hopewang123456.mailbus.app.PushService.Cards cards;
+
+        public AgentsCommand(io.github.hopewang123456.mailbus.app.PushService.Cards cards) {
+            this.cards = cards;
+        }
+
+        @Override
+        public Integer call() {
+            var all = cards.list();
+            System.out.printf("%d agent(s):%n", all.size());
+            all.forEach(c -> System.out.printf("  %-14s type=%-12s run=%-8s enabled=%s%n",
+                    c.id(), c.type(), c.runTarget(), c.enabled()));
+            return 0;
+        }
+    }
+
+    @Component
+    @Command(name = "push", description = "Push pending messages of an agent now (scan loop, on demand)")
+    public static class PushCommand implements Callable<Integer> {
+
+        private final io.github.hopewang123456.mailbus.app.PushService push;
+
+        public PushCommand(io.github.hopewang123456.mailbus.app.PushService push) {
+            this.push = push;
+        }
+
+        @Parameters(index = "0") String agent;
+
+        @Override
+        public Integer call() {
+            var r = push.pushPending(agent);
+            System.out.printf("pushed=%d failed=%d%n", r.pushed(), r.failed());
+            return r.failed() == 0 ? 0 : 1;
         }
     }
 }
