@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 dist/
+!java/dist/
 build/
 web/node_modules/
 web/dist/

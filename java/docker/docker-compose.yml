@@ -1,0 +1,17 @@
+# mailbus-j container (M4). Deliberately a SEPARATE file from the production
+# docker-agents compose — the python serve stays untouched during dual-run.
+# Usage: docker compose -f docker/docker-compose.yml up -d
+services:
+  mailbus-j:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: mailbus-j:0.1.0
+    container_name: mailbus-j
+    ports:
+      - "9815:9815"
+    volumes:
+      - ./store:/app/store
+    environment:
+      MAILBUS_STORAGE: sqlite
+    restart: unless-stopped
