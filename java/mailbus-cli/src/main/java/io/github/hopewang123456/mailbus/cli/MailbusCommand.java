@@ -271,13 +271,20 @@ public class MailbusCommand {
     }
 
     @Component
-    @Command(name = "test-connection", description = "Probe an agent card: executable reachability + test push")
+    @Command(name = "test-connection", description = "Probe an agent card: reachability + test push + activity profile")
     public static class TestConnectionCommand implements Callable<Integer> {
 
         private final io.github.hopewang123456.mailbus.ports.AgentDirectory directory;
+        private final io.github.hopewang123456.mailbus.ports.MessageRepository repository;
+        private final io.github.hopewang123456.mailbus.ports.MessageEventLog events;
 
-        public TestConnectionCommand(io.github.hopewang123456.mailbus.ports.AgentDirectory directory) {
+        public TestConnectionCommand(io.github.hopewang123456.mailbus.ports.AgentDirectory directory,
+                                     @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
+                                     io.github.hopewang123456.mailbus.ports.MessageRepository repository,
+                                     io.github.hopewang123456.mailbus.ports.MessageEventLog events) {
             this.directory = directory;
+            this.repository = repository;
+            this.events = events;
         }
 
         @Parameters(index = "0", description = "agent id") String agent;
@@ -291,15 +298,21 @@ public class MailbusCommand {
             }
             // stage 1: probe
             var probe = directory.probe(card);
-            System.out.println("[1/2] probe  " + (probe.ok() ? "OK  " : "FAIL") + " " + probe.error());
+            System.out.println("[1/3] probe  " + (probe.ok() ? "OK  " : "FAIL") + " " + probe.error());
             if (!probe.ok()) {
                 return 1;
             }
-            // stage 2: test push (tiny message; role discovery = stage 3, arrives with MD cards)
+            // stage 2: test push (tiny message)
             var send = directory.launch(agent, "MAILBUS-J connection test — reply briefly.");
             String digest = send.outputDigest().replace('\n', ' ');
-            System.out.println("[2/2] push   " + (send.ok() ? "OK  " : "FAIL") + " "
+            System.out.println("[2/3] push   " + (send.ok() ? "OK  " : "FAIL") + " "
                     + (send.ok() ? digest : send.error()));
+            // stage 3: activity profile (true role discovery needs profile cards, M4)
+            long unread = repository.countUnread(agent);
+            var last = events.latest(200).stream()
+                    .filter(e -> agent.equals(e.agent())).findFirst();
+            System.out.println("[3/3] agent  unread=" + unread
+                    + (last.map(e -> "  last-event=" + e.kind() + "@" + e.createdAt()).orElse("  no events yet")));
             return send.ok() ? 0 : 1;
         }
     }
@@ -359,6 +372,19 @@ public class MailbusCommand {
             if (pushArgv != null && !pushArgv.isEmpty()) {
                 cfg.put("push_argv", pushArgv);
                 cfg.put("timeout_s", 300);
+            } else if ("docker".equals(existing.runTarget())) {
+                // derive: <container> + framework preset argv (docker dispatch takes
+                // the first token as the container by convention)
+                Object container = cfg.get("container");
+                List<String> preset = io.github.hopewang123456.mailbus.ports.AgentDirectory.PRESETS
+                        .getOrDefault(existing.type(), List.of());
+                if (container != null && !preset.isEmpty()) {
+                    List<String> argv = new java.util.ArrayList<>();
+                    argv.add(String.valueOf(container));
+                    argv.addAll(preset);
+                    cfg.put("push_argv", argv);
+                    cfg.put("timeout_s", 300);
+                }
             }
             directory.upsert(new io.github.hopewang123456.mailbus.ports.AgentDirectory.AgentCard(
                     id, existing.type(), existing.runTarget(), true, cfg));

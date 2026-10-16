@@ -135,9 +135,20 @@ public class CliAgentDirectory implements AgentDirectory {
             out.add("exec");
             out.add(argv.get(0)); // first token = container id by convention
             out.addAll(argv.subList(1, argv.size()));
+            // On a Windows host the docker engine lives in WSL (python runtime_net
+            // topology): route through wsl -e unless a native docker.exe exists.
+            if (dockerHostOnWsl()) {
+                return concat(List.of("wsl", "-e"), out);
+            }
             return out;
         }
         return argv;
+    }
+
+    private static List<String> concat(List<String> prefix, List<String> rest) {
+        List<String> out = new ArrayList<>(prefix);
+        out.addAll(rest);
+        return out;
     }
 
     /** Probe: does the push executable exist on the card's run_target? (test-connection stage 1) */
@@ -159,7 +170,9 @@ public class CliAgentDirectory implements AgentDirectory {
         }
         List<String> check = switch (target) {
             case "wsl" -> List.of("wsl", "-e", "sh", "-c", "command -v " + shellQuote(exe));
-            case "docker" -> List.of("docker", "exec", String.valueOf(list.get(0)), "sh", "-c", "command -v " + shellQuote(String.valueOf(list.get(1))));
+            case "docker" -> dockerHostOnWsl()
+                    ? List.of("wsl", "-e", "docker", "exec", String.valueOf(list.get(0)), "sh", "-c", "command -v " + shellQuote(String.valueOf(list.get(1))))
+                    : List.of("docker", "exec", String.valueOf(list.get(0)), "sh", "-c", "command -v " + shellQuote(String.valueOf(list.get(1))));
             default -> List.of("cmd", "/C", "where", exe); // windows; linux callers use which
         };
         if ("linux".equalsIgnoreCase(target)) {
@@ -175,6 +188,11 @@ public class CliAgentDirectory implements AgentDirectory {
         } catch (Exception e) {
             return new LaunchResult(false, -1, "", "probe failed: " + e.getMessage());
         }
+    }
+
+    private static boolean dockerHostOnWsl() {
+        return System.getProperty("os.name", "").toLowerCase().contains("win")
+                && !java.nio.file.Files.isRegularFile(java.nio.file.Path.of("C:/Program Files/Docker/Docker/resources/bin/docker.exe"));
     }
 
     private static String shellQuote(String s) {

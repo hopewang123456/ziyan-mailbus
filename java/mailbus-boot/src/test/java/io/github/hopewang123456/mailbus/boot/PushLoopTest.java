@@ -82,9 +82,15 @@ class PushLoopTest {
         // wsl: wsl -e prefix
         assertEquals(List.of("wsl", "-e", "a", "b"),
                 CliAgentDirectory.wrapForRunTarget("wsl", List.of("a", "b")));
-        // docker: first token = container by convention
-        assertEquals(List.of("docker", "exec", "ctr", "run", "x"),
-                CliAgentDirectory.wrapForRunTarget("docker", List.of("ctr", "run", "x")));
+        // docker: first token = container by convention; on a Windows host without
+        // a native docker.exe the engine lives in WSL -> wsl -e prefix (python runtime_net topology)
+        boolean wslHost = System.getProperty("os.name", "").toLowerCase().contains("win")
+                && !java.nio.file.Files.isRegularFile(java.nio.file.Path.of(
+                        "C:/Program Files/Docker/Docker/resources/bin/docker.exe"));
+        List<String> expected = wslHost
+                ? List.of("wsl", "-e", "docker", "exec", "ctr", "run", "x")
+                : List.of("docker", "exec", "ctr", "run", "x");
+        assertEquals(expected, CliAgentDirectory.wrapForRunTarget("docker", List.of("ctr", "run", "x")));
     }
 
     @Test
