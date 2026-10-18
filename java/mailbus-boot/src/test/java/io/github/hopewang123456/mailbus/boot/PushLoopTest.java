@@ -119,6 +119,14 @@ class PushLoopTest {
     }
 
     @Test
+    void containerPrefixResolvesComposeNames() {
+        var d = new CliAgentDirectory(new JdbcTemplate(ds), Clock.systemUTC(), "docker-agents");
+        assertEquals("docker-agents-lingjian-1", d.resolveContainer("lingjian"));
+        assertEquals("docker-agents-codex-web-1", d.resolveContainer("docker-agents-codex-web-1"));
+        assertEquals("", d.resolveContainer(""));
+    }
+
+    @Test
     void failedSpawnStaysPendingAndLogsEvent() {
         var jdbc = new JdbcTemplate(ds);
         var events = new SqliteEventLog(jdbc, Clock.systemUTC());

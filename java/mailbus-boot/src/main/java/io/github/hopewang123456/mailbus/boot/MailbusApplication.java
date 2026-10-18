@@ -134,9 +134,25 @@ public class MailbusApplication {
     io.github.hopewang123456.mailbus.ports.Notifier notifier(FileMessageStore files,
             org.springframework.core.env.Environment env, Clock clock) {
         String webhook = env.getProperty("mailbus.notify.webhook-url", "");
+        var smtp = new io.github.hopewang123456.mailbus.adapters.notify.SmtpNotifier(
+                env.getProperty("mailbus.notify.smtp.host", ""),
+                env.getProperty("mailbus.notify.smtp.port", Integer.class, 465),
+                env.getProperty("mailbus.notify.smtp.from", ""),
+                env.getProperty("mailbus.notify.smtp.to", ""),
+                env.getProperty("mailbus.notify.smtp.username", ""),
+                env.getProperty("mailbus.notify.smtp.password", ""),
+                env.getProperty("mailbus.notify.smtp.starttls", Boolean.class, false));
+        io.github.hopewang123456.mailbus.ports.Notifier desktop =
+                new io.github.hopewang123456.mailbus.adapters.notify.DesktopNotifier();
+        var channels = new java.util.ArrayList<io.github.hopewang123456.mailbus.ports.Notifier>();
+        channels.add(new io.github.hopewang123456.mailbus.adapters.notify.WebhookNotifier(webhook, clock));
+        channels.add(new io.github.hopewang123456.mailbus.adapters.notify.FileDigestNotifier(files.root(), clock));
+        channels.add(desktop);
+        if (smtp.enabled()) {
+            channels.add(smtp);
+        }
         return io.github.hopewang123456.mailbus.ports.Notifier.fanOut(
-                new io.github.hopewang123456.mailbus.adapters.notify.WebhookNotifier(webhook, clock),
-                new io.github.hopewang123456.mailbus.adapters.notify.FileDigestNotifier(files.root(), clock));
+                channels.toArray(new io.github.hopewang123456.mailbus.ports.Notifier[0]));
     }
 
     @Bean

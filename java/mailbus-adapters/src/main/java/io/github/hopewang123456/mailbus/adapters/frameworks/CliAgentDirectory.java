@@ -29,9 +29,30 @@ public class CliAgentDirectory implements AgentDirectory {
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
+    private final String containerPrefix;
+
     public CliAgentDirectory(JdbcTemplate jdbc, Clock clock) {
+        this(jdbc, clock,
+                System.getenv().getOrDefault("MAILBUS_CONTAINER_PREFIX", "docker-agents"));
+    }
+
+    public CliAgentDirectory(JdbcTemplate jdbc, Clock clock, String containerPrefix) {
         this.jdbc = jdbc;
         this.clock = clock;
+        this.containerPrefix = containerPrefix;
+    }
+
+    /**
+     * compose service name -> real container (python MAILBUS_CONTAINER_PREFIX twin):
+     * transport cards carry compose names ("lingjian"); the running container is
+     * "<prefix>-<service>-1". An already-resolved name (contains the prefix or a
+     * separator like '-') with the prefix form tried first, exact form kept.
+     */
+    public String resolveContainer(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return raw;
+        }
+        return raw.startsWith(containerPrefix + "-") ? raw : containerPrefix + "-" + raw + "-1";
     }
 
     @Override
@@ -83,7 +104,7 @@ public class CliAgentDirectory implements AgentDirectory {
             List<String> argv = new ArrayList<>();
             argv.add("docker"); argv.add("exec");
             if (!workdir.isBlank()) { argv.add("-w"); argv.add(workdir); }
-            argv.add(String.valueOf(cfg.getOrDefault("container", "")));
+            argv.add(resolveContainer(String.valueOf(cfg.getOrDefault("container", ""))));
             argv.add("bash"); argv.add("-lc");
             argv.add(inner.replace("{MSG}", shellQuoteInner(message)));
             if (dockerHostOnWsl()) {
@@ -185,6 +206,16 @@ public class CliAgentDirectory implements AgentDirectory {
     /** Probe: does the push executable exist on the card's run_target? (test-connection stage 1) */
     public LaunchResult probe(AgentCard card) {
         Map<String, Object> cfg = card.adapterConfig();
+        // shell_inner cards: probe the first word of the inner script inside the container
+        Object shellInner = cfg.get("shell_inner");
+        if (shellInner instanceof String si && !si.isBlank()) {
+            String first = si.trim().split("\\s+")[0];
+            String ctr = resolveContainer(String.valueOf(cfg.getOrDefault("container", "")));
+            List<String> check = dockerHostOnWsl()
+                    ? List.of("wsl", "-e", "docker", "exec", ctr, "sh", "-c", "command -v " + shellQuote(first))
+                    : List.of("docker", "exec", ctr, "sh", "-c", "command -v " + shellQuote(first));
+            return runProbe(check, first);
+        }
         Object rawArgv = cfg.get("push_argv");
         if (!(rawArgv instanceof List<?> list) || list.isEmpty()) {
             return new LaunchResult(false, -1, "", "no push_argv configured");
@@ -201,14 +232,21 @@ public class CliAgentDirectory implements AgentDirectory {
         }
         List<String> check = switch (target) {
             case "wsl" -> List.of("wsl", "-e", "sh", "-c", "command -v " + shellQuote(exe));
-            case "docker" -> dockerHostOnWsl()
-                    ? List.of("wsl", "-e", "docker", "exec", String.valueOf(list.get(0)), "sh", "-c", "command -v " + shellQuote(String.valueOf(list.get(1))))
-                    : List.of("docker", "exec", String.valueOf(list.get(0)), "sh", "-c", "command -v " + shellQuote(String.valueOf(list.get(1))));
+            case "docker" -> {
+                String ctr = resolveContainer(String.valueOf(list.get(0)));
+                yield dockerHostOnWsl()
+                        ? List.of("wsl", "-e", "docker", "exec", ctr, "sh", "-c", "command -v " + shellQuote(String.valueOf(list.get(1))))
+                        : List.of("docker", "exec", ctr, "sh", "-c", "command -v " + shellQuote(String.valueOf(list.get(1))));
+            }
             default -> List.of("cmd", "/C", "where", exe); // windows; linux callers use which
         };
         if ("linux".equalsIgnoreCase(target)) {
             check = List.of("sh", "-c", "command -v " + shellQuote(exe));
         }
+        return runProbe(check, exe);
+    }
+
+    private LaunchResult runProbe(List<String> check, String exe) {
         try {
             Process p = new ProcessBuilder(check).redirectErrorStream(true).start();
             boolean fin = p.waitFor(20, TimeUnit.SECONDS);
