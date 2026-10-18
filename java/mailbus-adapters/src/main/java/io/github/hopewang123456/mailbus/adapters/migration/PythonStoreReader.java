@@ -109,7 +109,7 @@ public class PythonStoreReader implements io.github.hopewang123456.mailbus.ports
             case "pushed" -> MessageState.PUSHED;
             case "processing" -> MessageState.PROCESSING;
             case "done" -> MessageState.DONE;
-            case "acknowledged" -> MessageState.ACKNOWLEDGED;
+            case "acknowledged", "acked" -> MessageState.ACKNOWLEDGED;
             case "rejected" -> MessageState.REJECTED;
             case "archived" -> MessageState.ARCHIVED;
             default -> {
