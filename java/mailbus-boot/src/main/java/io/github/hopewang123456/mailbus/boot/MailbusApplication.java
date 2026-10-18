@@ -118,6 +118,13 @@ public class MailbusApplication {
     }
 
     @Bean
+    io.github.hopewang123456.mailbus.app.ReconcileService reconcileService(
+            @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
+            io.github.hopewang123456.mailbus.ports.MessageRepository repo) {
+        return new io.github.hopewang123456.mailbus.app.ReconcileService(repo);
+    }
+
+    @Bean
     io.github.hopewang123456.mailbus.ports.MessageEventLog messageEventLog(
             org.springframework.jdbc.core.JdbcTemplate jdbc, Clock clock) {
         return new io.github.hopewang123456.mailbus.adapters.sqlite.SqliteEventLog(jdbc, clock);

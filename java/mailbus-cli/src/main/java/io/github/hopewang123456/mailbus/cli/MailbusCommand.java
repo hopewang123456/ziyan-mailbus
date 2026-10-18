@@ -25,7 +25,7 @@ import java.util.concurrent.Callable;
                 MailbusCommand.DemoCommand.class, MailbusCommand.ArchiveCommand.class,
                 MailbusCommand.TraceCommand.class, MailbusCommand.AcceptanceCommand.class, MailbusCommand.AgentAddCommand.class,
                 MailbusCommand.AgentsCommand.class, MailbusCommand.PushCommand.class, MailbusCommand.TestConnectionCommand.class, MailbusCommand.AgentsImportCommand.class,
-                MailbusCommand.AgentEnableCommand.class})
+                MailbusCommand.AgentEnableCommand.class, MailbusCommand.ReconcileCommand.class})
 public class MailbusCommand {
 
     @Component
@@ -391,6 +391,39 @@ public class MailbusCommand {
             System.out.printf("enabled %s (type=%s run=%s argv=%s)%n", id, existing.type(),
                     existing.runTarget(), cfg.containsKey("push_argv") ? "wired" : "unchanged");
             return 0;
+        }
+    }
+
+    @Component
+    @Command(name = "reconcile", description = "Dual-run reconciliation: python store vs java store")
+    public static class ReconcileCommand implements Callable<Integer> {
+
+        private final io.github.hopewang123456.mailbus.app.ReconcileService reconcile;
+        private final io.github.hopewang123456.mailbus.ports.StoreMigrator.Factory migratorFactory;
+
+        public ReconcileCommand(io.github.hopewang123456.mailbus.app.ReconcileService reconcile,
+                                io.github.hopewang123456.mailbus.ports.StoreMigrator.Factory migratorFactory) {
+            this.reconcile = reconcile;
+            this.migratorFactory = migratorFactory;
+        }
+
+        @Parameters(index = "0", description = "python store path (contains inbox/)") String pythonStore;
+
+        @Override
+        public Integer call() {
+            var r = reconcile.reconcile(java.nio.file.Path.of(pythonStore),
+                    migratorFactory.forRoot(java.nio.file.Path.of(pythonStore)));
+            System.out.printf("python=%d  java=%d  java-only=%d%n", r.pythonTotal(), r.javaTotal(), r.javaOnlyCount());
+            if (!r.javaOnlySample().isEmpty()) {
+                System.out.println("  java-only ids (sample): " + r.javaOnlySample());
+            }
+            System.out.println("  states py: " + r.pythonStates());
+            System.out.println("  states jv: " + r.javaStates());
+            if (!r.perAgentDelta().isEmpty()) {
+                System.out.println("  per-agent delta (py-jv): " + r.perAgentDelta());
+            }
+            r.notes().forEach(n -> System.out.println("  note: " + n));
+            return r.javaOnlyCount() == 0 ? 0 : 2; // exit 2 = fabrication detected (java has unknowns)
         }
     }
 }

@@ -6,7 +6,7 @@
 
   <groupId>io.github.hopewang123456</groupId>
   <artifactId>mailbus-j</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
   <packaging>pom</packaging>
   <name>mailbus-j</name>
   <description>mailbus Java implementation — file-based A2A message bus (monorepo java/ subtree)</description>

@@ -1,6 +1,6 @@
 # mailbus-j — the Java implementation of mailbus
 
-> Status: **scaffold (M1 in progress)**. The Python implementation under
+> Status: **v0.1.0 (M1-M3 complete, M4 in progress)** — Python = stable, Java = preview per the dual-run plan. The Python implementation under
 > `../python` (moving there in the monorepo restructure) is the stable one;
 > this subtree reaches parity over milestones M1–M4 (see the architecture
 > plan in the Vault: `Projects/mailbus/plans/2026-10-14-java-rewrite-architecture.md`).
@@ -45,12 +45,12 @@ to JDK 21, flip `<java.version>` in the root `pom.xml` and set
 mvn -pl mailbus-boot -am package -DskipTests
 
 # CLI mode (mirrors the Python surface)
-java -jar mailbus-boot/target/mailbus-boot-0.1.0-SNAPSHOT.jar send agent-x --msg "hello"
-java -jar mailbus-boot/target/mailbus-boot-0.1.0-SNAPSHOT.jar inbox agent-x
-java -jar mailbus-boot/target/mailbus-boot-0.1.0-SNAPSHOT.jar ack <msg-id>
+java -jar mailbus-boot/target/mailbus-boot-0.1.0.jar send agent-x --msg "hello"
+java -jar mailbus-boot/target/mailbus-boot-0.1.0.jar inbox agent-x
+java -jar mailbus-boot/target/mailbus-boot-0.1.0.jar ack <msg-id>
 
 # Serve mode (bare run) — :9815 (9814 stays with the Python serve)
-java -jar mailbus-boot/target/mailbus-boot-0.1.0-SNAPSHOT.jar
+java -jar mailbus-boot/target/mailbus-boot-0.1.0.jar
 
 Storage: mailbus.storage=sqlite (default; Flyway V1+V2, files under
 <data-dir>/inbox/<agent>/<id>.json + metadata.db index) | memory (demo).

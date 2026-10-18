@@ -3,6 +3,22 @@
 All notable changes to mailbus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [java-v0.1.0] — 2026-10-16
+
+First tagged release of the Java implementation (preview; Python stays the
+stable one during dual-run). Milestones M1-M3 complete:
+
+- M1 storage: files-as-SoT shards + SQLite index (Flyway V1-V4), python
+  store migration (918 real messages, idempotent), demo chain, trace/archive
+- M2 ops: typed event stream, patrol scheduler, notify channels (webhook +
+  file digest), acceptance with serve probe, OpenAPI contract (11 paths),
+  cockpit SPA hosted on the java serve
+- M3 frameworks: agent cards, declarative argv push, run_target dispatch
+  (windows/wsl/linux/docker, WSL-verified), transport-card import (14 real
+  cards), three-stage test-connection, live claude + container probes
+- M4 underway: container image (live-verified), Windows installer,
+  dual-run reconciliation tool
+
 ## [1.1.0] — 2026-10-15
 
 Monorepo restructure: one product, two implementations, pick either.

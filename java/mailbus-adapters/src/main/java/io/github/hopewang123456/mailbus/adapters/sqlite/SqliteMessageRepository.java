@@ -106,6 +106,11 @@ public class SqliteMessageRepository implements MessageRepository {
                 (rs, i) -> new AgentStateCount(rs.getString("agent"), rs.getString("state"), rs.getLong("n")));
     }
 
+    @Override
+    public java.util.List<String> allIds() {
+        return jdbc.queryForList("SELECT id FROM msg_index ORDER BY id", String.class);
+    }
+
     private static String filePathOf(MsgRecord r) {
         // Relative store path — files-as-SoT layout: inbox/<agent>/<id>.json
         return "inbox/" + r.toAgent() + "/" + r.id() + ".json";

@@ -40,4 +40,9 @@ public interface MessageRepository {
     default java.util.List<AgentStateCount> countByAgentAndState() {
         return java.util.List.of(); // indexes without aggregation support
     }
+
+    /** All message ids (reconciliation id-level diff). */
+    default java.util.List<String> allIds() {
+        return java.util.List.of();
+    }
 }

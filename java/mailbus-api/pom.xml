@@ -6,7 +6,7 @@
   <parent>
     <groupId>io.github.hopewang123456</groupId>
     <artifactId>mailbus-j</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
   </parent>
   <artifactId>mailbus-api</artifactId>
   <name>mailbus-api</name>
