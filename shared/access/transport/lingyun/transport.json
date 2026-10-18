@@ -1,0 +1,13 @@
+{
+  "schema": "mailbus-transport-v1",
+  "agent_id": "lingyun",
+  "framework": "claude_code",
+  "workspace": "/path/to/.mailbus/claude/lingyun",
+  "docker": {
+    "service": "claude-agent",
+    "profile": "lingyun"
+  },
+  "push": {
+    "cwd": "/path/to/.mailbus/claude/lingyun"
+  }
+}

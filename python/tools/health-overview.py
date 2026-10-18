@@ -22,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "python"))
 
-DEFAULT_DATA_DIR = os.environ.get("MAILBUS_DATA") or os.environ.get("MAILBUS_DATA_DIR") or str(ROOT / "store")
+DEFAULT_DATA_DIR = os.environ.get("MAILBUS_DATA") or os.environ.get("MAILBUS_DATA_DIR") or str(ROOT / "shared" / "store")
 
 
 def _config_path(data_dir: str) -> str:
@@ -192,30 +192,30 @@ def check_identity_local(agent: str, atype: str) -> dict:
     local_hermes = ROOT / ".local" / "hermes" / "profiles"
     if atype in ("hermes", "hermes_profile"):
         candidates = [str(local_hermes / agent / "SOUL.md"),
-                      str(ROOT / "store" / "identities" / agent / "SOUL.md"),
-                      str(ROOT / "store" / "identities" / "hermes" / agent / "SOUL.md"),
-                      str(ROOT / "store" / "identities" / "hermes" / agent / "IDENTITY.md")]
+                      str(ROOT / "shared" / "store" / "identities" / agent / "SOUL.md"),
+                      str(ROOT / "shared" / "store" / "identities" / "hermes" / agent / "SOUL.md"),
+                      str(ROOT / "shared" / "store" / "identities" / "hermes" / agent / "IDENTITY.md")]
     elif atype == "codex":
-        candidates = [str(ROOT / "store" / "identities" / "codex" / agent / "IDENTITY.md")]
+        candidates = [str(ROOT / "shared" / "store" / "identities" / "codex" / agent / "IDENTITY.md")]
     elif atype == "claude_code":
-        candidates = [str(ROOT / "store" / "identities" / "claude" / agent / "IDENTITY.md")]
+        candidates = [str(ROOT / "shared" / "store" / "identities" / "claude" / agent / "IDENTITY.md")]
     elif atype == "openclaw":
         candidates = [
-            str(ROOT / "store" / "identities" / "openclaw" / agent / "IDENTITY.md"),
-            str(ROOT / "store" / "identities" / "openclaw" / agent / "SOUL.md"),
-            str(ROOT / "store" / "identities" / agent / "SOUL.md"),
-            str(ROOT / "store" / "identities" / agent / "IDENTITY.md"),
+            str(ROOT / "shared" / "store" / "identities" / "openclaw" / agent / "IDENTITY.md"),
+            str(ROOT / "shared" / "store" / "identities" / "openclaw" / agent / "SOUL.md"),
+            str(ROOT / "shared" / "store" / "identities" / agent / "SOUL.md"),
+            str(ROOT / "shared" / "store" / "identities" / agent / "IDENTITY.md"),
         ]
     elif atype == "opencode":
         candidates = [
-            str(ROOT / "store" / "identities" / "opencode" / agent / "IDENTITY.md"),
-            str(ROOT / "store" / "identities" / "opencode" / agent / "SOUL.md"),
-            str(ROOT / "store" / "identities" / agent / "IDENTITY.md"),
+            str(ROOT / "shared" / "store" / "identities" / "opencode" / agent / "IDENTITY.md"),
+            str(ROOT / "shared" / "store" / "identities" / "opencode" / agent / "SOUL.md"),
+            str(ROOT / "shared" / "store" / "identities" / agent / "IDENTITY.md"),
         ]
     elif atype == "cursor":
         candidates = [
-            str(ROOT / "store" / "identities" / "cursor" / agent / "IDENTITY.md"),
-            str(ROOT / "store" / "identities" / agent / "IDENTITY.md"),
+            str(ROOT / "shared" / "store" / "identities" / "cursor" / agent / "IDENTITY.md"),
+            str(ROOT / "shared" / "store" / "identities" / agent / "IDENTITY.md"),
         ]
     else:
         candidates = []

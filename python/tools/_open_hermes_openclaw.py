@@ -18,7 +18,7 @@ from lib.adapters.runtime.cred_delivery import sync_browser_credentials_to_env
 from lib.infra.utils import to_wsl_path
 from tools.ops.launch_agent import _start_browser
 
-DATA = str(ROOT / "store")
+DATA = str(ROOT / "shared" / "store")
 
 
 def open_cli(title: str, cmd: str) -> None:

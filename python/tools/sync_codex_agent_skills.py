@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT / "python"))
 
 AGENT = os.environ.get("CODEX_AGENT", "").strip()
 CODEX_HOME = Path(os.environ.get("CODEX_HOME") or "/home/node/.codex")
-DATA_DIR = Path(os.environ.get("DATA_DIR") or ROOT / "store")
+DATA_DIR = Path(os.environ.get("DATA_DIR") or ROOT / "shared" / "store")
 SKILLS_ROOT = CODEX_HOME / "skills"
 AI_TOOLS = ROOT.parent
 

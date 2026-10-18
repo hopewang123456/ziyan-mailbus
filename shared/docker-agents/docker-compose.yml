@@ -32,20 +32,20 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ..:/mailbus
+      - ../..:/mailbus
       # Default: in-repo skills/rules (demo). Local Vault SoT → override.yml
-      - ../skills:/mailbus/skills:ro
-      - ../rules:/mailbus/rules:ro
-      - ../docs:/mailbus/docs:ro
-      - ../plans:/mailbus/plans:ro
-      - ../access:/mailbus/access:ro
+      - ../skills:/mailbus/shared/skills:ro
+      - ../rules:/mailbus/shared/rules:ro
+      - ../docs:/mailbus/shared/docs:ro
+      - ../plans:/mailbus/shared/plans:ro
+      - ../access:/mailbus/shared/access:ro
       - ${HERMES_DATA:-./workspaces/hermes-data}/.env:/run/hermes/.env:ro
       - ${HERMES_DATA:-./workspaces/hermes-data}/shared-memory:/hermes/shared-memory
       # HERMES_DATA 从宿主挂载到容器，供 doctor 等诊断工具访问
       - ${HERMES_DATA:-./workspaces/hermes-data}:/hermes-data/.hermes:ro
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - DATA_DIR=/mailbus/store
+      - DATA_DIR=/mailbus/shared/store
       - TZ=Asia/Shanghai
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
       # Defaults only — compose sync override injects config/services docker profile
@@ -59,21 +59,21 @@ services:
       - MAILBUS_INTERNAL_LLM_PROVIDER_PRIORITY=${MAILBUS_INTERNAL_LLM_PROVIDER_PRIORITY:-local,remote}
       - IMAGE_GENERATE_WEBHOOK_URL=${IMAGE_GENERATE_WEBHOOK_URL:-}
       - MAILBUS_API_PORT=${MAILBUS_API_PORT:-9814}
-      - MAILBUS_LAUNCH_QUEUE=/mailbus/run/launch-queue
+      - MAILBUS_LAUNCH_QUEUE=/mailbus/shared/run/launch-queue
       # Container name prefix for self_heal / doctor / resolver (compose project)
       - MAILBUS_CONTAINER_PREFIX=${MAILBUS_CONTAINER_PREFIX:-docker-agents}
       # File audit trail (orchestration); set 0 to disable
       - MAILBUS_FILE_AUDIT=${MAILBUS_FILE_AUDIT:-1}
       - MAILBUS_LOG_LEVEL=${MAILBUS_LOG_LEVEL:-info}
-      - MAILBUS_IDENTITIES_ROOT=${MAILBUS_IDENTITIES_ROOT:-/mailbus/access}
+      - MAILBUS_IDENTITIES_ROOT=${MAILBUS_IDENTITIES_ROOT:-/mailbus/shared/access}
       # In-container knowledge roots = mount points (never host Vault abs paths)
-      - MAILBUS_SKILLS_ROOT=/mailbus/skills
-      - MAILBUS_RULES_ROOT=/mailbus/rules
-      - MAILBUS_DOCS_ROOT=/mailbus/docs
-      - MAILBUS_PLANS_ROOT=/mailbus/plans
+      - MAILBUS_SKILLS_ROOT=/mailbus/shared/skills
+      - MAILBUS_RULES_ROOT=/mailbus/shared/rules
+      - MAILBUS_DOCS_ROOT=/mailbus/shared/docs
+      - MAILBUS_PLANS_ROOT=/mailbus/shared/plans
       - TEAM_PACK_ROOT=/mailbus/team-pack
     restart: unless-stopped
-    command: ["python3", "-m", "bus", "serve", "--host", "0.0.0.0", "--port", "9814", "--data-dir", "/mailbus/store"]
+    command: ["python3", "-m", "bus", "serve", "--host", "0.0.0.0", "--port", "9814", "--data-dir", "/mailbus/shared/store"]
 
   iii-init:
     image: busybox:1.36
@@ -117,7 +117,7 @@ services:
     networks:
       - mailbus-net
     volumes:
-      - ${NODE_MODULES:-../node_modules}:/node_modules:ro
+      - ${NODE_MODULES:?set NODE_MODULES in shared/docker-agents/.env}:/node_modules:ro
     working_dir: /node_modules/@agentmemory/agentmemory
     environment:
       - NODE_PATH=/node_modules
@@ -159,19 +159,19 @@ services:
       # 会 mkdir memories，dangling symlink 直接 FileExistsError——挂真源让链路生效
       - /mnt/e/Obsidian/Vaults/Agent/02-members/022-category/0221-hermes/02214-memory:/mnt/e/Obsidian/Vaults/Agent/02-members/022-category/0221-hermes/02214-memory
       - ../store:/mailbus/store
-      - ../python/lib:/mailbus/python/lib:ro
-      - ../python/tools:/mailbus/python/tools:ro
-      - ../skills:/mailbus/skills:ro
-      - ../rules:/mailbus/rules:ro
-      - ../access:/mailbus/access:ro
-      - ../access/external-tools:/mailbus/external-tools:ro
+      - ../../python/lib:/mailbus/python/lib:ro
+      - ../../python/tools:/mailbus/python/tools:ro
+      - ../skills:/mailbus/shared/skills:ro
+      - ../rules:/mailbus/shared/rules:ro
+      - ../access:/mailbus/shared/access:ro
+      - ../access/external-tools:/mailbus/shared/external-tools:ro
       - ../access/hermes/.sync:/mailbus/access/hermes/.sync
       # Runtime skills SoT = Vault via profiles/*/skills under HERMES_DATA;
       # .sync is optional framework-skill mirror only (not Hermes load path).
       - ../store/inbox:/home/hermes/inbox:ro
     environment:
       - HERMES_HOME=/home/hermes/.hermes
-      - DATA_DIR=/mailbus/store
+      - DATA_DIR=/mailbus/shared/store
       - PYTHONPATH=/mailbus
       - AGENTMEMORY_URL=http://iii-engine:3111
       - TZ=Asia/Shanghai
@@ -203,17 +203,17 @@ services:
     volumes:
       - ${OPENCLAW_WORKSPACE:-./workspaces/openclaw}:/workspace
       - ../store:/mailbus/store
-      - ../python/tools:/mailbus/python/tools:ro
-      - ../python/lib:/mailbus/python/lib:ro
+      - ../../python/tools:/mailbus/python/tools:ro
+      - ../../python/lib:/mailbus/python/lib:ro
       # 热挂 entrypoint，避免每次改配对逻辑都要 rebuild 镜像
       - ./openclaw-agent/entrypoint.sh:/entrypoint.sh:ro
-      - ../skills:/mailbus/skills:ro
-      - ../rules:/mailbus/rules:ro
+      - ../skills:/mailbus/shared/skills:ro
+      - ../rules:/mailbus/shared/rules:ro
       # Default: workspace skills/memory. Local Vault overlay: override.yml
       - ${OPENCLAW_WORKSPACE:-./workspaces/openclaw}/skills:/workspace/skills:ro
       - ${OPENCLAW_WORKSPACE:-./workspaces/openclaw}/memory:/workspace/memory
-      - ../access:/mailbus/access:ro
-      - ../access/external-tools:/mailbus/external-tools:ro
+      - ../access:/mailbus/shared/access:ro
+      - ../access/external-tools:/mailbus/shared/external-tools:ro
       - ../store/inbox:/inbox:ro
       - ${HERMES_DATA:-./workspaces/hermes-data}:/hermes-secrets:ro
     environment:
@@ -248,16 +248,16 @@ services:
       - mailbus-net
     volumes:
       - ../store:/mailbus/store
-      - ../python/tools:/mailbus/python/tools:ro
-      - ../python/lib:/mailbus/python/lib:ro
-      - ../skills:/mailbus/skills:ro
-      - ../rules:/mailbus/rules:ro
-      - ../access:/mailbus/access:ro
-      - ../access/external-tools:/mailbus/external-tools:ro
+      - ../../python/tools:/mailbus/python/tools:ro
+      - ../../python/lib:/mailbus/python/lib:ro
+      - ../skills:/mailbus/shared/skills:ro
+      - ../rules:/mailbus/shared/rules:ro
+      - ../access:/mailbus/shared/access:ro
+      - ../access/external-tools:/mailbus/shared/external-tools:ro
       - ${CODEX_WORKSPACE:-./workspaces/codex}:/workspace/codex:ro
       - ${HERMES_DATA:-./workspaces/hermes-data}/.env:/run/hermes/.env:ro
       - ${CODEX_SKILLS:-./workspaces/codex-skills}:/home/node/.codex/skills
-      - ${NODE_MODULES:-../node_modules}:/node_modules:ro
+      - ${NODE_MODULES:?set NODE_MODULES in shared/docker-agents/.env}:/node_modules:ro
       - ./codex-agent/deepseek-model-catalog.json:/usr/local/share/codex/deepseek-model-catalog.json:ro
       - ./codex-agent/deepseek-model-aliases.json:/usr/local/share/codex/deepseek-model-aliases.json:ro
       # CODEX_HOME 卷持久化：codexui-password + auth.json 跨重建保持（登录 cookie 免密）
@@ -308,16 +308,16 @@ services:
       - mailbus-net
     volumes:
       - ../store:/mailbus/store
-      - ../python/tools:/mailbus/python/tools:ro
-      - ../python/lib:/mailbus/python/lib:ro
-      - ../skills:/mailbus/skills:ro
-      - ../rules:/mailbus/rules:ro
-      - ../access:/mailbus/access:ro
-      - ../access/external-tools:/mailbus/external-tools:ro
+      - ../../python/tools:/mailbus/python/tools:ro
+      - ../../python/lib:/mailbus/python/lib:ro
+      - ../skills:/mailbus/shared/skills:ro
+      - ../rules:/mailbus/shared/rules:ro
+      - ../access:/mailbus/shared/access:ro
+      - ../access/external-tools:/mailbus/shared/external-tools:ro
       - ${CODEX_REVIEW_WORKSPACE:-./workspaces/codex-review}:/workspace/codex-review:ro
       - ${HERMES_DATA:-./workspaces/hermes-data}/.env:/run/hermes/.env:ro
       - ${CODEX_SKILLS:-./workspaces/codex-skills}:/home/node/.codex/skills
-      - ${NODE_MODULES:-../node_modules}:/node_modules:ro
+      - ${NODE_MODULES:?set NODE_MODULES in shared/docker-agents/.env}:/node_modules:ro
       - ./codex-agent/deepseek-model-catalog.json:/usr/local/share/codex/deepseek-model-catalog.json:ro
       - ./codex-agent/deepseek-model-aliases.json:/usr/local/share/codex/deepseek-model-aliases.json:ro
       - codex-review-home:/home/node/.codex
@@ -360,11 +360,11 @@ services:
       - mailbus-net
     volumes:
       - ../store:/mailbus/store
-      - ../python/tools:/mailbus/python/tools:ro
-      - ../skills:/mailbus/skills:ro
-      - ../rules:/mailbus/rules:ro
-      - ../access:/mailbus/access:ro
-      - ../access/external-tools:/mailbus/external-tools:ro
+      - ../../python/tools:/mailbus/python/tools:ro
+      - ../skills:/mailbus/shared/skills:ro
+      - ../rules:/mailbus/shared/rules:ro
+      - ../access:/mailbus/shared/access:ro
+      - ../access/external-tools:/mailbus/shared/external-tools:ro
       - ./codex-agent/wait-agentmemory.sh:/mailbus/docker-agents/codex-agent/wait-agentmemory.sh:ro
       - ${OPENCODE_ROOT:-./workspaces/opencode}:/workspace/opencode:rw
       - ${OPENCODE_ROOT:-./workspaces/opencode}/skills:/workspace/opencode/skills
@@ -406,10 +406,10 @@ services:
     volumes:
       - ${DSH_WORKSPACE:-./workspaces/dsh}:/home/dsh/.dsh
       - ../store:/mailbus/store
-      - ../skills:/mailbus/skills:ro
-      - ../rules:/mailbus/rules:ro
-      - ../access:/mailbus/access:ro
-      - ../access/external-tools:/mailbus/external-tools:ro
+      - ../skills:/mailbus/shared/skills:ro
+      - ../rules:/mailbus/shared/rules:ro
+      - ../access:/mailbus/shared/access:ro
+      - ../access/external-tools:/mailbus/shared/external-tools:ro
     environment:
       - TZ=Asia/Shanghai
       - DSH_HOME=/home/dsh/.dsh

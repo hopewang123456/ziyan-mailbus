@@ -16,7 +16,7 @@ from lib.adapters.frameworks.claude_launch import launch_claude_cli
 def main() -> int:
     p = argparse.ArgumentParser(description="Launch Claude Code interactive CLI")
     p.add_argument("agent")
-    p.add_argument("--data-dir", default=os.environ.get("DATA_DIR") or os.path.join(ROOT, "store"))
+    p.add_argument("--data-dir", default=os.environ.get("DATA_DIR") or os.path.join(ROOT, "shared", "store"))
     args = p.parse_args()
     try:
         info = launch_claude_cli(args.agent, args.data_dir)

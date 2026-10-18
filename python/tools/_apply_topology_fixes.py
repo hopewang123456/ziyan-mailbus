@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CFG = ROOT / "store" / "config.json"
+CFG = ROOT / "shared" / "store" / "config.json"
 sys.path.insert(0, str(ROOT / "python"))
 
 
@@ -62,7 +62,7 @@ def main() -> int:
     print("=== ensure claude ttyd ===")
     for a in ("lingyun", "lingyan"):
         try:
-            info = ensure_claude_web(a, str(ROOT / "store"), wait_seconds=30)
+            info = ensure_claude_web(a, str(ROOT / "shared" / "store"), wait_seconds=30)
             print(a, "OK", info)
         except Exception as e:
             print(a, "FAIL", e)

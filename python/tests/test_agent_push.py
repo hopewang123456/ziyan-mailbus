@@ -25,7 +25,7 @@ class TestAgentPush(unittest.TestCase):
                     "deepseek-flash": {"codex": "--model deepseek-v4-flash"},
                 },
             },
-            data_dir=os.path.join(os.path.dirname(__file__), "..", "store"),
+            data_dir=os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store"),
             prompt="hello task",
         )
         self.assertIsNotNone(spec)
@@ -52,7 +52,7 @@ class TestAgentPush(unittest.TestCase):
                 "push": {"cwd": r"<PROJECT_ROOT>"},
             },
             {"models": {"deepseek-flash": {"claude_code": "--model deepseek-v4-flash"}}},
-            data_dir=os.path.join(os.path.dirname(__file__), "..", "store"),
+            data_dir=os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store"),
             prompt="ping",
         )
         self.assertIsNotNone(spec)

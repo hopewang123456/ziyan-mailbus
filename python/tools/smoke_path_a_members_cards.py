@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "python"))
 VAULT = Path(os.environ.get("OBSIDIAN_VAULT", r"E:\Obsidian\Vaults"))
 PATH_MAP = VAULT / "Agent" / "_path-map.json"
 API = os.environ.get("MAILBUS_API", "http://127.0.0.1:9814")
-DATA = str(ROOT / "store")
+DATA = str(ROOT / "shared" / "store")
 
 # Topology defaults (local stack) — also written onto cards
 TOPOLOGY = {
@@ -336,7 +336,7 @@ def main() -> int:
 
     probe_ports()
 
-    out = ROOT / "store" / "reports" / "path-a-members-card-smoke.json"
+    out = ROOT / "shared" / "store" / "reports" / "path-a-members-card-smoke.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({"configured": configured, "launches": results}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print("report:", out)

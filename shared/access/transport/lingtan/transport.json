@@ -1,0 +1,11 @@
+{
+  "schema": "mailbus-transport-v1",
+  "agent_id": "lingtan",
+  "framework": "dsh",
+  "docker": {
+    "service": "dsh",
+    "compose_service": "dsh",
+    "container": "mailbus-dsh",
+    "profile": "headless"
+  }
+}

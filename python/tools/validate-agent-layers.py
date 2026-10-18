@@ -27,7 +27,7 @@ def _agent_archetypes() -> dict[str, str]:
         if rec.get("archetype")
     }
 
-INDEX = ROOT / "store" / "agents" / "json" / "skills-index.json"
+INDEX = ROOT / "shared" / "store" / "agents" / "json" / "skills-index.json"
 OPENCODE_AGENTS = ROOT.parent / "opencode" / "AGENTS.md"
 
 

@@ -112,7 +112,7 @@ def render_config_toml(
 def main() -> int:
     ap = argparse.ArgumentParser(description="同步 Codex Desktop 配置")
     ap.add_argument("agent", help="agent key，如 agent-g / agent-e")
-    ap.add_argument("--data-dir", default=os.path.join(ROOT, "store"))
+    ap.add_argument("--data-dir", default=os.path.join(ROOT, "shared", "store"))
     ap.add_argument("--codex-home", default=None)
     ap.add_argument("--gateway-port", type=int, default=None)
     args = ap.parse_args()

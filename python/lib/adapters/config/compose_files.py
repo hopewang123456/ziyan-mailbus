@@ -11,7 +11,7 @@ _SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]+\.ya?ml$", re.I)
 
 def compose_roots(mailbus_root: str | Path) -> list[Path]:
     root = Path(mailbus_root).resolve()
-    return [root / "docker-agents", root]
+    return [root / "docker-agents", root.parent / "docker-agents", root]  # shared 布局: root=shared
 
 
 def _resolve_under_roots(mailbus_root: str | Path, rel: str) -> Path:

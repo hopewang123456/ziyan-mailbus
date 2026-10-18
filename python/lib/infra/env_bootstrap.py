@@ -49,7 +49,7 @@ def load_mailbus_env() -> None:
     # monorepo 布局：.env 与 docker-agents/.env 在仓库根（infra→lib→python→repo）。
     root = Path(__file__).resolve().parents[3]
     _parse_env_file(root / ".env")
-    _parse_env_file(root / "docker-agents" / ".env")
+    _parse_env_file(root / "shared" / "docker-agents" / ".env")
     if not os.environ.get("MAILBUS_INTERNAL_LLM_API_KEY"):
         fallback = (
             os.environ.get("DEEPSEEK_API_KEY")
@@ -66,11 +66,11 @@ def load_mailbus_env() -> None:
         os.environ.setdefault("COMPOSE_PROJECT_NAME", "docker-agents")
     root_str = str(root)
     os.environ.setdefault("MAIL_DIR", root_str)
-    os.environ.setdefault("MAILBUS_ROOT", os.environ.get("MAILBUS_ROOT") or root_str)
+    os.environ.setdefault("MAILBUS_ROOT", os.environ.get("MAILBUS_ROOT") or str(root / "shared"))  # v1.2: 资产根=shared
     data = (
         os.environ.get("MAILBUS_DATA")
         or os.environ.get("MAILBUS_DATA_DIR")
-        or str(root / "store")
+        or str(root / "shared" / "store")  # v1.2: store 在 shared/
     )
     os.environ.setdefault("MAILBUS_DATA", data)
     os.environ.setdefault("MAILBUS_API_PORT", os.environ.get("MAILBUS_API_PORT") or "9814")
@@ -85,7 +85,7 @@ def mailbus_paths() -> dict[str, str]:
     """返回常用路径（需先 load_mailbus_env）。未配置的框架路径为空串。"""
     load_mailbus_env()
     root = Path(os.environ["MAILBUS_ROOT"]).resolve()
-    compose = root / "docker-agents"
+    compose = root / "docker-agents"  # MAILBUS_ROOT=shared, 故= shared/docker-agents
     return {
         "root": str(root),
         "mail_dir": os.environ.get("MAIL_DIR", str(root)),

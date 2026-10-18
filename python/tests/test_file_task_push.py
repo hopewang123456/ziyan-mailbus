@@ -84,7 +84,7 @@ class TestFileTaskPush(unittest.TestCase):
 
     def test_role_flow_pursue_to_planner(self):
         from lib.application.orchestration.role_flow import get_next_role, get_next_role_type
-        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "store")  # repo-root store
+        data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "shared", "store")  # v1.2: shared store
         self.assertEqual(get_next_role("市场拓展官", "pursue"), "方案设计师")
         self.assertEqual(get_next_role_type(4, "pursue", data_dir), 1)
 

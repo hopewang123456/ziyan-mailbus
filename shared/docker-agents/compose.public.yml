@@ -29,14 +29,14 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ..:/mailbus
+      - ../..:/mailbus
       - mailbus-store:/mailbus/store
     environment:
-      - DATA_DIR=/mailbus/store
+      - DATA_DIR=/mailbus/shared/store
       - TZ=UTC
       - AGENTMEMORY_URL=${AGENTMEMORY_URL:-http://iii-engine:3111}
       - MAILBUS_OLLAMA_BASE_URL=${MAILBUS_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      - MAILBUS_IDENTITIES_ROOT=${MAILBUS_IDENTITIES_ROOT:-/mailbus/access}
+      - MAILBUS_IDENTITIES_ROOT=${MAILBUS_IDENTITIES_ROOT:-/mailbus/shared/access}
       # Align with full stack defaults used by resolver / audit / logging
       - MAILBUS_CONTAINER_PREFIX=${MAILBUS_CONTAINER_PREFIX:-docker-agents}
       - MAILBUS_FILE_AUDIT=${MAILBUS_FILE_AUDIT:-1}
@@ -81,7 +81,7 @@ services:
     volumes:
       - hermes-data:/home/hermes/.hermes
       - mailbus-store:/mailbus/store
-      - ../python/tools:/mailbus/python/tools:ro
+      - ../../python/tools:/mailbus/python/tools:ro
     environment:
       - HERMES_HOME=/home/hermes/.hermes
       - AGENTMEMORY_URL=http://iii-engine:3111
@@ -107,8 +107,8 @@ services:
     volumes:
       - openclaw-workspace:/workspace
       - mailbus-store:/mailbus/store
-      - ../python/tools:/mailbus/python/tools:ro
-      - ../python/lib:/mailbus/python/lib:ro
+      - ../../python/tools:/mailbus/python/tools:ro
+      - ../../python/lib:/mailbus/python/lib:ro
     environment:
       - TZ=UTC
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}

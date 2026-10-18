@@ -16,7 +16,7 @@ from lib.adapters.frameworks.desktop_launch import launch_desktop
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("agent")
-    ap.add_argument("--data-dir", default=os.path.join(ROOT, "store"))
+    ap.add_argument("--data-dir", default=os.path.join(ROOT, "shared", "store"))
     args = ap.parse_args()
     try:
         result = launch_desktop(args.agent, args.data_dir)

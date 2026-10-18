@@ -38,7 +38,7 @@ def _to_container_mailbus_path(host_path: str) -> str:
 def _secrets_path() -> str:
     return os.environ.get(
         "MAILBUS_SECRETS",
-        os.path.join(_repo_root(), "docker-agents", ".env.secrets"),
+        os.path.join(_repo_root(), "shared", "docker-agents", ".env.secrets"),
     )
 
 

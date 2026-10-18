@@ -10,7 +10,7 @@ from pathlib import Path
 from shutil import which
 
 ROOT = Path(__file__).resolve().parents[2]
-CFG = ROOT / "store" / "config.json"
+CFG = ROOT / "shared" / "store" / "config.json"
 
 
 def code(url: str, timeout: float = 4.0):

@@ -96,7 +96,7 @@ class TestPublishedExampleTemplates(unittest.TestCase):
     def test_compose_env_example(self):
         from lib.infra.constants import REPO_ROOT
 
-        p = Path(REPO_ROOT) / "docker-agents" / ".env.example"
+        p = Path(REPO_ROOT / "shared" / "docker-agents" / ".env.example")
         self.assertTrue(p.is_file(), "missing docker-agents/.env.example")
         text = p.read_text(encoding="utf-8")
         for key in (
@@ -124,12 +124,12 @@ class TestPublishedExampleTemplates(unittest.TestCase):
         from lib.infra.constants import PROJECT_ROOT, REPO_ROOT
 
         for root, rel in (
-            (REPO_ROOT, "docker-agents/docker-compose.override.example.yml"),
+            (REPO_ROOT / "shared", "docker-agents/docker-compose.override.example.yml"),
             (PROJECT_ROOT, "migrate/env.template"),
             (PROJECT_ROOT, "config/env.template"),
         ):
             self.assertTrue((root / rel).is_file(), f"missing {rel}")
-        override = (Path(REPO_ROOT) / "docker-agents/docker-compose.override.example.yml").read_text(
+        override = (Path(REPO_ROOT) / "shared/docker-agents/docker-compose.override.example.yml").read_text(
             encoding="utf-8"
         )
         self.assertIn("DSH_WORKSPACE", override)

@@ -39,7 +39,7 @@ RECOVERY_COOLDOWN_H = 1.0  # 恢复通知的最小间隔，防抖
 
 
 def _default_data_dir() -> str:
-    return os.path.join(_ROOT, "store")
+    return os.path.join(_ROOT, "shared", "store")
 
 
 def _load_state(data_dir: str) -> dict:

@@ -57,7 +57,7 @@ def seed_runtime_from_sot(tmp: str, *, extra_config: dict | None = None) -> None
 
 def copy_store_subdir_if_present(tmp: str, sub: str) -> None:
     """Legacy helper: copy mail/store/{sub} when populated (else no-op)."""
-    root = os.path.join(os.path.dirname(__file__), "..", "store")
+    root = os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store")
     src = os.path.join(root, sub)
     dst = os.path.join(tmp, sub)
     if os.path.isdir(src) and os.listdir(src):
@@ -67,7 +67,7 @@ def copy_store_subdir_if_present(tmp: str, sub: str) -> None:
 def load_pursue_intake_example() -> dict:
     for base in (
         os.path.join(os.path.dirname(__file__), "..", "examples"),
-        os.path.join(os.path.dirname(__file__), "..", "store", "examples"),
+        os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store", "examples"),
     ):
         path = os.path.join(base, "order-intake.pursue.example.json")
         if os.path.isfile(path):
@@ -83,7 +83,7 @@ def load_golden_a2a_path(letter: str) -> dict:
         raise ValueError(f"golden path must be a-d, got {letter!r}")
     name = f"golden-a2a-path-{letter}.json"
     for base in (
-        os.path.join(os.path.dirname(__file__), "..", "store", "examples"),
+        os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store", "examples"),
         os.path.join(os.path.dirname(__file__), "..", "examples"),
     ):
         path = os.path.join(base, name)

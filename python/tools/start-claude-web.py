@@ -113,13 +113,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     agent = args[0]
     port = int(args[1]) if len(args) > 1 else 9260
-    data_dir = args[2] if len(args) > 2 else os.path.join(ROOT, "store")
+    data_dir = args[2] if len(args) > 2 else os.path.join(ROOT, "shared", "store")
 
     env_root = ROOT
     default_data = (
         os.environ.get("MAILBUS_DATA")
         or (os.path.join(os.environ["MAILBUS_ROOT"], "store") if os.environ.get("MAILBUS_ROOT") else "")
-        or os.path.join(ROOT, "store")
+        or os.path.join(ROOT, "shared", "store")
     )
     data_dir = data_dir or default_data
 

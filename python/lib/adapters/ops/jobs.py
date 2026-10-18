@@ -660,7 +660,8 @@ def run_agent_cli_version_check(data_dir: str) -> int:
 def run_a2a_spec_sync(data_dir: str) -> int:
     """同步 A2A 协议 tracker（tools/a2a-sync-spec.py）。"""
     root = _mail_root(data_dir)
-    script = os.path.join(root, "python", "tools", "a2a-sync-spec.py")
+    from lib.infra.constants import REPO_ROOT as _RR
+    script = os.path.join(str(_RR), "python", "tools", "a2a-sync-spec.py")
     if not os.path.isfile(script):
         return 0
     try:

@@ -28,32 +28,32 @@ from lib.infra.constants import MAILBUS_ROOT, MAILBUS_ROOT  # noqa: E402
 from lib.infra.env_bootstrap import mailbus_paths  # noqa: E402
 from lib.adapters.config.sync_layers import normalize_host_path  # noqa: E402
 
-COMPOSE_PATH = ROOT / "docker-agents" / "docker-compose.yml"
-OVERRIDE_PATH = ROOT / "docker-agents" / "docker-compose.override.yml"
+COMPOSE_PATH = ROOT / "shared" / "docker-agents" / "docker-compose.yml"
+OVERRIDE_PATH = ROOT / "shared" / "docker-agents" / "docker-compose.override.yml"
 
 # Legacy mounts removed in Phase 3.3 (#17 #27 #34)
 FORBIDDEN_PATTERNS = (
     re.compile(r"/mailbus/adapters"),
     re.compile(r"/mailbus/roles"),
     re.compile(r"/mailbus/identities"),
-    re.compile(r"mail/external-tools:"),  # legacy alias sunset（现行挂载是 /mailbus/external-tools）
+    re.compile(r"mail/external-tools:"),  # legacy alias sunset（现行挂载是 /mailbus/shared/external-tools）
     re.compile(r"adapters/\.sync"),
 )
 
 # Required on agent-facing services (hermes, openclaw, codex*, opencode, mailbus)
 REQUIRED_AGENT_MOUNTS = (
-    "/mailbus/skills",
-    "/mailbus/access",
-    "/mailbus/rules",
+    "/mailbus/shared/skills",
+    "/mailbus/shared/access",
+    "/mailbus/shared/rules",
 )
 
 MAILBUS_SERVICE_MOUNTS = (
-    "/mailbus/skills",
-    "/mailbus/access",
-    "/mailbus/rules",
+    "/mailbus/shared/skills",
+    "/mailbus/shared/access",
+    "/mailbus/shared/rules",
 )
 
-HERMES_EXTRA = ("/mailbus/access/hermes/.sync",)
+HERMES_EXTRA = ("/mailbus/shared/access/hermes/.sync",)
 
 
 def _host_prefix(arg: str, mail_root: Path) -> str:
@@ -98,10 +98,10 @@ def standard_mail_mounts(host_prefix: str, *, mail_root: Path | None = None) -> 
     hp = _to_compose_host(root, host_prefix)
     lines = [
         f"      - {hp}:/mailbus",
-        f"      - {hp}/skills:/mailbus/skills:ro",
-        f"      - {hp}/rules:/mailbus/rules:ro",
-        f"      - {hp}/access:/mailbus/access:ro",
-        f"      - {hp}/access/external-tools:/mailbus/external-tools:ro",
+        f"      - {hp}/skills:/mailbus/shared/skills:ro",
+        f"      - {hp}/rules:/mailbus/shared/rules:ro",
+        f"      - {hp}/access:/mailbus/shared/access:ro",
+        f"      - {hp}/access/external-tools:/mailbus/shared/external-tools:ro",
     ]
     return lines
 
@@ -112,11 +112,11 @@ def hermes_service_mounts(host_prefix: str, *, mail_root: Path | None = None) ->
     lines = [
         f"      - {hp}/store:/mailbus/store",
         f"      - {hp}/tools:/mailbus/tools:ro",
-        f"      - {hp}/skills:/mailbus/skills:ro",
-        f"      - {hp}/rules:/mailbus/rules:ro",
-        f"      - {hp}/access:/mailbus/access:ro",
-        f"      - {hp}/access/external-tools:/mailbus/external-tools:ro",
-        f"      - {hp}/access/hermes/.sync:/mailbus/access/hermes/.sync",
+        f"      - {hp}/skills:/mailbus/shared/skills:ro",
+        f"      - {hp}/rules:/mailbus/shared/rules:ro",
+        f"      - {hp}/access:/mailbus/shared/access:ro",
+        f"      - {hp}/access/external-tools:/mailbus/shared/external-tools:ro",
+        f"      - {hp}/access/hermes/.sync:/mailbus/shared/access/hermes/.sync",
     ]
     return lines
 
@@ -258,10 +258,10 @@ def emit_override(host_prefix: str = "", *, mail_root: Path | None = None) -> st
         f"      - {data}:/mailbus/store",
         f"      - {mroot}/tools:/mailbus/tools:ro",
         f"      - {mroot}/lib:/mailbus/lib:ro",
-        f"      - {skills_hp}:/mailbus/skills:ro",
-        f"      - {rules_hp}:/mailbus/rules:ro",
-        f"      - {mroot}/access:/mailbus/access:ro",
-        f"      - {mroot}/access/external-tools:/mailbus/external-tools:ro",
+        f"      - {skills_hp}:/mailbus/shared/skills:ro",
+        f"      - {rules_hp}:/mailbus/shared/rules:ro",
+        f"      - {mroot}/access:/mailbus/shared/access:ro",
+        f"      - {mroot}/access/external-tools:/mailbus/shared/external-tools:ro",
     ]
     # profiles/*/skills may symlink into a Vault tree; containers that need
     # those targets must bind-mount the Vault root in override.yml (same host path).
@@ -287,7 +287,7 @@ def emit_override(host_prefix: str = "", *, mail_root: Path | None = None) -> st
         vols = list(shared)
         if svc == "hermes":
             # .sync = optional framework-skill mirror; runtime SoT via HERMES_DATA / settings
-            vols.append(f"      - {mroot}/access/hermes/.sync:/mailbus/access/hermes/.sync")
+            vols.append(f"      - {mroot}/access/hermes/.sync:/mailbus/shared/access/hermes/.sync")
             inbox = str(Path(data) / "inbox").replace("\\", "/")
             vols.append(f"      - {inbox}:/home/hermes/inbox:ro")
         vols.extend(infra.get(svc, []))
@@ -390,10 +390,10 @@ def check_compose(compose_text: str) -> list[str]:
     for req in REQUIRED_AGENT_MOUNTS:
         if req not in compose_text:
             errors.append(f"missing required mount target: {req}")
-    if "/mailbus/access/hermes/.sync" not in compose_text:
-        errors.append("missing hermes .sync mount: /mailbus/access/hermes/.sync")
-    if "/mailbus/external-tools" not in compose_text:
-        errors.append("missing external-tools mount: /mailbus/external-tools")
+    if "/mailbus/shared/access/hermes/.sync" not in compose_text:
+        errors.append("missing hermes .sync mount: /mailbus/shared/access/hermes/.sync")
+    if "/mailbus/shared/external-tools" not in compose_text:
+        errors.append("missing external-tools mount: /mailbus/shared/external-tools")
     return errors
 
 

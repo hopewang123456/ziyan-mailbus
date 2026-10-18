@@ -15,7 +15,7 @@ from lib.adapters.frameworks.claude_browser_launch import ensure_claude_web, lau
 def main() -> int:
     p = argparse.ArgumentParser(description="Launch Claude Code browser (ttyd)")
     p.add_argument("agent")
-    p.add_argument("--data-dir", default=os.environ.get("DATA_DIR") or os.path.join(ROOT, "store"))
+    p.add_argument("--data-dir", default=os.environ.get("DATA_DIR") or os.path.join(ROOT, "shared", "store"))
     p.add_argument("--ensure-only", action="store_true", help="Start ttyd without opening browser")
     p.add_argument("--wait", type=int, default=15)
     args = p.parse_args()

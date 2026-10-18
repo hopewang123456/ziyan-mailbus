@@ -1,0 +1,14 @@
+{
+  "schema": "mailbus-transport-v1",
+  "agent_id": "lingjian",
+  "framework": "codex",
+  "workspace": "/path/to/lingjian",
+  "docker": {
+    "service": "codex-agent",
+    "compose_service": "lingjian",
+    "profile": "lingjian"
+  },
+  "push": {
+    "cwd": "/path/to/lingjian"
+  }
+}

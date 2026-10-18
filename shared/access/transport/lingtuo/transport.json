@@ -1,0 +1,11 @@
+{
+  "schema": "mailbus-transport-v1",
+  "agent_id": "lingtuo",
+  "framework": "hermes_profile",
+  "docker": {
+    "service": "hermes",
+    "compose_service": "hermes",
+    "profile": "lingtuo",
+    "port": 9126
+  }
+}

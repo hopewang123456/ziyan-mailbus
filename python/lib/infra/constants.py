@@ -27,7 +27,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]  # python/lib/infra → pytho
 PROJECT_ROOT_STR = str(PROJECT_ROOT)
 REPO_ROOT = Path(__file__).resolve().parents[3]  # → monorepo 仓库根（.env/store/共享资产）
 REPO_ROOT_STR = str(REPO_ROOT)
-MAILBUS_ROOT = _env_path("MAILBUS_ROOT", REPO_ROOT)
+MAILBUS_ROOT = _env_path("MAILBUS_ROOT", REPO_ROOT / "shared")  # v1.2: 共享资产根（语言无关层）
 MAILBUS_ROOT_STR = str(MAILBUS_ROOT)
 
 TEAM_PACK_ROOT = _env_path("TEAM_PACK_ROOT", MAILBUS_ROOT / "team-pack")

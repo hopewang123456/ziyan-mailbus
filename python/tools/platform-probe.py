@@ -19,7 +19,7 @@ if ROOT not in sys.path:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Probe Agent framework instances on the current platform")
     ap.add_argument("--json", action="store_true", help="emit JSON to stdout")
-    ap.add_argument("--data-dir", default=os.environ.get("MAILBUS_DATA_DIR", os.environ.get("DATA_DIR", os.path.join(ROOT, "store"))))
+    ap.add_argument("--data-dir", default=os.environ.get("MAILBUS_DATA_DIR", os.environ.get("DATA_DIR", os.path.join(ROOT, "shared", "store"))))
     ap.add_argument("--framework", default="", help="probe a single framework/instance (default: all)")
     args = ap.parse_args()
 

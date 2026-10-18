@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # python 树(tools/harness)
-REPO = os.path.dirname(ROOT)  # monorepo 仓库根(store/examples)
+REPO = os.path.join(os.path.dirname(ROOT), "shared")  # v1.2: store 在 shared/
 sys.path.insert(0, ROOT)
 
 _GENERATE_REPORT_PATH = os.path.join(ROOT, "tools", "harness", "generate-report.py")

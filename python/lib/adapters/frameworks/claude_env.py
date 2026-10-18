@@ -422,7 +422,7 @@ def resolve_project_dir(agent_cfg: dict, plat_cfg: dict, agent_name: str = "") -
         return _to_fs_path(default)
     from lib.infra.env_bootstrap import mailbus_paths
 
-    install = Path(mailbus_paths()["root"]).parent
+    install = os.path.dirname(os.path.normpath(mailbus_paths()["root"]))  # root=shared → repo 根
     # Docker 容器内：mailbus 挂载在 /mailbus，parent 为容器根 /，需转 WSL 宿主机路径
     if str(install) == "/" and os.path.exists("/.dockerenv"):
         return os.environ.get("MAILBUS_PROJECT_ROOT", "<PROJECT_ROOT>")
@@ -510,7 +510,7 @@ def resolve_ttyd_bin() -> str:
     """解析 ttyd：本机 PATH / 捆绑二进制 / Windows 下走 WSL which ttyd。"""
     for cand in (
         shutil.which("ttyd"),
-        os.path.join(ROOT, "docker-agents", "codex-agent", "bin", "ttyd.x86_64"),
+        os.path.join(ROOT, "..", "shared", "docker-agents", "codex-agent", "bin", "ttyd.x86_64"),
         os.path.join(ROOT, "tools", "bin", "ttyd.x86_64"),
     ):
         if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):

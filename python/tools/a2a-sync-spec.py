@@ -17,7 +17,7 @@ from lib.infra.utils import json_read, json_write
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Sync A2A protocol tracker")
-    ap.add_argument("--data-dir", type=Path, default=MAILBUS_ROOT / "store")
+    ap.add_argument("--data-dir", type=Path, default=MAILBUS_ROOT / "shared" / "store")
     ap.add_argument("--latest-release", default="1.0.1")
     ap.add_argument("--negotiated", default="1.0")
     args = ap.parse_args()

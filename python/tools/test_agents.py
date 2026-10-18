@@ -28,7 +28,7 @@ from pathlib import Path
 
 # ── 路径解析 ──────────────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_DATA_DIR = os.environ.get("MAILBUS_DATA") or os.environ.get("MAILBUS_DATA_DIR") or str(ROOT / "store")
+DEFAULT_DATA_DIR = os.environ.get("MAILBUS_DATA") or os.environ.get("MAILBUS_DATA_DIR") or str(ROOT / "shared" / "store")
 LOCAL_HERMES = ROOT / ".local" / "hermes" / "profiles"
 
 MAILBUS_API = os.environ.get("MAILBUS_API_URL") or (
@@ -160,21 +160,21 @@ def check_identity_local(agent: str, atype: str) -> dict:
     if atype in ("hermes", "hermes_profile"):
         candidates = [
             str(LOCAL_HERMES / agent / "SOUL.md"),
-            str(ROOT / "store" / "identities" / agent / "SOUL.md"),
+            str(ROOT / "shared" / "store" / "identities" / agent / "SOUL.md"),
         ]
     elif atype == "codex":
         candidates = [
-            str(ROOT / "store" / "identities" / "codex" / agent / "IDENTITY.md"),
+            str(ROOT / "shared" / "store" / "identities" / "codex" / agent / "IDENTITY.md"),
             str(ROOT / "access" / "codex" / agent / "IDENTITY.md"),
         ]
     elif atype == "claude_code":
         candidates = [
-            str(ROOT / "store" / "identities" / "claude" / agent / "IDENTITY.md"),
+            str(ROOT / "shared" / "store" / "identities" / "claude" / agent / "IDENTITY.md"),
         ]
     elif atype == "openclaw":
         candidates = [
-            str(ROOT / "store" / "identities" / agent / "SOUL.md"),
-            str(ROOT / "store" / "identities" / agent / "IDENTITY.md"),
+            str(ROOT / "shared" / "store" / "identities" / agent / "SOUL.md"),
+            str(ROOT / "shared" / "store" / "identities" / agent / "IDENTITY.md"),
         ]
     elif atype == "opencode":
         candidates = []

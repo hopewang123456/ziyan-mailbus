@@ -38,7 +38,7 @@ TYPES = {
 
 class TestClaudeLaunch(unittest.TestCase):
     def test_load_mailbus_claude_from_store(self):
-        data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "store")  # repo-root store
+        data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store")  # repo-root store
         cfg = load_mailbus_claude(data_dir)
         self.assertIn("windows", cfg)
         self.assertIn("linux", cfg)
@@ -65,7 +65,7 @@ class TestClaudeLaunch(unittest.TestCase):
     def test_push_windows_from_wsl_uses_powershell(self, *_mocks):
         # WSL 场景前提：/mnt/c 下 PowerShell 桥可达（容器等无桥环境走 host-only 跳过，
         # 见 test_scan_poison_isolation）
-        data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "store")  # repo-root store
+        data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store")  # repo-root store
         cmd = build_push_command(
             "agent-h", AGENT_CFG, TYPES, "deepseek-flash", data_dir=data_dir,
         )
@@ -83,7 +83,7 @@ class TestClaudeLaunch(unittest.TestCase):
     def test_push_linux_native_bash(self, *_mocks):
         cfg = dict(AGENT_CFG)
         cfg["push"] = {"cwd": "/mnt/mailbus"}
-        data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "store")  # repo-root store
+        data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store")  # repo-root store
         cmd = build_push_command("agent-h", cfg, TYPES, data_dir=data_dir)
         self.assertIn("bash -lc", cmd)
         self.assertIn("claude", cmd)
@@ -92,7 +92,7 @@ class TestClaudeLaunch(unittest.TestCase):
     @patch("lib.adapters.frameworks.claude_env.resolve_claude_platform", return_value="windows")
     @patch("lib.adapters.frameworks.claude_env._runtime_os", return_value="windows")
     def test_interactive_windows_no_exit(self, *_mocks):
-        data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "store")  # repo-root store
+        data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store")  # repo-root store
         cmd = build_interactive_command("agent-h", AGENT_CFG, TYPES, data_dir=data_dir)
         self.assertIn("NoExit", cmd)
         self.assertIn("claude", cmd)
@@ -165,7 +165,7 @@ class TestClaudeLaunch(unittest.TestCase):
     def test_try_build_push_direct_on_windows_native(self, *_mocks):
         if sys.platform != "win32":
             self.skipTest("Windows-only direct push")
-        data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "store")  # repo-root store
+        data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store")  # repo-root store
         spec = try_build_push_direct(
             "agent-h",
             AGENT_CFG,
@@ -186,7 +186,7 @@ class TestClaudeLaunch(unittest.TestCase):
     @patch("lib.adapters.frameworks.claude_launch.resolve_claude_platform", return_value="linux")
     @patch("lib.adapters.frameworks.claude_launch._runtime_os", return_value="linux")
     def test_try_build_push_direct_on_linux(self, *_mocks):
-        data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "store")  # repo-root store
+        data_dir = os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store")  # repo-root store
         spec = try_build_push_direct(
             "agent-h",
             AGENT_CFG,

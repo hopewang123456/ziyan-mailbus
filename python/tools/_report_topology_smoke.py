@@ -10,8 +10,8 @@ from pathlib import Path
 from shutil import which
 
 ROOT = Path(__file__).resolve().parents[2]
-CFG = ROOT / "store" / "config.json"
-DATA = ROOT / "store"
+CFG = ROOT / "shared" / "store" / "config.json"
+DATA = ROOT / "shared" / "store"
 
 PORT_HINTS = {
     "lingzhao": 9120,

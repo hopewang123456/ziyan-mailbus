@@ -14,7 +14,7 @@ import sys
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-LOG = os.path.join(ROOT, "store", "logs", "host-scan.log")
+LOG = os.path.join(ROOT, "shared", "store", "logs", "host-scan.log")
 MAX_LOG = 1_000_000
 
 

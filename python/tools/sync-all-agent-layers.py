@@ -74,7 +74,7 @@ def _sync_codex(agent: str, data_dir: str) -> int:
 
 def main() -> int:
     p = argparse.ArgumentParser(description="Sync L0–L2 skills to all workspaces (registry SoT)")
-    p.add_argument("--data-dir", default=str(ROOT / "store"))
+    p.add_argument("--data-dir", default=str(ROOT / "shared" / "store"))
     p.add_argument("--skip-claude", action="store_true")
     p.add_argument("--skip-hermes", action="store_true")
     p.add_argument("--skip-codex", action="store_true")

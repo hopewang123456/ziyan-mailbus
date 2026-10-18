@@ -182,7 +182,7 @@ class TestAgentAdapters(unittest.TestCase):
         self.assertIn("-q 'MSG'", cmd)
 
     def test_store_config_valid(self):
-        root = os.path.join(os.path.dirname(__file__), "..", "store", "config.json")
+        root = os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store", "config.json")
         if not os.path.isfile(root):
             self.skipTest("no store config")
         # 模拟真实运行时：外部框架 descriptor（store/frameworks/*.json）先加载，

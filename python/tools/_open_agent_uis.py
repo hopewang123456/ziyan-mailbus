@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "python"))
 
 from tools.ops.launch_agent import launch_agent  # noqa: E402
 
-DATA = str(ROOT / "store")
+DATA = str(ROOT / "shared" / "store")
 
 # Browser: all hermes + openclaw + samples of the rest
 BROWSERS = [

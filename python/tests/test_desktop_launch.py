@@ -16,7 +16,7 @@ class TestDesktopLaunch(unittest.TestCase):
     def _agents(self):
         from lib.infra.utils import json_read
 
-        cfg = json_read(os.path.join(os.path.dirname(__file__), "..", "store", "config.json"), {})
+        cfg = json_read(os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store", "config.json"), {})
         return cfg.get("agents") or {}, cfg.get("agent_types") or {}
 
     def test_desktop_disabled_for_non_desktop_frameworks(self):

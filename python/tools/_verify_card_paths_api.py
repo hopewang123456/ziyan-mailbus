@@ -6,7 +6,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-cfg_path = ROOT / "store" / "config.json"
+cfg_path = ROOT / "shared" / "store" / "config.json"
 cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
 for aid, a in (cfg.get("agents") or {}).items():
     if isinstance(a.get("paths"), dict) and a["paths"]:

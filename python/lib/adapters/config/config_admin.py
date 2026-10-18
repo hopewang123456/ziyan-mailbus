@@ -218,7 +218,7 @@ def _env_paths(data_dir: str) -> List[str]:
     root = mailbus_root(data_dir)
     paths = [
         os.path.join(root, ".env"),
-        os.path.join(root, "docker-agents", ".env"),
+        os.path.join(root, "docker-agents", ".env") if os.path.exists(os.path.join(root, "docker-agents", ".env")) else os.path.join(root, "..", "docker-agents", ".env"),
         os.path.join(data_dir, ".env"),
     ]
     out: List[str] = []
@@ -919,7 +919,7 @@ def patch_env(data_dir: str, vars_patch: dict) -> dict:
         candidates = [
             os.path.join(root, "migrate", "env.template"),
             os.path.join(root, "config", "env.template"),
-            os.path.join(root, "docker-agents", ".env.example"),
+            os.path.join(root, "..", "docker-agents", ".env.example"),
         ]
         seeded = False
         for example in candidates:

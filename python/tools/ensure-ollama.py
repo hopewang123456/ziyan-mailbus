@@ -37,7 +37,7 @@ from lib.infra.internal_llm.ollama_ensure import ensure_from_config
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Ensure Ollama daemon + model")
-    ap.add_argument("--data-dir", default=os.path.join(ROOT, "store"))
+    ap.add_argument("--data-dir", default=os.path.join(ROOT, "shared", "store"))
     ap.add_argument("--no-start", action="store_true", help="do not start ollama serve if API down")
     ap.add_argument("--no-pull", action="store_true", help="do not pull missing model")
     ap.add_argument("--wait-seconds", type=float, default=60)

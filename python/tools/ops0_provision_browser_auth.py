@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / "store"
+DATA = ROOT / "shared" / "store"
 CFG_PATH = DATA / "config.json"
 
 

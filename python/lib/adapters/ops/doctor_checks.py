@@ -32,7 +32,7 @@ _CRITICAL_FILES = (
     "python/pyproject.toml",
     "python/config/mailbus/base.json",
     "python/config/frameworks/registry.json",
-    "docker-agents/docker-compose.yml",
+    "shared/docker-agents/docker-compose.yml",
     "python/bus/__main__.py",
     "ARCHITECTURE.md",
     "AGENTS.md",

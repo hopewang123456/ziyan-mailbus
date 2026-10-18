@@ -1,0 +1,54 @@
+﻿# Local override — volumes from docker-agents/.env (see .env.example).
+# Regenerated from absolute-path style; keep .env as SoT for host paths.
+
+services:
+  hermes:
+    volumes:
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/python/tools:/mailbus/python/tools:ro
+      - ${MAILBUS_HOST_ROOT}/python/lib:/mailbus/python/lib:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access/hermes/.sync:/mailbus/shared/access/hermes/.sync
+      - ${MAILBUS_HOST_ROOT}/store/inbox:/home/hermes/inbox:ro
+  openclaw:
+    volumes:
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/python/tools:/mailbus/python/tools:ro
+      - ${MAILBUS_HOST_ROOT}/python/lib:/mailbus/python/lib:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
+      - ${OPENCLAW_WORKSPACE}:/workspace:rw
+  codex-web:
+    volumes:
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/python/tools:/mailbus/python/tools:ro
+      - ${MAILBUS_HOST_ROOT}/python/lib:/mailbus/python/lib:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
+      - ${CODEX_WORKSPACE}:/workspace/codex:ro
+  codex-review:
+    volumes:
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/python/tools:/mailbus/python/tools:ro
+      - ${MAILBUS_HOST_ROOT}/python/lib:/mailbus/python/lib:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
+      - ${CODEX_REVIEW_WORKSPACE}:/workspace/codex-review:ro
+  opencode:
+    volumes:
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/python/tools:/mailbus/python/tools:ro
+      - ${MAILBUS_HOST_ROOT}/python/lib:/mailbus/python/lib:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
+      - ${OPENCODE_ROOT}:/workspace/opencode:rw
+  mailbus:
+    volumes:
+      - ${MAILBUS_HOST_ROOT}:/mailbus
+      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/run:/mailbus/run
+      - ${MAILBUS_HOST_ROOT}/python/tools:/mailbus/python/tools:ro
+      - ${MAILBUS_HOST_ROOT}/python/lib:/mailbus/python/lib:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro

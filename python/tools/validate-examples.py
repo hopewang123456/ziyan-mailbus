@@ -10,9 +10,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-EXAMPLES = ROOT / "store" / "examples"
-REGISTRY = ROOT / "store" / "workflows" / "registry.json"
-ROLE_TYPES = ROOT / "store" / "roles" / "json" / "role-types.json"
+EXAMPLES = ROOT / "shared" / "store" / "examples"
+REGISTRY = ROOT / "shared" / "store" / "workflows" / "registry.json"
+ROLE_TYPES = ROOT / "shared" / "store" / "roles" / "json" / "role-types.json"
 
 INTAKE_ID = re.compile(r"^intake-[0-9]{8}-[a-z0-9]{6}$")
 TASK_ID = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{2,127}$")

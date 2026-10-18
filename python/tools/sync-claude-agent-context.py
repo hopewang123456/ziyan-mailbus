@@ -192,7 +192,7 @@ def sync_agent(agent: str, data_dir: str) -> dict:
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("agent")
-    p.add_argument("--data-dir", default=os.environ.get("DATA_DIR") or os.path.join(ROOT, "store"))
+    p.add_argument("--data-dir", default=os.environ.get("DATA_DIR") or os.path.join(ROOT, "shared", "store"))
     args = p.parse_args()
     try:
         info = sync_agent(args.agent, args.data_dir)

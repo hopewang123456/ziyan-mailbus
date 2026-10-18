@@ -18,7 +18,7 @@ load_mailbus_env()
 from lib.adapters.config.agent_registry import load_all_agents  # noqa: E402
 from lib.adapters.config.sync_layers import build_skills_index_from_registry  # noqa: E402
 
-INDEX = ROOT / "store" / "agents" / "json" / "skills-index.json"
+INDEX = ROOT / "shared" / "store" / "agents" / "json" / "skills-index.json"
 
 
 def _load_json(path: Path) -> dict:
@@ -72,7 +72,7 @@ def patch_index(*, check_only: bool = False, data_dir: str | None = None) -> tup
 def main() -> int:
     p = argparse.ArgumentParser(description="Patch skills-index from access/**/agent.json")
     p.add_argument("--check", action="store_true", help="只检查，不写文件")
-    p.add_argument("--data-dir", default=str(ROOT / "store"), help="runtime store (for future use)")
+    p.add_argument("--data-dir", default=str(ROOT / "shared" / "store"), help="runtime store (for future use)")
     args = p.parse_args()
     changes, errors = patch_index(check_only=args.check, data_dir=args.data_dir)
     for c in changes:

@@ -46,7 +46,7 @@ class _FakeHandler:
 
 
 def _seed_store(tmp: str, *, llm_enabled: bool = True) -> None:
-    root = os.path.join(os.path.dirname(__file__), "..", "..", "store")  # monorepo: repo-root store seeds
+    root = os.path.join(os.path.dirname(__file__), "..", "..", "shared", "store")  # monorepo: repo-root store seeds
     for sub in ("roles/json", "workflows", "dispatch", "rules", "rag"):
         src = os.path.join(root, sub)
         dst = os.path.join(tmp, sub)

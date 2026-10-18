@@ -1,0 +1,14 @@
+{
+  "schema": "mailbus-transport-v1",
+  "agent_id": "dali",
+  "framework": "opencode",
+  "workspace": "/path/to/opencode",
+  "docker": {
+    "service": "opencode-agent",
+    "compose_service": "dali",
+    "profile": "dali"
+  },
+  "push": {
+    "cwd": "/path/to/opencode"
+  }
+}
