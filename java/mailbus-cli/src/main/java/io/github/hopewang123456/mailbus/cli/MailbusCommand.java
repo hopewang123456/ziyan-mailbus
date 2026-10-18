@@ -360,6 +360,9 @@ public class MailbusCommand {
 
         @Parameters(index = "0") String id;
         @Option(names = "--push-argv", split = ",", description = "argv with {MSG} slot") List<String> pushArgv;
+        @Option(names = "--shell-inner", description = "inner bash script for container agents, {MSG} slot quoted") String shellInner;
+        @Option(names = "--workdir", description = "docker exec -w workdir (with --shell-inner)") String workdir;
+        @Option(names = "--container", description = "override container name (compose service -> real name)") String container;
 
         @Override
         public Integer call() {
@@ -369,7 +372,16 @@ public class MailbusCommand {
                 return 1;
             }
             java.util.Map<String, Object> cfg = new java.util.HashMap<>(existing.adapterConfig());
-            if (pushArgv != null && !pushArgv.isEmpty()) {
+            if (container != null && !container.isBlank()) {
+                cfg.put("container", container);
+            }
+            if (shellInner != null && !shellInner.isBlank()) {
+                cfg.put("shell_inner", shellInner);
+                if (workdir != null && !workdir.isBlank()) {
+                    cfg.put("workdir", workdir);
+                }
+                cfg.put("timeout_s", 600);
+            } else if (pushArgv != null && !pushArgv.isEmpty()) {
                 cfg.put("push_argv", pushArgv);
                 cfg.put("timeout_s", 300);
             } else if ("docker".equals(existing.runTarget())) {

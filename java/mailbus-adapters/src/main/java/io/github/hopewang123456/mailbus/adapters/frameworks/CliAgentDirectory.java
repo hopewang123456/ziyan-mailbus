@@ -73,6 +73,24 @@ public class CliAgentDirectory implements AgentDirectory {
             return new LaunchResult(false, -1, "", "agent disabled: " + agentId);
         }
         Map<String, Object> cfg = card.adapterConfig();
+        // shell_inner mode (container agents): argv = [docker, exec, [-w dir], ctr, bash, -lc, <script>]
+        // the inner script is a single argv element — quoting happens INSIDE the container's
+        // trusted boundary; the host side stays argv-declarative (python bash -lc twin)
+        Object shellInner = cfg.get("shell_inner");
+        if (shellInner instanceof String inner && !inner.isBlank()) {
+            // full docker exec form assembled here (wrapForRunTarget would double-wrap)
+            String workdir = String.valueOf(cfg.getOrDefault("workdir", ""));
+            List<String> argv = new ArrayList<>();
+            argv.add("docker"); argv.add("exec");
+            if (!workdir.isBlank()) { argv.add("-w"); argv.add(workdir); }
+            argv.add(String.valueOf(cfg.getOrDefault("container", "")));
+            argv.add("bash"); argv.add("-lc");
+            argv.add(inner.replace("{MSG}", shellQuoteInner(message)));
+            if (dockerHostOnWsl()) {
+                argv.add(0, "-e"); argv.add(0, "wsl");
+            }
+            return runArgv(argv, timeoutOf(cfg), agentId);
+        }
         Object rawArgv = cfg.get("push_argv");
         if (!(rawArgv instanceof List<?> list) || list.isEmpty()) {
             return new LaunchResult(false, -1, "", "no push_argv configured for " + agentId);
@@ -85,8 +103,12 @@ public class CliAgentDirectory implements AgentDirectory {
             }
             argv.add(s);
         }
-        long timeoutSec = ((Number) cfg.getOrDefault("timeout_s", 300)).longValue();
+        long timeoutSec = timeoutOf(cfg);
         argv = wrapForRunTarget(card.runTarget(), argv);
+        return runArgv(argv, timeoutSec, agentId);
+    }
+
+    private LaunchResult runArgv(List<String> argv, long timeoutSec, String agentId) {
         try {
             Process p = new ProcessBuilder(argv)
                     .redirectErrorStream(true)
@@ -106,6 +128,15 @@ public class CliAgentDirectory implements AgentDirectory {
             Thread.currentThread().interrupt();
             return new LaunchResult(false, -1, "", "interrupted");
         }
+    }
+
+    /** single-quote the message for the inner shell (python shlex twin: ' -> ''') */
+    private static String shellQuoteInner(String msg) {
+        return "'" + (msg == null ? "" : msg.replace("'", "'\''")) + "'";
+    }
+
+    private static long timeoutOf(Map<String, Object> cfg) {
+        return ((Number) cfg.getOrDefault("timeout_s", 300)).longValue();
     }
 
     /**
