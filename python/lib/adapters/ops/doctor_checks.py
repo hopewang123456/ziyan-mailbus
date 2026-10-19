@@ -15,7 +15,7 @@ from lib.adapters.plane.platform_runner import detect_platform, docker_ready, pr
 
 Level = Literal["ok", "warn", "fail"]
 
-# 恢复/迁移后必须存在的关键路径（相对 MAILBUS_ROOT）— Wave1+ 新布局
+# 恢复/迁移后必须存在的关键路径（相对 REPO_ROOT 仓库根）— v1.2: python/ 实现与 shared/ 资产平级
 _CRITICAL_FILES = (
     "python/tools/mailbus.py",
     "python/tools/generate-compose-volumes.py",
@@ -34,7 +34,7 @@ _CRITICAL_FILES = (
     "python/config/frameworks/registry.json",
     "shared/docker-agents/docker-compose.yml",
     "python/bus/__main__.py",
-    "ARCHITECTURE.md",
+    "python/ARCHITECTURE.md",
     "AGENTS.md",
 )
 
@@ -513,7 +513,9 @@ def docker_status(*, distro: str = "Ubuntu") -> dict[str, Any]:
 
 def check_data_integrity(*, mail_root: Path | None = None) -> list[DoctorItem]:
     """恢复 mail 源码树后的数据/文件完整性探测。"""
-    root = Path(mail_root) if mail_root else MAILBUS_ROOT
+    # v1.2: 清单相对仓库根(python/ 与 shared/ 平级), MAILBUS_ROOT=shared 不适用
+    from lib.infra.constants import REPO_ROOT
+    root = Path(mail_root) if mail_root else REPO_ROOT
     items: list[DoctorItem] = []
 
     missing_files = [rel for rel in _CRITICAL_FILES if not (root / rel).is_file()]
@@ -777,8 +779,8 @@ def run_doctor_checks(*, mail_root: Path | None = None, wsl_distro: str = "Ubunt
 
     for label, path in (
         ("compose dir", paths["compose_dir"]),
-        ("mailbus.py", os.path.join(paths["root"], "python", "tools", "mailbus.py")),
-        ("launch_agent.py", os.path.join(paths["root"], "python", "tools", "ops", "launch_agent.py")),
+        ("mailbus.py", os.path.join(paths["root"], "..", "python", "tools", "mailbus.py")),  # root=shared -> repo
+        ("launch_agent.py", os.path.join(paths["root"], "..", "python", "tools", "ops", "launch_agent.py")),
         ("store config", os.path.join(paths["data_dir"], "config.json")),
     ):
         if os.path.exists(path):
@@ -989,7 +991,7 @@ def run_doctor_checks(*, mail_root: Path | None = None, wsl_distro: str = "Ubunt
     else:
         items.append(DoctorItem("warn", "compose", "compose override missing", "mailbus compose sync"))
 
-    items.extend(check_data_integrity(mail_root=root))
+    items.extend(check_data_integrity())  # v1.2: 清单相对 REPO_ROOT, mail_root=shared 会全断
     items.extend(check_locale_transport_codes())
     items.extend(check_hermes_readiness(
         mail_root=root,

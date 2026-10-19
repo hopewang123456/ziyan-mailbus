@@ -250,8 +250,9 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             legacy = True
 
         candidates = []
-        web_dist = os.path.join(str(MAILBUS_ROOT), "web", "dist")
-        web_public = os.path.join(str(MAILBUS_ROOT), "web", "public")
+        from lib.infra.constants import REPO_ROOT as _REPO_ROOT  # v1.2: web 在仓库根(实现共享), 不在 shared/
+        web_dist = os.path.join(str(_REPO_ROOT), "web", "dist")
+        web_public = os.path.join(str(_REPO_ROOT), "web", "public")
         docs_dir = str(MAILBUS_DOCS_ROOT)
         if legacy:
             # Escape hatch: docs/ 侧栏舰队 HUD
