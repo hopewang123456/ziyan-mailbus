@@ -547,6 +547,70 @@ def cmd_serve(args) -> int:
     return 0
 
 
+def _probe_listening_pids(port) -> list:
+    """跨平台探测监听端口的 PID：优先 psutil（Windows 可用），回退 ss -tlnp（Linux）。"""
+    try:
+        import psutil
+        pids = [c.pid for c in psutil.net_connections(kind="inet")
+                if c.status == psutil.CONN_LISTEN and c.laddr and c.laddr.port == int(port)]
+        if pids:
+            seen = []
+            for p in pids:
+                if p and str(p) not in seen:
+                    seen.append(str(p))
+            return seen
+    except Exception:
+        pass
+    try:
+        import re
+        out = subprocess.run(["ss", "-tlnp"], capture_output=True, text=True, timeout=5).stdout
+        for line in out.splitlines():
+            if f":{port} " in line and "pid=" in line:
+                return re.findall(r"pid=(\d+)", line)
+    except Exception:
+        pass
+    return []
+
+
+def _probe_agent_pid(name) -> str:
+    """跨平台按命令行子串匹配进程：优先 psutil，回退 pgrep -f（Linux）。"""
+    try:
+        import psutil
+        for p in psutil.process_iter(["pid", "cmdline"]):
+            cl = p.info.get("cmdline") or []
+            if cl and name in " ".join(str(x) for x in cl):
+                return str(p.info["pid"])
+        return ""
+    except Exception:
+        pass
+    try:
+        proc = subprocess.run(["pgrep", "-f", name], capture_output=True, text=True, timeout=5)
+        if proc.returncode == 0:
+            return proc.stdout.strip().splitlines()[0] if proc.stdout.strip() else ""
+    except Exception:
+        pass
+    return ""
+
+
+def _kill_pids(pids: list) -> int:
+    """跨平台终止 PID：优先 psutil，回退 kill（Linux）。返回成功数。"""
+    killed = 0
+    for pid in pids:
+        try:
+            import psutil
+            psutil.Process(int(pid)).terminate()
+            killed += 1
+            continue
+        except Exception:
+            pass
+        try:
+            subprocess.run(["kill", pid], capture_output=True, timeout=5)
+            killed += 1
+        except Exception:
+            pass
+    return killed
+
+
 def cmd_launch(args) -> int:
     """启动/停止 agent 常驻进程
 
@@ -584,22 +648,17 @@ def cmd_launch(args) -> int:
             port = browser_cfg.get("gateway_port") or browser_cfg.get("dashboard_port") or \
                    browser_cfg.get("port", "")
             if port:
-                port_check = subprocess.run(
-                    ["ss", "-tlnp"], capture_output=True, text=True, timeout=5
-                )
-                if f":{port} " in port_check.stdout:
-                    print(f"  ✅ {cfg.get('name', name)} ({name}) — :{port} 监听中")
+                listen_pids = _probe_listening_pids(port)
+                if listen_pids:
+                    print(f"  ✅ {cfg.get('name', name)} ({name}) — :{port} 监听中 (PID {','.join(listen_pids)})")
                 else:
                     print(f"  ❌ {cfg.get('name', name)} ({name}) — :{port} 未启动")
             elif template_name == "url_only":
                 print(f"  ⚪ {cfg.get('name', name)} ({name}) — CLI 模式，无常驻进程")
             else:
-                # 尝试 pgrep
-                proc_check = subprocess.run(
-                    ["pgrep", "-f", name], capture_output=True, text=True, timeout=5
-                )
-                if proc_check.returncode == 0:
-                    print(f"  ✅ {cfg.get('name', name)} ({name}) — PID: {proc_check.stdout.strip()}")
+                pid = _probe_agent_pid(name)
+                if pid:
+                    print(f"  ✅ {cfg.get('name', name)} ({name}) — PID: {pid}")
                 else:
                     print(f"  ❌ {cfg.get('name', name)} ({name}) — 未运行")
         # ── 显示 inbox 积压情况 ──────────────────────────────
@@ -643,23 +702,17 @@ def cmd_launch(args) -> int:
                 print(f"  ⚠️ {cfg.get('name', name)} ({name}): 无端口配置，跳过")
                 continue
 
-            # 用 ss 获取监听该端口的 PID
+            # 跨平台获取监听该端口的 PID 并终止
             try:
-                ss_out = subprocess.run(
-                    ["ss", "-tlnp"],
-                    capture_output=True, text=True, timeout=5
-                ).stdout
-                for line in ss_out.splitlines():
-                    if f":{port} " in line and "pid=" in line:
-                        # 提取所有 PID
-                        import re
-                        pids = re.findall(r'pid=(\d+)', line)
-                        for pid in pids:
-                            subprocess.run(["kill", pid], capture_output=True, timeout=5)
-                            print(f"  ✅ 已停止: {cfg.get('name', name)} ({name}:{port}) — PID {pid}")
-                        break
-                else:
+                pids = _probe_listening_pids(port)
+                if not pids:
                     print(f"  ⚪ {cfg.get('name', name)} ({name}): :{port} 未监听，无需停止")
+                    continue
+                killed = _kill_pids(pids)
+                if killed:
+                    print(f"  ✅ 已停止: {cfg.get('name', name)} ({name}:{port}) — PID {','.join(pids)}")
+                else:
+                    print(f"  ⚠️ {cfg.get('name', name)} ({name}): PID {','.join(pids)} 终止失败")
             except Exception as e:
                 print(f"  ⚠️ {cfg.get('name', name)} ({name}): 停止失败 — {e}")
         print("")

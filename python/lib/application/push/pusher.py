@@ -888,7 +888,15 @@ def _invoke_cli(
         
         return True
     except Exception as e:
-        warn(f"[pusher] CLI background start failed: {e}")
+        argv0 = ""
+        try:
+            _a = (direct or {}).get("argv") if direct else push_argv
+            _a = _a or cmd
+            argv0 = _a[0] if isinstance(_a, list) and _a else _a
+            argv0 = str(argv0)[:120]
+        except Exception:
+            pass
+        warn(f"[pusher] CLI background start failed: {e} (agent={agent_name} argv0={argv0})")
         return False
 
 

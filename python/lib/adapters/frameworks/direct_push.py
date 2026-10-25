@@ -33,6 +33,28 @@ def _docker_bin() -> str:
     return shutil.which("docker") or shutil.which("docker.exe") or "docker"
 
 
+def _host_docker_argv(argv: list) -> list:
+    """Windows 宿主无 docker.exe 时经 wsl -e 桥接 docker。
+
+    对齐 pusher._docker_push_argv 与 Java 侧 CliAgentDirectory.dockerHostOnWsl：
+    argv[0] 为 docker/docker.exe 且 which 不可得时，加 [wsl, -e] 前缀，
+    由默认 WSL 发行版内的 docker CLI 执行（数组直传，不经 shell，无引号重解析）。
+    """
+    import sys
+
+    if sys.platform != "win32" or not argv:
+        return argv
+    head = str(argv[0]).lower().replace("\\", "/")
+    if head.rsplit("/", 1)[-1] not in ("docker", "docker.exe"):
+        return argv
+    if shutil.which("docker") or shutil.which("docker.exe"):
+        return argv
+    wsl = shutil.which("wsl.exe") or shutil.which("wsl")
+    if not wsl:
+        return argv
+    return [wsl, "-e"] + list(argv)
+
+
 def _claude_direct(
     agent_name: str,
     agent_cfg: dict,
@@ -329,6 +351,9 @@ def try_build_push_direct(
 
     cfg = json_read(os.path.join(data_dir, "config.json"), {}) if data_dir else {}
     assert_spawn_argv_allowed(list(built["argv"]), cfg)
+    # guard 审原始 docker 语义后再做宿主桥接（wsl -e docker ...）
+    built = dict(built)
+    built["argv"] = _host_docker_argv(list(built["argv"]))
     return built
 
 

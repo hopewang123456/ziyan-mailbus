@@ -30,8 +30,18 @@ class TestAgentPush(unittest.TestCase):
         )
         self.assertIsNotNone(spec)
         argv = spec["argv"]
-        self.assertEqual(argv[0], "docker")
-        self.assertEqual(argv[1], "exec")
+        # Windows 宿主无 docker.exe 时经 wsl -e 桥接（direct_push._host_docker_argv）
+        import shutil as _shutil
+        if not (_shutil.which("docker") or _shutil.which("docker.exe")):
+            self.assertTrue(
+                str(argv[0]).lower().endswith(("wsl.exe", "wsl")), argv
+            )
+            self.assertEqual(argv[1], "-e")
+            self.assertEqual(argv[2], "docker")
+            self.assertEqual(argv[3], "exec")
+        else:
+            self.assertEqual(argv[0], "docker")
+            self.assertEqual(argv[1], "exec")
         self.assertIn("codex", argv)
         self.assertIn("exec", argv)
         self.assertEqual(argv[-1], "hello task")
