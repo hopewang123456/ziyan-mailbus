@@ -3,6 +3,52 @@
 All notable changes to mailbus are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased — 2026-10-26 大版本：指挥席位 + 指标中心 + 管理中心 + 双栈 AI]
+
+规划文档：Vault `Agent/01-mailbus/017-plans/0173-plans/2026-10-26-command-window-metrics-center-dual-cabin-plan.md`（D1-D15 十五决策 + B/AA/PY/R 四组清单）。
+
+### 指挥席位（P1 — 发令交互窗口，D1-D4/D15）
+- **发令窗口**（全局抽屉，双舱可唤起）：选职位（`GET /api/positions` 职位目录：候选池+空闲态+inputs 起草表单 schema）→ 动态表单 → `POST /api/tasks/create`（v3 envelope，mode=explicit）→ 空闲优先派发（idle_first 真链路验证）
+- **LLM 草稿确认制**：自由需求 → `POST /api/command/draft` 无副作用预演（tier0→internal LLM 同一逻辑）→ 草稿预览（换职位/改理由/调序/删步）→ explicit 多步提交；防幻觉：role_type 合法表过滤 + 空草稿 422 + LLM 不可达显式 503
+- **子言真身份（D2/D15）**：`builtin-identities.json` SoT（id/role 稳定、display_name 可改、清单可枚举扩展）；agents 视图运行时合并 → send_msg/inbox 对子言即刻生效（真收件箱验证）；`GET/PATCH /api/identities`
+- **被唤起聚合**：`GET /api/command/inbox` 四路合一（manager-pending + human-queue 去重 + 告警 + 子言 inbox）→ 会话流 30s 轮询 + 消息卡内联 FSM 动作按钮（批准/验收/回退）+ ⚡按钮未读徽标
+
+### 指标中心（P2 — B1-B7 开源 BI 取经全落地，双栈同源）
+- **metrics manifest 双栈唯一口径真源**（`shared/config/mailbus/metrics-manifest.json`，11 项 A+B 类指标含口径说明；改口径改 JSON 不改代码）
+- **python 指标引擎**（`lib/adapters/metrics/`）：collector 现算 + 时序环形存储（7 天窗口）+ 统一查询协议（`GET /api/metrics/query`：point/1h 窗口）+ scheduler 300s 自动采集
+- **java Micrometer 对等**：三层（calculator/binder/controller）+ `/actuator/metrics/mailbus.*` 标准暴露（python 无此通道，D8 差异化实证）
+- **B4 dashboard as config**：`/api/metrics/layout` hidden 清单——管理中心配置、双舱生效
+- **B5 告警规则配置化**：`alert-rules.json` SoT + 规则引擎（触发→写告警+**给子言发消息**，30 分钟去抖）+ 管理中心行内编辑
+- **B6 AI 问答走语义层**：LLM 只念注入真值不摸原始数据（真值验证：助手回答与指标引擎一致）
+- **驾驶舱三屏统一消费语义层**：首页指标卡（30s 轮询）+ 指标大盘（manifest 驱动网格+sparkline）+ 告警通知
+
+### AI 助手（P2 — D10 双栈对等达成）
+- **python**：`POST /api/assistant/ask` 三源上下文（指标真值+RAG 手册+问题）+ citations；复用 internal_llm（langchain 延后：多轮 agent 流需求时引入）
+- **java**：spring-ai-starter-model-openai（deepseek/ollama base-url 切换）+ DocsRagService（同源知识库检索）+ 双态 Controller（真/501）；端到端验证（ollama：回答+citations 正确）
+- **知识库**：`mailbus/docs/`（架构总览/发令指南 + Vault runbooks 11 篇）
+
+### 管理中心（P3 — 逃生舱重做，D6 双舱分工）
+- **`/console`**（/legacy redirect 兼容）：固定侧栏+顶栏标准后台布局（**去星空/星云/3D**，与驾驶舱孪生大屏视觉分野）+ ConsoleKit 设计系统（Table/PageHeader/Tag/Section）
+- **七页全真页面**：概览（指标+实体+身份+待办）/ Agent与职位（职位表单 schema 行内编辑 + agent 启停）/ 工作流模板 / 集成 / 指标与报表（规则编辑+布局开关+效率报表）/ 审计与告警 / 诊所
+- **职位写端点**：`PATCH /api/positions/{role_type}`（字段白名单+inputs 逐项校验）——发令窗口表单 schema 的管理入口
+
+### 驾驶舱收敛（P4）
+- SpaceFlyby 纯氛围飞掠停挂（D6 标准：3D 须映射真实状态；组件保留一行回退）
+- 管理类弹窗加「在管理中心打开 →」跳转（弹窗=快捷视图，操作回管理中心）
+
+### 效率度量（P5 — B 类口径）
+- `tasks.cycle_avg_minutes`（7 天终态任务周期均值）+ `tasks.interventions_week`（human_gate.resolve 介入数）+ 管理中心效率报表区
+
+### 架构治理（P0 — D7-D9/D12）
+- **版本**：JDK 17→25 LTS + Spring Boot 3.3.5→**4.1.2** + Spring AI 2.0.2 + a2a-java 1.4.0.Final 锁版 + requires-python ≥3.12；docker 基镜像 25-jre
+- **python 重构（R1-R4）**：composition.py 1835 行拆 9 文件包（157 符号零缺失）；task_fsm/phantom_detect 归位 application；HarnessContract 下沉 domain（清 3 处反向）；LLM 路由域聚合 `adapters/llm_routing/`；修 handlers_inbox 潜伏死 import
+- **L3 配置型装配（D7/D8）**：python 轻量装配器（interfaces 注册表 + composition 查表，~100 行）；java Spring 条件装配（MailbusAiProperties + AiConfig）
+- **Boot 4 坑全踩平**：starter-web→webmvc 改名、picocli 无 Boot4 starter（自写 SpringCliFactory）、spring-boot-flyway 独立模块（此前 serve 从未真跑迁移）、Spring AI defaultOptions 收 Builder、**@ConditionalOnBean 在用户配置类不可靠**（改 ObjectProvider 运行期判空）
+
+### 验收（D13）
+- python **1017 全绿**（+2 装配器/职位/身份/指标/效率等新测试）/ java BUILD SUCCESS / web tsc+build 过
+- 冒烟项目执行：python 8 步全链路（身份→职位→草稿→发令→被唤起→批准→指标→助手）+ java 4 端点（同一 SoT）；冒烟数据已清
+
 ## [java-v0.1.0] — 2026-10-16
 
 First tagged release of the Java implementation (preview; Python stays the

@@ -1,0 +1,31 @@
+# D14 双后端并跑（python + java + 共享 store 卷 + 同一前端产物双挂）
+# 用法（在 mailbus 仓根）：
+#   docker compose -f docker-compose.dual.yml up --build
+# 首次需构建前端产物：cd web && npm run build
+services:
+  mailbus-py:
+    build:
+      context: .
+      dockerfile: python/docker/Dockerfile
+    ports:
+      - "9814:9814"   # D14 端口规约：python
+    volumes:
+      - store-data:/app/shared/store
+      - ./web/dist:/app/web-dist:ro   # 前端产物挂载位（serve 静态托管按需配置）
+    restart: unless-stopped
+
+  mailbus-java:
+    build:
+      context: ./java
+      dockerfile: docker/Dockerfile
+    ports:
+      - "9815:9815"   # D14 端口规约：java
+    volumes:
+      - store-data:/app/store
+    environment:
+      - MAILBUS_DATA_DIR=/app/store
+      # AI 助手（可选）：SPRING_AI_OPENAI_API_KEY / SPRING_AI_OPENAI_BASE_URL / SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL
+    restart: unless-stopped
+
+volumes:
+  store-data:
