@@ -345,6 +345,15 @@ public class MailbusApplication {
                 dir, tasks, new io.github.hopewang123456.mailbus.app.HumanQueueService(dir, clock));
     }
 
+    /** M2d-a：A2A 入站代理（JSON-RPC SendMessage/GetTask/CancelTask，python handlers_a2a 对等）。 */
+    @Bean
+    io.github.hopewang123456.mailbus.app.A2aRpcService a2aRpcService(
+            org.springframework.core.env.Environment env,
+            io.github.hopewang123456.mailbus.app.TaskService tasks,
+            io.github.hopewang123456.mailbus.ports.TaskRepository repo) {
+        return new io.github.hopewang123456.mailbus.app.A2aRpcService(dataDir(env), tasks, repo);
+    }
+
     /** M2a 起 positions 候选池 busy/active 为任务池真值（原 controller 自建改 boot 装配）。 */
     @Bean
     io.github.hopewang123456.mailbus.app.PositionCatalogService positionCatalogService(
