@@ -14,6 +14,9 @@ from typing import Any, Optional
 _handlers = None
 
 
+from lib.api import routes as api_routes  # PY4-A 渐进路由表（表优先，未命中回退本文件分支）
+
+
 class _HandlerStub:
     """缺失 handler 模块时的占位，避免整站 HTTP 不可用。"""
 
@@ -324,6 +327,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         needs_api_auth = (path.startswith("/api/") or path.startswith("/a2a/")) and not is_device_route
         if needs_api_auth and not self._check_auth():
             return
+        if api_routes.dispatch(self, "GET", path):
+            return
         h = _get_handlers()
 
         routes = {
@@ -537,6 +542,8 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             h["device"].handle_metis_sse(self)
             return
         if not self._check_auth(write=True):
+            return
+        if api_routes.dispatch(self, self.command or "POST", path):
             return
         h = _get_handlers()
 
