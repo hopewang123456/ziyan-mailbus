@@ -2,27 +2,45 @@ package io.github.hopewang123456.mailbus.boot;
 
 import io.github.hopewang123456.mailbus.cli.MailbusCommand;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import picocli.CommandLine;
-import picocli.spring.PicocliSpringFactory;
 
 /**
  * Dual-mode entry: bare run (or --spring args) starts serve; a first non-flag
  * argument dispatches as a CLI subcommand and exits with its code
  * (python `mailbus serve` vs `mailbus send ...` semantics).
  *
- * The CommandLine bean is declared manually because picocli-spring-boot-starter
- * 4.7.x registers its autoconfiguration via spring.factories, which Spring
- * Boot 3 no longer picks up.
+ * P0a: picocli-spring-boot-starter has no Spring Boot 4 build (upstream issue
+ * #2491, maintainer recommends wiring picocli core yourself), so the Spring
+ * bridge is the thin IFactory below.
  */
 @Configuration
 public class CliServeModeConfig {
 
+    /** Resolve subcommand instances as Spring beans when registered, else default. */
+    static final class SpringCliFactory implements CommandLine.IFactory {
+        private final ApplicationContext ctx;
+
+        SpringCliFactory(ApplicationContext ctx) {
+            this.ctx = ctx;
+        }
+
+        @Override
+        public <K> K create(Class<K> cls) throws Exception {
+            try {
+                return ctx.getBean(cls);
+            } catch (NoSuchBeanDefinitionException e) {
+                return CommandLine.defaultFactory().create(cls);
+            }
+        }
+    }
+
     @Bean
     public CommandLine commandLine(MailbusCommand rootCommand, ApplicationContext ctx) {
-        return new CommandLine(rootCommand, new PicocliSpringFactory(ctx));
+        return new CommandLine(rootCommand, new SpringCliFactory(ctx));
     }
 
     @Bean

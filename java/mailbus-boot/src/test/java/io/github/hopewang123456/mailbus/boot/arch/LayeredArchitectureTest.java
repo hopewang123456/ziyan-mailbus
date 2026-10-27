@@ -62,4 +62,13 @@ class LayeredArchitectureTest {
                 .should().dependOnClassesThat().resideInAPackage("..mailbus.adapters..")
                 .check(classes);
     }
+
+    @Test
+    void adaptersMustNotImportApp() {
+        // DIP mirror rule (P0a): python has 4 adapters→application reverse deps to
+        // clean up (R4); java forbids this direction from day one.
+        noClasses().that().resideInAPackage("..mailbus.adapters..")
+                .should().dependOnClassesThat().resideInAPackage("..mailbus.app..")
+                .check(classes);
+    }
 }

@@ -56,6 +56,49 @@ public class MailbusApplication {
         return Clock.systemUTC(); // domain discipline: UTC only
     }
 
+    /** P2 指标（B1 双栈同源 manifest；D8：值计算在 app 层，Micrometer 注册在此）。 */
+    @Bean
+    io.github.hopewang123456.mailbus.app.MetricsManifestService metricsManifestService(
+            org.springframework.core.env.Environment env) {
+        return new io.github.hopewang123456.mailbus.app.MetricsManifestService(
+                java.nio.file.Path.of(env.getProperty("mailbus.data-dir", "./store")),
+                io.github.hopewang123456.mailbus.app.SharedRoots.resolve(env.getProperty("mailbus.root")));
+    }
+
+    @Bean
+    io.github.hopewang123456.mailbus.app.MailbusMetricsCalculator mailbusMetricsCalculator(
+            io.github.hopewang123456.mailbus.app.MetricsManifestService manifest,
+            @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
+            io.github.hopewang123456.mailbus.ports.MessageRepository messages,
+            io.github.hopewang123456.mailbus.ports.AgentDirectory agents) {
+        return new io.github.hopewang123456.mailbus.app.MailbusMetricsCalculator(manifest, messages, agents);
+    }
+
+    /** P2 收尾：AI 助手（ChatClient 就位时装配；否则 controller 走 501） */
+    @Bean
+    io.github.hopewang123456.mailbus.app.DocsRagService docsRagService(
+            org.springframework.core.env.Environment env) {
+        // docs 知识库在仓库根（shared/ 的父级），与 python rag source（store 相对 ../docs）同源
+        var sharedRoot = io.github.hopewang123456.mailbus.app.SharedRoots.resolve(env.getProperty("mailbus.root"));
+        return new io.github.hopewang123456.mailbus.app.DocsRagService(sharedRoot.getParent());
+    }
+
+    @Bean
+    AssistantService assistantService(
+            org.springframework.beans.factory.ObjectProvider<org.springframework.ai.chat.model.ChatModel> chatModel,
+            io.github.hopewang123456.mailbus.app.DocsRagService rag,
+            io.github.hopewang123456.mailbus.app.MetricsManifestService manifest,
+            io.github.hopewang123456.mailbus.app.MailbusMetricsCalculator calculator) {
+        return new AssistantService(chatModel, rag, manifest, calculator);
+    }
+
+    @Bean
+    MailbusMetricsBinder mailbusMetricsBinder(
+            io.github.hopewang123456.mailbus.app.MetricsManifestService manifest,
+            io.github.hopewang123456.mailbus.app.MailbusMetricsCalculator calculator) {
+        return new MailbusMetricsBinder(manifest, calculator);
+    }
+
     /** Files-as-SoT layer — always present; writes flow through the composite repo. */
     @Bean
     FileMessageStore fileMessageStore(org.springframework.core.env.Environment env) {

@@ -12,9 +12,9 @@
   <description>mailbus Java implementation — file-based A2A message bus (monorepo java/ subtree)</description>
 
   <!--
-    JDK: builds on 17 today (host toolchain); flip java.version to 21 when the
-    host JDK upgrades — M1 code is version-agnostic, virtual threads arrive in M2.
-    Layering is enforced by ArchUnit in mailbus-boot tests from day one.
+    P0a 塑形基线（2026-10-26，规划文档 D12/D9）：JDK 25 LTS + Spring Boot 4.1.x +
+    Spring AI 2.0.x（BOM 锁版）+ 官方 a2a-java SDK（AA1，先锁版本后集成）。
+    一律 GA 版本，无 milestone/repo 例外。分层由 ArchUnit 在 mailbus-boot tests 守卫。
   -->
 
   <modules>
@@ -29,13 +29,14 @@
   </modules>
 
   <properties>
-    <java.version>17</java.version>
+    <java.version>25</java.version>
     <maven.compiler.release>${java.version}</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <spring-boot.version>3.3.5</spring-boot.version>
-    <spring-ai.version>1.0.0-M4</spring-ai.version>
+    <spring-boot.version>4.1.2</spring-boot.version>
+    <spring-ai.version>2.0.2</spring-ai.version>
+    <a2a-sdk.version>1.4.0.Final</a2a-sdk.version>
     <picocli.version>4.7.6</picocli.version>
-    <archunit.version>1.3.0</archunit.version>
+    <archunit.version>1.5.1</archunit.version>
     <sqlite-jdbc.version>3.46.1.3</sqlite-jdbc.version>
   </properties>
 
@@ -48,11 +49,25 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
-      <!-- spring-ai BOM returns in M2 (internal-llm): milestone versions are not on
-           the aliyun mirror; pin a GA release alongside the spring milestone repo then. -->
+      <!-- Spring AI 2.0 GA：要求 Boot 4.x / Framework 7（D10 智能层地基） -->
+      <dependency>
+        <groupId>org.springframework.ai</groupId>
+        <artifactId>spring-ai-bom</artifactId>
+        <version>${spring-ai.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <!-- 官方 A2A Java SDK（AA1）：先锁版本，M2 transport 起集成 -->
+      <dependency>
+        <groupId>org.a2aproject.sdk</groupId>
+        <artifactId>a2a-java-sdk-reference-jsonrpc</artifactId>
+        <version>${a2a-sdk.version}</version>
+      </dependency>
+      <!-- picocli core only: no Boot 4 starter exists upstream (issue #2491);
+           Spring wiring is a thin local IFactory in mailbus-boot (P0a). -->
       <dependency>
         <groupId>info.picocli</groupId>
-        <artifactId>picocli-spring-boot-starter</artifactId>
+        <artifactId>picocli</artifactId>
         <version>${picocli.version}</version>
       </dependency>
       <dependency>
@@ -96,7 +111,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-compiler-plugin</artifactId>
-          <version>3.13.0</version>
+          <version>3.16.0</version>
           <configuration>
             <parameters>true</parameters>  <!-- Spring MVC @PathVariable/@RequestParam name resolution -->
           </configuration>
@@ -104,7 +119,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-surefire-plugin</artifactId>
-          <version>3.5.2</version>
+          <version>3.5.6</version>
         </plugin>
       </plugins>
     </pluginManagement>

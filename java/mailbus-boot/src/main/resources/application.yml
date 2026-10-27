@@ -1,6 +1,14 @@
 mailbus:
   storage: sqlite   # sqlite (default: Flyway + file store) | memory (demo)
   data-dir: ./store
+  ai:
+    enabled: false  # L3 (P0c): true 时 AI 助手/指标问答装配激活（openai 兼容 provider 已就位）
+    provider: ""
+    model: ""
+
+spring.ai.openai:
+  api-key: ${SPRING_AI_OPENAI_API_KEY:sk-mailbus-placeholder}  # 占位避免无 key 炸启动；真实 key/deepseek 端点经环境变量覆盖
+  base-url: ${SPRING_AI_OPENAI_BASE_URL:https://api.openai.com}  # deepseek: https://api.deepseek.com；ollama: http://127.0.0.1:11434（/v1 兼容）
 
 spring:
   application:
@@ -25,4 +33,4 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics

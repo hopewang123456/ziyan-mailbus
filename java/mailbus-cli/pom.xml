@@ -19,7 +19,13 @@
 
     <dependency>
       <groupId>info.picocli</groupId>
-      <artifactId>picocli-spring-boot-starter</artifactId>
+      <artifactId>picocli</artifactId>
+    </dependency>
+    <!-- subcommands are Spring beans (constructor-injected app services);
+         was a transitive of picocli-spring-boot-starter, made explicit in P0a. -->
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-context</artifactId>
     </dependency>
   </dependencies>
 </project>
