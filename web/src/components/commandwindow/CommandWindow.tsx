@@ -3,7 +3,7 @@ import { api } from "../../lib/api";
 import { PositionPicker, type Position } from "./PositionPicker";
 import { InputSchemaForm } from "./InputSchemaForm";
 import { DraftPreview, type DraftStep } from "./DraftPreview";
-import { buildIntent, defaults, draftEnvelope, missingRequired, newTaskId, singleStepEnvelope } from "./logic";
+import { buildIntent, defaults, draftEnvelope, missingRequired, newTaskId, singleStepEnvelope, templateEnvelope, templateSteps, type WorkflowTemplate } from "./logic";
 
 /** 一条会话消息（D1 双向窗口：子言发出的指令 / 系统回执 / 被唤起通知） */
 type FlowMessage = {
@@ -65,6 +65,9 @@ export function CommandWindow({ state }: { state: CommandWindowState }) {
   // D4 自由起草（LLM 草稿确认制）：requirement → /api/command/draft → 预览调整 → explicit 提交
   const [requirement, setRequirement] = useState("");
   const [draftSteps, setDraftSteps] = useState<DraftStep[] | null>(null);
+  // 交接③ 模板起草：选 workflow → phases 拉平为 planned_chain → 复用草稿预览/提交
+  const [workflows, setWorkflows] = useState<Array<{ id: string; display?: { zh?: string; en?: string }; phase_count?: number }>>([]);
+  const [templateId, setTemplateId] = useState("");
   // D2/D15 内置身份：显示名可编辑（id 稳定）
   const [identity, setIdentity] = useState<{ id: string; display_name: string } | null>(null);
   const [editingName, setEditingName] = useState(false);
@@ -148,6 +151,46 @@ export function CommandWindow({ state }: { state: CommandWindowState }) {
     });
   }, [state.open, positions.length]);
 
+  // 交接③：模板清单懒加载（与职位目录同批拉取节奏）
+  useEffect(() => {
+    if (!state.open || workflows.length) return;
+    void api<{ workflows?: Array<{ id: string; display?: { zh?: string; en?: string }; phase_count?: number }> }>(
+      "/api/workflows",
+    ).then((r) => {
+      if (r.ok && r.data?.workflows) setWorkflows(r.data.workflows);
+    });
+  }, [state.open, workflows.length]);
+
+  async function applyTemplate() {
+    if (!templateId || busy) return;
+    setBusy(true);
+    const r = await api<{ workflow?: WorkflowTemplate }>(`/api/workflows/${encodeURIComponent(templateId)}`);
+    setBusy(false);
+    const wf = r.ok ? r.data?.workflow : undefined;
+    if (wf) {
+      const steps = templateSteps(wf);
+      if (steps.length) {
+        setDraftSteps(steps);
+        setFlow((f) => [
+          ...f,
+          {
+            id: `t${Date.now()}`,
+            from: "ziyan",
+            text: `【模板】${wf.display?.zh || templateId}（${steps.length} 步）`,
+            ts: now(),
+          },
+        ]);
+      } else {
+        setFlow((f) => [
+          ...f,
+          { id: `te${Date.now()}`, from: "system", text: "该模板 phases 无 role_type 步骤，无法起草", ts: now(), tone: "error" },
+        ]);
+      }
+    } else if (!r.ok) {
+      setFlow((f) => [...f, { id: `te${Date.now()}`, from: "system", text: `模板加载失败：${r.error}`, ts: now(), tone: "error" }]);
+    }
+  }
+
   useEffect(() => {
     flowRef.current?.scrollTo({ top: flowRef.current.scrollHeight });
   }, [flow]);
@@ -174,9 +217,14 @@ export function CommandWindow({ state }: { state: CommandWindowState }) {
   async function submitDraft() {
     if (!draftSteps?.length || busy || !requirement.trim()) return;
     setBusy(true);
-    const envelope = draftEnvelope(requirement.trim(), draftSteps, newTaskId());
+    const envelope = templateId
+      ? templateEnvelope(requirement.trim(), draftSteps, newTaskId(), templateId)
+      : draftEnvelope(requirement.trim(), draftSteps, newTaskId());
     const task_id = String(envelope.task_id);
-    setFlow((f) => [...f, { id: task_id, from: "ziyan", text: `确认草稿（${draftSteps.length} 步）`, ts: now() }]);
+    setFlow((f) => [
+      ...f,
+      { id: task_id, from: "ziyan", text: `确认${templateId ? "模板" : "草稿"}（${draftSteps.length} 步）`, ts: now() },
+    ]);
     const r = await api<{ task?: { task_id?: string } }>("/api/tasks/create", {
       method: "POST",
       body: JSON.stringify(envelope),
@@ -185,9 +233,10 @@ export function CommandWindow({ state }: { state: CommandWindowState }) {
     if (r.ok) {
       setFlow((f) => [
         ...f,
-        { id: `r${Date.now()}`, from: "system", text: `工单 ${r.data?.task?.task_id || task_id} 已按草稿创建并派发`, ts: now(), tone: "ok" },
+        { id: `r${Date.now()}`, from: "system", text: `工单 ${r.data?.task?.task_id || task_id} 已按${templateId ? "模板" : "草稿"}创建并派发`, ts: now(), tone: "ok" },
       ]);
       setDraftSteps(null);
+      setTemplateId("");
       setRequirement("");
     } else {
       setFlow((f) => [...f, { id: `r${Date.now()}`, from: "system", text: `创建失败：${r.error}`, ts: now(), tone: "error" }]);
@@ -344,6 +393,29 @@ export function CommandWindow({ state }: { state: CommandWindowState }) {
         )}
         {!selected && (
           <div className="mt-3 space-y-2">
+            {/* 交接③：模板起草（/console/workflows 可编辑，选模板拉平为职位链） */}
+            <div className="flex items-center gap-1.5">
+              <select
+                className="flex-1 rounded border border-rail bg-hull px-1.5 py-1 text-xs text-frost focus:border-mint/60 focus:outline-none"
+                value={templateId}
+                onChange={(e) => setTemplateId(e.target.value)}
+              >
+                <option value="">从工作流模板起草…</option>
+                {workflows.map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.display?.zh || w.display?.en || w.id}（{w.phase_count ?? 0} 阶段）
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="hud-btn text-xs disabled:opacity-40"
+                disabled={busy || !templateId}
+                onClick={() => void applyTemplate()}
+              >
+                按模板起草
+              </button>
+            </div>
             <textarea
               rows={3}
               className="w-full rounded border border-rail bg-hull px-2 py-1.5 text-xs text-frost placeholder:text-mute/60 focus:border-mint/60 focus:outline-none"

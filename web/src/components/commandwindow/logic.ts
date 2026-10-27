@@ -79,3 +79,37 @@ export function draftEnvelope(
     extensions: { mailbus: { command_window: { via: "llm_draft", steps: steps.length } } },
   };
 }
+
+/** 工作流模板（交接③）：phases[].steps[].role_type 拉平为职位链。 */
+export type WorkflowTemplate = {
+  id: string;
+  display?: { zh?: string; en?: string };
+  phases?: Array<{ id?: string; display?: { zh?: string }; steps?: Array<{ node_type?: string; role_type?: number }> }>;
+};
+
+export function templateSteps(wf: WorkflowTemplate): DraftStep[] {
+  const out: DraftStep[] = [];
+  for (const ph of wf.phases || []) {
+    const reason = ph.display?.zh || ph.id || wf.display?.zh || "";
+    for (const st of ph.steps || []) {
+      if (typeof st.role_type === "number") out.push({ role_type: st.role_type, reason });
+    }
+  }
+  return out;
+}
+
+/** 模板起草 envelope：extensions 顶层点号键 `mailbus.workflow` 绑定 workflow_id
+ *  （python resolve_workflow_id/engine 的消费形状）。 */
+export function templateEnvelope(
+  requirement: string,
+  steps: DraftStep[],
+  taskId: string,
+  workflowId: string,
+): Record<string, unknown> {
+  const env = draftEnvelope(requirement, steps, taskId);
+  const ext = env.extensions as Record<string, unknown>;
+  ext["mailbus.workflow"] = { workflow_id: workflowId };
+  const mailbus = ext.mailbus as Record<string, unknown>;
+  mailbus.command_window = { via: "template", workflow_id: workflowId, steps: steps.length };
+  return env;
+}

@@ -358,6 +358,13 @@ public class MailbusApplication {
                 new io.github.hopewang123456.mailbus.app.HumanQueueService(dir, clock));
     }
 
+    /** 交接③：工作流模板 registry CRUD（python handlers_workflows 对等，SoT 双栈共享）。 */
+    @Bean
+    io.github.hopewang123456.mailbus.app.WorkflowsService workflowsService(
+            org.springframework.core.env.Environment env, Clock clock) {
+        return new io.github.hopewang123456.mailbus.app.WorkflowsService(dataDir(env), clock);
+    }
+
     /** M2a 起 positions 候选池 busy/active 为任务池真值（原 controller 自建改 boot 装配）。 */
     @Bean
     io.github.hopewang123456.mailbus.app.PositionCatalogService positionCatalogService(

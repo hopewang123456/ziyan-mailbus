@@ -5,6 +5,8 @@ import {
   draftEnvelope,
   missingRequired,
   singleStepEnvelope,
+  templateSteps,
+  templateEnvelope,
 } from "../components/commandwindow/logic";
 
 /** D13 承诺的最小核心测试：发令窗口纯逻辑（envelope 构造 / 校验 / intent 组装） */
@@ -77,5 +79,42 @@ describe("envelope 构造（v3 协议）", () => {
       { role_type: 3, reason: "调研" },
       { role_type: 12, reason: "验收" },
     ]);
+  });
+});
+
+describe("模板起草（交接③）", () => {
+  const wf = {
+    id: "bugfix_s",
+    display: { zh: "小修" },
+    phases: [
+      { id: "fix", display: { zh: "修复" }, steps: [{ node_type: "agent", role_type: 8 }] },
+      { id: "verify", display: { zh: "验收" }, steps: [{ role_type: 12 }, { role_type: 12 }] },
+      { id: "empty", steps: [] },
+    ],
+  };
+
+  it("templateSteps：phases 拉平 + reason 取阶段名", () => {
+    expect(templateSteps(wf)).toEqual([
+      { role_type: 8, reason: "修复" },
+      { role_type: 12, reason: "验收" },
+      { role_type: 12, reason: "验收" },
+    ]);
+  });
+
+  it("templateSteps：空 phases / 无 role_type 步骤 → 空链", () => {
+    expect(templateSteps({ id: "x", phases: [] })).toEqual([]);
+    expect(templateSteps({ id: "x", phases: [{ id: "p", steps: [{ node_type: "agent" }] }] })).toEqual([]);
+  });
+
+  it("templateEnvelope：explicit + workflow_id 绑定进 extensions", () => {
+    const env = templateEnvelope("修个 bug", templateSteps(wf), "cmd-t9", "bugfix_s");
+    expect(env.mode).toBe("explicit");
+    expect(env.planned_chain).toHaveLength(3);
+    const ext = env.extensions as Record<string, unknown>;
+    // python resolve_workflow_id 消费顶层点号键 mailbus.workflow
+    expect(ext["mailbus.workflow"]).toEqual({ workflow_id: "bugfix_s" });
+    expect((ext.mailbus as Record<string, unknown>).command_window).toMatchObject({
+      via: "template", workflow_id: "bugfix_s",
+    });
   });
 });
