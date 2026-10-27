@@ -16,7 +16,7 @@
 | Agent 卡导入 | *(a2a.agent_card_cache 内联)* | `AgentCardImporter` | java 先行，M2 与 A2A transport 汇合 |
 | 存储迁移 | *(StoreMigrator 在 python 为脚本)* | `StoreMigrator` | java 先行 |
 | 人机闸门 | `gates.HumanGatePort` + `AuditPort` | — | M2 补（P1 发令窗口依赖） |
-| 工单 FSM | `orchestration.TaskFsmPort` | — | M2 补 |
+| 工单 FSM | `orchestration.TaskFsmPort` | `TaskRepository` | M2a 起（任务文件 {data_dir}/tasks/*.json 双栈共享；FSM 转移逻辑在 app `TaskService`/`TaskFsmViews`） |
 | 编排 | `orchestration.OrchestrationPort` + `BudgetMeterPort` | — | M2-M3 补 |
 | 消息传输 | `message_transport.MessageTransportPort` | — | M2 补（A2A 官方 SDK 之上，AA1） |
 | A2A 传输 | `message_transport.A2ATransportPort` + `BridgedAgentPort` | — | M2-M3 补 |

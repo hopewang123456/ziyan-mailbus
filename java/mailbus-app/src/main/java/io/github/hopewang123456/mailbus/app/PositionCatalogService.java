@@ -16,24 +16,36 @@ import java.util.Map;
  * <p>SoT：{@code {dataDir}/roles/json/role-types.json}（与 python 同一份文件，
  * 双栈同一真源；inputs 为起草表单 schema，缺省空列表兼容存量）。
  *
- * <p>M1 阶段候选池的 busy/active_tasks 恒为 false/0（python 侧由
- * TaskTracker 负载感知提供；java M2 接入任务追踪后对齐）。
+ * <p>M2a 起 busy/active_tasks/available 由 {@link RoleResolverService} 读
+ * 共享任务池提供真值（此前恒 false/0 的占位已对齐 python）。
  */
 public class PositionCatalogService {
 
     private final Path roleTypesPath;
+    private final RoleResolverService resolver;
 
     public PositionCatalogService(Path dataDir) {
+        this(dataDir, null);
+    }
+
+    public PositionCatalogService(Path dataDir, RoleResolverService resolver) {
         this.roleTypesPath = dataDir.resolve("roles/json/role-types.json");
+        this.resolver = resolver;
     }
 
     /** GET /api/positions — {status, positions:[...], total}. */
     public Map<String, Object> catalog() {
+        Map<String, Object> agentsCfg = resolver != null ? resolver.agentsConfig() : Map.of();
+        Map<String, Integer> active = resolver != null ? resolver.activeLoad() : Map.of();
+        java.util.Set<String> busy = resolver != null && resolver.loadAwareEnabled()
+                ? resolver.busyAgents(active, agentsCfg, resolver.defaultConcurrency())
+                : java.util.Set.of();
         List<Map<String, Object>> positions = new ArrayList<>();
         Map<String, Object> roles = readRoles();
         roles.entrySet().stream()
                 .sorted(Comparator.comparingInt(e -> parseIntOr(e.getKey(), 0)))
-                .forEach(e -> positions.add(toPosition(e.getKey(), asMap(e.getValue()))));
+                .forEach(e -> positions.add(toPosition(e.getKey(), asMap(e.getValue()),
+                        agentsCfg, active, busy)));
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("status", "ok");
         out.put("positions", positions);
@@ -41,18 +53,23 @@ public class PositionCatalogService {
         return out;
     }
 
-    private Map<String, Object> toPosition(String roleType, Map<String, Object> entry) {
+    private Map<String, Object> toPosition(String roleType, Map<String, Object> entry,
+                                           Map<String, Object> agentsCfg,
+                                           Map<String, Integer> active, java.util.Set<String> busy) {
         Map<String, Object> display = asMap(entry.get("display"));
         List<Map<String, Object>> candidates = new ArrayList<>();
         for (Object c : asList(entry.get("candidates"))) {
             String agentId = String.valueOf(c);
+            Map<String, Object> meta = asMap(agentsCfg.get(agentId));
             Map<String, Object> cand = new LinkedHashMap<>();
             cand.put("agent_id", agentId);
-            cand.put("name", agentId);
-            cand.put("framework", "");
-            cand.put("available", true);
-            cand.put("busy", false);
-            cand.put("active_tasks", 0);
+            cand.put("name", String.valueOf(meta.getOrDefault("name", agentId)));
+            cand.put("framework", String.valueOf(meta.getOrDefault("type",
+                    meta.getOrDefault("framework", ""))));
+            cand.put("available", resolver == null
+                    || resolver.agentDispatchable(agentId, agentsCfg));
+            cand.put("busy", busy.contains(agentId));
+            cand.put("active_tasks", active.getOrDefault(agentId, 0));
             candidates.add(cand);
         }
         Map<String, Object> pos = new LinkedHashMap<>();

@@ -257,4 +257,99 @@ public class MailbusApplication {
                                Clock clock) {
         return new InboxService(messages, events, clock);
     }
+
+    // ── M2a 任务引擎（python tasks/*.json 共享任务池，M2-S1）────────────────
+
+    private static java.nio.file.Path dataDir(org.springframework.core.env.Environment env) {
+        return io.github.hopewang123456.mailbus.app.SharedRoots
+                .resolveDataDir(env.getProperty("mailbus.data-dir"));
+    }
+
+    @Bean
+    io.github.hopewang123456.mailbus.ports.TaskRepository taskRepository(
+            org.springframework.core.env.Environment env) {
+        return new io.github.hopewang123456.mailbus.adapters.filestore.FileTaskRepository(dataDir(env));
+    }
+
+    @Bean
+    io.github.hopewang123456.mailbus.app.RoleResolverService roleResolverService(
+            org.springframework.core.env.Environment env,
+            io.github.hopewang123456.mailbus.ports.TaskRepository tasks) {
+        return new io.github.hopewang123456.mailbus.app.RoleResolverService(dataDir(env), tasks);
+    }
+
+    /** M2b：结果消化引擎（G-02 立即推进 + scan 兜底的共享内核）。 */
+    @Bean
+    io.github.hopewang123456.mailbus.app.ResultIngestService resultIngestService(
+            org.springframework.core.env.Environment env,
+            io.github.hopewang123456.mailbus.ports.TaskRepository tasks,
+            io.github.hopewang123456.mailbus.app.RoleResolverService resolver,
+            Clock clock) {
+        var dir = dataDir(env);
+        return new io.github.hopewang123456.mailbus.app.ResultIngestService(
+                dir, clock, tasks, resolver,
+                new io.github.hopewang123456.mailbus.app.HumanQueueService(dir, clock));
+    }
+
+    @Bean
+    io.github.hopewang123456.mailbus.app.TaskService taskService(
+            org.springframework.core.env.Environment env,
+            io.github.hopewang123456.mailbus.ports.TaskRepository tasks,
+            io.github.hopewang123456.mailbus.app.RoleResolverService resolver,
+            io.github.hopewang123456.mailbus.app.TaskPlannerService planner,
+            Clock clock) {
+        var dir = dataDir(env);
+        var svc = new io.github.hopewang123456.mailbus.app.TaskService(
+                dir, clock, tasks, resolver,
+                new io.github.hopewang123456.mailbus.app.HumanQueueService(dir, clock));
+        svc.setPlanner(planner); // M2c：解锁 auto 模式（tier0 规则 + 可选 LLM）
+        return svc;
+    }
+
+    // ── M2c 发令聚合：planner（tier0 + 可选 Spring AI）+ draft/inbox ──────────
+
+    /** LLM 回调：ChatModel 就绪时经 Spring AI ChatClient 补全（ObjectProvider 判空，勿用 @ConditionalOnBean）。 */
+    @Bean
+    io.github.hopewang123456.mailbus.app.TaskPlannerService taskPlannerService(
+            org.springframework.core.env.Environment env,
+            org.springframework.beans.factory.ObjectProvider<org.springframework.ai.chat.model.ChatModel> chatModel) {
+        var cm = chatModel.getIfAvailable();
+        io.github.hopewang123456.mailbus.app.TaskPlannerService.LlmClient llm = null;
+        if (cm != null) {
+            llm = (system, user) -> {
+                try {
+                    return org.springframework.ai.chat.client.ChatClient.builder(cm).build()
+                            .prompt().system(system).user(user).call().content();
+                } catch (RuntimeException e) {
+                    throw new io.github.hopewang123456.mailbus.app.TaskPlannerService.LlmError(
+                            String.valueOf(e.getMessage()));
+                }
+            };
+        }
+        return new io.github.hopewang123456.mailbus.app.TaskPlannerService(dataDir(env), llm);
+    }
+
+    @Bean
+    io.github.hopewang123456.mailbus.app.CommandDraftService commandDraftService(
+            io.github.hopewang123456.mailbus.app.TaskPlannerService planner) {
+        return new io.github.hopewang123456.mailbus.app.CommandDraftService(planner);
+    }
+
+    @Bean
+    io.github.hopewang123456.mailbus.app.CommandInboxService commandInboxService(
+            org.springframework.core.env.Environment env,
+            io.github.hopewang123456.mailbus.ports.TaskRepository tasks,
+            Clock clock) {
+        var dir = dataDir(env);
+        return new io.github.hopewang123456.mailbus.app.CommandInboxService(
+                dir, tasks, new io.github.hopewang123456.mailbus.app.HumanQueueService(dir, clock));
+    }
+
+    /** M2a 起 positions 候选池 busy/active 为任务池真值（原 controller 自建改 boot 装配）。 */
+    @Bean
+    io.github.hopewang123456.mailbus.app.PositionCatalogService positionCatalogService(
+            org.springframework.core.env.Environment env,
+            io.github.hopewang123456.mailbus.app.RoleResolverService resolver) {
+        return new io.github.hopewang123456.mailbus.app.PositionCatalogService(dataDir(env), resolver);
+    }
 }
