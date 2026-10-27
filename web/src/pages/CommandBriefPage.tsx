@@ -69,7 +69,23 @@ export function CommandBriefPage() {
   }
 
   // ── 统计摘要 ──
-  const failedTasks = (stats?.task_statuses?.failed || 0) + (stats?.task_statuses?.timeout || 0);
+  // P4 孪生强化：指标卡口径切统一 metrics 端点（B1/B2——驾驶舱数据全经语义层，口径与管理中心同源）
+  const [metrics, setMetrics] = useState<{ points?: Array<{ metric?: string; value?: number; error?: string }> }>({});
+  useEffect(() => {
+    void api<{ points?: Array<{ metric?: string; value?: number; error?: string }> }>("/api/metrics/query").then((r) => {
+      if (r.ok && r.data) setMetrics(r.data);
+    });
+    const timer = window.setInterval(() => {
+      void api<{ points?: Array<{ metric?: string; value?: number; error?: string }> }>("/api/metrics/query").then((r) => {
+        if (r.ok && r.data) setMetrics(r.data);
+      });
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const mv = (id: string) => {
+    const p = (metrics.points || []).find((x) => x.metric === id);
+    return p && p.value !== undefined ? p.value : null;
+  };
   const doctorIssues = (doctor?.issues || 0) + (doctor?.warnings || 0);
 
   // Agent 负载 top 问题
@@ -122,22 +138,22 @@ export function CommandBriefPage() {
           color={doctorIssues > 0 ? "text-flare" : "text-mint"}
         />
         <IndicatorCard
-          label="失败任务"
-          value={stats ? String(failedTasks) : "…"}
-          ok={stats ? failedTasks === 0 : undefined}
-          color={failedTasks > 0 ? "text-flare" : "text-mint"}
+          label="失败任务(今日)"
+          value={mv("tasks.failed_today") !== null ? String(mv("tasks.failed_today")) : "…"}
+          ok={mv("tasks.failed_today") !== null ? mv("tasks.failed_today") === 0 : undefined}
+          color={(mv("tasks.failed_today") || 0) > 0 ? "text-flare" : "text-mint"}
         />
         <IndicatorCard
-          label="运行中"
-          value={stats ? String(stats.task_statuses?.running || 0) : "…"}
+          label="活跃任务"
+          value={mv("tasks.active") !== null ? String(mv("tasks.active")) : "…"}
           ok={undefined}
           color="text-cyan-signal"
         />
         <IndicatorCard
-          label="AgentMemory"
-          value={stats ? "已连接" : "…"}
-          ok={stats ? undefined : undefined}
-          color={stats ? "text-mint" : "text-mute"}
+          label="待我处理"
+          value={mv("humanqueue.pending") !== null ? String(mv("humanqueue.pending")) : "…"}
+          ok={mv("humanqueue.pending") !== null ? mv("humanqueue.pending") === 0 : undefined}
+          color={(mv("humanqueue.pending") || 0) > 0 ? "text-amber-signal" : "text-mint"}
         />
       </div>
 

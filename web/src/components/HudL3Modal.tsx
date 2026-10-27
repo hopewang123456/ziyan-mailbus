@@ -8,10 +8,12 @@ type Props = {
   children: ReactNode;
   /** portrait：宽幅名片，去内边距让头像铺满 */
   variant?: "default" | "portrait";
+  /** P3/P4：管理职能弹窗提供「管理中心打开」跳转（弹窗=快捷视图，操作回管理页） */
+  consolePath?: string;
 };
 
 /** L3 业务弹层 */
-export function HudL3Modal({ title, open, onClose, children, variant = "default" }: Props) {
+export function HudL3Modal({ title, open, onClose, children, variant = "default", consolePath }: Props) {
   const sheetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,7 +56,16 @@ export function HudL3Modal({ title, open, onClose, children, variant = "default"
             ×
           </button>
         </header>
-        <div className="cp-l3-body">{children}</div>
+        <div className="cp-l3-body">
+          {children}
+          {consolePath && (
+            <div className="mt-3 border-t border-rail/50 pt-2 text-right">
+              <a href={consolePath} className="text-[11px] text-mint/80 underline-offset-2 hover:underline">
+                在管理中心打开 →
+              </a>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

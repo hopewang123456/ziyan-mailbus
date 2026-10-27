@@ -13,6 +13,7 @@ import { InboxPage } from "../pages/InboxPage";
 import { CommandBriefPage } from "../pages/CommandBriefPage";
 import { ApiListPage } from "../pages/thin/ApiListPage";
 import { TokensTodayPage } from "../pages/thin/TokensTodayPage";
+import { MetricsBoard } from "./metrics/MetricsBoard";
 import { TaskTracePage } from "../pages/thin/TaskTracePage";
 import { WorkflowBoardPage } from "../pages/thin/WorkflowBoardPage";
 import { getManagerPending } from "../lib/api";
@@ -34,11 +35,14 @@ function CardLauncher({
   render,
   surface = "form",
   badges,
+  consolePaths,
 }: {
   cards: { id: string; titleKey: I18nKey; blurb?: string }[];
   render: (id: string) => ReactNode;
   surface?: "fleet" | "form";
   badges?: Record<string, number>;
+  /** P3/P4：卡 id → 管理中心路径（弹窗=快捷视图，操作回管理页） */
+  consolePaths?: Record<string, string>;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const title = cards.find((c) => c.id === openId)?.titleKey;
@@ -50,7 +54,12 @@ function CardLauncher({
         onOpen={setOpenId}
         badges={badges}
       />
-      <HudL3Modal title={title ? t(title) : ""} open={!!openId} onClose={() => setOpenId(null)}>
+      <HudL3Modal
+        title={title ? t(title) : ""}
+        open={!!openId}
+        onClose={() => setOpenId(null)}
+        consolePath={openId ? consolePaths?.[openId] : undefined}
+      >
         {openId ? render(openId) : null}
       </HudL3Modal>
     </>
@@ -110,6 +119,14 @@ function WorkCards() {
 function OtherCards() {
   return (
     <CardLauncher
+        consolePaths={{
+          workflows: "/console/workflows",
+          inbox: "/console/agents",
+          stats: "/console/audit",
+          patrol: "/console/audit",
+          alerts: "/console/audit",
+          trace: "/console/audit",
+        }}
       cards={[
         { id: "intake", titleKey: "intake", blurb: "商前 · 需求入口" },
         { id: "workflows", titleKey: "workflows", blurb: "工作流定义" },
@@ -122,6 +139,7 @@ function OtherCards() {
         { id: "tokens", titleKey: "tokens", blurb: "今日 Token · 尖峰归因" },
         { id: "trace", titleKey: "trace", blurb: "工单回放 · 生命周期时序" },
         { id: "alerts", titleKey: "alerts", blurb: "告警日志" },
+        { id: "metricsBoard", titleKey: "metricsBoard", blurb: "实时指标 · 9 项口径 SoT" },
       ]}
       render={(id) => {
         switch (id) {
@@ -147,6 +165,8 @@ function OtherCards() {
             return <TaskTracePage />;
           case "alerts":
             return <ApiListPage title={t("alerts")} path="/api/alerts" listKey="alerts" variant="mail" />;
+          case "metricsBoard":
+            return <MetricsBoard />;
           default:
             return null;
         }

@@ -1,7 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { Shell } from "./components/Shell";
 import { CockpitPrototype } from "./components/CockpitPrototype";
+import { CommandWindow, CommandWindowButton } from "./components/commandwindow/CommandWindow";
+import { AssistantWindow } from "./components/assistant/AssistantWindow";
+import { ConsoleApp } from "./pages/console/ConsoleApp";
 import { HomePage } from "./pages/HomePage";
 import { ClinicPage } from "./pages/ClinicPage";
 import { ManagerDeskPage } from "./pages/ManagerDeskPage";
@@ -132,14 +135,32 @@ function CockpitEntry() {
 }
 
 export default function App() {
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   return (
     <>
       <AuthTokenBanner />
       <WriteFailToast />
       <DemoModeBanner />
+      {/* P1 发令交互窗口（D1 双向指挥席位）— 全局抽屉，双舱皆可唤起 */}
+      <CommandWindowButton state={{ open: cmdOpen, setOpen: setCmdOpen }} />
+      <CommandWindow state={{ open: cmdOpen, setOpen: setCmdOpen }} />
+      {/* P2 AI 助手（D10/D11）— 全局浮窗，双舱皆可唤起 */}
+      <button
+        type="button"
+        className="fixed bottom-16 right-24 z-[85] rounded-full border border-rail bg-hull/90 px-4 py-2 font-mono text-xs text-frost shadow hover:bg-rail/60"
+        title="AI 助手 · 指标问答与手册检索"
+        onClick={() => setAssistantOpen(!assistantOpen)}
+      >
+        🤖 助手
+      </button>
+      <AssistantWindow open={assistantOpen} onClose={() => setAssistantOpen(false)} />
       <Routes>
         <Route path="/" element={<CockpitEntry />} />
         <Route path="/cockpit" element={<CockpitEntry />} />
+        {/* P3 管理中心（新主入口）；/legacy 保留 redirect 兼容历史直链 */}
+        <Route path="/console/*" element={<ConsoleApp />} />
+        <Route path="/legacy" element={<Navigate to="/console" replace />} />
         <Route path="/*" element={<LegacyApp />} />
       </Routes>
     </>

@@ -7,7 +7,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { TwinStarsLogo } from "./TwinStarsLogo";
-import { SpaceFlybyHost } from "./SpaceFlybyHost";
+// P4: SpaceFlybyHost 停挂（氛围件收敛）；恢复时取消下一行注释
+// import { SpaceFlybyHost } from "./SpaceFlybyHost";
 import { CockpitHudBody, type HudPanelId } from "./CockpitHudBody";
 import { getLang, t, type I18nKey } from "../lib/i18n";
 import { playClickSfx, setCockpitMuted, unlockCockpitAudio } from "../lib/cockpit-audio";
@@ -356,10 +357,9 @@ export function CockpitPrototype() {
           setDrag(null);
         }}
       >
-        {/* 窗外景色：Canvas 永不挂 filter/opacity，变暗只用遮罩，避免 WebGL 层重建 */}
-        <div className="cp-layer cp-space-persist" aria-hidden>
-          <SpaceFlybyHost />
-        </div>
+        {/* P4 驾驶舱收敛（D6：3D 元素须映射真实系统状态）：SpaceFlyby 纯氛围飞掠已停挂。
+            回退：恢复 <SpaceFlybyHost />（组件与 WebGL 单例保留未删）。 */}
+        <div className="cp-layer cp-space-persist" aria-hidden />
         <div className="cp-layer cp-glass-view">
           <div className={`cp-glass-veil ${showConsole ? "is-on" : ""}`} />
           <div className="cp-glass-frame" />
