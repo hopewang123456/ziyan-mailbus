@@ -1,0 +1,11 @@
+{
+ "identities": [
+  {
+   "id": "ziyan",
+   "display_name": "子言",
+   "role": "owner",
+   "builtin": true,
+   "description": "内置主仓角色（D2）：用户本人。安装即有；id 稳定，显示名可改（D15：清单可枚举扩展更多内置人员身份）。"
+  }
+ ]
+}

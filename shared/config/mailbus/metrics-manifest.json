@@ -1,0 +1,157 @@
+{
+ "schema": "mailbus-metrics-manifest-v1",
+ "description": "指标清单 SoT（P2 B1）——双栈唯一口径真源：python 与 java 引擎各自实现计算，但指标 id/口径/维度以本文件为准。改口径改这里，不改代码。",
+ "metrics": [
+  {
+   "id": "tasks.active",
+   "name": {
+    "zh": "活跃任务",
+    "en": "Active tasks"
+   },
+   "description": "status ∈ {running, pending, blocked} 的任务数（口径=TaskTracker.list_all）",
+   "unit": "count",
+   "source": "tasks",
+   "granularity": [
+    "point",
+    "1h"
+   ],
+   "dimensions": [
+    "status"
+   ]
+  },
+  {
+   "id": "tasks.failed_today",
+   "name": {
+    "zh": "今日失败任务",
+    "en": "Failed tasks today"
+   },
+   "description": "今日内 status ∈ {failed, timeout} 的任务数（口径=/api/stats task_statuses 口径）",
+   "unit": "count",
+   "source": "tasks",
+   "granularity": [
+    "point"
+   ]
+  },
+  {
+   "id": "bus.messages_total",
+   "name": {
+    "zh": "总线消息总量",
+    "en": "Bus messages total"
+   },
+   "description": "inbox 全 agent 消息累计数（口径=/api/stats total_messages）",
+   "unit": "count",
+   "source": "messages",
+   "granularity": [
+    "point",
+    "1h"
+   ]
+  },
+  {
+   "id": "bus.unread",
+   "name": {
+    "zh": "未读消息",
+    "en": "Unread messages"
+   },
+   "description": "非 terminal 态消息数（口径=/api/status unread_messages）",
+   "unit": "count",
+   "source": "messages",
+   "granularity": [
+    "point"
+   ]
+  },
+  {
+   "id": "agents.online",
+   "name": {
+    "zh": "在线 agent",
+    "en": "Agents online"
+   },
+   "description": "心跳在线的 agent 数（口径=heartbeat is_online）",
+   "unit": "count",
+   "source": "agents",
+   "granularity": [
+    "point"
+   ]
+  },
+  {
+   "id": "agents.total",
+   "name": {
+    "zh": "注册 agent 总数",
+    "en": "Registered agents"
+   },
+   "description": "agents 配置条目数（含内置身份）",
+   "unit": "count",
+   "source": "agents",
+   "granularity": [
+    "point"
+   ]
+  },
+  {
+   "id": "tokens.today_estimated",
+   "name": {
+    "zh": "今日 Token（估算）",
+    "en": "Tokens today (est.)"
+   },
+   "description": "今日 token 消耗估算（口径=/api/tokens/summary 估算口径，回执 usage 为上报口径）",
+   "unit": "tokens",
+   "source": "tokens",
+   "granularity": [
+    "point",
+    "1h"
+   ]
+  },
+  {
+   "id": "alerts.active",
+   "name": {
+    "zh": "活跃告警",
+    "en": "Active alerts"
+   },
+   "description": "最近 24h 未消警报数（口径=get_recent_alerts）",
+   "unit": "count",
+   "source": "alerts",
+   "granularity": [
+    "point"
+   ]
+  },
+  {
+   "id": "humanqueue.pending",
+   "name": {
+    "zh": "人工待办",
+    "en": "Human queue pending"
+   },
+   "description": "human-queue status=pending 条数",
+   "unit": "count",
+   "source": "human_queue",
+   "granularity": [
+    "point"
+   ]
+  },
+  {
+   "id": "tasks.cycle_avg_minutes",
+   "name": {
+    "zh": "工单平均周期（7天）",
+    "en": "Avg cycle minutes (7d)"
+   },
+   "description": "近 7 天终态(success)任务 created_at→updated_at 平均分钟数（P5 B 类口径：周期=创建到最后变更）",
+   "unit": "minutes",
+   "source": "tasks_b",
+   "granularity": [
+    "point",
+    "1h"
+   ]
+  },
+  {
+   "id": "tasks.interventions_week",
+   "name": {
+    "zh": "人工介入次数（7天）",
+    "en": "Human interventions (7d)"
+   },
+   "description": "近 7 天 human_gate.resolve 事件数（audit SoT；P5 B 类口径：人的审批/驳回决策）",
+   "unit": "count",
+   "source": "tasks_b",
+   "granularity": [
+    "point",
+    "1h"
+   ]
+  }
+ ]
+}

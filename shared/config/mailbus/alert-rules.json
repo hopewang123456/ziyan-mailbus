@@ -1,0 +1,36 @@
+{
+ "schema": "mailbus-alert-rules-v1",
+ "description": "指标告警规则（P2 B5）— 阈值规则配置化；触发动作走总线：写 alerts + 给子言发消息（D1 通道）。改规则改这里或经管理中心 PATCH。",
+ "rules": [
+  {
+   "id": "tasks-active-high",
+   "metric": "tasks.active",
+   "op": "gt",
+   "threshold": 10,
+   "severity": "warn",
+   "enabled": true,
+   "note": "活跃任务堆积（>10）提醒关注吞吐",
+   "actions": ["write_alert", "notify_ziyan"]
+  },
+  {
+   "id": "alerts-storm",
+   "metric": "alerts.active",
+   "op": "gt",
+   "threshold": 30,
+   "severity": "critical",
+   "enabled": true,
+   "note": "告警风暴（>30 未消警）升级通知",
+   "actions": ["write_alert", "notify_ziyan"]
+  },
+  {
+   "id": "humanqueue-backlog",
+   "metric": "humanqueue.pending",
+   "op": "gt",
+   "threshold": 5,
+   "severity": "warn",
+   "enabled": true,
+   "note": "人工待办积压（>5 项）需要子言处理",
+   "actions": ["write_alert", "notify_ziyan"]
+  }
+ ]
+}
