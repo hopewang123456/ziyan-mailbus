@@ -51,11 +51,11 @@ class A2aRpcShapeTest {
         Files.createDirectories(dataDir.resolve("inbox/agentB"));
         repo = new FileTaskRepository(dataDir);
         Clock clock = Clock.systemUTC();
+        HumanQueueService humanQueue = new HumanQueueService(dataDir, clock);
         var taskService = new TaskService(dataDir, clock, repo,
-                new RoleResolverService(dataDir, repo),
-                new HumanQueueService(dataDir, clock));
+                new RoleResolverService(dataDir, repo), humanQueue);
         taskService.setPlanner(new TaskPlannerService(dataDir, null));
-        rpc = new A2aRpcService(dataDir, taskService, repo);
+        rpc = new A2aRpcService(dataDir, taskService, repo, humanQueue);
     }
 
     @AfterEach
@@ -97,12 +97,31 @@ class A2aRpcShapeTest {
                 "message", Map.of("parts", List.of(Map.of("text", "x")),
                         "metadata", Map.of("mailbus", Map.of("taskId", "ext-get-1",
                                 "planned_chain", List.of(Map.of("role_type", 1))))))));
+        // M 级默认待批 → GetTask 富状态（M2d-b1）：input-required + hq 上下文
         Map<String, Object> hit = rpc.rpc("agentA", jsonRpc("GetTask", Map.of("id", "ext-get-1")));
         assertEquals(200, ((Number) hit.get("status")).intValue());
+        Map<?, ?> wire = (Map<?, ?>) ((Map<?, ?>) ((Map<?, ?>) hit.get("body")).get("result")).get("task");
+        assertEquals("input-required", wire.get("status"));
+        Map<?, ?> mailbus = (Map<?, ?>) ((Map<?, ?>) wire.get("metadata")).get("mailbus");
+        assertEquals("plan_approval", mailbus.get("hqType"));
+        assertEquals("created", mailbus.get("fsmState"));
+        assertTrue(String.valueOf(wire.get("statusMessage")).contains("批准任务计划"));
 
         Map<String, Object> miss = rpc.rpc("agentA", jsonRpc("GetTask", Map.of("id", "nope")));
         assertEquals(404, ((Number) miss.get("status")).intValue());
         assertEquals(-32001.0, ((Number) ((Map<?, ?>) ((Map<?, ?>) miss.get("body")).get("error")).get("code")).doubleValue());
+    }
+
+    @Test
+    void getTaskRichStatusAfterCancel() {
+        rpc.rpc("agentA", jsonRpc("SendMessage", Map.of(
+                "message", Map.of("parts", List.of(Map.of("text", "x")),
+                        "metadata", Map.of("mailbus", Map.of("taskId", "ext-done-1",
+                                "planned_chain", List.of(Map.of("role_type", 1))))))));
+        rpc.rpc("agentA", jsonRpc("CancelTask", Map.of("id", "ext-done-1")));
+        Map<String, Object> out = rpc.rpc("agentA", jsonRpc("GetTask", Map.of("id", "ext-done-1")));
+        Map<?, ?> wire = (Map<?, ?>) ((Map<?, ?>) ((Map<?, ?>) out.get("body")).get("result")).get("task");
+        assertEquals("canceled", wire.get("status")); // fsm=cancelled → A2A canceled
     }
 
     @Test

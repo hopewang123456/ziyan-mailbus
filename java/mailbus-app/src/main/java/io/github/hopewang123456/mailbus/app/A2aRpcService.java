@@ -18,11 +18,14 @@ public class A2aRpcService {
     private final Path dataDir;
     private final TaskService tasks;
     private final TaskRepository repo;
+    private final HumanQueueService humanQueue;
 
-    public A2aRpcService(Path dataDir, TaskService tasks, TaskRepository repo) {
+    public A2aRpcService(Path dataDir, TaskService tasks, TaskRepository repo,
+                         HumanQueueService humanQueue) {
         this.dataDir = dataDir;
         this.tasks = tasks;
         this.repo = repo;
+        this.humanQueue = humanQueue;
     }
 
     /** 返回 {status, body}；body 为 JSON-RPC 响应文档。 */
@@ -54,8 +57,9 @@ public class A2aRpcService {
                             .anyMatch(s -> tid.equals(str(s.get("a2a_task_id"))));
                 }
                 if (match) {
+                    // M2d-b1：富 wire（fsm→A2A 状态 + pending hq 上下文，python to_a2a_hub_task 对等）
                     return result(rpcId, Map.of("task",
-                            A2aMessageMapper.wireTask(str(task.get("task_id")), null)), 200);
+                            A2aMessageMapper.hubTask(task, tid, humanQueue.items())), 200);
                 }
             }
             return error(rpcId, -32001, "task_not_found", 404);

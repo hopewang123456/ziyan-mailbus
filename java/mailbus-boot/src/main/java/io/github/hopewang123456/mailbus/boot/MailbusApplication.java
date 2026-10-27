@@ -350,8 +350,12 @@ public class MailbusApplication {
     io.github.hopewang123456.mailbus.app.A2aRpcService a2aRpcService(
             org.springframework.core.env.Environment env,
             io.github.hopewang123456.mailbus.app.TaskService tasks,
-            io.github.hopewang123456.mailbus.ports.TaskRepository repo) {
-        return new io.github.hopewang123456.mailbus.app.A2aRpcService(dataDir(env), tasks, repo);
+            io.github.hopewang123456.mailbus.ports.TaskRepository repo,
+            Clock clock) {
+        var dir = dataDir(env);
+        return new io.github.hopewang123456.mailbus.app.A2aRpcService(
+                dir, tasks, repo,
+                new io.github.hopewang123456.mailbus.app.HumanQueueService(dir, clock));
     }
 
     /** M2a 起 positions 候选池 busy/active 为任务池真值（原 controller 自建改 boot 装配）。 */

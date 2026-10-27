@@ -88,6 +88,96 @@ public final class A2aMessageMapper {
         return task;
     }
 
+    /**
+     * GetTask 富 wire — python {@code to_a2a_hub_task} 对等（M2d-b1）：
+     * fsm→A2A 状态映射 + pending human-queue 上下文（input-required 及其标题）。
+     */
+    public static Map<String, Object> hubTask(Map<String, Object> taskDoc, String a2aTaskId,
+                                              List<Map<String, Object>> humanQueue) {
+        Map<String, Object> fsm = taskDoc.get("fsm") instanceof Map<?, ?> f ? toMap(f) : Map.of();
+        String fsmState = strOrDefault(fsm.get("state"), "executing");
+        String taskId = firstNonEmpty(taskDoc.get("task_id"), taskDoc.get("id"));
+
+        Map<String, Object> mailbus = new LinkedHashMap<>();
+        mailbus.put("taskId", taskId);
+        mailbus.put("taskType", taskDoc.get("task_type"));
+        mailbus.put("tier", taskDoc.get("tier"));
+        mailbus.put("fsmState", fsmState);
+        mailbus.put("protocolVersion", "mailbus-a2a/1");
+
+        String status = "working";
+        String statusMessage = firstNonEmpty(taskDoc.get("intent"));
+
+        Map<String, Object> pendingHq = null;
+        for (Map<String, Object> item : humanQueue) {
+            if (!"pending".equals(strOrDefault(item.get("status"), ""))) {
+                continue;
+            }
+            if (!taskId.equals(strOrDefault(item.get("task_id"), ""))) {
+                continue;
+            }
+            String t = strOrDefault(item.get("type"), "");
+            if (t.equals("a2a_input_required") || t.equals("final_acceptance") || t.equals("plan_approval")) {
+                pendingHq = item;
+                break;
+            }
+        }
+
+        if (pendingHq != null) {
+            status = "input-required";
+            statusMessage = firstNonEmpty(pendingHq.get("title"), statusMessage);
+            mailbus.put("hqType", pendingHq.get("type"));
+            mailbus.put("hqId", pendingHq.get("id"));
+            Object prompt = pendingHq.get("context") instanceof Map<?, ?> ctx ? ctx.get("prompt") : null;
+            if (prompt != null && !String.valueOf(prompt).isEmpty()) {
+                statusMessage = String.valueOf(prompt);
+            }
+        } else if ("accepting".equals(fsmState)) {
+            status = "input-required";
+            statusMessage = "等待终验确认";
+            mailbus.put("hqType", "final_acceptance");
+        } else if ("blocked".equals(fsmState) || "paused".equals(fsmState)) {
+            status = "input-required";
+            statusMessage = firstNonEmpty(taskDoc.get("pause_reason"), taskDoc.get("error"), "blocked");
+        } else if ("succeeded".equals(fsmState) || "success".equals(fsmState)) {
+            status = "completed";
+        } else if ("failed".equals(fsmState)) {
+            status = "failed";
+        } else if ("cancelled".equals(fsmState)) {
+            status = "canceled";
+        }
+
+        // 首个活跃步骤的 stepId / a2a_task_id
+        if (taskDoc.get("chain") instanceof List<?> chain) {
+            for (Object o : chain) {
+                if (!(o instanceof Map<?, ?> step)) {
+                    continue;
+                }
+                String fs = strOrDefault(step.get("fsm_state"), "");
+                if (fs.equals("queued") || fs.equals("running") || fs.equals("dispatched") || fs.equals("working")) {
+                    if (step.get("step_id") != null) {
+                        mailbus.put("stepId", step.get("step_id"));
+                    }
+                    if (step.get("a2a_task_id") != null) {
+                        a2aTaskId = String.valueOf(step.get("a2a_task_id"));
+                    }
+                    break;
+                }
+            }
+        }
+
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("mailbus", mailbus);
+        Map<String, Object> wire = new LinkedHashMap<>();
+        wire.put("id", a2aTaskId == null || a2aTaskId.isEmpty() ? taskId : a2aTaskId);
+        wire.put("status", status);
+        wire.put("metadata", metadata);
+        if (!statusMessage.isEmpty()) {
+            wire.put("statusMessage", statusMessage);
+        }
+        return wire;
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> toMap(Object o) {
         return (Map<String, Object>) o;
@@ -100,5 +190,9 @@ public final class A2aMessageMapper {
             }
         }
         return "";
+    }
+
+    private static String strOrDefault(Object o, String fallback) {
+        return o == null || String.valueOf(o).isEmpty() ? fallback : String.valueOf(o);
     }
 }

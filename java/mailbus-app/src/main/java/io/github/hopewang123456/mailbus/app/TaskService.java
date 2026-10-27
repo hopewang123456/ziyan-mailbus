@@ -338,6 +338,8 @@ public class TaskService {
                 fsm.asMap(task.get("fsm")).put("state", TaskFsmState.CANCELLED.value());
                 task.put("status", "cancelled");
                 task.put("error", reason.isEmpty() ? "cancelled" : reason);
+                // 任务终态收尾：关闭该任务全部 pending 待办（否则 GetTask 富状态会误报 input-required）
+                humanQueue.closeByTask(taskId, null, Map.of("reason", "task_cancelled"));
                 fsm.appendHistory(task, "cancel", Map.of("reason", reason));
                 tasks.save(taskId, task);
                 return ok(task, "cancel", null);

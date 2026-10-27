@@ -72,7 +72,7 @@ public class HumanQueueService {
         return doc == null ? new ArrayList<>() : items(doc);
     }
 
-    /** 该任务指定类型的 pending 条目 → resolved + resolution。 */
+    /** 该任务指定类型的 pending 条目 → resolved + resolution；qtype 空 = 匹配任意类型（任务终态收尾）。 */
     public void closeByTask(String taskId, String qtype, Map<String, Object> resolution) {
         Path q = dataDir.resolve("human-queue.json");
         Map<String, Object> doc = JsonFiles.readMap(q);
@@ -82,16 +82,19 @@ public class HumanQueueService {
         List<Map<String, Object>> items = items(doc);
         boolean changed = false;
         for (Map<String, Object> item : items) {
-            if ("pending".equals(str(item.get("status")))
-                    && taskId.equals(str(item.get("task_id")))
-                    && qtype.equals(str(item.get("type")))) {
-                item.put("status", "resolved");
-                item.put("resolved_at", Instant.now(clock).toString());
-                if (resolution != null) {
-                    item.put("resolution", resolution);
-                }
-                changed = true;
+            if (!"pending".equals(str(item.get("status")))
+                    || !taskId.equals(str(item.get("task_id")))) {
+                continue;
             }
+            if (qtype != null && !qtype.isEmpty() && !qtype.equals(str(item.get("type")))) {
+                continue;
+            }
+            item.put("status", "resolved");
+            item.put("resolved_at", Instant.now(clock).toString());
+            if (resolution != null) {
+                item.put("resolution", resolution);
+            }
+            changed = true;
         }
         if (changed) {
             doc.put("items", items);
