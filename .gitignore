@@ -90,7 +90,7 @@ docker-agents/docker-compose.override.yml
 /skills/
 /rules/
 /plans/
-/docs/
+# /docs/ 已改产品知识库（P2 真目录，随仓分发；AI 助手 RAG 消费）
 
 # Local-only trees
 external-tools/
