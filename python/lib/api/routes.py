@@ -70,6 +70,23 @@ ROUTES: list[RouteSpec] = [
               "工作流模板详情", ("workflows",), param_mode="path"),
     RouteSpec("GET", "/api/openapi.json", "_openapi", "handle_openapi",
               "本服务 OpenAPI 3.1 文档（PY4-A：路由表生成）", ("meta",)),
+    # ── 任务查询（GET）────────────────────────────────────────────────────
+    RouteSpec("GET", "/api/tasks", "tasks", "handle_tasks",
+              "任务列表（过滤/分页/噪音排除）", ("tasks",),
+              params_meta=(("status", "query", "状态过滤"), ("assignee", "query", "负责人过滤"),
+                           ("limit", "query", "页大小"), ("offset", "query", "偏移"))),
+    RouteSpec("GET", "/api/tasks/{id}", "tasks", "handle_task_get",
+              "任务详情", ("tasks",), param_mode="path"),
+    # ── A2A（python handlers_a2a；M2d 对角面）────────────────────────────
+    RouteSpec("GET", "/api/a2a/agent-cards", "a2a", "handle_a2a_agent_card_list",
+              "A2A agent 卡片目录", ("a2a",)),
+    RouteSpec("GET", "/api/a2a/agent-card/{id}", "a2a", "handle_a2a_agent_card_get",
+              "A2A agent 卡片详情", ("a2a",), param_mode="path"),
+    RouteSpec("GET", "/api/a2a/protocol", "a2a", "handle_a2a_protocol_status",
+              "A2A 协议状态（spec 版本追踪）", ("a2a",)),
+    RouteSpec("POST", "/api/a2a/rpc/{id}", "a2a", "handle_a2a_rpc",
+              "A2A JSON-RPC 入站代理（SendMessage/GetTask/CancelTask）", ("a2a",),
+              param_mode="path"),
     # ── 任务 / 发令（POST）───────────────────────────────────────────────
     RouteSpec("POST", "/api/tasks/create", "tasks", "handle_task_create",
               "建任务（v3 A2A Envelope；legacy→410）", ("tasks",)),

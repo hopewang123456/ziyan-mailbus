@@ -1,0 +1,220 @@
+{
+  "generated_at": "2026-10-27T08:01:21.065555+00:00",
+  "source": {
+    "python": "offline",
+    "java": "http://127.0.0.1:9815"
+  },
+  "summary": {
+    "python_endpoints": 23,
+    "java_endpoints": 33,
+    "both": 20,
+    "python_only": 3,
+    "java_only": 13
+  },
+  "both": [
+    {
+      "method": "GET",
+      "path": "/api/a2a/agent-card/{}",
+      "py_summary": "A2A agent 卡片详情",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/a2a/agent-cards",
+      "py_summary": "A2A agent 卡片目录",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/a2a/protocol",
+      "py_summary": "A2A 协议状态（spec 版本追踪）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/command/inbox",
+      "py_summary": "子言收件箱四路聚合（manager-pending+human-queue+alerts+未读）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/identities",
+      "py_summary": "内置身份清单（D2/D15：id 稳定，显示名可改）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/metrics/manifest",
+      "py_summary": "指标清单 SoT（B1：双栈同源 manifest）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/metrics/query",
+      "py_summary": "指标查询（B2：point 现算/1h 时序窗口）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/positions",
+      "py_summary": "职位目录（发令窗口起草面板：候选池+inputs schema+实时空闲态）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/status",
+      "py_summary": "系统状态总览",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/tasks",
+      "py_summary": "任务列表（过滤/分页/噪音排除）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/tasks/{}",
+      "py_summary": "任务详情",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/workflows",
+      "py_summary": "工作流模板清单（registry SoT）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/workflows/{}",
+      "py_summary": "工作流模板详情",
+      "java_summary": ""
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/identities/{}",
+      "py_summary": "内置身份改名（显示名，id 稳定）",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/a2a/rpc/{}",
+      "py_summary": "A2A JSON-RPC 入站代理（SendMessage/GetTask/CancelTask）",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/agents/{}/step-result",
+      "py_summary": "agent 工单执行回执（落 msg-results + 立即推进）",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/command/draft",
+      "py_summary": "发令草稿预演（D4：tier0→LLM 无副作用）",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/create",
+      "py_summary": "建任务（v3 A2A Envelope；legacy→410）",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/workflows/{}",
+      "py_summary": "创建/更新工作流模板",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/workflows/{}/delete",
+      "py_summary": "删除工作流模板",
+      "java_summary": ""
+    }
+  ],
+  "python_only": [
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "summary": "服务健康探测"
+    },
+    {
+      "method": "GET",
+      "path": "/api/metrics/layout",
+      "summary": "驾驶舱大盘布局（B4 dashboard as config）"
+    },
+    {
+      "method": "GET",
+      "path": "/api/metrics/rules",
+      "summary": "告警规则清单（B5）"
+    }
+  ],
+  "java_only": [
+    {
+      "method": "GET",
+      "path": "/api/acceptance",
+      "summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/agents",
+      "summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/agents/{}/unread",
+      "summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/events",
+      "summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/inbox/{}",
+      "summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats",
+      "summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/tasks/{}/fsm",
+      "summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/trace/{}",
+      "summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/assistant/ask",
+      "summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/inbox/ack/{}",
+      "summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/inbox/{}/archive",
+      "summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/inbox/{}/send",
+      "summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/{}/fsm/{}",
+      "summary": ""
+    }
+  ]
+}
