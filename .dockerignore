@@ -1,0 +1,10 @@
+# D14 build context：python 镜像只需 shared/config 与 store SoT json/yaml（最小+安全）
+**
+!python/
+!python/bus/
+!python/lib/
+!python/config/
+!python/tools/
+!shared/config/
+python/**/__pycache__/
+python/mailbus.egg-info/
