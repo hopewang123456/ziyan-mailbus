@@ -31,6 +31,7 @@ DEFAULT_JOBS = [
     {"id": "log_rotate", "enabled": True, "cron": "0 3 * * *"},
     {"id": "agent_cli_version_check", "enabled": True, "interval_seconds": 86400, "lock": "mailbus-agent-versions"},
     {"id": "a2a-spec-sync", "enabled": True, "interval_seconds": 604800, "lock": "mailbus-a2a-spec-sync"},
+    {"id": "metrics-snapshot", "enabled": True, "interval_seconds": 300, "lock": "mailbus-metrics"},  # P2 B3 时序采集
 ]
 
 _JOB_RUNNERS: Dict[str, Callable] = {}
@@ -66,6 +67,8 @@ def _register_runners():
     _JOB_RUNNERS["platform-scout"] = lambda data_dir, cfg, job: job_mod.run_platform_scout(data_dir)
     _JOB_RUNNERS["triage-inbox"] = lambda data_dir, cfg, job: job_mod.run_triage_inbox(data_dir, cfg)
     _JOB_RUNNERS["patrol"] = lambda data_dir, cfg, job: job_mod.run_patrol(data_dir)
+    from lib.composition import metrics_snapshot
+    _JOB_RUNNERS["metrics-snapshot"] = lambda data_dir, cfg, job: metrics_snapshot(data_dir)
     _JOB_RUNNERS["daily_report"] = lambda data_dir, cfg, job: job_mod.run_daily_report(data_dir)
     _JOB_RUNNERS["log_rotate"] = lambda data_dir, cfg, job: job_mod.run_log_rotate(data_dir)
     _JOB_RUNNERS["agent_cli_version_check"] = lambda data_dir, cfg, job: job_mod.run_agent_cli_version_check(data_dir)

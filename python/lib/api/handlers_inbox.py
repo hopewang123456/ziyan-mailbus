@@ -20,6 +20,8 @@ def handle_inbox(handler, agent: str):
         ?status_filter=pending  — 只返回待处理消息（默认返回全部）
         ?limit=100              — 只返回最近 N 条（按 created_at 倒序，减轻 Dashboard 负载）
     """
+    from lib.api.handlers_system import _reload_store_config
+    _reload_store_config(handler)  # 含 D2/D15 内置身份合并
     from lib.api.security import validate_agent_name
     if not validate_agent_name(agent, handler.agents):
         handler._send_api_error("not_found", 404, detail=f"未知 agent: {agent}")
@@ -123,6 +125,8 @@ def handle_send_msg(handler):
     from_ = body.get("from", "api")
     priority = body.get("priority", "normal")
     msg_type = body.get("type", "notice")
+    from lib.api.handlers_system import _reload_store_config
+    _reload_store_config(handler)  # 含 D2/D15 内置身份合并（send_msg 可直达子言）
     if to not in handler.agents:
         handler._send_api_error("not_found", 404, detail=f"agent '{to}' 未注册")
         return
@@ -143,7 +147,7 @@ def handle_send_msg(handler):
 
     # 即时推送：写完后立即扫描并推送，不等下次 cron
     try:
-        from ..model_router import is_no_llm_notice
+        from lib.composition import is_no_llm_notice
         from lib.application.scan import finalize_auto_ack
 
         if is_no_llm_notice(msg_dict):

@@ -10,7 +10,7 @@ from unittest.mock import patch
 from lib.application.push.spawn_guard import assert_spawn_argv_allowed
 from lib.composition import build_result_store, get_integrations, merge_launch_desktop
 from lib.application.transport_send import send_outbound
-from lib.application.harness.contract import write_d1_step_result
+from lib.domain.harness_contract import write_d1_step_result
 from lib.application.scan.inbox import finalize_auto_ack
 from lib.infra.utils import json_read, json_write
 

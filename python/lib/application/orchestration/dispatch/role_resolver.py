@@ -145,3 +145,42 @@ def resolve_agent_for_role_type(
             }
     return _pick_round_robin(data_dir, int(role_type), pool)
 
+
+
+def position_catalog(data_dir: str) -> dict:
+    """职位目录（P1 发令窗口起草面板数据源，D3 职位≠角色）。
+
+    聚合 role-types SoT（含 inputs 起草 schema）+ agent 元数据 + 实时空闲态；
+    inputs 缺省为空列表（存量 SoT 零迁移兼容）。
+    """
+    from lib.infra.role_types import role_types_sot
+
+    agents_cfg = json_read(os.path.join(data_dir, "config.json"), {}).get("agents") or {}
+    active = _active_load(data_dir)
+    load_aware, default_concurrency = _dispatch_config(data_dir, agents_cfg)
+    busy = _busy_agents(data_dir, agents_cfg, active, default_concurrency) if load_aware else set()
+
+    positions = []
+    for rt_str, entry in sorted(role_types_sot(data_dir).items(), key=lambda kv: int(kv[0])):
+        disp = entry.get("display") or {}
+        candidates = []
+        for agent_id in entry.get("candidates") or []:
+            meta = agents_cfg.get(agent_id) or {}
+            candidates.append({
+                "agent_id": agent_id,
+                "name": meta.get("name") or agent_id,
+                "framework": meta.get("type") or meta.get("framework") or "",
+                "available": _agent_dispatchable(data_dir, agent_id, agents_cfg),
+                "busy": agent_id in busy,
+                "active_tasks": active.get(agent_id, 0),
+            })
+        positions.append({
+            "role_type": int(rt_str),
+            "key": entry.get("key") or f"role_{rt_str}",
+            "name_zh": disp.get("zh") or get_locale(data_dir).role_type_to_zh(int(rt_str)),
+            "name_en": disp.get("en") or "",
+            "default_sla_minutes": entry.get("default_sla_minutes"),
+            "inputs": entry.get("inputs") or [],
+            "candidates": candidates,
+        })
+    return {"positions": positions, "total": len(positions)}

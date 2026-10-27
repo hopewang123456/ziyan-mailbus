@@ -8,7 +8,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1] / "lib"
 
 
+def _is_move_shim(path: Path) -> bool:
+    """R1/R4 兼容 shim（sys.modules[__name__] 模块替换）不计入分层扫描。"""
+    try:
+        return "sys.modules[__name__]" in path.read_text(encoding="utf-8-sig")
+    except OSError:
+        return False
+
+
 def _imports_of(path: Path) -> list[str]:
+    if _is_move_shim(path):
+        return []
     tree = ast.parse(path.read_text(encoding="utf-8-sig"))
     out: list[str] = []
     for node in ast.walk(tree):

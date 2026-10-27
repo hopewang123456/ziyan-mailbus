@@ -199,7 +199,7 @@ class TestAcceptanceVSuite(unittest.TestCase):
         """Skill ids enter the contract; adapters must not rglob a skills tree."""
         push = _read(LIB / "application" / "push_with_contract.py")
         self.assertIn("domain_skill_ids", push)
-        contract = _read(LIB / "application" / "harness" / "contract.py")
+        contract = _read(LIB / "domain" / "harness_contract.py")  # R4: 契约真身下沉 domain
         self.assertIn("domain_skill_ids", contract)
         # adapters/frameworks must not rglob a skills tree
         bad = []

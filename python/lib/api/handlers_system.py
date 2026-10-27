@@ -24,8 +24,10 @@ def _reload_store_config(handler) -> tuple[dict, dict]:
     """每次 API 请求从 config.json 重读 agents（避免 serve 进程缓存旧配置）。"""
     config_path = os.path.join(handler.data_dir, "config.json")
     cfg = json_read(config_path, {})
-    agents = cfg.get("agents") or handler.agents or {}
-    agent_types = cfg.get("agent_types") or handler.agent_types or {}
+    agents = cfg.get("agents") or getattr(handler, "agents", None) or {}
+    agent_types = cfg.get("agent_types") or getattr(handler, "agent_types", None) or {}
+    from lib.infra.builtin_identities import merge_into_agents
+    agents = merge_into_agents(agents, handler.data_dir)  # D2/D15 内置身份（运行时合并，不落 config.json）
     handler.agents = agents
     handler.agent_types = agent_types
     return agents, agent_types
@@ -1545,3 +1547,116 @@ def handle_agent_assembly(handler):
         handler._send_json({"status": "error", "error": str(exc)}, 404)
     except Exception as exc:
         handler._send_json({"status": "error", "error": str(exc)[:300]}, 500)
+
+
+def handle_positions(handler):
+    """GET /api/positions — 职位目录（P1 发令窗口起草面板：职位+候选池+空闲态+inputs schema）。"""
+    handler._send_json({"status": "ok", **composition.position_catalog(handler.data_dir)})
+
+
+def handle_identities(handler):
+    """GET /api/identities — 内置身份清单（D2/D15：子言=第一内置主仓角色，清单可枚举扩展）。"""
+    from lib.infra.builtin_identities import load_builtin_identities
+
+    items = []
+    for e in load_builtin_identities(handler.data_dir):
+        items.append({
+            "id": e.get("id"),
+            "display_name": e.get("display_name"),
+            "role": e.get("role"),
+            "builtin": True,
+            "inbox_unread": 0,  # P1 五批（被唤起消息流）接真实计数
+        })
+    handler._send_json({"status": "ok", "identities": items, "total": len(items)})
+
+
+def handle_identity_rename(handler, ident_id: str):
+    """PATCH/POST /api/identities/{id} — 改显示名（D2 改名按钮；id 与 role 稳定不动）。"""
+    from lib.infra.builtin_identities import rename_identity
+
+    body = handler._read_post_body()
+    name = str(body.get("display_name") or "").strip()
+    updated = rename_identity(handler.data_dir, ident_id, name)
+    if updated is None:
+        handler._send_api_error("not_found", 404, detail=f"身份 {ident_id} 不存在或名称为空")
+        return
+    handler._send_json({"status": "ok", "identity": updated})
+
+
+def handle_metrics_query(handler):
+    """GET /api/metrics/query — 统一指标查询（B2：?metric=&granularity=point|1h&hours=24）。"""
+    from urllib.parse import urlparse, parse_qs
+
+    from lib.composition import metrics_query
+
+    qs = parse_qs(urlparse(handler.path).query)
+    metric = (qs.get("metric") or [""])[0]
+    granularity = (qs.get("granularity") or ["point"])[0]
+    try:
+        hours = max(1, min(24 * 30, int((qs.get("hours") or ["24"])[0])))
+    except ValueError:
+        hours = 24
+    out = metrics_query(handler.data_dir, metric, granularity=granularity, hours=hours)
+    status = 200 if out.get("status") == "ok" else 404
+    handler._send_json(out, status)
+
+
+def handle_metrics_manifest(handler):
+    """GET /api/metrics/manifest — 指标清单（B1 双栈 SoT）。"""
+    from lib.composition import metrics_manifest
+
+    handler._send_json({"status": "ok", "manifest": metrics_manifest(handler.data_dir)})
+
+
+def handle_metrics_snapshot(handler):
+    """POST /api/metrics/snapshot — 手动触发一次采集（scheduler 之外）。"""
+    from lib.composition import metrics_snapshot
+
+    handler._send_json(metrics_snapshot(handler.data_dir))
+
+
+def handle_metrics_rules(handler):
+    """GET /api/metrics/rules — 告警规则清单（B5）。"""
+    from lib.composition import metrics_rules
+
+    handler._send_json({"status": "ok", "rules": metrics_rules(handler.data_dir)})
+
+
+def handle_metrics_rule_patch(handler, rule_id: str):
+    """PATCH /api/metrics/rules/{id} — 编辑规则（白名单 enabled/threshold/severity/note/actions）。"""
+    from lib.composition import metrics_rule_patch
+
+    body = handler._read_post_body()
+    fields = body.get("fields") if isinstance(body.get("fields"), dict) else body
+    try:
+        updated = metrics_rule_patch(handler.data_dir, rule_id, fields or {})
+    except ValueError as exc:
+        handler._send_api_error("fatal", 400, detail=str(exc))
+        return
+    if updated is None:
+        handler._send_api_error("not_found", 404, detail=f"规则 {rule_id} 不存在")
+        return
+    handler._send_json({"status": "ok", "rule": updated})
+
+
+def handle_metrics_layout(handler):
+    """GET/PATCH /api/metrics/layout — 大盘布局（B4 dashboard as config 最小版）。
+
+    GET 返回 {hidden: [metric_id...]}；PATCH body {hidden: [...]} 整体覆盖写
+    {data_dir}/config/dashboard-layout.json。驾驶舱 MetricsBoard 与管理中心报表页共同消费。
+    """
+    from lib.infra.utils import json_read, json_write
+
+    path = os.path.join(handler.data_dir, "config", "dashboard-layout.json")
+    if handler.command == "PATCH" or handler.command == "POST":
+        body = handler._read_post_body()
+        hidden = body.get("hidden")
+        if not isinstance(hidden, list):
+            handler._send_api_error("fatal", 400, detail="需要 hidden 数组")
+            return
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        json_write(path, {"hidden": [str(h) for h in hidden]})
+        handler._send_json({"status": "ok", "layout": {"hidden": hidden}})
+        return
+    layout = json_read(path, {"hidden": []})
+    handler._send_json({"status": "ok", "layout": layout})

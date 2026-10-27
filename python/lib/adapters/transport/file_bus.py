@@ -94,7 +94,7 @@ class FileBusMessageTransport:
         msg_id: str,
         message: OutboundMessage,
     ) -> None:
-        from lib.application.harness import get_harness
+        from lib.composition import get_harness
 
         cfg = json_read(os.path.join(data_dir, "config.json"), {})
         harness = get_harness(cfg)
@@ -123,7 +123,7 @@ class FileBusMessageTransport:
         agent: str,
         msg_id: str,
     ) -> TransportReceipt:
-        from lib.application.harness import get_harness
+        from lib.composition import get_harness
 
         cfg = json_read(os.path.join(data_dir, "config.json"), {})
         harness = get_harness(cfg)

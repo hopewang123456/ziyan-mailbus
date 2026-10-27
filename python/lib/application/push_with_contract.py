@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from lib.application.harness.contract import HarnessContract, build_contract
+from lib.domain.harness_contract import HarnessContract, build_contract
 from lib.application.harness.production import ProductionHarness
 
 

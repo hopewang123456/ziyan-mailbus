@@ -6,6 +6,7 @@ import os
 from typing import Any, Mapping
 
 from lib.infra.utils import _now_iso
+from lib.interfaces.assembler import register
 
 
 class NoopAudit:
@@ -24,3 +25,16 @@ class FileAuditAdapter:
         line = {"ts": _now_iso(), "event": event, "payload": dict(payload or {})}
         with open(self._path, "a", encoding="utf-8") as f:
             f.write(json.dumps(line, ensure_ascii=False) + "\n")
+
+
+# ── L3 装配登记（composition.assemble("audit", ...) 查表用）─────────────
+
+
+@register("audit", "noop")
+def _build_noop_audit(ctx: dict) -> NoopAudit:
+    return NoopAudit()
+
+
+@register("audit", "file")
+def _build_file_audit(ctx: dict) -> FileAuditAdapter:
+    return FileAuditAdapter(ctx.get("data_dir", "store"))

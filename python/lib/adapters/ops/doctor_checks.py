@@ -19,7 +19,7 @@ Level = Literal["ok", "warn", "fail"]
 _CRITICAL_FILES = (
     "python/tools/mailbus.py",
     "python/tools/generate-compose-volumes.py",
-    "python/lib/composition.py",
+    "python/lib/composition/__init__.py",
     "python/lib/infra/constants.py",
     "python/lib/infra/env_bootstrap.py",
     "python/lib/adapters/config/agent_registry.py",

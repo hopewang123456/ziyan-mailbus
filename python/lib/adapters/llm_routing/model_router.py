@@ -122,7 +122,7 @@ def pick_model_alias(
         return TIER_PRO
 
     if config is not None:
-        from lib.adapters.orchestration.complexity_router import log_routing_decision, suggest_model_alias
+        from lib.adapters.llm_routing.complexity_router import log_routing_decision, suggest_model_alias
 
         suggestion = suggest_model_alias(
             msg,

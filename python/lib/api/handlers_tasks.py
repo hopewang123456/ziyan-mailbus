@@ -928,3 +928,233 @@ def handle_task_trace(handler):
         handler._send_json({"status": "error", "error": str(exc)}, 404)
     except Exception as exc:
         handler._send_json({"status": "error", "error": str(exc)[:300]}, 500)
+
+
+def handle_command_draft(handler):
+    """POST /api/command/draft — 发令窗口草稿预演（D4 草稿确认制）。
+
+    入参 {"intent": "..."}；无副作用地走 plan_task（tier0 规则优先，
+    无匹配时 internal LLM 生成——与正式创建同一逻辑，保证「所见即所发」），
+    返回 planned_chain 供前端预览/调整；确认后前端按 mode=explicit 提交，
+    不再二次规划。LLM/规划失败显式报错，不静默降级。
+    """
+    body = handler._read_post_body()
+    intent = str(body.get("intent") or "").strip()
+    if not intent:
+        handler._send_api_error("fatal", 400, detail="缺少 intent（需求描述）")
+        return
+
+    from lib.application.orchestration.router.planner import PlanError, plan_task
+    from lib.composition import llm_error_type
+
+    envelope = {
+        "task_id": f"draft-{handler.data_dir and '' or ''}",  # 占位；plan_task 不落盘
+        "intent": intent,
+        "initiator": "ziyan",
+        "task_type": str(body.get("task_type") or "custom").lower(),
+        "tier": str(body.get("tier") or "M"),
+        "mode": "auto",  # auto 才会走 tier0→LLM 链；确认后前端改 explicit 提交
+    }
+    try:
+        planned = plan_task(envelope, data_dir=handler.data_dir)
+    except PlanError as exc:
+        handler._send_json(
+            {"status": "error", "error": exc.code, "message": str(exc)}, 422
+        )
+        return
+    except llm_error_type() as exc:
+        handler._send_json(
+            {"status": "error", "error": "llm_error", "message": str(exc)}, 503
+        )
+        return
+    chain = planned.get("planned_chain") or []
+    # 防幻觉：role_type 全量校验（B6 精神——LLM 只翻译，口径由语义层把关）
+    from lib.composition import get_locale
+
+    valid = set(get_locale(handler.data_dir).valid_role_types())
+    chain = [s for s in chain if int(s.get("role_type") or 0) in valid]
+    if not chain:
+        handler._send_json(
+            {"status": "error", "error": "draft_empty",
+             "message": "草稿为空（LLM 输出未含有效职位）"}, 422
+        )
+        return
+    handler._send_json({
+        "status": "ok",
+        "draft": {
+            "planned_chain": chain,
+            "plan_meta": planned.get("plan_meta") or {},
+            "intent": intent,
+        },
+    })
+
+
+# ── P1 五批：子言被唤起消息聚合（D1 双向窗口的「被唤起」侧）─────────────────
+
+_MP_ACTIONS = {
+    # manager-pending / human-queue 的 bucket/type → 可执行 FSM 动作（label 中文）
+    "plan_approval": [("approve-plan", "批准计划"), ("rollback", "回退")],
+    "acceptance": [("accept", "验收"), ("rollback", "回退")],
+    "coordination": [("continue", "继续"), ("rollback", "回退")],
+}
+
+
+def handle_command_inbox(handler):
+    """GET /api/command/inbox — 子言收件箱聚合（四路 → 统一消息流）。
+
+    一期 UI 聚合（P1 规划）：manager-pending + human-queue(pending) + alerts
+    + 子言 inbox 未读；动作按钮走既有 /api/tasks/{id}/fsm/{action}。
+    二期子言真节点通道就绪后，inbox 路为真收件（第四批已通）。
+    """
+    import json as _json
+    from lib.application.queries.manager import manager_pending
+    from lib.composition import get_recent_alerts, load_human_queue
+    from lib.infra.utils import json_read, resolve_paths
+
+    items: list = []
+
+    # 1) manager pending（计划待批/待终验/待协调）
+    mp = manager_pending(handler.data_dir)
+    for it in (mp or {}).get("items") or []:
+        bucket = str(it.get("bucket") or it.get("type") or "")
+        task_id = str(it.get("task_id") or "")
+        items.append({
+            "source": "manager_pending",
+            "id": f"mp:{task_id}:{bucket}",
+            "ts": it.get("updated_at") or it.get("created_at") or "",
+            "text": f"{it.get('title') or bucket}（{task_id}）",
+            "tone": "warn",
+            "task_id": task_id,
+            "actions": [
+                {"action": a, "label": label, "task_id": task_id}
+                for a, label in _MP_ACTIONS.get(bucket, [])
+            ],
+        })
+
+    # 2) human queue（pending；load_queue 返回全量，此处过滤）
+    hq = load_human_queue(handler.data_dir) or {}
+    for it in (hq.get("items") or [])[:50]:
+        if it.get("status") != "pending":
+            continue
+        itype = str(it.get("type") or "")
+        task_id = str(it.get("task_id") or "")
+        if any(i["id"] == f"mp:{task_id}:{itype}" for i in items):
+            continue  # 与 manager-pending 重复的待批项
+        items.append({
+            "source": "human_queue",
+            "id": f"hq:{it.get('id')}",
+            "ts": it.get("created_at") or "",
+            "text": f"{it.get('title') or itype}（{task_id or it.get('id')}）",
+            "tone": "warn",
+            "task_id": task_id,
+            "actions": [
+                {"action": a, "label": label, "task_id": task_id}
+                for a, label in _MP_ACTIONS.get(itype, [])
+            ],
+        })
+
+    # 3) alerts（severity 高者优先，取最近 5 条未消警）
+    for al in (get_recent_alerts(handler.data_dir, limit=5) or []):
+        sev = str(al.get("severity") or "info")
+        items.append({
+            "source": "alert",
+            "id": f"al:{al.get('id')}",
+            "ts": str(al.get("ts") or al.get("time") or ""),
+            "text": f"[{sev}] {al.get('message') or al.get('type')}",
+            "tone": "critical" if sev == "critical" else "warn",
+            "actions": [],
+        })
+
+    # 4) 子言真 inbox（第四批打通的收件通道；未读消息）
+    paths = resolve_paths(handler.data_dir)
+    inbox_file = os.path.join(paths["inbox"], "ziyan", "inbox.json")
+    inbox_doc = json_read(inbox_file, {})
+    ziyan_unread = 0
+    terminal = {"done", "closed", "rejected", "failed", "archived", "sent"}
+    for m in (inbox_doc.get("messages") or [])[-20:]:
+        state = m.get("state") or m.get("status") or ""
+        if state in terminal:
+            continue
+        ziyan_unread += 1
+        items.append({
+            "source": "inbox",
+            "id": f"in:{m.get('id')}",
+            "ts": m.get("created_at") or "",
+            "text": f"来自 {m.get('from')}：{(m.get('content') or '')[:120]}",
+            "tone": "info",
+            "actions": [],
+        })
+
+    handler._send_json({
+        "status": "ok",
+        "identity": {"id": "ziyan"},
+        "unread": len(items),
+        "ziyan_inbox_unread": ziyan_unread,
+        "items": items,
+    })
+
+
+# ── P3 管理中心：职位（role_type）写端点 ────────────────────────────────
+
+_POSITION_PATCH_KEYS = ("display", "candidates", "inputs", "default_sla_minutes", "key")
+
+
+def handle_position_update(handler, role_type: int):
+    """PATCH /api/positions/{role_type} — 管理中心编辑职位（D3 表单 schema 来源）。
+
+    写 {data_dir}/roles/json/role-types.json（SoT 首选路径）——seed 不动。
+    允许字段：display/candidates/inputs/default_sla_minutes/key（白名单）。
+    inputs 逐项校验 name/type/required，type 限 string|text|enum|number|boolean。
+    """
+    from lib.infra.utils import json_read, json_write
+
+    body = handler._read_post_body()
+    fields = body.get("fields") if isinstance(body.get("fields"), dict) else body
+    if not isinstance(fields, dict):
+        handler._send_api_error("fatal", 400, detail="需要 fields 对象")
+        return
+    unknown = [k for k in fields if k not in _POSITION_PATCH_KEYS]
+    if unknown:
+        handler._send_api_error("fatal", 400, detail=f"不可编辑字段: {', '.join(unknown)}")
+        return
+    if "inputs" in fields:
+        err = _validate_position_inputs(fields["inputs"])
+        if err:
+            handler._send_api_error("fatal", 400, detail=err)
+            return
+
+    path = os.path.join(handler.data_dir, "roles", "json", "role-types.json")
+    doc = json_read(path, {})
+    roles = doc.get("roles")
+    if not isinstance(roles, dict):
+        handler._send_api_error("not_found", 404, detail="role-types SoT 不存在或格式不符")
+        return
+    key = str(int(role_type))
+    entry = roles.get(key)
+    if not isinstance(entry, dict):
+        handler._send_api_error("not_found", 404, detail=f"职位 role_type={role_type} 不存在")
+        return
+    entry = dict(entry)
+    for k, v in fields.items():
+        entry[k] = v
+    roles[key] = entry
+    doc["roles"] = roles
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    json_write(path, doc)
+    handler._send_json({"status": "ok", "role_type": int(role_type), "entry": entry})
+
+
+def _validate_position_inputs(inputs) -> str:
+    if not isinstance(inputs, list):
+        return "inputs 必须是数组"
+    allowed = {"string", "text", "enum", "number", "boolean"}
+    for i, f in enumerate(inputs):
+        if not isinstance(f, dict):
+            return f"inputs[{i}] 必须是对象"
+        if not f.get("name"):
+            return f"inputs[{i}] 缺 name"
+        if f.get("type") not in allowed:
+            return f"inputs[{i}].type 必须是 {'/'.join(sorted(allowed))}"
+        if f.get("type") == "enum" and not f.get("options"):
+            return f"inputs[{i}] enum 类型需 options"
+    return ""

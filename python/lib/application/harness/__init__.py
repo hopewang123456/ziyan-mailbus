@@ -108,4 +108,4 @@ def get_harness(config: Optional[dict] = None) -> AgentHarness:
     return ProductionHarness()
 
 
-from .contract import HarnessContract, build_contract, write_d1_step_result  # noqa: E402
+from lib.domain.harness_contract import HarnessContract, build_contract, write_d1_step_result  # noqa: E402

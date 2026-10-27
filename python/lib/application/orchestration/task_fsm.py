@@ -633,7 +633,7 @@ def apply_submit(
     cfg = _json_read(os.path.join(data_dir, "config.json"), {}) if data_dir else {}
     crt_rt = step_role_type(step)
     from lib.composition import run_step_verify, notify_verify_failure
-    from lib.adapters.orchestration.automation import bump_retry_count, retry_exceeded, verify_fail_auto_retry
+    from lib.composition import bump_retry_count, retry_exceeded, verify_fail_auto_retry
 
     v_ok, v_err, v_meta = run_step_verify(
         crt_rt, conclusion, result, config=cfg, data_dir=data_dir or "",
@@ -789,7 +789,7 @@ def apply_submit(
 
     next_role_type = None
     if kind == "advance" and is_role_pipeline_task(task) and n_role:
-        from lib.adapters.locale.role_labels import zh_to_role_type
+        from lib.composition import zh_to_role_type
         next_role_type = result.get("next_role_type")
         if next_role_type is not None:
             try:

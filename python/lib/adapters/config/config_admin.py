@@ -11,7 +11,7 @@ from lib.infra.utils import json_read, json_write
 from lib.adapters.frameworks.spec import FRAMEWORKS
 from .config_schema import validate_config
 from lib.infra.env_bootstrap import load_mailbus_env
-from lib.adapters.integrations.model_router import TIER_OLLAMA
+from lib.adapters.llm_routing.model_router import TIER_OLLAMA
 from lib.infra.utils import json_read, json_write
 
 
@@ -96,6 +96,7 @@ EDITABLE_SECTIONS = frozenset({
     "asset_paths",
     "browser_hosts",
     "auth",
+    "composition",
 })
 
 AGENT_PATCH_KEYS = frozenset({
@@ -200,6 +201,7 @@ SECTION_LABELS = {
     "smart_routing": "智能路由 / L0–L3",
     "services": "外部服务 / 接线",
     "asset_paths": "资产路径（skill/rule/identity · 仓内默认/自定义）",
+    "composition": "L3 装配（audit/notifier 实现选择）",
     "harness": "Harness / 规则路径",
     "browser_hosts": "浏览器 Host 白名单",
     "auth": "API 鉴权 / 无 Token 写白名单",
@@ -371,12 +373,12 @@ def get_section(data_dir: str, section: str) -> dict:
             },
         }
     if section == "smart_routing":
-        from lib.adapters.orchestration.complexity_router import (
+        from lib.adapters.llm_routing.complexity_router import (
             DEFAULT_TIER_MAP_CLOUD,
             DEFAULT_TIER_MAP_OLLAMA,
             load_smart_routing_config,
         )
-        from lib.adapters.integrations.ollama_routing import is_ollama_ready, resolve_ollama_settings
+        from lib.adapters.llm_routing.ollama_routing import is_ollama_ready, resolve_ollama_settings
 
         sr = load_smart_routing_config(cfg)
         types = cfg.get("agent_types") or {}
@@ -701,7 +703,7 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
             _persist_services_seed(data_dir, cfg["services"])
         try:
             from lib.adapters.ops.service_registry import clear_service_registry_cache
-            from lib.adapters.integrations.ollama_routing import invalidate_ollama_probe_cache
+            from lib.adapters.llm_routing.ollama_routing import invalidate_ollama_probe_cache
 
             clear_service_registry_cache()
             invalidate_ollama_probe_cache()
@@ -827,7 +829,7 @@ def patch_section(data_dir: str, section: str, patch: dict) -> Tuple[dict, List[
         if section in ("scheduler", "mailbus_internal_llm", "mailbus_intake_bridge", "smart_routing"):
             requires_restart.append(section)
         if section == "smart_routing":
-            from lib.adapters.integrations.ollama_routing import invalidate_ollama_probe_cache
+            from lib.adapters.llm_routing.ollama_routing import invalidate_ollama_probe_cache
 
             invalidate_ollama_probe_cache()
 

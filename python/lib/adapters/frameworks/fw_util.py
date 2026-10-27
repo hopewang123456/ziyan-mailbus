@@ -20,7 +20,7 @@ def model_flag(
     models_map = agent_types.get("models", {})
     agent_models = agent_cfg.get("models", [])
     if model_alias == "ollama-local":
-        from lib.adapters.integrations.ollama_routing import ollama_model_flag
+        from lib.adapters.llm_routing.ollama_routing import ollama_model_flag
         from lib.infra.push_context import get_push_context
 
         ctx = get_push_context()

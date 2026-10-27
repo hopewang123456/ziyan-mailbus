@@ -1,4 +1,7 @@
-"""TaskFsmPort adapter over lib.adapters.orchestration.task_fsm."""
+"""TaskFsmPort adapter over lib.application.orchestration.task_fsm (R1 归位后的过渡兼容层).
+
+R1 (2026-10-26): task_fsm 应用服务已移入 application 层；本 Port+Adapter 保留为
+兼容层，application 内部请直接使用 task_fsm 服务。R3 分包时评估退役。"""
 from __future__ import annotations
 
 from typing import Any, Optional

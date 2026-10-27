@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from lib.domain.types import AgentRef, HealthStatus, ProbeResult, SpawnHandle
-from lib.application.harness.contract import HarnessContract
+from lib.domain.harness_contract import HarnessContract
 
 
 class FakeRuntime:

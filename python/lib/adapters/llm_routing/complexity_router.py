@@ -11,7 +11,7 @@ import os
 import re
 from typing import Any, Optional
 
-from lib.adapters.integrations.model_router import TIER_FLASH, TIER_OLLAMA, TIER_PRO, _pro_allowed
+from lib.adapters.llm_routing.model_router import TIER_FLASH, TIER_OLLAMA, TIER_PRO, _pro_allowed
 
 COMPLEXITY_TIERS = ("L0", "L1", "L2", "L3")
 ENGINE_VERSION = "mailbus-smart-routing"
@@ -223,7 +223,7 @@ def resolve_effective_tier_map(
     if not use_ollama:
         return base
 
-    from lib.adapters.integrations.ollama_routing import agent_supports_ollama, is_ollama_ready
+    from lib.adapters.llm_routing.ollama_routing import agent_supports_ollama, is_ollama_ready
 
     if not is_ollama_ready(config, data_dir=data_dir):
         return {k: (v if v != TIER_OLLAMA else TIER_FLASH) for k, v in base.items()}
@@ -250,7 +250,7 @@ def map_tier_to_alias(
 
     if alias == TIER_PRO and not _pro_allowed(agent_cfg):
         # L3 无 Pro 许可：优先本机 Ollama，否则 flash
-        from lib.adapters.integrations.ollama_routing import agent_supports_ollama, is_ollama_ready
+        from lib.adapters.llm_routing.ollama_routing import agent_supports_ollama, is_ollama_ready
 
         if (
             cfg.get("use_ollama", True)
@@ -263,7 +263,7 @@ def map_tier_to_alias(
             alias = TIER_FLASH
 
     if alias == TIER_OLLAMA:
-        from lib.adapters.integrations.ollama_routing import agent_supports_ollama, is_ollama_ready
+        from lib.adapters.llm_routing.ollama_routing import agent_supports_ollama, is_ollama_ready
 
         if not (
             cfg.get("use_ollama", True)
@@ -316,13 +316,13 @@ def suggest_model_alias(
 
     ollama_ready = False
     if routing_cfg.get("use_ollama", True):
-        from lib.adapters.integrations.ollama_routing import is_ollama_ready
+        from lib.adapters.llm_routing.ollama_routing import is_ollama_ready
 
         ollama_ready = is_ollama_ready(config, data_dir=data_dir)
 
     gpu_step = None
     if alias == TIER_OLLAMA and config:
-        from lib.adapters.integrations.ollama_routing import prepare_gpu_for_ollama_push
+        from lib.adapters.llm_routing.ollama_routing import prepare_gpu_for_ollama_push
 
         gpu_step = prepare_gpu_for_ollama_push(config)
 

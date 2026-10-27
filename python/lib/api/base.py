@@ -329,6 +329,13 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         routes = {
             "/api/health": lambda: h["system"].handle_health(self),
             "/api/status": lambda: h["system"].handle_status(self),
+            "/api/positions": lambda: h["system"].handle_positions(self),
+            "/api/identities": lambda: h["system"].handle_identities(self),
+            "/api/command/inbox": lambda: h["tasks"].handle_command_inbox(self),
+            "/api/metrics/manifest": lambda: h["system"].handle_metrics_manifest(self),
+            "/api/metrics/query": lambda: h["system"].handle_metrics_query(self),
+            "/api/metrics/rules": lambda: h["system"].handle_metrics_rules(self),
+            "/api/metrics/layout": lambda: h["system"].handle_metrics_layout(self),
             "/api/agents": lambda: h["system"].handle_agents(self),
             "/api/frameworks": lambda: h["system"].handle_frameworks(self),
             "/api/tasks": lambda: h["tasks"].handle_tasks(self),
@@ -509,6 +516,9 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
 
     # ── HTTP POST 路由 ─────────────────────────────────────────────────
 
+    def do_PATCH(self):
+        self.do_POST()
+
     def do_POST(self):
         path = self._read_path()
         if path == "/api/device/chat":
@@ -540,6 +550,27 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             h["tasks"].handle_permission(self)
         elif path == "/api/skill-use":
             h["tasks"].handle_skill_use(self)
+        elif path.startswith("/api/positions/"):
+            try:
+                rt = int(path[len("/api/positions/"):].strip("/"))
+            except ValueError:
+                h["system"].handle_positions(self)
+            else:
+                h["tasks"].handle_position_update(self, rt)
+        elif path == "/api/assistant/ask":
+            h["internal_llm"].handle_assistant_ask(self)
+        elif path.startswith("/api/metrics/rules/"):
+            rid = path[len("/api/metrics/rules/"):].strip("/")
+            h["system"].handle_metrics_rule_patch(self, rid)
+        elif path == "/api/metrics/layout":
+            h["system"].handle_metrics_layout(self)
+        elif path == "/api/metrics/snapshot":
+            h["system"].handle_metrics_snapshot(self)
+        elif path.startswith("/api/identities/") and path != "/api/identities":
+            ident_id = path[len("/api/identities/"):].strip("/")
+            h["system"].handle_identity_rename(self, ident_id)
+        elif path == "/api/command/draft":
+            h["tasks"].handle_command_draft(self)
         elif path == "/api/tasks/create":
             h["tasks"].handle_task_create(self)
         elif path == "/api/tasks/update":

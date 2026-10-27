@@ -21,3 +21,15 @@ class FileNotifier:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+# ── L3 装配登记（composition.assemble("notifier", ...) 查表用）──────────
+
+
+def _build_file_notifier(ctx: dict) -> FileNotifier:
+    return FileNotifier(ctx.get("data_dir", "store"))
+
+
+from lib.interfaces.assembler import register  # noqa: E402  (登记置于类定义后)
+
+register("notifier", "file")(_build_file_notifier)
