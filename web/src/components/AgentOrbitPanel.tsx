@@ -12,6 +12,20 @@ import { api } from "../lib/api";
 
 const AGENTS_TTL_MS = 8000;
 const MANIFEST_POLL_MS = 1200;
+
+/** P4 孪生映射：agent 环体绑定心跳真实在线态（离线=灰暗，在线=常亮） */
+type OnlineMap = Record<string, boolean>;
+async function fetchOnlineMap(): Promise<OnlineMap> {
+  const r = await api<{ agents?: Record<string, { has_unread?: boolean }> } | Record<string, unknown>>("/api/heartbeat");
+  if (!r.ok || !r.data) return {};
+  // heartbeat 返回形状兼容：优先 agents 字典
+  const agents = (r.data as { agents?: Record<string, unknown> }).agents || (r.data as Record<string, unknown>);
+  const out: OnlineMap = {};
+  for (const [id, v] of Object.entries(agents || {})) {
+    out[id] = Boolean((v as Record<string, unknown>)?.online ?? (v as Record<string, unknown>)?.is_online ?? true);
+  }
+  return out;
+}
 const ORBIT_FILTERS: OrbitFilter[] = [
   "all",
   "hermes",
@@ -48,6 +62,20 @@ function toRows(raw: AgentsResp["agents"]): AgentRow[] {
 
 /** 齐套门禁：全部 agent 静+动均存在才上环 */
 export function AgentOrbitPanel() {
+  const [onlineMap, setOnlineMap] = useState<OnlineMap>({});
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      const m = await fetchOnlineMap();
+      if (alive) setOnlineMap(m);
+    };
+    void tick();
+    const timer = window.setInterval(tick, 30000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, []);
   const [roster, setRoster] = useState<AgentRow[]>([]);
   const [err, setErr] = useState("");
   const [ready, setReady] = useState(false);
@@ -371,9 +399,13 @@ export function AgentOrbitPanel() {
               <button
                 key={ag.id}
                 type="button"
-                className={`cp-orbit-node${on ? " is-on" : ""}`}
-                style={{ left: `${left}%`, top: `${top}%` }}
-                aria-label={`${label}${fw ? ` · ${fw}` : ""}`}
+                className={`cp-orbit-node${on ? " is-on" : ""}${onlineMap[ag.id] === false ? " is-offline" : ""}`}
+                style={{
+                  left: `${left}%`,
+                  top: `${top}%`,
+                  ...(onlineMap[ag.id] === false ? { filter: "grayscale(0.9) brightness(0.55)" } : {}),
+                }}
+                aria-label={`${label}${fw ? ` · ${fw}` : ""}${onlineMap[ag.id] === false ? " · 离线" : ""}`}
                 aria-pressed={on}
                 onClick={() => {
                   setLaunchErr("");
