@@ -86,26 +86,55 @@ def resolve_harness_rules_path(
 
 
 def get_harness(config: Optional[dict] = None) -> AgentHarness:
+    """按 ``config.harness.mode`` 装配 harness（L3 登记制，P0c 上提）。
+
+    四实现经 ``lib.interfaces.assembler.register("harness", ...)`` 登记
+    （登记在本文件尾部），此处查表实例化；**未知 mode fail-fast** 抛
+    AssemblyError——此前拼写错误会静默落 production（W7 期隐患）。
+    选择键保持 ``harness.mode``（既有配置零迁移）。
+    """
+    from lib.interfaces.assembler import resolve_factory
+
     cfg = (config or {}).get("harness") or {}
-    mode = cfg.get("mode", "production")
-    if mode == "stub":
-        from .fixtures.stub import StubHarness
+    mode = str(cfg.get("mode", "production")).strip()
+    factory = resolve_factory("harness", mode)
+    return factory({"data_dir": "", "harness_cfg": cfg})
 
-        return StubHarness(_resolve_fixtures_dir(cfg))
-    if mode == "replay":
-        from .fixtures.replay import ReplayHarness
 
-        return ReplayHarness(_resolve_fixtures_dir(cfg))
-    if mode == "record":
-        from .fixtures.record import RecordHarness
+def _build_stub_harness(ctx: dict) -> AgentHarness:
+    from .fixtures.stub import StubHarness
 
-        record_dir = cfg.get("record_dir") or os.path.join(str(MAILBUS_ROOT), "store", "harness-recordings")
-        if not os.path.isabs(record_dir):
-            record_dir = os.path.join(str(MAILBUS_ROOT), record_dir)
-        return RecordHarness(record_dir=record_dir)
+    return StubHarness(_resolve_fixtures_dir(ctx.get("harness_cfg") or {}))
+
+
+def _build_replay_harness(ctx: dict) -> AgentHarness:
+    from .fixtures.replay import ReplayHarness
+
+    return ReplayHarness(_resolve_fixtures_dir(ctx.get("harness_cfg") or {}))
+
+
+def _build_record_harness(ctx: dict) -> AgentHarness:
+    from .fixtures.record import RecordHarness
+
+    cfg = ctx.get("harness_cfg") or {}
+    record_dir = cfg.get("record_dir") or os.path.join(str(MAILBUS_ROOT), "store", "harness-recordings")
+    if not os.path.isabs(record_dir):
+        record_dir = os.path.join(str(MAILBUS_ROOT), record_dir)
+    return RecordHarness(record_dir=record_dir)
+
+
+def _build_production_harness(ctx: dict) -> AgentHarness:
     from .production import ProductionHarness
 
     return ProductionHarness()
+
+
+from lib.interfaces.assembler import register  # noqa: E402  (登记置于工厂定义后)
+
+register("harness", "stub")(_build_stub_harness)
+register("harness", "replay")(_build_replay_harness)
+register("harness", "record")(_build_record_harness)
+register("harness", "production")(_build_production_harness)
 
 
 from lib.domain.harness_contract import HarnessContract, build_contract, write_d1_step_result  # noqa: E402

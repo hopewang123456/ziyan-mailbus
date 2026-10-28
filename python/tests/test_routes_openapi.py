@@ -11,16 +11,25 @@ from lib.api.openapi import build_openapi
 class TestRouteSpecMatch:
     def test_exact_hit_and_miss(self):
         spec = routes.RouteSpec("GET", "/api/health", "system", "handle_health")
-        assert spec.match("/api/health") == ""
+        assert spec.match("/api/health") == {}
         assert spec.match("/api/health2") is None
         assert spec.match("/api/other") is None
 
     def test_param_prefix(self):
         spec = routes.RouteSpec("GET", "/api/workflows/{id}", "workflows", "handle_workflow_get")
-        assert spec.match("/api/workflows/bugfix_s") == "bugfix_s"
+        assert spec.match("/api/workflows/bugfix_s") == {"id": "bugfix_s"}
         assert spec.match("/api/workflows/") is None  # 空参数不匹配
         assert spec.match("/api/workflows") is None
         assert spec.match("/api/positions") is None
+
+    def test_multi_path_params(self):
+        """多路径参数：/api/tasks/{id}/fsm/{action} → 两个参数按序返回。"""
+        spec = routes.RouteSpec(
+            "POST", "/api/tasks/{id}/fsm/{action}", "tasks", "handle_task_fsm_action")
+        assert spec.path_params == ("id", "action")
+        assert spec.match("/api/tasks/t_001/fsm/rollback") == {"id": "t_001", "action": "rollback"}
+        assert spec.match("/api/tasks/t_001/fsm") is None
+        assert spec.match("/api/tasks/t_001/fsm/a/b") is None
 
 
 class TestDispatch:
@@ -52,6 +61,33 @@ class TestDispatch:
         with mock.patch("lib.api.base._get_handlers", return_value={}):
             assert routes.dispatch(object(), "POST", "/api/health") is False
 
+    def test_multi_param_dispatch_passes_params_in_order(self):
+        """双参 dispatch：handler(task_id, action) 顺序正确。"""
+        called = []
+
+        class Mods:
+            def handle_task_fsm_action(self, handler_self, task_id, action):
+                called.append((task_id, action))
+
+        with mock.patch("lib.api.base._get_handlers", return_value={"tasks": Mods()}):
+            assert routes.dispatch(object(), "POST", "/api/tasks/t_9/fsm/rollback") is True
+        assert called == [("t_9", "rollback")]
+
+    def test_longer_path_wins_over_shorter(self):
+        """/api/inbox/ack/{id} 必须先于 /api/inbox/{agent} 命中。"""
+        called = []
+
+        class Mods:
+            def handle_inbox_ack(self, handler_self, msg_id):
+                called.append(("ack", msg_id))
+
+            def handle_inbox(self, handler_self, agent):
+                called.append(("inbox", agent))
+
+        with mock.patch("lib.api.base._get_handlers", return_value={"inbox": Mods()}):
+            assert routes.dispatch(object(), "POST", "/api/inbox/ack/m_001") is True
+        assert called == [("ack", "m_001")]
+
 
 class TestOpenApi:
     def test_document_shape(self):
@@ -67,6 +103,31 @@ class TestOpenApi:
         entry = doc["paths"]["/api/workflows/{id}"]["get"]
         assert entry["parameters"][0]["name"] == "id"
         assert entry["parameters"][0]["in"] == "path"
+
+    def test_path_param_declared_when_not_last_segment(self):
+        """参数不在末段时也必须声明（/{id}/delete 这类路由）。"""
+        doc = build_openapi()
+        entry = doc["paths"]["/api/workflows/{id}/delete"]["post"]
+        names = [p["name"] for p in entry["parameters"] if p["in"] == "path"]
+        assert "id" in names
+
+    def test_multi_path_params_all_declared(self):
+        doc = build_openapi()
+        entry = doc["paths"]["/api/tasks/{id}/fsm/{action}"]["post"]
+        names = [p["name"] for p in entry["parameters"] if p["in"] == "path"]
+        assert names == ["id", "action"]
+
+    def test_request_body_and_response_schema_emitted(self):
+        """body_meta / response_meta → requestBody + 带 schema 的 responses。"""
+        spec = next(s for s in routes.ROUTES if s.path == "/api/tasks/create")
+        assert spec.body_meta, "建任务端点应声明 requestBody"
+        doc = build_openapi()
+        entry = doc["paths"]["/api/tasks/create"]["post"]
+        rb = entry["requestBody"]["content"]["application/json"]["schema"]
+        assert rb["type"] == "object"
+        assert "properties" in rb
+        resp = entry["responses"]["200"]["content"]["application/json"]["schema"]
+        assert resp["type"] == "object"
 
     def test_query_params_from_meta(self):
         doc = build_openapi()
@@ -96,7 +157,7 @@ class TestDispatchPriority:
     def test_suffix_route_captures_param_without_suffix(self):
         """{id}/delete 的 regex 捕获 id（不含后缀）。"""
         suffix_spec = next(s for s in routes.ROUTES if s.path == "/api/workflows/{id}/delete")
-        assert suffix_spec.match("/api/workflows/x/delete") == "x"
+        assert suffix_spec.match("/api/workflows/x/delete") == {"id": "x"}
         assert suffix_spec.match("/api/workflows/x") is None
 
     def test_delete_routes_to_delete_handler_not_save(self):

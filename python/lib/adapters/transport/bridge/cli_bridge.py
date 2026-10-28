@@ -163,3 +163,15 @@ class CliBridgedAgent:
                     return True
             time.sleep(0.5)
         return False
+
+
+# ── L3 装配登记（composition.assemble("bridged_agent", ...) 查表用）──────
+
+
+def _build_cli_bridged_agent(ctx: dict) -> "CliBridgedAgent":
+    return CliBridgedAgent(data_dir=ctx.get("data_dir", "store"), config=ctx.get("impl_config"))
+
+
+from lib.interfaces.assembler import register  # noqa: E402  (登记置于类定义后)
+
+register("bridged_agent", "cli")(_build_cli_bridged_agent)

@@ -60,3 +60,15 @@ class FakeBridgedAgent:
         }
         self.statuses.append(rec)
         return rec
+
+
+# ── L3 装配登记（composition.assemble("bridged_agent", ...) 查表用）──────
+
+
+def _build_fake_bridged_agent(ctx: dict) -> "FakeBridgedAgent":
+    return FakeBridgedAgent()
+
+
+from lib.interfaces.assembler import register  # noqa: E402  (登记置于类定义后)
+
+register("bridged_agent", "fake")(_build_fake_bridged_agent)

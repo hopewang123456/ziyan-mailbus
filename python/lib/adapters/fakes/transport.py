@@ -102,3 +102,20 @@ class FakeMessageTransport:
             channel="fake",
             error_code="" if self.accept else "delivery_failed",
         )
+
+
+# ── L3 装配登记（composition.assemble(...) 查表用；测试/dry-run 假件）──
+
+
+def _build_fake_a2a_transport(ctx: dict) -> "FakeA2ATransport":
+    return FakeA2ATransport()
+
+
+def _build_fake_message_transport(ctx: dict) -> "FakeMessageTransport":
+    return FakeMessageTransport()
+
+
+from lib.interfaces.assembler import register  # noqa: E402  (登记置于类定义后)
+
+register("a2a_transport", "fake")(_build_fake_a2a_transport)
+register("transport", "fake")(_build_fake_message_transport)

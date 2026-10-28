@@ -87,3 +87,15 @@ class SelectingMessageTransport:
 
 def build_message_transport(data_dir: str, config: dict | None = None) -> MessageTransportPort:
     return SelectingMessageTransport(data_dir, config)
+
+
+# ── L3 装配登记（composition.assemble("transport", ...) 查表用）─────────
+
+
+def _build_selecting_transport(ctx: dict) -> "SelectingMessageTransport":
+    return SelectingMessageTransport(ctx.get("data_dir", "store"), ctx.get("impl_config"))
+
+
+from lib.interfaces.assembler import register  # noqa: E402  (登记置于类定义后)
+
+register("transport", "selecting")(_build_selecting_transport)

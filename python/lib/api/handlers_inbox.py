@@ -2,6 +2,8 @@
 mailbus HTTP API — Inbox 相关路由处理器
 
 处理: /api/inbox/, /api/mark-read/, /api/send-msg, /api/replies, /api/actions/update/
+      /api/inbox/ack/{id}, /api/inbox/{agent}/archive, /api/inbox/{agent}/send
+      （后三个为 java 对等面，2026-10-27 PY4-A 补齐）
 """
 
 import os
@@ -11,6 +13,44 @@ from lib.infra.utils import json_read, json_write, resolve_paths, _now_iso, buil
 from lib.application.scan import build_queues, update_message_status
 from lib.application.push.pusher import push_messages, resolve_cli_chain
 from lib.infra.clock import now_dt, now_iso, now_ts, now_utc_dt
+
+# 非终态消息视为未处理（P4 语义，handle_inbox 与 unread 端点共用）
+_TERMINAL_STATES = {"done", "closed", "rejected", "failed", "archived", "sent"}
+
+
+def _read_inbox_file(handler, agent: str):
+    """读 agent 的 inbox.json → Inbox 对象（不存在/空则返回空 inbox）。
+
+    兼容历史损坏：inbox.json 被写成纯 messages 数组（v4.0 迁移前格式）。
+    """
+    paths = resolve_paths(handler.data_dir)
+    inbox_file = f"{paths['inbox']}/{agent}/inbox.json"
+    if not os.path.exists(inbox_file):
+        return None, inbox_file
+    data = json_read(inbox_file, {})
+    if not data:
+        return None, inbox_file
+    if isinstance(data, list):
+        data = {"agent": agent, "has_unread": True, "messages": data, "since": _now_iso()}
+    return Inbox.from_dict(data), inbox_file
+
+
+def _count_unread(inbox: Inbox) -> int:
+    """未读计数：非终态消息数。"""
+    return sum(
+        1 for m in inbox.messages
+        if (inbox.msg_field(m, "state", "") or inbox.msg_field(m, "status", ""))
+        not in _TERMINAL_STATES
+    )
+
+
+def validate_agent_name_or_404(handler, agent: str) -> bool:
+    """校验 agent 名合法性；不合法则写 404 并返回 False（调用方直接 return）。"""
+    from lib.api.security import validate_agent_name
+    if not validate_agent_name(agent, handler.agents):
+        handler._send_api_error("not_found", 404, detail=f"未知 agent: {agent}")
+        return False
+    return True
 
 
 def handle_inbox(handler, agent: str):
@@ -22,9 +62,7 @@ def handle_inbox(handler, agent: str):
     """
     from lib.api.handlers_system import _reload_store_config
     _reload_store_config(handler)  # 含 D2/D15 内置身份合并
-    from lib.api.security import validate_agent_name
-    if not validate_agent_name(agent, handler.agents):
-        handler._send_api_error("not_found", 404, detail=f"未知 agent: {agent}")
+    if not validate_agent_name_or_404(handler, agent):
         return
     from urllib.parse import urlparse, parse_qs
     qs = parse_qs(urlparse(handler.path).query)
@@ -33,7 +71,7 @@ def handle_inbox(handler, agent: str):
         msg_limit = int(qs.get("limit", ["0"])[0])
     except (ValueError, TypeError):
         msg_limit = 0
-    
+
     paths = resolve_paths(handler.data_dir)
     inbox_file = f"{paths['inbox']}/{agent}/inbox.json"
     if not os.path.exists(inbox_file):
@@ -49,10 +87,7 @@ def handle_inbox(handler, agent: str):
     inbox = Inbox.from_dict(data)
     msg_count = len(inbox.messages)
     # P4: 非 terminal 态（pending/pushed/acknowledged/processing）视为未处理
-    terminal_states = {"done", "closed", "rejected", "failed", "archived", "sent"}
-    unread = sum(1 for m in inbox.messages
-                 if (inbox.msg_field(m, "state", "") or inbox.msg_field(m, "status", ""))
-                 not in terminal_states)
+    unread = _count_unread(inbox)
     msgs_out = []
     # limit>0：按时间倒序取最近 N 条（Dashboard 用，避免一次序列化整个 inbox）
     source_msgs = list(inbox.messages)
@@ -228,3 +263,116 @@ def handle_actions_update(handler, agent: str, msg_id: str):
             handler._send_json({"status": "ok"})
             return
     handler._send_api_error("not_found", 404, detail="msg not found")
+
+
+def handle_inbox_ack(handler, msg_id: str):
+    """POST /api/inbox/ack/<message_id> — 确认（ack）单条消息（java 对等面）。
+
+    状态跃迁：PENDING → PROCESSING → DONE（与 java InboxService.acknowledge
+    同语义；python 侧无 processing 中间态落盘，ack 后直接终态 DONE）。
+    """
+    from lib.api.handlers_system import _reload_store_config
+    _reload_store_config(handler)
+
+    # 消息按 id 落在所属 agent 的 inbox 里——需跨 agent 定位
+    paths = resolve_paths(handler.data_dir)
+    inbox_root = paths["inbox"]
+    if not os.path.isdir(inbox_root):
+        handler._send_api_error("not_found", 404, detail=f"not found: {msg_id}")
+        return
+    for agent in sorted(os.listdir(inbox_root)):
+        agent_dir = os.path.join(inbox_root, agent)
+        if not os.path.isfile(os.path.join(agent_dir, "inbox.json")):
+            continue
+        data = json_read(os.path.join(agent_dir, "inbox.json"), {})
+        if not data:
+            continue
+        if isinstance(data, list):
+            data = {"agent": agent, "has_unread": True, "messages": data, "since": _now_iso()}
+        inbox = Inbox.from_dict(data)
+        for m in inbox.messages:
+            if inbox.msg_field(m, "id", "") != msg_id:
+                continue
+            ts = _now_iso()
+            inbox.set_msg_status(msg_id, MsgStatus.ACKNOWLEDGED, acknowledged_at=ts)
+            inbox.set_msg_status(msg_id, MsgStatus.ACKNOWLEDGED, state=MsgStatus.DONE, done_at=ts)
+            inbox.has_unread = any(
+                (inbox.msg_field(x, "state", "") or inbox.msg_field(x, "status", ""))
+                not in _TERMINAL_STATES
+                for x in inbox.messages
+            )
+            json_write(os.path.join(agent_dir, "inbox.json"), inbox.to_dict())
+            handler._send_json({"status": "ok", "id": msg_id, "state": str(MsgStatus.DONE)})
+            return
+    handler._send_api_error("not_found", 404, detail=f"not found: {msg_id}")
+
+
+def handle_inbox_archive(handler, agent: str):
+    """POST /api/inbox/<agent>/archive — 归档已结算消息（java 对等面）。
+
+    复用 store_cleanup.archive_inbox_backlog（同一份归档判定逻辑）。
+    """
+    from lib.composition import archive_inbox_backlog
+    from lib.api.handlers_system import _reload_store_config
+    _reload_store_config(handler)
+    if not validate_agent_name_or_404(handler, agent):
+        return
+    body = handler._read_post_body() or {}
+    dry_run = bool(body.get("dry_run"))
+    outcome = archive_inbox_backlog(
+        handler.data_dir, agent, dry_run=dry_run,
+    )
+    handler._send_json({
+        "status": "ok",
+        "agent": agent,
+        "archived": outcome.get("archived", 0),
+        "ids": outcome.get("ids", []),
+    })
+
+
+def handle_inbox_send(handler, agent: str):
+    """POST /api/inbox/<agent>/send — 向指定 agent 发消息（java 对等面）。
+
+    body: {"from": "...", "content": "..."}（java 形状；python 旧端点
+    /api/send-msg 用 {"to","content"}，此端点把 to 固定在路径参数上）。
+    """
+    from lib.api.handlers_system import _reload_store_config
+    _reload_store_config(handler)
+    if not validate_agent_name_or_404(handler, agent):
+        return
+    body = handler._read_post_body() or {}
+    content = str(body.get("content") or "")
+    if not content:
+        handler._send_api_error("fatal", 400, detail="缺少 content")
+        return
+    from_ = str(body.get("from") or "system")
+    if from_ not in handler.agents:
+        handler._send_api_error("not_found", 404, detail=f"agent '{from_}' 未注册")
+        return
+    msg_dict = build_message(from_, agent, content, "notice", "normal").to_dict()
+    paths = resolve_paths(handler.data_dir)
+    inbox_file = f"{paths['inbox']}/{agent}/inbox.json"
+    inbox_data = json_read(inbox_file, {"agent": agent, "has_unread": False, "messages": [], "since": _now_iso()})
+    if isinstance(inbox_data, list):
+        inbox_data = {"agent": agent, "has_unread": True, "messages": inbox_data, "since": _now_iso()}
+    inbox = Inbox.from_dict(inbox_data)
+    inbox.has_unread = True
+    inbox.messages.append(msg_dict)
+    json_write(inbox_file, inbox.to_dict())
+    handler._send_json({"status": "ok", "id": msg_dict["id"], "state": "pending", "msg_id": msg_dict["id"]})
+
+
+def handle_agent_unread(handler, agent: str):
+    """GET /api/agents/<agent>/unread — 指定 agent 的未读计数（java 对等面）。
+
+    与 GET /api/inbox/<agent> 的 unread 字段同源（共用 _count_unread）。
+    """
+    from lib.api.handlers_system import _reload_store_config
+    _reload_store_config(handler)  # 含 D2/D15 内置身份合并
+    if not validate_agent_name_or_404(handler, agent):
+        return
+    inbox, _ = _read_inbox_file(handler, agent)
+    if inbox is None:
+        handler._send_json({"agent": agent, "unread": 0})
+        return
+    handler._send_json({"agent": agent, "unread": _count_unread(inbox)})

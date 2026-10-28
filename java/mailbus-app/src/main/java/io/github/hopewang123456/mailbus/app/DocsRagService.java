@@ -22,9 +22,61 @@ public class DocsRagService {
     private static final int TOP_K = 5;
 
     private final Path docsRoot;
+    /** 附加 RAG 源（config rag.sources；2026-10-28 追加 Vault runbooks）。 */
+    private final List<ExtraRoot> extraRoots;
+
+    /** 附加只读源：目录 + source_id（与 python rag source 同配置真源）。 */
+    private record ExtraRoot(Path dir, String sourceId) {}
 
     public DocsRagService(Path mailbusRoot) {
+        this(mailbusRoot, null);
+    }
+
+    public DocsRagService(Path mailbusRoot, Path dataDir) {
         this.docsRoot = mailbusRoot.resolve("docs");
+        this.extraRoots = readExtraRoots(mailbusRoot, dataDir);
+    }
+
+    /** store config 的 rag.sources 里、docs 主源之外的目录型源（单一真源）。 */
+    private static List<ExtraRoot> readExtraRoots(Path mailbusRoot, Path dataDir) {
+        List<ExtraRoot> extras = new ArrayList<>();
+        if (dataDir == null) {
+            return extras;
+        }
+        try {
+            Map<String, Object> cfg = io.github.hopewang123456.mailbus.infra.json.JsonFiles
+                    .readMap(dataDir.resolve("config.json"));
+            Object llmCfg = cfg == null ? null : cfg.get("mailbus_internal_llm");
+            Object rag = llmCfg instanceof Map<?, ?> m ? m.get("rag") : null;
+            Object sources = rag instanceof Map<?, ?> r ? r.get("sources") : null;
+            if (sources instanceof List<?> list) {
+                for (Object o : list) {
+                    if (!(o instanceof Map<?, ?> s)) {
+                        continue;
+                    }
+                    String sid = String.valueOf(s.get("id"));
+                    if (sid.isBlank() || "null".equals(sid)) {
+                        sid = "src";
+                    }
+                    String raw = String.valueOf(s.get("path"));
+                    if (raw == null || "null".equals(raw)) {
+                        raw = "";
+                    }
+                    raw = raw.replace("\\", "/");
+                    // docs 主源（../docs）已由 docsRoot 覆盖；store/ 前缀按 mail root
+                    if (raw.isEmpty() || raw.equals("../docs")) {
+                        continue;
+                    }
+                    Path dir = Path.of(raw).isAbsolute() ? Path.of(raw) : mailbusRoot.resolve(raw);
+                    if (Files.isDirectory(dir)) {
+                        extras.add(new ExtraRoot(dir, sid));
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // config 不可读：退化为仅 docs 主源
+        }
+        return extras;
     }
 
     public record Citation(String sourceId, String title, String excerpt, int score) {}
@@ -39,7 +91,24 @@ public class DocsRagService {
             return List.of();
         }
         List<Citation> scored = new ArrayList<>();
-        try (Stream<Path> files = Files.walk(docsRoot)) {
+        List<ExtraRoot> roots = new ArrayList<>();
+        roots.add(new ExtraRoot(docsRoot, "docs"));
+        roots.addAll(extraRoots);
+        for (ExtraRoot root : roots) {
+            if (!Files.isDirectory(root.dir())) {
+                continue;
+            }
+            scoreTree(root, keywords, scored);
+        }
+        return scored.stream()
+                .sorted(Comparator.comparingInt(Citation::score).reversed())
+                .limit(TOP_K)
+                .toList();
+    }
+
+    /** 单源目录打分；源失败不阻断其它源。 */
+    private static void scoreTree(ExtraRoot root, List<String> keywords, List<Citation> scored) {
+        try (Stream<Path> files = Files.walk(root.dir())) {
             files.filter(p -> p.toString().endsWith(".md")).forEach(p -> {
                 String text;
                 try {
@@ -47,7 +116,7 @@ public class DocsRagService {
                 } catch (IOException e) {
                     return;
                 }
-                String rel = docsRoot.relativize(p).toString().replace('\\', '/');
+                String rel = root.dir().relativize(p).toString().replace('\\', '/');
                 for (int i = 0; i < text.length(); i += CHUNK_CHARS) {
                     String chunk = text.substring(i, Math.min(text.length(), i + CHUNK_CHARS));
                     int score = 0;
@@ -59,17 +128,14 @@ public class DocsRagService {
                         }
                     }
                     if (score > 0) {
-                        scored.add(new Citation("docs", rel, chunk.length() > 300 ? chunk.substring(0, 300) : chunk, score));
+                        scored.add(new Citation(root.sourceId(), rel,
+                                chunk.length() > 300 ? chunk.substring(0, 300) : chunk, score));
                     }
                 }
             });
         } catch (IOException e) {
-            return List.of();
+            // 单源失败：跳过
         }
-        return scored.stream()
-                .sorted(Comparator.comparingInt(Citation::score).reversed())
-                .limit(TOP_K)
-                .toList();
     }
 
     /** 简易中文分词：提取 2 字以上 CJK 滑窗 + ASCII 词。 */

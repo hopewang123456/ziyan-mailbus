@@ -34,21 +34,10 @@ import java.time.Clock;
 public class MailbusApplication {
 
     public static void main(String[] args) {
-        ensureDataDir(args);
+        // data-dir 规范化（绝对化 + 建目录）由 DataDirPostProcessor 在属性
+        // 绑定前完成（2026-10-28 技术债批次二）——它看得见 args/env/yml 全
+        // 来源，且能覆盖 application.yml 里 JDBC URL 的占位符替换。
         SpringApplication.run(MailbusApplication.class, args);
-    }
-
-    /** mailbus init semantics: the data dir must exist before SQLite opens (mkdir -p). */
-    private static void ensureDataDir(String[] args) {
-        String dir = "./store";
-        for (String a : args) {
-            if (a.startsWith("--mailbus.data-dir=")) dir = a.substring("--mailbus.data-dir=".length());
-        }
-        try {
-            java.nio.file.Files.createDirectories(java.nio.file.Path.of(dir));
-        } catch (java.io.IOException e) {
-            throw new IllegalStateException("cannot create data dir: " + dir, e);
-        }
     }
 
     @Bean
@@ -65,22 +54,51 @@ public class MailbusApplication {
                 io.github.hopewang123456.mailbus.app.SharedRoots.resolve(env.getProperty("mailbus.root")));
     }
 
+    /**
+     * P2 驾驶舱配置面（B4 layout / B5 rules）— 2026-10-27 PY4-A java 对等。
+     * 与 python 同源同优先级（shared seed + store 覆盖）。
+     */
+    @Bean
+    io.github.hopewang123456.mailbus.app.DashboardConfigService dashboardConfigService(
+            org.springframework.core.env.Environment env) {
+        return new io.github.hopewang123456.mailbus.app.DashboardConfigService(
+                io.github.hopewang123456.mailbus.app.SharedRoots.resolveDataDir(
+                        env.getProperty("mailbus.data-dir")),
+                io.github.hopewang123456.mailbus.app.SharedRoots.resolve(env.getProperty("mailbus.root")));
+    }
+
     @Bean
     io.github.hopewang123456.mailbus.app.MailbusMetricsCalculator mailbusMetricsCalculator(
             io.github.hopewang123456.mailbus.app.MetricsManifestService manifest,
             @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
             io.github.hopewang123456.mailbus.ports.MessageRepository messages,
-            io.github.hopewang123456.mailbus.ports.AgentDirectory agents) {
-        return new io.github.hopewang123456.mailbus.app.MailbusMetricsCalculator(manifest, messages, agents);
+            io.github.hopewang123456.mailbus.ports.AgentDirectory agents,
+            io.github.hopewang123456.mailbus.ports.TaskRepository tasks,
+            org.springframework.core.env.Environment env,
+            java.time.Clock clock) {
+        // 批次三（2026-10-28）：7 source 全覆盖——补 tasks/humanQueue/
+        // dataDir/builtin（HumanQueueService 与 BuiltinIdentitiesService 为
+        // 轻量只读对象，与 CommandInboxService 内 new 的先例一致）
+        var dataDir = io.github.hopewang123456.mailbus.app.SharedRoots.resolveDataDir(
+                env.getProperty("mailbus.data-dir"));
+        var mailbusRoot = io.github.hopewang123456.mailbus.app.SharedRoots.resolve(
+                env.getProperty("mailbus.root"));
+        return new io.github.hopewang123456.mailbus.app.MailbusMetricsCalculator(
+                manifest, messages, agents, tasks,
+                new io.github.hopewang123456.mailbus.app.HumanQueueService(dataDir, clock),
+                dataDir,
+                new io.github.hopewang123456.mailbus.app.BuiltinIdentitiesService(dataDir, mailbusRoot));
     }
 
     /** P2 收尾：AI 助手（ChatClient 就位时装配；否则 controller 走 501） */
     @Bean
     io.github.hopewang123456.mailbus.app.DocsRagService docsRagService(
             org.springframework.core.env.Environment env) {
-        // docs 知识库在仓库根（shared/ 的父级），与 python rag source（store 相对 ../docs）同源
+        // docs 知识库在仓库根（shared/ 的父级），与 python rag source（store 相对 ../docs）同源；
+        // dataDir 传入以读 config rag.sources 的附加源（2026-10-28 Vault runbooks）
         var sharedRoot = io.github.hopewang123456.mailbus.app.SharedRoots.resolve(env.getProperty("mailbus.root"));
-        return new io.github.hopewang123456.mailbus.app.DocsRagService(sharedRoot.getParent());
+        var dataDir = io.github.hopewang123456.mailbus.app.SharedRoots.resolveDataDir(env.getProperty("mailbus.data-dir"));
+        return new io.github.hopewang123456.mailbus.app.DocsRagService(sharedRoot.getParent(), dataDir);
     }
 
     @Bean
@@ -303,6 +321,13 @@ public class MailbusApplication {
                 dir, clock, tasks, resolver,
                 new io.github.hopewang123456.mailbus.app.HumanQueueService(dir, clock));
         svc.setPlanner(planner); // M2c：解锁 auto 模式（tier0 规则 + 可选 LLM）
+        // M2d-b2b：transport.use_router 开启时步骤走 A2A 远端派发（agent endpoint 显式为准）
+        var storeCfg = io.github.hopewang123456.mailbus.infra.json.JsonFiles
+                .readMap(dir.resolve("config.json"));
+        var router = new io.github.hopewang123456.mailbus.app.A2aDispatchRouter(storeCfg);
+        if (router.enabled()) {
+            svc.setA2aDispatch(router);
+        }
         return svc;
     }
 

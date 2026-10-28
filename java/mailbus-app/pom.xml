@@ -24,6 +24,15 @@
       <groupId>com.fasterxml.jackson.core</groupId>
       <artifactId>jackson-databind</artifactId>
     </dependency>
+    <!-- M2d-b：官方 A2A Java SDK — RequestHandler SPI 桥接（0.3 协议面） -->
+    <dependency>
+      <groupId>org.a2aproject.sdk</groupId>
+      <artifactId>a2a-java-sdk-server-common</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.a2aproject.sdk</groupId>
+      <artifactId>a2a-java-sdk-jsonrpc-common</artifactId>
+    </dependency>
     <dependency>
       <groupId>io.github.hopewang123456</groupId>
       <artifactId>mailbus-adapters</artifactId>

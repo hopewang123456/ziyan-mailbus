@@ -87,6 +87,16 @@ def load_human_queue(*args: Any, **kwargs: Any):
     return _impl(*args, **kwargs)
 
 
+def save_human_queue(*args: Any, **kwargs: Any):
+    """Human queue 保存（M2d-b2b cancel 收尾用）— adapter 服务门面。
+
+    实际实现见 `lib.adapters.orchestration.human_queue.save_queue`。
+    """
+    from lib.adapters.orchestration.human_queue import save_queue as _impl
+
+    return _impl(*args, **kwargs)
+
+
 def poll_pending_a2a_tasks(*args: Any, **kwargs: Any):
     """A2A 轮询 — core/a2a 通过本函数拿到 application 服务。
 

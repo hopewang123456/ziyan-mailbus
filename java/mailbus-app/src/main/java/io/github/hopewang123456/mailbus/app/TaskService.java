@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 任务引擎 — python {@code api/handlers_tasks.py create_task_from_envelope} +
@@ -22,6 +23,12 @@ import java.util.Optional;
  * task lock / bind_workflow / requires_audit 推断 / denied-replan。
  */
 public class TaskService {
+
+    /** python NO_AUDIT_PREFIXES + SKIP_TIMEOUT_PREFIXES 合并（audit_dispatch 对等）。 */
+    private static final List<String> NO_AUDIT_PREFIXES = List.of(
+            "msg-", "game-lvup-", "smoke-", "demo-", "test-", "pipeline-",
+            "remind-", "tracker-remind-", "patrol-", "heartbeat-",
+            "confirm-", "rule-change-", "alert-task-");
 
     private final Path dataDir;
     private final TaskRepository tasks;
@@ -46,6 +53,11 @@ public class TaskService {
     /** M2c：注入 planner（tier0 规则 + 可选 LLM），解锁 auto 模式。 */
     public void setPlanner(TaskPlannerService planner) {
         this.planner = planner;
+    }
+
+    /** M2d-b2b：注入 A2A 路由（transport.use_router 开启时步骤远端派发）。 */
+    public void setA2aDispatch(A2aDispatchRouter router) {
+        this.dispatcher.setA2aRouter(router, resolver.agentsConfig());
     }
 
     /** (httpStatus, body) 对——python handler 的 (resp, status) 元组。 */
@@ -117,24 +129,7 @@ public class TaskService {
             fsm.asMap(task.get("fsm")).put("state", TaskFsmState.CREATED.value());
             fsm.asMap(task.get("fsm")).put("substate", "await_plan_approval");
             task.put("status", "pending");
-            List<Map<String, Object>> chain = TaskFsmViews.chain(task);
-            List<Integer> planned = chain.isEmpty() ? List.of()
-                    : intList(chain.get(0).get("planned_role_types"));
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("type", "plan_approval");
-            item.put("status", "pending");
-            item.put("title", "批准任务计划 · " + taskId.substring(0, Math.min(32, taskId.length())));
-            item.put("hint", "planned_role_types: " + planned);
-            item.put("task_id", taskId);
-            Map<String, Object> context = new LinkedHashMap<>();
-            context.put("intent", str(task.get("intent")));
-            context.put("tier", task.get("tier"));
-            context.put("task_type", task.get("task_type"));
-            context.put("planned_role_types", planned);
-            context.put("plan_meta", task.get("plan_meta"));
-            item.put("context", context);
-            String hid = humanQueue.enqueue(item);
-            fsm.asMap(task.get("fsm")).put("human_queue_id", hid);
+            String hid = enqueuePlanApproval(task);
             tasks.save(taskId, task);
             Map<String, Object> b = new LinkedHashMap<>();
             b.put("status", "ok");
@@ -211,7 +206,15 @@ public class TaskService {
             planMeta.put("provider_used", "rules");
         }
         task.put("plan_meta", planMeta);
-        task.put("requires_audit", false);
+        // requires_audit 推断（2026-10-28 批次四回收，python
+        // infer_requires_audit 对等）：显式优先 → 前缀免审 → chain[0]
+        // pipeline 步/带 planned_agents 需审 → 默认 False
+        Object explicitAudit = envelope.get("requires_audit");
+        if (explicitAudit instanceof Boolean) {
+            task.put("requires_audit", explicitAudit);
+        } else {
+            task.put("requires_audit", inferRequiresAudit(taskId, planned));
+        }
         task.put("error", null);
         task.put("reminded_count", 0);
         task.put("created_at", fsm.nowIso());
@@ -380,9 +383,11 @@ public class TaskService {
             case "accept" -> {
                 return accept(taskId, task, b, reason);
             }
-            case "approve-join", "continue" -> {
-                return Result.of(501, "not_implemented",
-                        "java action '" + action + "' lands with M2c+ (collab/resume paths)");
+            case "approve-join" -> {
+                return approveJoin(taskId, task, b);
+            }
+            case "continue" -> {
+                return recoverContinue(taskId, task, b, reason);
             }
             default -> {
                 Map<String, Object> err = new LinkedHashMap<>();
@@ -390,6 +395,136 @@ public class TaskService {
                 return new Result(400, err);
             }
         }
+    }
+
+    /**
+     * approve-join（2026-10-28 批次四回收）— python apply_approve_join 的
+     * 协议面对等。java 无 collab 并行组置位方（显式不做，见 M2 计划 §6.3），
+     * 故 advance 分支不可达：守卫语义与 python 一致——非 await_join_review
+     * 状态 → not_awaiting_join_review；状态对但无 join meta →
+     * no_collab_join_meta（python 同款 400）。
+     */
+    private Result approveJoin(String taskId, Map<String, Object> task,
+                               Map<String, Object> body) {
+        fsm.ensureFsm(task, 50);
+        Map<String, Object> fsmDoc = fsm.asMap(task.get("fsm"));
+        boolean awaiting = "await_join_review".equals(str(fsmDoc.get("substate")))
+                || "join_gate_review".equals(str(fsmDoc.get("reason")));
+        if (!awaiting) {
+            return Result.of(400, "not_awaiting_join_review", null);
+        }
+        return Result.of(400, "no_collab_join_meta",
+                "collab parallel groups are not implemented in java (M2 §6.3 显式不做)");
+    }
+
+    /**
+     * continue / recover_continue（2026-10-28 批次四回收）— python
+     * recover_continue 对等：复位可恢复步骤 + 重推 assignee inbox。
+     * task lock 语义不做（M2d 偏差保留：java 无锁基建，python 用
+     * acquire_task_lock 防并发恢复）。
+     */
+    private Result recoverContinue(String taskId, Map<String, Object> task,
+                                   Map<String, Object> body, String reason) {
+        fsm.ensureFsm(task, 50);
+        Map<String, Object> fsmDoc = fsm.asMap(task.get("fsm"));
+        String state = str(fsmDoc.get("state"));
+        if (TaskFsmState.CANCELLED.value().equals(state)) {
+            return Result.of(400, "cancelled", null);
+        }
+        if (TaskFsmState.SUCCEEDED.value().equals(state)) {
+            return Result.of(400, "already_succeeded", null);
+        }
+        if (TaskFsmState.PAUSED.value().equals(state)) {
+            fsmDoc.put("state", TaskFsmState.EXECUTING.value());
+            task.put("status", "running");
+            fsmDoc.remove("pause_reason");
+        }
+        // 找可恢复步骤：active_step_id 优先，否则 chain 尾向前找非终态步
+        List<Map<String, Object>> chain = TaskFsmViews.chain(task);
+        Map<String, Object> step = null;
+        String activeId = str(fsmDoc.get("active_step_id"));
+        if (!activeId.isEmpty()) {
+            for (Map<String, Object> s : chain) {
+                if (activeId.equals(str(s.get("step_id")))) {
+                    step = s;
+                    break;
+                }
+            }
+        }
+        if (step == null) {
+            Set<String> done = Set.of("completed", "skipped", "superseded");
+            for (int i = chain.size() - 1; i >= 0; i--) {
+                if (!done.contains(str(chain.get(i).get("fsm_state")))) {
+                    step = chain.get(i);
+                    break;
+                }
+            }
+        }
+        if (step == null) {
+            return Result.of(400, "no_recoverable_step", null);
+        }
+        // 步骤复位 + 任务回执行态
+        step.put("fsm_state", io.github.hopewang123456.mailbus.domain.task.StepFsmState.QUEUED.value());
+        step.put("status", "running");
+        step.remove("result_consumed");
+        fsmDoc.put("state", TaskFsmState.EXECUTING.value());
+        fsmDoc.put("active_step_id", str(step.get("step_id")));
+        task.put("status", "running");
+        task.put("interrupted", false);
+        task.put("updated_at", fsm.nowIso());
+        fsm.appendHistory(task, "recover_continue",
+                Map.of("reviewer", str(body.getOrDefault("reviewer", "manager")), "reason", reason));
+        tasks.save(taskId, task);
+        // 重推 assignee inbox（python _repush_step）
+        boolean dispatchOk = dispatcher.dispatchStep(task, step, null);
+        tasks.save(taskId, task);
+        Map<String, Object> out = okBody(task, "recover_continue", null);
+        out.put("dispatch_ok", dispatchOk);
+        out.put("step_id", str(step.get("step_id")));
+        return new Result(200, out);
+    }
+
+    /** python infer_requires_audit 对等：前缀免审 + chain[0] pipeline 步。 */
+    private static boolean inferRequiresAudit(String taskId, List<Map<String, Object>> chain) {
+        for (String p : NO_AUDIT_PREFIXES) {
+            if (taskId.startsWith(p)) {
+                return false;
+            }
+        }
+        if (chain == null || chain.isEmpty()) {
+            return false;
+        }
+        Map<String, Object> first = chain.get(0);
+        // python is_pipeline_step：step_id / to_agent / to_person 任一存在
+        boolean isPipelineStep = !str(first.get("step_id")).isEmpty()
+                || !str(first.get("to_agent")).isEmpty()
+                || !str(first.get("to_person")).isEmpty();
+        boolean hasPlannedAgents = first.get("planned_agents") != null;
+        return isPipelineStep || hasPlannedAgents;
+    }
+
+    /** python enqueue_plan_approval 对等（create 与 deny_replan 复用）。 */
+    private String enqueuePlanApproval(Map<String, Object> task) {
+        String taskId = str(task.get("task_id"));
+        List<Map<String, Object>> chain = TaskFsmViews.chain(task);
+        List<Integer> planned = chain.isEmpty() ? List.of()
+                : intList(chain.get(0).get("planned_role_types"));
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("type", "plan_approval");
+        item.put("status", "pending");
+        item.put("title", "批准任务计划 · " + taskId.substring(0, Math.min(32, taskId.length())));
+        item.put("hint", "planned_role_types: " + planned);
+        item.put("task_id", taskId);
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("intent", str(task.get("intent")));
+        context.put("tier", task.get("tier"));
+        context.put("task_type", task.get("task_type"));
+        context.put("planned_role_types", planned);
+        context.put("plan_meta", task.get("plan_meta"));
+        item.put("context", context);
+        String hid = humanQueue.enqueue(item);
+        fsm.asMap(task.get("fsm")).put("human_queue_id", hid);
+        return hid;
     }
 
     private Result approvePlan(String taskId, Map<String, Object> task,
@@ -425,14 +560,67 @@ public class TaskService {
             if (reason.isEmpty()) {
                 return Result.of(400, "missing_reason", null);
             }
-            // M2a 简化：denied → 取消任务（python 的 replan 重规划属 M2c）
             humanQueue.closeByTask(taskId, "plan_approval", resolution);
+            // 2026-10-28 批次四回收（python apply_approve_plan denied 对等）：
+            // action=replan（默认）→ 强制重规划 + 回 await_plan_approval +
+            // 重新入 human-queue；其它 action → 终态 cancelled。
+            String denyAction = str(body.getOrDefault("action", "replan"));
+            if ("replan".equals(denyAction)) {
+                if (planner == null) {
+                    return Result.of(400, "plan_failed",
+                            "replan requires LLM planner; configure mailbus.ai first");
+                }
+                Map<String, Object> replanEnvelope = new LinkedHashMap<>();
+                replanEnvelope.put("task_id", taskId);
+                replanEnvelope.put("intent", str(task.get("intent")));
+                replanEnvelope.put("initiator", str(task.get("initiator")));
+                replanEnvelope.put("mode", "auto");
+                replanEnvelope.put("tier", str(task.get("tier")).isEmpty() ? "M" : task.get("tier"));
+                if (task.get("task_type") != null) {
+                    replanEnvelope.put("task_type", task.get("task_type"));
+                }
+                Map<String, Object> constraints = orMap(task.get("constraints"));
+                constraints.put("replan_reason", reason);
+                replanEnvelope.put("constraints", constraints);
+                Map<String, Object> planned;
+                try {
+                    planned = planner.plan(replanEnvelope);
+                } catch (TaskPlannerService.PlanError e) {
+                    return Result.of(400, e.code, e.getMessage());
+                }
+                List<Map<String, Object>> newChain = plannedChain(replanEnvelope);
+                // planner 输出的 planned_chain（explicit 归一化后的形状）
+                Object plannedOut = planned.get("planned_chain");
+                if (plannedOut instanceof List<?> l && !l.isEmpty()) {
+                    Map<String, Object> wrapper = new LinkedHashMap<>();
+                    wrapper.put("planned_chain", plannedOut);
+                    newChain = plannedChain(wrapper);
+                }
+                task.put("chain", newChain);
+                task.put("plan_meta",
+                        planned.get("plan_meta") instanceof Map<?, ?> pm ? new LinkedHashMap<>(orMap(pm)) : Map.of());
+                task.put("error", null);
+                task.put("status", "pending");
+                Map<String, Object> fd = fsm.asMap(task.get("fsm"));
+                fd.put("state", TaskFsmState.CREATED.value());
+                fd.put("substate", "await_plan_approval");
+                fd.put("active_step_id", "s1");
+                fd.remove("human_queue_id");
+                fsm.appendHistory(task, "deny_replan", Map.of("reviewer", reviewer, "reason", reason));
+                String hid = enqueuePlanApproval(task);
+                tasks.save(taskId, task);
+                Map<String, Object> out = okBody(task, "deny_replan", null);
+                out.put("dispatch_ok", null);
+                out.put("human_queue_id", hid);
+                return new Result(200, out);
+            }
+            // 非 replan：终态取消（action 名对齐 python deny_cancel）
             fsmDoc.put("state", TaskFsmState.CANCELLED.value());
             task.put("status", "cancelled");
             task.put("error", "plan_denied: " + reason);
-            fsm.appendHistory(task, "deny_plan", Map.of("reviewer", reviewer, "reason", reason));
+            fsm.appendHistory(task, "deny_cancel", Map.of("reviewer", reviewer, "reason", reason));
             tasks.save(taskId, task);
-            Map<String, Object> out = okBody(task, "deny_plan", null);
+            Map<String, Object> out = okBody(task, "deny_cancel", null);
             out.put("dispatch_ok", false);
             return new Result(200, out);
         }

@@ -36,13 +36,14 @@ def build_orchestration(
 ) -> OrchestrationBundle:
     import os
 
-    from lib.adapters.orchestration import build_budget_meter, build_notifier, build_task_fsm
+    from lib.adapters.orchestration import build_budget_meter, build_task_fsm
     from lib.adapters.orchestration.human_gate import HumanGateAdapter
     from lib.composition.assembler import assemble
     from lib.interfaces.assembler import registered_impls
 
-    # L3（P0c）：audit 实现经装配器查表 — composition.audit 声明优先，
-    # legacy MAILBUS_FILE_AUDIT=0 与 with_file_audit 参数仅作用于缺省值（渐进兼容）。
+    # L3（P0c）：audit/notifier 实现经装配器查表 — composition.<slot> 声明
+    # 优先；legacy MAILBUS_FILE_AUDIT=0 与 with_file_audit 参数仅作用于
+    # audit 的缺省值（渐进兼容）。
     env_off = os.environ.get("MAILBUS_FILE_AUDIT", "1").strip().lower() in (
         "0", "false", "no", "off",
     )
@@ -50,13 +51,16 @@ def build_orchestration(
     if "noop" not in registered_impls("audit"):  # 触发 adapters 登记加载
         import lib.adapters.orchestration.audit  # noqa: F401
     audit = assemble("audit", data_dir, default=default_audit)
+    if "file" not in registered_impls("notifier"):  # 触发 adapters 登记加载
+        import lib.adapters.orchestration.notifier  # noqa: F401
+    notifier = assemble("notifier", data_dir, default="file")
     human_gate = (
         HumanGateAdapter(data_dir, audit=audit) if with_human_gate else None
     )
     return OrchestrationBundle(
         fsm=build_task_fsm(),
         budget=build_budget_meter(data_dir),
-        notifier=build_notifier(data_dir),
+        notifier=notifier,
         human_gate=human_gate,
         audit=audit,
     )
@@ -77,9 +81,13 @@ def get_human_gate(data_dir: str, *, audit: AuditPort | None = None) -> HumanGat
 
 
 def build_result_store(data_dir: str) -> ResultStorePort:
-    from lib.adapters.results.msg_results import FileResultStore
+    from lib.composition.assembler import assemble
+    from lib.interfaces.assembler import registered_impls
 
-    return FileResultStore(data_dir)
+    # L3（P0c）：result_store 经装配器查表（composition.result_store 声明优先）
+    if "file" not in registered_impls("result_store"):  # 触发 adapters 登记加载
+        import lib.adapters.results.msg_results  # noqa: F401
+    return assemble("result_store", data_dir, default="file")
 
 
 def get_token_store() -> Any:
@@ -102,9 +110,13 @@ def build_ops():
 
 
 def build_locale_port(data_dir: str = "", lang: str = "zh") -> LocalePort:
-    from lib.adapters.locale import build_locale
+    from lib.composition.assembler import assemble
+    from lib.interfaces.assembler import registered_impls
 
-    return build_locale(data_dir=data_dir, lang=lang)
+    # L3（P0c）：locale 经装配器查表（composition.locale 声明优先；lang 经 ctx）
+    if "dict" not in registered_impls("locale"):  # 触发 adapters 登记加载
+        import lib.adapters.locale.dict_locale  # noqa: F401
+    return assemble("locale", data_dir, default="dict", lang=lang)
 
 
 def get_locale(data_dir: str = "", lang: str = "zh") -> LocalePort:
@@ -120,22 +132,33 @@ def get_locale(data_dir: str = "", lang: str = "zh") -> LocalePort:
 
 
 def build_transport(data_dir: str, config: dict | None = None) -> MessageTransportPort:
-    from lib.adapters.transport import build_message_transport
+    from lib.composition.assembler import assemble
+    from lib.interfaces.assembler import registered_impls
 
-    return build_message_transport(data_dir, config)
+    # L3（P0c）：消息传输经装配器查表（composition.transport 声明优先）
+    if "selecting" not in registered_impls("transport"):  # 触发 adapters 登记加载
+        import lib.adapters.transport.router  # noqa: F401
+    return assemble("transport", data_dir, default="selecting", impl_config=config)
 
 
 def build_bridged_agent(data_dir: str, config: dict | None = None) -> BridgedAgentPort:
-    from lib.adapters.transport.bridge import CliBridgedAgent
+    from lib.composition.assembler import assemble
+    from lib.interfaces.assembler import registered_impls
 
-    return CliBridgedAgent(data_dir=data_dir, config=config or {})
+    # L3（P0c）：桥接 agent 经装配器查表（composition.bridged_agent 声明优先）
+    if "cli" not in registered_impls("bridged_agent"):  # 触发 adapters 登记加载
+        import lib.adapters.transport.bridge.cli_bridge  # noqa: F401
+    return assemble("bridged_agent", data_dir, default="cli", impl_config=config)
 
 
 def build_a2a_transport(data_dir: str, config: dict | None = None) -> A2ATransportPort:
-    """Production A2ATransportPort (HTTP A2A cancel/stream/poll + send)."""
-    from lib.adapters.transport.http_a2a import HttpA2AMessageTransport
+    """A2ATransportPort（HTTP A2A cancel/stream/poll + send；经装配器查表）。"""
+    from lib.composition.assembler import assemble
+    from lib.interfaces.assembler import registered_impls
 
-    return HttpA2AMessageTransport(data_dir=data_dir, config=config)
+    if "http" not in registered_impls("a2a_transport"):  # 触发 adapters 登记加载
+        import lib.adapters.transport.http_a2a  # noqa: F401
+    return assemble("a2a_transport", data_dir, default="http", impl_config=config)
 
 
 def build_transport_bundle(data_dir: str, config: dict | None = None) -> TransportBundle:

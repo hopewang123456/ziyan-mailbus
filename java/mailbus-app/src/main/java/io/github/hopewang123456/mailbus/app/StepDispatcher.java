@@ -23,10 +23,18 @@ public class StepDispatcher {
 
     private final Path dataDir;
     private final TaskFsmViews fsm;
+    /** M2d-b2b：可选 A2A 路由（transport.use_router 开启时远端派发；null=file 直派不变）。 */
+    private A2aDispatchRouter a2aRouter;
+    private Map<String, Object> agentsConfig = Map.of();
 
     public StepDispatcher(Path dataDir, Clock clock) {
         this.dataDir = dataDir;
         this.fsm = new TaskFsmViews(clock);
+    }
+
+    public void setA2aRouter(A2aDispatchRouter router, Map<String, Object> agentsConfig) {
+        this.a2aRouter = router;
+        this.agentsConfig = agentsConfig == null ? Map.of() : agentsConfig;
     }
 
     /**
@@ -43,6 +51,23 @@ public class StepDispatcher {
 
     /** 推指定步骤（rollback 重做步复用）。 */
     public boolean dispatchStep(Map<String, Object> task, Map<String, Object> step, String summary) {
+        // M2d-b2b：use_router 开启且 agent 有远端 endpoint → a2a 远端派发；失败回落 file
+        if (a2aRouter != null) {
+            var outcome = a2aRouter.tryDispatch(task, step, agentsConfig, summary);
+            if (outcome.ok()) {
+                step.put("fsm_state", io.github.hopewang123456.mailbus.domain.task.StepFsmState.DISPATCHED.value());
+                step.put("status", "running");
+                step.putIfAbsent("started_at", fsm.nowIso());
+                task.put("updated_at", fsm.nowIso());
+                return true;
+            }
+            if (outcome.attempt() != null) {
+                // 失败审计：file 兜底时保留 a2a 尝试记录（python fallback 语义）
+                List<Map<String, Object>> attempts = new ArrayList<>();
+                attempts.add(outcome.attempt());
+                step.put("transport_attempts", attempts);
+            }
+        }
         String to = firstNonEmpty(step.get("to_person"), step.get("to_agent"));
         if (to == null || to.isEmpty()) {
             return false;
@@ -84,6 +109,18 @@ public class StepDispatcher {
             intent = intent.substring(0, 300);
         }
         String roleType = step.get("role_type") != null ? String.valueOf(step.get("role_type")) : "";
+        // 下一步执行人（python work_order：planned_agents[0] / planned_role_types[0]，
+        // 无则「(末步)」）
+        String nextPerson = "(末步)";
+        if (step.get("planned_agents") instanceof List<?> pa && !pa.isEmpty()) {
+            nextPerson = str(pa.get(0));
+        } else if (step.get("planned_role_types") instanceof List<?> pr && !pr.isEmpty()) {
+            nextPerson = "role_type " + str(pr.get(0));
+        }
+        String roleTypeSection = roleType.isEmpty() ? "" : """
+
+                ## Role Type
+                %s""".formatted(roleType);
 
         String md = """
                 # Pipeline 工单
@@ -101,6 +138,7 @@ public class StepDispatcher {
                 | message_id | %s |
                 | 发起人 | mailbus (调度) |
                 | 当前执行人 | %s |
+                | 下一步执行人 | %s |
                 | 状态 | in_progress |
                 | result_path | %s |
 
@@ -119,7 +157,7 @@ public class StepDispatcher {
 
                 ## On Failure
                 写 msg-results conclusion=failed + reason；Dashboard 可 recover --continue
-
+                %s
                 ## msg-results 格式（必填）
                 ```json
                 {
@@ -133,14 +171,21 @@ public class StepDispatcher {
                   "timestamp": "<ISO8601>"
                 }
                 ```
-                """.formatted(taskId, stepId, stepNum, msgId, to, resultFile.toAbsolutePath(),
+
+                ⚠️ 无 msg-results 文件 = 本步未完成。stdout / replies / patch 须经 Delivery Normalizer 归一化后 FSM 才推进。
+                """.formatted(taskId, stepId, stepNum, msgId, to, nextPerson,
+                resultFile.toAbsolutePath(),
                 intent, to, resultFile.toAbsolutePath(),
                 dataDir.resolve("deliverables").resolve(taskId).toAbsolutePath(),
-                taskId, stepId, taskId, stepId, to,
+                taskId, stepId, roleTypeSection, taskId, stepId, to,
                 roleType.isEmpty() ? "0" : roleType, stepNum);
         try {
             Files.createDirectories(orderPath.getParent());
             Files.writeString(orderPath, md);
+            // 双轨镜像（python work_order：msg-files/{msg_id}.md 供旧 push 路径解析）
+            Path mirror = dataDir.resolve("msg-files").resolve(msgId + ".md");
+            Files.createDirectories(mirror.getParent());
+            Files.writeString(mirror, md);
             return orderPath.toAbsolutePath().toString();
         } catch (IOException e) {
             return null;

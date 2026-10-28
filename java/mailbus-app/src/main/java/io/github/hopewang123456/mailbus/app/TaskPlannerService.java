@@ -85,12 +85,30 @@ public class TaskPlannerService {
         }
         List<Map<String, Object>> out = new ArrayList<>();
         for (Object o : planned) {
-            if (!(o instanceof Map<?, ?> x) || x.get("role_type") == null) {
+            if (!(o instanceof Map<?, ?> x)) {
+                throw new PlanError("schema_invalid", "planned_chain entry missing role_type/station");
+            }
+            Integer rt = x.get("role_type") != null ? intOr(x.get("role_type"), 0) : null;
+            // E7 工位变体（2026-10-28 批次四回收）：station 经 config.json
+            // stations 段映射 role_type（python station_resolver 同源），
+            // station 本身透传（运行时按工位解析到人）
+            String station = str(x.get("station"));
+            if (rt == null && !station.isEmpty()) {
+                rt = stationRoleType(station);
+                if (rt == null) {
+                    throw new PlanError("schema_invalid",
+                            "station '" + station + "' 未注册或未关联 role_type — 先跑 mailbus stations migrate");
+                }
+            }
+            if (rt == null) {
                 throw new PlanError("schema_invalid", "planned_chain entry missing role_type/station");
             }
             Map<String, Object> item = new LinkedHashMap<>();
-            item.put("role_type", intOr(x.get("role_type"), 0));
+            item.put("role_type", rt);
             item.put("reason", str(x.get("reason")));
+            if (!station.isEmpty()) {
+                item.put("station", station);
+            }
             if (x.get("pin_agent") != null) {
                 item.put("pin_agent", str(x.get("pin_agent")));
             }
@@ -100,6 +118,24 @@ public class TaskPlannerService {
         result.put("planned_chain", out);
         result.put("plan_meta", meta("rules", taskType, 1.0, "rules", null));
         return result;
+    }
+
+    /** python station_role_type 对等：config.json stations 段 → role_type。 */
+    private Integer stationRoleType(String stationId) {
+        try {
+            Map<String, Object> cfg = io.github.hopewang123456.mailbus.infra.json.JsonFiles
+                    .readMap(dataDir.resolve("config.json"));
+            if (cfg == null || !(cfg.get("stations") instanceof Map<?, ?> stations)) {
+                return null;
+            }
+            Object st = stations.get(stationId);
+            if (st instanceof Map<?, ?> m && m.get("role_type") != null) {
+                return intOr(m.get("role_type"), 0);
+            }
+            return null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private Map<String, Object> llmPlan(Map<String, Object> envelope, String taskType,

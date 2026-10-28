@@ -17,7 +17,6 @@ from lib.adapters.container.resolver import (  # noqa: F401 — re-export for ca
     container_prefix,
     resolve_container,
 )
-from lib.infra.agent_demo import openclaw_gateway_ports, openclaw_state_dirs  # noqa: F401
 from lib.adapters.frameworks.spec import FRAMEWORKS
 from lib.adapters.frameworks.base import (  # noqa: F401 — re-export for callers
     BaseAdapter, PUSH_TIMEOUT_DEFAULT, PUSH_TIMEOUT_PIPELINE,

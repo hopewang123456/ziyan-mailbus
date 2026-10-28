@@ -14,6 +14,20 @@ def _truthy(v: str | None) -> bool:
     return (v or "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def _harness_for(data_dir: str):
+    """按 data_dir 解析 harness（L3 登记制：mode 经 config.harness.mode 查表）。
+
+    惰性经 composition 门面而非直接 import application.harness（分层规则：
+    adapters 不得 import application；本函数是 adapters→composition 的
+    **成文例外**——harness 按 headers 的 data_dir 逐消息解析，per-store
+    语义无法在装配期注入单一实例。模式已在 adapters/ARCHITECTURE.md 记录。
+    """
+    from lib.composition import get_harness
+
+    cfg = json_read(os.path.join(data_dir, "config.json"), {})
+    return get_harness(cfg), cfg
+
+
 class FileBusMessageTransport:
     """Implements MessageTransportPort for local inbox delivery.
 
@@ -94,10 +108,7 @@ class FileBusMessageTransport:
         msg_id: str,
         message: OutboundMessage,
     ) -> None:
-        from lib.composition import get_harness
-
-        cfg = json_read(os.path.join(data_dir, "config.json"), {})
-        harness = get_harness(cfg)
+        harness, cfg = _harness_for(data_dir)
         agents = cfg.get("agents") or {}
         agent_cfg = agents.get(agent) or {}
         harness.spawn(
@@ -123,10 +134,7 @@ class FileBusMessageTransport:
         agent: str,
         msg_id: str,
     ) -> TransportReceipt:
-        from lib.composition import get_harness
-
-        cfg = json_read(os.path.join(data_dir, "config.json"), {})
-        harness = get_harness(cfg)
+        harness, cfg = _harness_for(data_dir)
         timeout = int(
             h.get("wait_timeout_sec")
             or ((cfg.get("harness") or {}).get("file_bus") or {}).get("ack_timeout_sec")

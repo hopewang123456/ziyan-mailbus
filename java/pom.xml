@@ -57,11 +57,13 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
-      <!-- 官方 A2A Java SDK（AA1）：先锁版本，M2 transport 起集成 -->
+      <!-- 官方 A2A Java SDK（AA1 / M2d-b）：BOM 统一管 SDK 全工件版本 -->
       <dependency>
         <groupId>org.a2aproject.sdk</groupId>
-        <artifactId>a2a-java-sdk-reference-jsonrpc</artifactId>
+        <artifactId>a2a-java-sdk-bom</artifactId>
         <version>${a2a-sdk.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
       </dependency>
       <!-- picocli core only: no Boot 4 starter exists upstream (issue #2491);
            Spring wiring is a thin local IFactory in mailbus-boot (P0a). -->

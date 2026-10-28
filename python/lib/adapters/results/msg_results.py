@@ -52,3 +52,15 @@ class FileResultStore:
             ack_mod.ack_message(self.data_dir, agent_id, mid)
             n += 1
         return n
+
+
+# ── L3 装配登记（composition.assemble("result_store", ...) 查表用）──────
+
+
+def _build_file_result_store(ctx: dict) -> "FileResultStore":
+    return FileResultStore(ctx.get("data_dir", "store"))
+
+
+from lib.interfaces.assembler import register  # noqa: E402  (登记置于类定义后)
+
+register("result_store", "file")(_build_file_result_store)

@@ -1660,3 +1660,63 @@ def handle_metrics_layout(handler):
         return
     layout = json_read(path, {"hidden": []})
     handler._send_json({"status": "ok", "layout": layout})
+
+
+def handle_acceptance(handler):
+    """GET /api/acceptance — 验收观察项对账（java 对等面）。
+
+    复用 composition.acceptance_status（六项健康检查：serve_api/scheduler/
+    patrol/daily/ledger/human_queue），与 java AcceptanceService 同构：
+    {ok, checked_at, items:{name:{status,detail}}}。
+    """
+    from lib.composition import acceptance_status
+    report = acceptance_status(handler.data_dir)
+    handler._send_json({
+        "status": "ok",
+        "ok": bool(report.get("ok")),
+        "checked_at": report.get("checked_at", ""),
+        "items": report.get("items", {}),
+    })
+
+
+def handle_metrics_stream(handler):
+    """GET /api/metrics/stream — 指标快照的 SSE 差量流。
+
+    载荷与 GET /api/metrics/query?granularity=point 同形（{status, points}）；
+    变化才推 snapshot，无变化发心跳。双栈各自现算（java 指标覆盖面更窄，
+    但协议形状一致）。
+    """
+    from lib.api.sse import (
+        StreamLimitExceeded, acquire_stream_slot, begin_stream, end_stream,
+        release_stream_slot, send_event, stream_snapshot,
+    )
+    from lib.composition import metrics_query
+    from lib.core.a2a.config import load_transport_config
+
+    try:
+        acquire_stream_slot()
+    except StreamLimitExceeded as exc:
+        handler._send_api_error("too_many_streams", 503, detail=str(exc))
+        return
+    try:
+        cfg = load_transport_config(data_dir=handler.data_dir).get("api") or {}
+        begin_stream(handler)
+        try:
+            stream_snapshot(
+                handler,
+                lambda: metrics_query(handler.data_dir, "", granularity="point"),
+                poll_sec=float(cfg.get("stream_poll_sec", 1.0)),
+                timeout_sec=float(cfg.get("stream_timeout_sec", 300)),
+                heartbeat_sec=float(cfg.get("stream_heartbeat_sec", 15)),
+                max_events=int(cfg.get("stream_max_events", 0)),
+            )
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # 客户端断开
+        except Exception as exc:
+            try:
+                send_event(handler, "error", {"error": "stream_error", "message": str(exc)})
+            except Exception:
+                pass
+        end_stream(handler)
+    finally:
+        release_stream_slot()

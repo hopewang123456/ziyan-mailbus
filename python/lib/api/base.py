@@ -205,11 +205,18 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             payload.update(extra)
         self._send_json(payload, status)
 
-    def _send_sse_start(self, status: int = 200):
-        self.send_response(status)
+    def _send_sse_start(self, status: int = 200, *, http_status: Optional[int] = None):
+        """开始 SSE 响应。
+
+        ``http_status`` 是 A2A 流式的显式状态码入口（handlers_a2a 按 RPC
+        结果状态发首帧），与 ``status`` 等价但保留原调用点的关键字形态。
+        """
+        self.send_response(http_status if http_status is not None else status)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
+        # 防反代缓冲（与 device/chat 侧 _begin_sse 一致）
+        self.send_header("X-Accel-Buffering", "no")
         self._apply_cors_headers()
         self.end_headers()
 
@@ -341,7 +348,6 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/metrics/query": lambda: h["system"].handle_metrics_query(self),
             "/api/metrics/rules": lambda: h["system"].handle_metrics_rules(self),
             "/api/metrics/layout": lambda: h["system"].handle_metrics_layout(self),
-            "/api/agents": lambda: h["system"].handle_agents(self),
             "/api/frameworks": lambda: h["system"].handle_frameworks(self),
             "/api/tasks": lambda: h["tasks"].handle_tasks(self),
             "/api/tasks/audit/stats/trend": lambda: h["tasks"].handle_task_audit_trend(self),
@@ -350,7 +356,6 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             "/api/heartbeat": lambda: h["system"].handle_heartbeat(self),
             "/api/alerts": lambda: h["system"].handle_alerts(self),
             "/api/config": lambda: h["system"].handle_config(self),
-            "/api/stats": lambda: h["system"].handle_stats(self),
             "/api/launch": lambda: h["system"].handle_list_launchable(self),
             "/api/bulletin": lambda: h["tasks"].handle_bulletin(self),
             "/api/bulletin/permit": lambda: self._send_json({"permit": self.bulletin_permit}),
@@ -448,13 +453,12 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"error": "not_found"}, 404)
         elif path.startswith("/api/tasks/"):
+            # 路由表已覆盖 /api/tasks、/api/tasks/{id}、/api/tasks/{id}/fsm
+            # （GET）；此处只保留路由表未覆盖的边界路径。
             rest = path[len("/api/tasks/"):]
             if rest.endswith("/fsm"):
-                tid = rest[:-4].rstrip("/")
-                if tid:
-                    h["tasks"].handle_task_fsm_get(self, tid)
-                else:
-                    h["tasks"].handle_tasks(self)
+                # 空 id 的退化路径（/api/tasks//fsm）→ 列表视图
+                h["tasks"].handle_tasks(self)
             elif "/fsm/" in rest:
                 parts = rest.split("/fsm/", 1)
                 tid, sub = parts[0], parts[1].split("/")[0]
@@ -468,7 +472,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                 h["tasks"].handle_task_get(self, rest)
             else:
                 h["tasks"].handle_tasks(self)
-        
+
         elif path.startswith("/api/device/chat/"):
             ticket_id = path[len("/api/device/chat/"):].strip("/")
             if ticket_id:
@@ -476,6 +480,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"error": "not_found"}, 404)
         elif path.startswith("/api/inbox/"):
+            # 路由表已覆盖 GET /api/inbox/{agent}（单段）；此处兜底多段路径
             h["inbox"].handle_inbox(self, path[len("/api/inbox/"):])
         elif path.startswith("/api/agent-profile/"):
             h["system"].handle_agent_profile(self, path[len("/api/agent-profile/"):])
@@ -564,8 +569,6 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                 h["system"].handle_positions(self)
             else:
                 h["tasks"].handle_position_update(self, rt)
-        elif path == "/api/assistant/ask":
-            h["internal_llm"].handle_assistant_ask(self)
         elif path.startswith("/api/metrics/rules/"):
             rid = path[len("/api/metrics/rules/"):].strip("/")
             h["system"].handle_metrics_rule_patch(self, rid)
@@ -617,6 +620,7 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"error": "not_found"}, 404)
         elif path.startswith("/api/tasks/") and "/fsm/" in path:
+            # 路由表已覆盖 POST /api/tasks/{id}/fsm/{action}；此处为兜底
             rest = path[len("/api/tasks/"):]
             parts = rest.split("/fsm/", 1)
             tid, action = parts[0], parts[1].split("/")[0]

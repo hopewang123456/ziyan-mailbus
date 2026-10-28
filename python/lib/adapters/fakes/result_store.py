@@ -38,3 +38,15 @@ class FakeResultStore:
                 self._acked.add(key)
                 n += 1
         return n
+
+
+# ── L3 装配登记（composition.assemble("result_store", ...) 查表用）──────
+
+
+def _build_fake_result_store(ctx: dict) -> "FakeResultStore":
+    return FakeResultStore()
+
+
+from lib.interfaces.assembler import register  # noqa: E402  (登记置于类定义后)
+
+register("result_store", "fake")(_build_fake_result_store)

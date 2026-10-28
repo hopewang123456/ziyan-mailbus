@@ -107,19 +107,15 @@ class TestImportLayers(unittest.TestCase):
         ad_dir = ROOT / "adapters"
         if not ad_dir.is_dir():
             self.skipTest("no adapters yet")
-        allow: set[str] = set()  # 2026-09 治理完成：白名单清零
-        # Wave-1: harness now under application; file_bus/results still call it
-        allow_mods_prefix = ("lib.application.harness",)
+        # 白名单清零（2026-10-28 P0c harness 上提实证）：adapters 已无
+        # lib.application 直接 import；adapters/transport/file_bus.py 的
+        # harness 获取走 composition 门面惰性查（成文例外见
+        # adapters/ARCHITECTURE.md），不触本规则。
         offenders: list[str] = []
         for path in ad_dir.rglob("*.py"):
-            if path.name in allow:
-                continue
             for mod in _imports_of(path):
-                if not mod.startswith("lib.application"):
-                    continue
-                if any(mod == p or mod.startswith(p + ".") for p in allow_mods_prefix):
-                    continue
-                offenders.append(f"{path.relative_to(ROOT)}:{mod}")
+                if mod == "lib.application" or mod.startswith("lib.application."):
+                    offenders.append(f"{path.relative_to(ROOT)}:{mod}")
         self.assertEqual(offenders, [], msg=f"layer violation: {offenders}")
 
     def test_api_does_not_import_adapters(self):

@@ -304,6 +304,7 @@ __all__ = [
     "metrics_manifest",
     "metrics_rules",
     "metrics_rule_patch",
+    "archive_inbox_backlog",
 ]
 
 
@@ -341,5 +342,15 @@ def metrics_rules(*args: Any, **kwargs: Any):
 def metrics_rule_patch(*args: Any, **kwargs: Any):
     """告警规则编辑（B5）— api 经此访问；ValueError 语义保留。"""
     from lib.adapters.metrics.rules import patch_rule as _impl
+
+    return _impl(*args, **kwargs)
+
+
+def archive_inbox_backlog(*args: Any, **kwargs: Any):
+    """归档 agent 的已结算消息 — api 经此访问（分层约束）。
+
+    实际实现见 `lib.application.ops.store_cleanup.archive_inbox_backlog`。
+    """
+    from lib.application.ops.store_cleanup import archive_inbox_backlog as _impl
 
     return _impl(*args, **kwargs)

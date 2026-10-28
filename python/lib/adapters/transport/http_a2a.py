@@ -139,3 +139,15 @@ class HttpA2AMessageTransport:
             return self._transport(data_dir, cfg).poll_task(ctx, a2a_task_id, agents=agents)
         except Exception as exc:
             return {"ok": False, "error": str(exc), "a2a_task_id": a2a_task_id}
+
+
+# ── L3 装配登记（composition.assemble("a2a_transport", ...) 查表用）──────
+
+
+def _build_http_a2a_transport(ctx: dict) -> "HttpA2AMessageTransport":
+    return HttpA2AMessageTransport(data_dir=ctx.get("data_dir", ""), config=ctx.get("impl_config"))
+
+
+from lib.interfaces.assembler import register  # noqa: E402  (登记置于类定义后)
+
+register("a2a_transport", "http")(_build_http_a2a_transport)

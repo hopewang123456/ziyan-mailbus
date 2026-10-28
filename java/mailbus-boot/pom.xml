@@ -61,6 +61,13 @@
       <groupId>org.springframework.ai</groupId>
       <artifactId>spring-ai-starter-model-openai</artifactId>
     </dependency>
+    <!-- spring-ai-openai 2.0.2 将 okhttp 声明为 test scope、Boot BOM 亦 manage 成 test
+         （运行时缺类：OpenAiSetup NoClassDefFoundError okhttp3/Callback），显式 compile 覆盖 -->
+    <dependency>
+      <groupId>com.squareup.okhttp3</groupId>
+      <artifactId>okhttp</artifactId>
+      <scope>compile</scope>
+    </dependency>
     <dependency>
       <groupId>org.flywaydb</groupId>
       <artifactId>flyway-core</artifactId>

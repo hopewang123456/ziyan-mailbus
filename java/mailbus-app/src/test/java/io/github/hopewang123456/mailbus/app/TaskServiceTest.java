@@ -205,9 +205,17 @@ class TaskServiceTest {
         assertEquals(400, noReason.status());
         assertEquals("missing_reason", noReason.body().get("error"));
 
-        TaskService.Result r = svc.fsmAction("t-deny", "approve-plan",
+        // 批次四（2026-10-28）对齐 python：denied 默认 action=replan（本测试
+        // 无 planner → 400 plan_failed）；显式非 replan action → deny_cancel
+        TaskService.Result replan = svc.fsmAction("t-deny", "approve-plan",
                 Map.of("decision", "denied", "reason", "方案太粗"));
+        assertEquals(400, replan.status());
+        assertEquals("plan_failed", replan.body().get("error"));
+
+        TaskService.Result r = svc.fsmAction("t-deny", "approve-plan",
+                Map.of("decision", "denied", "reason", "方案太粗", "action", "cancel"));
         assertEquals(200, r.status());
+        assertEquals("deny_cancel", r.body().get("action"));
         assertEquals("cancelled", taskFile("t-deny").get("status"));
     }
 
@@ -270,12 +278,19 @@ class TaskServiceTest {
     }
 
     @Test
-    void unknownTask404AndFutureActions501() {
+    void unknownTask404AndNewActionsGuardSemantics() {
         assertEquals(404, svc.fsmAction("nope", "cancel", Map.of()).status());
 
-        svc.createFromEnvelope(envelope("t-501", "S"));
-        assertEquals(501, svc.fsmAction("t-501", "approve-join", Map.of()).status());
-        assertEquals(501, svc.fsmAction("t-501", "continue", Map.of()).status());
+        // 批次四（2026-10-28）回收 501 → 协议面对等：
+        // approve-join = python 守卫语义（非 await_join_review → 400）
+        svc.createFromEnvelope(envelope("t-aj", "S"));
+        assertEquals(400, svc.fsmAction("t-aj", "approve-join", Map.of()).status());
+        assertEquals("not_awaiting_join_review",
+                svc.fsmAction("t-aj", "approve-join", Map.of()).body().get("error"));
+        // continue 对执行中任务 = recover_continue（200 + 复位重推）
+        TaskService.Result r = svc.fsmAction("t-aj", "continue", Map.of("reason", "恢复"));
+        assertEquals(200, r.status());
+        assertEquals("recover_continue", r.body().get("action"));
     }
 
     @Test

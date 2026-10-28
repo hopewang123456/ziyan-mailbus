@@ -8,7 +8,7 @@ from lib.adapters.orchestration.human_gate import HumanGateAdapter
 from lib.adapters.orchestration.notifier import FileNotifier
 from lib.domain.errors import PAUSE_REASON_BUDGET
 from lib.interfaces.gates import AuditPort, HumanGatePort
-from lib.interfaces.orchestration import BudgetMeterPort, NotifierPort, TaskFsmPort
+from lib.interfaces.orchestration import BudgetMeterPort, TaskFsmPort
 
 
 def build_task_fsm() -> TaskFsmPort:
@@ -17,10 +17,6 @@ def build_task_fsm() -> TaskFsmPort:
 
 def build_budget_meter(data_dir: str) -> BudgetMeterPort:
     return FileBudgetMeter(data_dir)
-
-
-def build_notifier(data_dir: str) -> NotifierPort:
-    return FileNotifier(data_dir)
 
 
 def build_human_gate(
@@ -46,6 +42,5 @@ __all__ = [
     "build_audit",
     "build_budget_meter",
     "build_human_gate",
-    "build_notifier",
     "build_task_fsm",
 ]

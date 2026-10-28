@@ -936,7 +936,7 @@ def apply_skip(task: dict, reason: str = "") -> Dict[str, Any]:
     return {"ok": True, "action": "skip", "task": task, "needs_manual_advance": True}
 
 
-def apply_cancel(task: dict, reason: str = "", *, data_dir: str = "", agents: Optional[dict] = None) -> Dict[str, Any]:
+def apply_cancel(task: dict, reason: str = "", *, data_dir: str, agents: Optional[dict] = None) -> Dict[str, Any]:
     ensure_fsm(task)
     if data_dir:
         from lib.core.a2a.a2a_cancel import cancel_inflight_a2a_for_task
@@ -948,8 +948,36 @@ def apply_cancel(task: dict, reason: str = "", *, data_dir: str = "", agents: Op
     task["fsm"]["state"] = TaskFsmState.CANCELLED.value
     task["status"] = "cancelled"
     task["error"] = reason or "cancelled"
+    # M2d-b2b：cancel 收尾关闭该任务全部 pending hq（java TaskService.fsmAction 同语义，
+    # 双栈 cancel 后富状态口径一致——对角对拍抓出的对等债）
+    if data_dir:
+        _close_pending_hq_on_cancel(data_dir, task)
     _append_history(task, "cancel", {"reason": reason})
     return {"ok": True, "action": "cancel", "task": task}
+
+
+def _close_pending_hq_on_cancel(data_dir: str, task: dict) -> None:
+    """把该 task 的 pending human-queue 条目置 cancelled（human_queue SoT 复用）。"""
+    task_id = str(task.get("task_id") or task.get("id") or "")
+    if not task_id:
+        return
+    # 跨层解耦：application→adapter 走 composition 门面（分层守卫）
+    from lib.composition import load_human_queue, save_human_queue
+
+    doc = load_human_queue(data_dir)
+    changed = False
+    for item in doc.get("items") or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("status") != "pending":
+            continue
+        if str(item.get("task_id") or "") != task_id:
+            continue
+        item["status"] = "cancelled"
+        item["resolution"] = "task_cancelled"
+        changed = True
+    if changed:
+        save_human_queue(data_dir, doc)
 
 
 def apply_pause(task: dict, reason: str = "") -> Dict[str, Any]:

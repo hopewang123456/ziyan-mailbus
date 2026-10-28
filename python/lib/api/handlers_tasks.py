@@ -861,7 +861,11 @@ def handle_task_fsm_action(handler, task_id: str, action: str):
         if p is None:
             handler._send_json({"error": "missing priority"}, 400)
             return
-        task["fsm"]["priority"] = int(p)
+        try:
+            task["fsm"]["priority"] = int(p)
+        except (TypeError, ValueError):
+            handler._send_json({"error": "invalid priority", "hint": "需要整数"}, 400)
+            return
         outcome = {"ok": True, "action": "priority", "task": task}
     else:
         handler._send_json({"error": f"unknown action: {action}"}, 400)
@@ -999,12 +1003,11 @@ _MP_ACTIONS = {
 }
 
 
-def handle_command_inbox(handler):
-    """GET /api/command/inbox — 子言收件箱聚合（四路 → 统一消息流）。
+def collect_command_inbox(data_dir: str) -> dict:
+    """子言收件箱四路聚合的**纯函数**版本（不写响应）。
 
-    一期 UI 聚合（P1 规划）：manager-pending + human-queue(pending) + alerts
-    + 子言 inbox 未读；动作按钮走既有 /api/tasks/{id}/fsm/{action}。
-    二期子言真节点通道就绪后，inbox 路为真收件（第四批已通）。
+    GET /api/command/inbox 与 SSE /api/command/inbox/stream 共用，
+    保证两条出口的载荷逐字段同形（PY4-A 双栈 SSE）。
     """
     import json as _json
     from lib.application.queries.manager import manager_pending
@@ -1014,7 +1017,7 @@ def handle_command_inbox(handler):
     items: list = []
 
     # 1) manager pending（计划待批/待终验/待协调）
-    mp = manager_pending(handler.data_dir)
+    mp = manager_pending(data_dir)
     for it in (mp or {}).get("items") or []:
         bucket = str(it.get("bucket") or it.get("type") or "")
         task_id = str(it.get("task_id") or "")
@@ -1032,7 +1035,7 @@ def handle_command_inbox(handler):
         })
 
     # 2) human queue（pending；load_queue 返回全量，此处过滤）
-    hq = load_human_queue(handler.data_dir) or {}
+    hq = load_human_queue(data_dir) or {}
     for it in (hq.get("items") or [])[:50]:
         if it.get("status") != "pending":
             continue
@@ -1054,7 +1057,7 @@ def handle_command_inbox(handler):
         })
 
     # 3) alerts（severity 高者优先，取最近 5 条未消警）
-    for al in (get_recent_alerts(handler.data_dir, limit=5) or []):
+    for al in (get_recent_alerts(data_dir, limit=5) or []):
         sev = str(al.get("severity") or "info")
         items.append({
             "source": "alert",
@@ -1066,7 +1069,7 @@ def handle_command_inbox(handler):
         })
 
     # 4) 子言真 inbox（第四批打通的收件通道；未读消息）
-    paths = resolve_paths(handler.data_dir)
+    paths = resolve_paths(data_dir)
     inbox_file = os.path.join(paths["inbox"], "ziyan", "inbox.json")
     inbox_doc = json_read(inbox_file, {})
     ziyan_unread = 0
@@ -1085,13 +1088,63 @@ def handle_command_inbox(handler):
             "actions": [],
         })
 
-    handler._send_json({
+    return {
         "status": "ok",
         "identity": {"id": "ziyan"},
         "unread": len(items),
         "ziyan_inbox_unread": ziyan_unread,
         "items": items,
-    })
+    }
+
+
+def handle_command_inbox(handler):
+    """GET /api/command/inbox — 子言收件箱聚合（四路 → 统一消息流）。
+
+    一期 UI 聚合（P1 规划）：manager-pending + human-queue(pending) + alerts
+    + 子言 inbox 未读；动作按钮走既有 /api/tasks/{id}/fsm/{action}。
+    二期子言真节点通道就绪后，inbox 路为真收件（第四批已通）。
+    """
+    handler._send_json(collect_command_inbox(handler.data_dir))
+
+
+def handle_command_inbox_stream(handler):
+    """GET /api/command/inbox/stream — 收件箱聚合的 SSE 差量流。
+
+    载荷与 GET /api/command/inbox 同形；变化才推 snapshot，无变化发心跳。
+    """
+    from lib.api.sse import (
+        StreamLimitExceeded, acquire_stream_slot, begin_stream, end_stream,
+        release_stream_slot, send_event, stream_snapshot,
+    )
+    from lib.core.a2a.config import load_transport_config
+
+    try:
+        acquire_stream_slot()
+    except StreamLimitExceeded as exc:
+        handler._send_api_error("too_many_streams", 503, detail=str(exc))
+        return
+    try:
+        cfg = load_transport_config(data_dir=handler.data_dir).get("api") or {}
+        begin_stream(handler)
+        try:
+            stream_snapshot(
+                handler,
+                lambda: collect_command_inbox(handler.data_dir),
+                poll_sec=float(cfg.get("stream_poll_sec", 1.0)),
+                timeout_sec=float(cfg.get("stream_timeout_sec", 300)),
+                heartbeat_sec=float(cfg.get("stream_heartbeat_sec", 15)),
+                max_events=int(cfg.get("stream_max_events", 0)),
+            )
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # 客户端断开
+        except Exception as exc:
+            try:
+                send_event(handler, "error", {"error": "stream_error", "message": str(exc)})
+            except Exception:
+                pass
+        end_stream(handler)
+    finally:
+        release_stream_slot()
 
 
 # ── P3 管理中心：职位（role_type）写端点 ────────────────────────────────

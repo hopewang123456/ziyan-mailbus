@@ -37,5 +37,26 @@
 ## 已知待办
 
 - `orchestration/automation.py`、`human_queue.py`：规则+持久化混合体，无独立 Port；
-  待 P0c L3 装配器落地时评估是否提 Port 或并入域服务。
-- `frameworks/registry.py` 反向 import `lib.infra.agent_demo`（demo 工具）——下次触达 frameworks 时改走 composition。
+  待后续触达时评估是否提 Port 或并入域服务。
+
+## L3 装配登记现状（P0c，2026-10-28 更新）
+
+已登记 slot（`lib.interfaces.assembler.register`；`composition.<slot>` 声明优先，
+harness 例外——选择键保持 `harness.mode`）：
+
+| slot | 实现 | 消费点 |
+|---|---|---|
+| `audit` | noop / file | composition.build_orchestration |
+| `notifier` | file | composition.build_orchestration |
+| `result_store` | file / fake | composition.build_result_store |
+| `locale` | dict | composition.build_locale_port（lang 经 ctx） |
+| `transport` | selecting / fake | composition.build_transport |
+| `a2a_transport` | http / fake | composition.build_a2a_transport |
+| `bridged_agent` | cli / fake | composition.build_bridged_agent |
+| `harness` | stub / replay / record / production | composition.get_harness 门面（未知 mode fail-fast） |
+
+**成文例外**：`adapters/transport/file_bus.py` 的 `_harness_for()` 惰性经
+composition 门面查 harness（adapters→composition）——per-store 语义要求按
+消息 headers 的 data_dir 逐次解析，无法装配期注入单一实例；禁止扩大此模式。
+（原债 `frameworks/registry.py` 反向 import `lib.infra.agent_demo` 已于
+2026-10-28 删除——零消费者的死 re-export。）

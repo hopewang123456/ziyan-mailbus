@@ -1,15 +1,16 @@
 {
-  "generated_at": "2026-10-27T08:01:21.065555+00:00",
+  "generated_at": "2026-10-28T03:37:09.284275+00:00",
   "source": {
-    "python": "offline",
+    "python": "http://127.0.0.1:9816",
     "java": "http://127.0.0.1:9815"
   },
   "summary": {
-    "python_endpoints": 23,
-    "java_endpoints": 33,
-    "both": 20,
-    "python_only": 3,
-    "java_only": 13
+    "python_endpoints": 36,
+    "java_endpoints": 38,
+    "both": 36,
+    "python_only": 0,
+    "java_only": 0,
+    "exempted_not_implemented": 2
   },
   "both": [
     {
@@ -32,14 +33,56 @@
     },
     {
       "method": "GET",
+      "path": "/api/acceptance",
+      "py_summary": "验收观察项对账（六项健康检查）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/agents",
+      "py_summary": "agent 列表与配置（含 access/agent.json registry）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/agents/{}/unread",
+      "py_summary": "指定 agent 的未读计数",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
       "path": "/api/command/inbox",
       "py_summary": "子言收件箱四路聚合（manager-pending+human-queue+alerts+未读）",
       "java_summary": ""
     },
     {
       "method": "GET",
+      "path": "/api/command/inbox/stream",
+      "py_summary": "收件箱聚合 SSE 差量流（snapshot/heartbeat/done）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "py_summary": "服务健康探测",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
       "path": "/api/identities",
       "py_summary": "内置身份清单（D2/D15：id 稳定，显示名可改）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/inbox/{}",
+      "py_summary": "指定 agent 的 inbox 内容（?status_filter/?limit）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/metrics/layout",
+      "py_summary": "驾驶舱大盘布局（B4 dashboard as config）",
       "java_summary": ""
     },
     {
@@ -56,8 +99,26 @@
     },
     {
       "method": "GET",
+      "path": "/api/metrics/rules",
+      "py_summary": "告警规则清单（B5）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/metrics/stream",
+      "py_summary": "指标快照 SSE 差量流（snapshot/heartbeat/done）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
       "path": "/api/positions",
       "py_summary": "职位目录（发令窗口起草面板：候选池+inputs schema+实时空闲态）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats",
+      "py_summary": "消息统计/报表（总量+状态分布+agent 排行+响应时间）",
       "java_summary": ""
     },
     {
@@ -76,6 +137,12 @@
       "method": "GET",
       "path": "/api/tasks/{}",
       "py_summary": "任务详情",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/tasks/{}/fsm",
+      "py_summary": "任务状态机摘要（Dashboard 用）",
       "java_summary": ""
     },
     {
@@ -110,14 +177,44 @@
     },
     {
       "method": "POST",
+      "path": "/api/assistant/ask",
+      "py_summary": "AI 助手问答（指标语义层 + RAG 手册）",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
       "path": "/api/command/draft",
       "py_summary": "发令草稿预演（D4：tier0→LLM 无副作用）",
       "java_summary": ""
     },
     {
       "method": "POST",
+      "path": "/api/inbox/ack/{}",
+      "py_summary": "确认（ack）单条消息",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/inbox/{}/archive",
+      "py_summary": "归档 agent 的已结算消息",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/inbox/{}/send",
+      "py_summary": "向指定 agent 发消息",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
       "path": "/api/tasks/create",
       "py_summary": "建任务（v3 A2A Envelope；legacy→410）",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/{}/fsm/{}",
+      "py_summary": "任务状态机动作（rollback/skip/cancel/pause/priority/accept…）",
       "java_summary": ""
     },
     {
@@ -133,88 +230,18 @@
       "java_summary": ""
     }
   ],
-  "python_only": [
-    {
-      "method": "GET",
-      "path": "/api/health",
-      "summary": "服务健康探测"
-    },
-    {
-      "method": "GET",
-      "path": "/api/metrics/layout",
-      "summary": "驾驶舱大盘布局（B4 dashboard as config）"
-    },
-    {
-      "method": "GET",
-      "path": "/api/metrics/rules",
-      "summary": "告警规则清单（B5）"
-    }
-  ],
-  "java_only": [
-    {
-      "method": "GET",
-      "path": "/api/acceptance",
-      "summary": ""
-    },
-    {
-      "method": "GET",
-      "path": "/api/agents",
-      "summary": ""
-    },
-    {
-      "method": "GET",
-      "path": "/api/agents/{}/unread",
-      "summary": ""
-    },
+  "python_only": [],
+  "java_only": [],
+  "exempted": [
     {
       "method": "GET",
       "path": "/api/events",
-      "summary": ""
-    },
-    {
-      "method": "GET",
-      "path": "/api/inbox/{}",
-      "summary": ""
-    },
-    {
-      "method": "GET",
-      "path": "/api/stats",
-      "summary": ""
-    },
-    {
-      "method": "GET",
-      "path": "/api/tasks/{}/fsm",
-      "summary": ""
+      "reason": "java 显式 501：依赖 java 独有存储，无 python 对等实现"
     },
     {
       "method": "GET",
       "path": "/api/trace/{}",
-      "summary": ""
-    },
-    {
-      "method": "POST",
-      "path": "/api/assistant/ask",
-      "summary": ""
-    },
-    {
-      "method": "POST",
-      "path": "/api/inbox/ack/{}",
-      "summary": ""
-    },
-    {
-      "method": "POST",
-      "path": "/api/inbox/{}/archive",
-      "summary": ""
-    },
-    {
-      "method": "POST",
-      "path": "/api/inbox/{}/send",
-      "summary": ""
-    },
-    {
-      "method": "POST",
-      "path": "/api/tasks/{}/fsm/{}",
-      "summary": ""
+      "reason": "java 显式 501：依赖 java 独有存储，无 python 对等实现"
     }
   ]
 }

@@ -25,6 +25,14 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 REPORT_PATH = REPO / "docs" / "reports" / "api-surface-diff.json"
 
+# 显式不对等豁免（2026-10-27 PY4-A 拍板）：java 侧显式 501 声明「无 python 对等
+# 实现」的端点。这些不是缺口——补齐前提是消息存储 SoT 统一（D15 之后）。
+# 键为 (METHOD, 归一化 path)，与 surface_set 的键同形。
+EXEMPT_NOT_IMPLEMENTED = {
+    ("GET", "/api/events"),
+    ("GET", "/api/trace/{}"),
+}
+
 
 def _fetch(url: str) -> dict:
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
@@ -76,6 +84,12 @@ def main() -> int:
     py_only = sorted(set(py_set) - set(java_set))
     java_only = sorted(set(java_set) - set(py_set))
 
+    # 豁免：双侧显式声明不对等（java 501）的端点不算缺口
+    exempted = sorted(k for k in (set(py_only) | set(java_only)) if k in EXEMPT_NOT_IMPLEMENTED)
+    exempt_set = set(exempted)
+    py_only = [k for k in py_only if k not in exempt_set]
+    java_only = [k for k in java_only if k not in exempt_set]
+
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "source": {"python": args.py, "java": args.java},
@@ -85,11 +99,15 @@ def main() -> int:
             "both": len(both),
             "python_only": len(py_only),
             "java_only": len(java_only),
+            "exempted_not_implemented": len(exempted),
         },
         "both": [{"method": m, "path": p, "py_summary": py_set[(m, p)], "java_summary": java_set[(m, p)]}
                  for m, p in both],
         "python_only": [{"method": m, "path": p, "summary": py_set[(m, p)]} for m, p in py_only],
         "java_only": [{"method": m, "path": p, "summary": java_set[(m, p)]} for m, p in java_only],
+        "exempted": [{"method": m, "path": p,
+                      "reason": "java 显式 501：依赖 java 独有存储，无 python 对等实现"}
+                     for m, p in exempted],
     }
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -97,7 +115,8 @@ def main() -> int:
 
     s = report["summary"]
     print(f"双栈 API 面对拍：python {s['python_endpoints']} | java {s['java_endpoints']} | "
-          f"双侧齐 {s['both']} | python-only {s['python_only']} | java-only {s['java_only']}")
+          f"双侧齐 {s['both']} | python-only {s['python_only']} | java-only {s['java_only']} | "
+          f"显式不对等豁免 {s['exempted_not_implemented']}")
     if py_only:
         print("\n[python-only]")
         for e in report["python_only"]:
@@ -106,8 +125,13 @@ def main() -> int:
         print("\n[java-only]")
         for e in report["java_only"]:
             print(f"  {e['method']:6} {e['path']}  # {e['summary']}")
+    if exempted:
+        print("\n[显式不对等豁免（java 501）]")
+        for e in report["exempted"]:
+            print(f"  {e['method']:6} {e['path']}  # {e['reason']}")
     print(f"\n报告：{out}")
-    return 0
+    # 真缺口（豁免之外的单侧端点）→ 非零退出码，供 CI 判定
+    return 1 if (py_only or java_only) else 0
 
 
 if __name__ == "__main__":

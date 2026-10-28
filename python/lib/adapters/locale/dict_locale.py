@@ -61,3 +61,15 @@ class DictLocale:
 
 def build_locale(data_dir: str = "", lang: str = "zh") -> DictLocale:
     return DictLocale(data_dir=data_dir, lang=lang)
+
+
+# ── L3 装配登记（composition.assemble("locale", ...) 查表用）────────────
+
+
+def _build_dict_locale(ctx: dict) -> "DictLocale":
+    return DictLocale(data_dir=ctx.get("data_dir", ""), lang=ctx.get("lang", "zh"))
+
+
+from lib.interfaces.assembler import register  # noqa: E402  (登记置于类定义后)
+
+register("locale", "dict")(_build_dict_locale)

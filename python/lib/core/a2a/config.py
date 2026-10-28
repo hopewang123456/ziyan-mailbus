@@ -21,6 +21,13 @@ _DEFAULT = {
         "stream_missing_grace_sec": 0.3,
         "use_streaming": False,
     },
+    # PY4-A 双栈 SSE（/api/command/inbox/stream、/api/metrics/stream）
+    "api": {
+        "stream_poll_sec": 1.0,
+        "stream_timeout_sec": 300,
+        "stream_heartbeat_sec": 15,
+        "stream_max_events": 0,
+    },
     "file_bus": {"enabled": True},
     "fallback_alerts": {"enabled": True, "notify_agent": "agent-a"},
 }
@@ -46,6 +53,7 @@ def _default_transport() -> dict[str, Any]:
     return {
         "channel_order": list(_DEFAULT["channel_order"]),
         "a2a": dict(_DEFAULT["a2a"]),
+        "api": dict(_DEFAULT["api"]),
         "file_bus": dict(_DEFAULT["file_bus"]),
         "fallback_alerts": dict(_DEFAULT["fallback_alerts"]),
     }

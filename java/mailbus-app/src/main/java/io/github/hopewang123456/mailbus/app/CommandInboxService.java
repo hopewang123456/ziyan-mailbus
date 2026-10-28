@@ -133,7 +133,11 @@ public class CommandInboxService {
         return out;
     }
 
-    /** python _bucket_of：accepting→acceptance / await_plan_approval→plan_approval / blocked|failed→coordination。 */
+    /**
+     * python {@code _bucket_of} 的 java 对等：
+     * accepting→acceptance / await_plan_approval→plan_approval /
+     * await_join_review|join_gate_review|blocked|failed→coordination。
+     */
     private static String bucketOf(Map<String, Object> task) {
         Map<String, Object> fsm = task.get("fsm") instanceof Map<?, ?> f ? toMap(f) : Map.of();
         String state = str(fsm.get("state"));
@@ -142,6 +146,11 @@ public class CommandInboxService {
         }
         if ("await_plan_approval".equals(str(fsm.get("substate")))) {
             return "plan_approval";
+        }
+        // 2026-10-27 PY4-A：对齐 python——协作评审待批也进 coordination 桶
+        if ("await_join_review".equals(str(fsm.get("substate")))
+                || "join_gate_review".equals(str(fsm.get("reason")))) {
+            return "coordination";
         }
         if (TaskFsmState.BLOCKED.value().equals(state) || TaskFsmState.FAILED.value().equals(state)) {
             return "coordination";

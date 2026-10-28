@@ -77,7 +77,108 @@ jobs:
             tests/test_framework_spec.py \
             tests/test_external_frameworks.py \
             tests/test_agent_register.py \
-            tests/test_framework_skills.py -q
+            tests/test_framework_skills.py \
+            tests/test_routes_openapi.py \
+            tests/test_api_surface_diff.py \
+            tests/test_sse_protocol.py \
+            tests/test_a2a_streaming.py -q
+
+  java:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: java
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: mvn test
+        run: mvn -B test
+
+  # 双栈 API 面对拍（D13 四件套常设项 / PY4-A DoD）：
+  # 起 python serve + java serve，跑 tools/api_surface_diff.py；
+  # 真缺口（豁免之外的单侧端点）→ 退出码非零 → job 失败。
+  api-surface-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Install python deps
+        working-directory: python
+        run: |
+          python -m pip install -U pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -e .
+      - name: Build java
+        working-directory: java
+        run: mvn -B install -DskipTests
+      - name: Prepare diagonal smoke stores
+        run: |
+          mkdir -p .diag-java/roles/json .diag-java/inbox/agentA .diag-java/tasks
+          mkdir -p .diag-py/roles/json .diag-py/inbox/agentX .diag-py/tasks
+          cat > .diag-java/config.json <<'EOF'
+          {"agents": {"agentA": {"type": "cli"}}}
+          EOF
+          cat > .diag-py/config.json <<'EOF'
+          {"agents": {"agentX": {"type": "cli"}}, "auth": {"allow_write_without_token": true}}
+          EOF
+          cat > .diag-java/roles/json/role-types.json <<'EOF'
+          {"roles": {"1": {"key": "designer", "display": {"zh": "方案设计师"}, "candidates": ["agentA"]}}}
+          EOF
+          sed 's/agentA/agentX/' .diag-java/roles/json/role-types.json > .diag-py/roles/json/role-types.json
+      - name: Start python serve (9816)
+        working-directory: python
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          nohup python -m bus serve --port 9816 --data-dir "$PWD/../.diag-py" \
+            > /tmp/py-serve.log 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:9816/api/health > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:9816/api/health
+      - name: Start java serve (9815)
+        working-directory: java
+        run: |
+          STORE="$(cd ../.diag-java && pwd)"
+          nohup mvn -B -pl mailbus-boot spring-boot:run \
+            -Dspring-boot.run.arguments="--mailbus.data-dir=$STORE --server.port=9815 --mailbus.task-scan.enabled=false" \
+            > /tmp/java-serve.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -sf http://127.0.0.1:9815/api/health > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:9815/api/health
+      - name: Run API surface diff
+        run: |
+          python tools/api_surface_diff.py \
+            --py http://127.0.0.1:9816 \
+            --java http://127.0.0.1:9815 \
+            --out docs/reports/api-surface-diff.json
+      - name: Run A2A diagonal check (SDK face)
+        env:
+          PYTHONUTF8: "1"
+        run: |
+          python tools/a2a_diagonal_check.py \
+            --py http://127.0.0.1:9816 \
+            --java http://127.0.0.1:9815 \
+            --py-agent agentX --java-agent agentA
+      - name: Upload diff report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-surface-diff
+          path: docs/reports/api-surface-diff.json
+          if-no-files-found: ignore
 
   web:
     runs-on: ubuntu-latest

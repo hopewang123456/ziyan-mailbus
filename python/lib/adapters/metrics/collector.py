@@ -118,8 +118,10 @@ def _tokens(metric_id: str, data_dir: str) -> float:
     from lib.infra.token_ledger import today_summary
 
     summary = today_summary(data_dir)
-    # 口径=/api/tokens/summary 估算口径（estimates），回执 usage 为上报口径
-    for key in ("estimated_total", "estimates_total", "total_estimated", "total"):
+    # 口径=/api/tokens/summary 估算口径（estimates），回执 usage 为上报口径。
+    # est_tokens_total 是 today_summary 的实际键名（2026-10-28 java 对拍实证：
+    # 原四键全不匹配 → 本指标恒 0）
+    for key in ("est_tokens_total", "estimated_total", "estimates_total", "total_estimated", "total"):
         if key in summary:
             return float(summary[key] or 0)
     return float(sum(float(e.get("estimated") or 0) for e in summary.get("entries") or []))

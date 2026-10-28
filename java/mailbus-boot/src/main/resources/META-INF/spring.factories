@@ -1,0 +1,2 @@
+org.springframework.boot.env.EnvironmentPostProcessor=\
+  io.github.hopewang123456.mailbus.boot.DataDirPostProcessor
