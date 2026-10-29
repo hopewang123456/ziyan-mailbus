@@ -338,114 +338,14 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             return
         h = _get_handlers()
 
-        routes = {
-            "/api/health": lambda: h["system"].handle_health(self),
-            "/api/status": lambda: h["system"].handle_status(self),
-            "/api/positions": lambda: h["system"].handle_positions(self),
-            "/api/identities": lambda: h["system"].handle_identities(self),
-            "/api/command/inbox": lambda: h["tasks"].handle_command_inbox(self),
-            "/api/metrics/manifest": lambda: h["system"].handle_metrics_manifest(self),
-            "/api/metrics/query": lambda: h["system"].handle_metrics_query(self),
-            "/api/metrics/rules": lambda: h["system"].handle_metrics_rules(self),
-            "/api/metrics/layout": lambda: h["system"].handle_metrics_layout(self),
-            "/api/frameworks": lambda: h["system"].handle_frameworks(self),
-            "/api/tasks": lambda: h["tasks"].handle_tasks(self),
-            "/api/tasks/audit/stats/trend": lambda: h["tasks"].handle_task_audit_trend(self),
-            "/api/tasks/audit/stats": lambda: h["tasks"].handle_task_audit_stats(self),
-            "/api/tasks/audit/pending": lambda: h["tasks"].handle_task_audit_pending(self),
-            "/api/heartbeat": lambda: h["system"].handle_heartbeat(self),
-            "/api/alerts": lambda: h["system"].handle_alerts(self),
-            "/api/config": lambda: h["system"].handle_config(self),
-            "/api/launch": lambda: h["system"].handle_list_launchable(self),
-            "/api/bulletin": lambda: h["tasks"].handle_bulletin(self),
-            "/api/bulletin/permit": lambda: self._send_json({"permit": self.bulletin_permit}),
-            "/api/permission": lambda: h["tasks"].handle_permission(self),
-            "/api/reports": lambda: h["system"].handle_reports(self),
-            "/api/patrol-reports": lambda: h["system"].handle_patrol_reports(self),
-            "/api/reviews": lambda: h["system"].handle_code_reviews(self),
-            "/api/reviews/projects": lambda: h["system"].handle_code_reviews_projects(self),
-            "/api/replies": lambda: h["inbox"].handle_replies(self),
-            "/api/skill-usage": lambda: h["tasks"].handle_skill_usage(self),
-            "/api/skill-use": lambda: h["tasks"].handle_skill_use(self),
-            "/api/templates": lambda: h["system"].handle_templates(self),
-            "/api/external-tools": lambda: h["system"].handle_external_tools(self),
-            "/api/clinic/tools": lambda: h["system"].handle_clinic_tools(self),
-            "/api/clinic/jobs": lambda: h["system"].handle_clinic_jobs(self),
-            "/api/test-agents": lambda: h["system"].handle_test_agents(self),
-            "/api/doctor": lambda: h["system"].handle_doctor(self),
-            "/api/failover/metrics": lambda: h["system"].handle_failover_metrics(self),
-            "/api/tokens/summary": lambda: h["system"].handle_token_summary(self),
-            "/api/demo/trace": lambda: h["system"].handle_demo_trace(self),
-            "/api/agents/assembly": lambda: h["system"].handle_agent_assembly(self),
-            "/api/tasks/trace": lambda: h["tasks"].handle_task_trace(self),
-            "/api/locale/errors": lambda: h["system"].handle_locale_errors(self),
-            "/api/workload": lambda: h["system"].handle_workload(self),
-            "/api/send-msg": lambda: h["inbox"].handle_send_msg(self),
-            "/api/avatars/manifest": lambda: h["system"].handle_avatars_manifest(self),
-            "/api/internal-llm/status": lambda: h["internal_llm"].handle_internal_llm_status(self),
-            "/api/internal-llm/health": lambda: h["internal_llm"].handle_internal_llm_health(self),
-            "/api/workflows": lambda: h["workflows"].handle_workflows_list(self),
-            "/api/intake": lambda: h["intake"].handle_intake_list(self),
-            "/api/settings/sections": lambda: h["settings"].handle_settings_sections(self),
-            "/api/settings/env": lambda: h["settings"].handle_settings_env_get(self),
-            "/api/settings/paths": lambda: h["settings"].handle_settings_paths(self),
-            "/api/settings/compose-files": lambda: h["settings"].handle_compose_files_list(self),
-            "/api/settings/integrations": lambda: h["settings"].handle_integrations(self),
-            "/api/skills/index": lambda: h["settings"].handle_skills_index(self),
-            "/api/discover": lambda: h["lifecycle"].handle_discover(self),
-            "/api/align": lambda: h["lifecycle"].handle_align(self),
-            "/api/agents/active": lambda: h["lifecycle"].handle_active_agents(self),
-            "/api/chain/budget": lambda: h["lifecycle"].handle_chain_budget(self),
-            "/api/config/mailbus-token": lambda: h["lifecycle"].handle_mailbus_token(self),
-        }
-
-        if path in routes:
-            routes[path]()
-        elif path.startswith("/api/workflows/"):
-            wf_id = path[len("/api/workflows/"):].strip("/")
-            if wf_id:
-                h["workflows"].handle_workflow_get(self, wf_id)
-            else:
-                h["workflows"].handle_workflows_list(self)
-        elif path.startswith("/api/intake/"):
-            rest = path[len("/api/intake/"):].strip("/")
-            parts = rest.split("/")
-            if len(parts) == 1 and parts[0]:
-                h["intake"].handle_intake_get(self, parts[0])
-            elif len(parts) == 2 and parts[0] and parts[1] == "tasks":
-                h["intake"].handle_intake_tasks(self, parts[0])
-            elif len(parts) == 2 and parts[0] and parts[1] == "spawn":
-                self._send_json({"error": "method_not_allowed", "use": "POST"}, 405)
-            else:
-                self._send_json({"error": "not_found"}, 404)
-        elif path.startswith("/api/settings/section/"):
-            section = path[len("/api/settings/section/"):].strip("/")
-            if section == "services/probe":
-                self._send_json({"error": "method_not_allowed", "use": "POST"}, 405)
-            elif section:
-                h["settings"].handle_settings_section_get(self, section)
-            else:
-                self._send_json({"error": "not_found"}, 404)
+        if path == "/api/settings/section/services/probe":
+            self._send_json({"error": "method_not_allowed", "use": "POST"}, 405)
         elif path.startswith("/api/settings/compose-files/"):
             rel = path[len("/api/settings/compose-files/"):].lstrip("/")
             if rel:
                 h["settings"].handle_compose_file_get(self, rel)
             else:
                 h["settings"].handle_compose_files_list(self)
-        elif path.startswith("/api/human-queue"):
-            h["tasks"].handle_human_queue(self)
-        elif path == "/api/manager/pending":
-            h["tasks"].handle_manager_pending(self)
-        elif path == "/api/a2a/agent-cards":
-            h["a2a"].handle_a2a_agent_card_list(self)
-        elif path == "/api/a2a/protocol":
-            h["a2a"].handle_a2a_protocol_status(self)
-        elif path.startswith("/api/a2a/agent-card/"):
-            agent_id = path[len("/api/a2a/agent-card/"):].strip("/")
-            if agent_id:
-                h["a2a"].handle_a2a_agent_card_get(self, agent_id)
-            else:
-                self._send_json({"error": "not_found"}, 404)
         elif path.startswith("/api/a2a/rpc/"):
             agent_id = path[len("/api/a2a/rpc/"):].strip("/")
             if agent_id:
@@ -482,8 +382,6 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
         elif path.startswith("/api/inbox/"):
             # 路由表已覆盖 GET /api/inbox/{agent}（单段）；此处兜底多段路径
             h["inbox"].handle_inbox(self, path[len("/api/inbox/"):])
-        elif path.startswith("/api/agent-profile/"):
-            h["system"].handle_agent_profile(self, path[len("/api/agent-profile/"):])
         elif path.startswith("/api/agent-avatar/"):
             rest = path[len("/api/agent-avatar/"):].strip("/")
             parts = rest.split("/", 1)
@@ -493,22 +391,9 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
                 h["system"].handle_agent_avatar(self, agent, kind)
             else:
                 self._send_json({"error": "agent required"}, 400)
-        elif path.startswith("/api/harness-reports/"):
-            sha = path[len("/api/harness-reports/"):].strip("/")
-            if sha:
-                h["system"].handle_harness_report(self, sha)
-            else:
-                self._send_json({"error": "not_found"}, 404)
         elif path.startswith("/api/report-content/"):
             fname = path[len("/api/report-content/"):]
             h["system"].handle_report_content(self, fname)
-        elif path.startswith("/api/ping/"):
-            h["system"].handle_ping(self, path[len("/api/ping/"):])
-        elif path.startswith("/api/reviews/"):
-            fname = path[len("/api/reviews/"):]
-            h["system"].handle_code_reviews_detail(self, fname)
-        elif path.startswith("/api/search"):
-            h["system"].handle_search(self)
         elif path in ("", "/"):
             self._serve_static("/")
         elif path == "/index.html":
@@ -552,171 +437,12 @@ class MailbusAPIHandler(BaseHTTPRequestHandler):
             return
         h = _get_handlers()
 
-        if path == "/api/launch":
-            h["system"].handle_launch(self)
-        elif path == "/api/bulletin/post":
-            h["tasks"].handle_bulletin_post(self)
-        elif path == "/api/bulletin/permit":
-            h["tasks"].handle_bulletin_permit(self)
-        elif path == "/api/permission":
-            h["tasks"].handle_permission(self)
-        elif path == "/api/skill-use":
-            h["tasks"].handle_skill_use(self)
-        elif path.startswith("/api/positions/"):
-            try:
-                rt = int(path[len("/api/positions/"):].strip("/"))
-            except ValueError:
-                h["system"].handle_positions(self)
-            else:
-                h["tasks"].handle_position_update(self, rt)
-        elif path.startswith("/api/metrics/rules/"):
-            rid = path[len("/api/metrics/rules/"):].strip("/")
-            h["system"].handle_metrics_rule_patch(self, rid)
-        elif path == "/api/metrics/layout":
-            h["system"].handle_metrics_layout(self)
-        elif path == "/api/metrics/snapshot":
-            h["system"].handle_metrics_snapshot(self)
-        elif path.startswith("/api/identities/") and path != "/api/identities":
-            ident_id = path[len("/api/identities/"):].strip("/")
-            h["system"].handle_identity_rename(self, ident_id)
-        elif path == "/api/command/draft":
-            h["tasks"].handle_command_draft(self)
-        elif path == "/api/tasks/create":
-            h["tasks"].handle_task_create(self)
-        elif path == "/api/tasks/update":
-            h["tasks"].handle_task_update(self)
-        elif path == "/api/tasks/audit":
-            h["tasks"].handle_task_audit(self)
-        elif path == "/api/intake/spawn-analyze":
-            h["intake"].handle_intake_spawn_analyze(self)
-        elif path.startswith("/api/intake/") and path.endswith("/spawn"):
-            rest = path[len("/api/intake/"):].rstrip("/")
-            intake_id = rest[: -len("/spawn")].strip("/")
-            if intake_id:
-                h["intake"].handle_intake_spawn(self, intake_id)
-            else:
-                self._send_json({"error": "not_found"}, 404)
-        elif path.startswith("/api/intake/") and "/gates/" in path:
-            rest = path[len("/api/intake/"):]
-            parts = rest.split("/")
-            if len(parts) >= 4 and parts[1] == "gates" and parts[3] in ("approve", "deny"):
-                if parts[3] == "approve":
-                    h["intake"].handle_intake_gate_approve(self, parts[0], parts[2])
-                else:
-                    h["intake"].handle_intake_gate_deny(self, parts[0], parts[2])
-            else:
-                self._send_json({"error": "not_found"}, 404)
-        elif path.startswith("/api/tasks/") and "/gates/" in path:
-            rest = path[len("/api/tasks/"):]
-            parts = rest.split("/")
-            if len(parts) >= 4 and parts[1] == "gates" and parts[3] in ("approve", "deny"):
-                h["gates"].handle_gate_approve(self, parts[0], parts[2]) if parts[3] == "approve" else h["gates"].handle_gate_deny(self, parts[0], parts[2])
-            else:
-                self._send_json({"error": "not_found"}, 404)
-        elif path.startswith("/api/human-queue/") and path.endswith("/resolve"):
-            item_id = path[len("/api/human-queue/"): -len("/resolve")].strip("/")
-            if item_id:
-                h["tasks"].handle_human_queue_resolve(self, item_id)
-            else:
-                self._send_json({"error": "not_found"}, 404)
-        elif path.startswith("/api/tasks/") and "/fsm/" in path:
-            # 路由表已覆盖 POST /api/tasks/{id}/fsm/{action}；此处为兜底
-            rest = path[len("/api/tasks/"):]
-            parts = rest.split("/fsm/", 1)
-            tid, action = parts[0], parts[1].split("/")[0]
-            h["tasks"].handle_task_fsm_action(self, tid, action)
-        elif path == "/api/send-msg":
-            h["inbox"].handle_send_msg(self)
-        elif path == "/api/agents/scan":
-            h["lifecycle"].handle_agent_scan(self)
-        elif path == "/api/agent-instances":
-            h["lifecycle"].handle_agent_instance_upsert(self)
-        elif path == "/api/agent-instances/load-roles":
-            h["lifecycle"].handle_agent_instance_load_roles(self)
-        elif path == "/api/agent-instances/discover":
-            h["lifecycle"].handle_agent_instance_discover(self)
-        elif path == "/api/agent-instances/test-connection":
-            h["lifecycle"].handle_agent_instance_test_connection(self)
-        elif path == "/api/demo/run":
-            h["system"].handle_demo_run(self)
-        elif path == "/api/demo/clean":
-            h["system"].handle_demo_clean(self)
-        elif path == "/api/internal-llm/dry-run":
-            h["internal_llm"].handle_internal_llm_dry_run(self)
-        elif path == "/api/internal-llm/rebuild-rag":
-            h["internal_llm"].handle_internal_llm_rebuild_rag(self)
-        elif path == "/api/attachments/upload":
-            h["attachments"].handle_attachment_upload(self)
-        elif path.startswith("/api/agents/") and path.endswith("/step-result"):
-            agent_id = path[len("/api/agents/"): -len("/step-result")].strip("/")
-            if agent_id:
-                h["step_result"].handle_agent_step_result(self, agent_id)
-            else:
-                self._send_json({"error": "not_found"}, 404)
-        elif path == "/api/clinic/run":
-            h["system"].handle_clinic_run(self)
-        elif path == "/api/dev/reload":
-            h["system"].handle_dev_reload(self)
-        elif path == "/api/drill/video-publish":
-            h["drill"].handle_drill_video_publish(self)
-        elif path == "/api/agents/recruit":
-            h["system"].handle_agent_recruit(self)
-        elif path.startswith("/api/workflows/") and path.endswith("/delete"):
-            wf_id = path[len("/api/workflows/"): -len("/delete")].strip("/")
-            h["workflows"].handle_workflow_delete(self, wf_id)
-        elif path.startswith("/api/workflows/"):
-            wf_id = path[len("/api/workflows/"):].strip("/")
-            if wf_id and wf_id not in ("delete",):
-                h["workflows"].handle_workflow_save(self, wf_id)
-            else:
-                self._send_json({"error": "not_found"}, 404)
-        elif path == "/api/settings/env":
-            h["settings"].handle_settings_env_patch(self)
-        elif path == "/api/align":
-            h["lifecycle"].handle_align(self)
-        elif path == "/api/chain/budget":
-            h["lifecycle"].handle_chain_budget(self)
-        elif path in ("/api/config/mailbus-token", "/api/config/mailbus-token/rotate"):
-            h["lifecycle"].handle_mailbus_token(self)
-        elif path.startswith("/api/frameworks/") and path.endswith("/enable"):
-            fid = path[len("/api/frameworks/"): -len("/enable")].strip("/")
-            h["lifecycle"].handle_framework_enable(self, fid)
-        elif path.startswith("/api/frameworks/") and path.endswith("/disable"):
-            fid = path[len("/api/frameworks/"): -len("/disable")].strip("/")
-            h["lifecycle"].handle_framework_disable(self, fid)
-        elif path.startswith("/api/agents/") and path.endswith("/enable"):
-            aid = path[len("/api/agents/"): -len("/enable")].strip("/")
-            h["lifecycle"].handle_role_enable(self, aid)
-        elif path.startswith("/api/settings/section/"):
-            section = path[len("/api/settings/section/"):].strip("/")
-            if section == "services/probe":
-                h["settings"].handle_settings_services_probe(self)
-            elif section:
-                h["settings"].handle_settings_section_patch(self, section)
-            else:
-                self._send_json({"error": "not_found"}, 404)
-        elif path.startswith("/api/settings/compose-files/"):
+        if path.startswith("/api/settings/compose-files/"):
             rel = path[len("/api/settings/compose-files/"):].lstrip("/")
             if rel:
                 h["settings"].handle_compose_file_put(self, rel)
             else:
                 self._send_json({"error": "path required"}, 400)
-        elif path == "/api/a2a/tasks":
-            h["a2a"].handle_a2a_tasks_create(self)
-        elif path.startswith("/api/a2a/rpc/"):
-            agent_id = path[len("/api/a2a/rpc/"):].strip("/")
-            if agent_id:
-                h["a2a"].handle_a2a_rpc(self, agent_id)
-            else:
-                self._send_json({"error": "not_found"}, 404)
-        elif path.startswith("/api/actions/update/"):
-            parts = path.split("/")
-            if len(parts) >= 5:
-                h["inbox"].handle_actions_update(self, parts[3], parts[4])
-            else:
-                self._send_json({"error": "bad_path"}, 400)
-        elif path.startswith("/api/mark-read/"):
-            h["inbox"].handle_mark_read(self, path[len("/api/mark-read/"):])
         else:
             self._send_json({"error": "not_found"}, 404)
 

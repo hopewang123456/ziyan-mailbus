@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import unittest
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent.parent
@@ -107,3 +108,28 @@ class TestReportStructure:
             assert key in summary
         assert summary["python_only"] == 1
         assert summary["java_only"] == 1
+
+
+class TestPythonOnlyMode(unittest.TestCase):
+    """迁表批三（2026-10-29）：python 面全量登记 → python-only=java 待实现清单观察项。"""
+
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "api_surface_diff_tool", str(TOOL))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        self.exit_code = mod.exit_code
+
+    def test_hard_default_fails_on_py_only(self):
+        self.assertEqual(self.exit_code(python_only=[1], java_only=[], mode="hard"), 1)
+
+    def test_report_mode_passes_with_py_only(self):
+        self.assertEqual(self.exit_code(python_only=[1], java_only=[], mode="report"), 0)
+
+    def test_java_only_always_fails(self):
+        self.assertEqual(self.exit_code(python_only=[], java_only=[1], mode="report"), 1)
+        self.assertEqual(self.exit_code(python_only=[], java_only=[1], mode="hard"), 1)
+
+    def test_clean_passes_both_modes(self):
+        self.assertEqual(self.exit_code(python_only=[], java_only=[], mode="hard"), 0)

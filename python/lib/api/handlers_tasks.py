@@ -1211,3 +1211,14 @@ def _validate_position_inputs(inputs) -> str:
         if f.get("type") == "enum" and not f.get("options"):
             return f"inputs[{i}] enum 类型需 options"
     return ""
+
+def handle_bulletin_permit_get(handler):
+    """GET /api/bulletin/permit — 查询公告发布许可（读 permission.json，与 POST 写入同源）。
+
+    迁表批一时曾读内存类属性（恒为初始 []），改为读持久化——java BulletinController 同语义。
+    """
+    from lib.infra.utils import json_read
+
+    perm = json_read(handler.permission_file, {}) or {}
+    permit = perm.get("bulletin")
+    handler._send_json({"permit": permit if permit is not None else False})

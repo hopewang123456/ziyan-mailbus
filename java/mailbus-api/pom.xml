@@ -21,5 +21,16 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-webmvc</artifactId>
     </dependency>
+    <!-- 测试：controller 形状对等测试需 filestore 仓储与 spring mock -->
+    <dependency>
+      <groupId>io.github.hopewang123456</groupId>
+      <artifactId>mailbus-adapters</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 </project>

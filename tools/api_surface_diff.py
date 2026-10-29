@@ -67,12 +67,24 @@ def surface_set(doc: dict) -> dict:
     return out
 
 
+def exit_code(*, python_only: list, java_only: list, mode: str = "hard") -> int:
+    """java-only 恒挂；python-only 仅 hard 模式挂（report=java 待实现观察项）。"""
+    if java_only:
+        return 1
+    if python_only and mode == "hard":
+        return 1
+    return 0
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="mailbus 双栈 API 面对拍")
     ap.add_argument("--py", default="http://127.0.0.1:9814",
                     help="python serve base URL，或 offline=直接路由表生成")
     ap.add_argument("--java", default="http://127.0.0.1:9815")
     ap.add_argument("--out", default=str(REPORT_PATH))
+    ap.add_argument("--python-only-mode", choices=("hard", "report"), default="hard",
+                    help="hard=python-only 缺口 exit 非零（默认）；report=仅报告不挂"
+                         "（迁表批后 python 面全量登记，python-only 是 java 待实现清单观察项；"
+                         "java-only 两种模式均硬约束）")
     args = ap.parse_args()
 
     py_doc = python_surface(args.py)
@@ -130,8 +142,9 @@ def main() -> int:
         for e in report["exempted"]:
             print(f"  {e['method']:6} {e['path']}  # {e['reason']}")
     print(f"\n报告：{out}")
-    # 真缺口（豁免之外的单侧端点）→ 非零退出码，供 CI 判定
-    return 1 if (py_only or java_only) else 0
+    # 真缺口判定：java-only 恒硬；python-only 按 --python-only-mode
+    # （hard=对等缺口；report=java 待实现清单，仅报告）
+    return exit_code(python_only=py_only, java_only=java_only, mode=args.python_only_mode)
 
 
 if __name__ == "__main__":

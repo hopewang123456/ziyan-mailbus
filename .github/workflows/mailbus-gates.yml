@@ -163,7 +163,7 @@ jobs:
           python tools/api_surface_diff.py \
             --py http://127.0.0.1:9816 \
             --java http://127.0.0.1:9815 \
-            --out docs/reports/api-surface-diff.json
+            --out docs/reports/api-surface-diff.json --python-only-mode report
       - name: Run A2A diagonal check (SDK face)
         env:
           PYTHONUTF8: "1"
