@@ -30,6 +30,7 @@ public class MiscController {
     private final TaskRepository tasks;
     private final DemoService demo;
     private final io.github.hopewang123456.mailbus.app.TokenAdminService tokenAdmin;
+    private final io.github.hopewang123456.mailbus.app.CommandDraftService commandDraft;
 
     public MiscController(Environment env, TaskRepository tasks, InboxService inbox,
                           io.github.hopewang123456.mailbus.app.ArchiveService archive,
@@ -38,6 +39,8 @@ public class MiscController {
         this.tasks = tasks;
         this.demo = new DemoService(inbox, archive);
         this.tokenAdmin = new io.github.hopewang123456.mailbus.app.TokenAdminService(this.dataDir);
+        this.commandDraft = new io.github.hopewang123456.mailbus.app.CommandDraftService(
+                new io.github.hopewang123456.mailbus.app.TaskPlannerService(this.dataDir, null));
         this.request = request;
     }
 
@@ -232,25 +235,54 @@ public class MiscController {
         return ni("drill video-publish（演练机制）");
     }
 
+    /** GET /api/internal-llm/status — python llm_status=probe_all 对等。 */
     @GetMapping("/api/internal-llm/status")
-    public ResponseEntity<Map<String, Object>> llmStatus() {
-        return ni("internal-llm status（python planner 机制）");
+    public Map<String, Object> llmStatus() {
+        return new io.github.hopewang123456.mailbus.app.InternalLlmService(dataDir).probeAll();
     }
 
+    /** GET /api/internal-llm/health — 同 status 载荷（python 同源 probe）。 */
     @GetMapping("/api/internal-llm/health")
-    public ResponseEntity<Map<String, Object>> llmHealth() {
-        return ni("internal-llm health");
+    public Map<String, Object> llmHealth() {
+        return new io.github.hopewang123456.mailbus.app.InternalLlmService(dataDir).probeAll();
     }
 
+    /** POST /api/internal-llm/dry-run — 走 CommandDraftService 预演通道（M2c，不建任务）。 */
     @PostMapping("/api/internal-llm/dry-run")
-    public ResponseEntity<Map<String, Object>> llmDryRun() {
-        return ni("internal-llm dry-run");
+    public ResponseEntity<Map<String, Object>> llmDryRun(@RequestBody(required = false) Map<String, Object> body) {
+        Map<String, Object> env = body != null && body.get("envelope") instanceof Map<?, ?> e ? cast(e)
+                : (body == null ? Map.of() : body);
+        String intent = str(env.get("intent"));
+        if (intent.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "status", "error", "error", "fatal", "message", "缺少 intent"));
+        }
+        Map<String, Object> r = commandDraft.draft(intent,
+                str(env.get("task_type")).isEmpty() ? "custom" : str(env.get("task_type")),
+                str(env.get("tier")).isEmpty() ? "M" : str(env.get("tier")));
+        int http = ((Number) r.get("status")).intValue();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rbody = (Map<String, Object>) r.get("body");
+        if (http == 200) {
+            return ResponseEntity.ok(Map.of("status", "ok", "result", rbody.get("draft")));
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("status", "error");
+        out.put("error", rbody.getOrDefault("error", "dry_run_failed"));
+        out.put("message", String.valueOf(rbody.getOrDefault("message", "")));
+        return ResponseEntity.status(http).body(out);
     }
 
+    /** POST /api/internal-llm/rebuild-rag — chunks 索引重建（python rebuild_index 对等）。 */
     @PostMapping("/api/internal-llm/rebuild-rag")
     public ResponseEntity<Map<String, Object>> llmRebuildRag() {
-        return ni("internal-llm rebuild-rag");
-
+        try {
+            int n = new io.github.hopewang123456.mailbus.app.InternalLlmService(dataDir).rebuildIndex();
+            return ResponseEntity.ok(Map.of("status", "ok", "chunks", n));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of(
+                    "status", "error", "error", "rebuild_failed", "message", String.valueOf(e.getMessage())));
+        }
     }
 
     @GetMapping("/api/demo/trace")
