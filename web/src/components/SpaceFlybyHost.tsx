@@ -1,6 +1,20 @@
 import { createRoot, type Root } from "react-dom/client";
 import { useLayoutEffect, useRef } from "react";
 import { SpaceFlybyScene } from "./SpaceFlyby";
+import { intensityFromMetrics, setFlybyIntensity } from "../lib/cockpit/flybyIntensity";
+import { useEventStream, type MetricsPointsPayload } from "../lib/cockpit/useEventStream";
+
+/**
+ * D6 孪生映射（P4 第二批；P5 升级为 SSE 推送）：
+ * 订阅 /api/metrics/stream 差量快照（双栈流端点），活跃度 → 飞掠强度。
+ * 场景自运行，这里只写 store；断流时 store 自回落 1。
+ */
+function useFlybyIntensityStream() {
+  const payload = useEventStream<MetricsPointsPayload>("/api/metrics/stream");
+  if (payload?.points) {
+    setFlybyIntensity(intensityFromMetrics(payload.points));
+  }
+}
 
 /**
  * 驾驶舱 hover 会频繁 setState。若 SpaceFlyby 落在同一 React 树里，
@@ -38,6 +52,7 @@ function ensureFlybyNode() {
 /** 槽位组件：可安全随 Cockpit 重渲染；不卸载 WebGL 场景 */
 export function SpaceFlybyHost() {
   const slotRef = useRef<HTMLDivElement>(null);
+  useFlybyIntensityStream();
 
   useLayoutEffect(() => {
     const slot = slotRef.current;

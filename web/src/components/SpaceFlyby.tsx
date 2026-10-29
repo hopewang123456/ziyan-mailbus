@@ -1,4 +1,5 @@
 import { Canvas, useFrame } from "@react-three/fiber";
+import { flybyDt } from "../lib/cockpit/flybyIntensity";
 import { memo, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import {
@@ -684,7 +685,7 @@ function StarField() {
 
   useFrame((_, dt) => {
     if (!ref.current) return;
-    ref.current.position.z += dt * 4.2;
+    ref.current.position.z += flybyDt(dt) * 4.2;
     if (ref.current.position.z > 50) ref.current.position.z = 0;
   });
 
@@ -1084,7 +1085,7 @@ function StarSystem({
 
   useFrame((state, dt) => {
     if (!root.current || !star.current) return;
-    root.current.position.z += dt * seed.speed;
+    root.current.position.z += flybyDt(dt) * seed.speed;
     star.current.rotation.y += dt * seed.starSpin;
 
     if (!whooshed.current && root.current.position.z > 0.5) {
@@ -1256,8 +1257,8 @@ function _PlanetBody({
 
   useFrame((_, dt) => {
     if (!root.current || !planet.current) return;
-    root.current.position.z += dt * seed.speed;
-    root.current.position.x += dt * seed.vx;
+    root.current.position.z += flybyDt(dt) * seed.speed;
+    root.current.position.x += flybyDt(dt) * seed.vx;
     // 绕自转轴旋转（轴倾在父 group 上）
     planet.current.rotation.y += dt * seed.spin;
     if (ring.current) ring.current.rotation.z += dt * seed.spin * 0.15;
@@ -1332,9 +1333,9 @@ function MeteorBody({ delay = 0 }: { delay?: number }) {
   );
   useFrame((_, dt) => {
     if (!g.current || !rock.current) return;
-    g.current.position.z += dt * seed.speed;
-    g.current.position.x += dt * seed.vx;
-    g.current.position.y += dt * seed.vy;
+    g.current.position.z += flybyDt(dt) * seed.speed;
+    g.current.position.x += flybyDt(dt) * seed.vx;
+    g.current.position.y += flybyDt(dt) * seed.vy;
     rock.current.rotation.x += dt * seed.spin;
     rock.current.rotation.y += dt * seed.spin * 1.3;
     rock.current.rotation.z += dt * seed.spin * 0.7;
@@ -1387,7 +1388,7 @@ function BlackHole({ delay = 0 }: { delay?: number }) {
   );
   useFrame((_, dt) => {
     if (!g.current || !disk.current) return;
-    g.current.position.z += dt * seed.speed;
+    g.current.position.z += flybyDt(dt) * seed.speed;
     disk.current.rotation.z += dt * seed.spin;
     // 飞过后丢到极远处，长时间不再出现
     if (g.current.position.z > 8) {
@@ -1447,7 +1448,7 @@ function BrownDwarfBody({ delay = 0 }: { delay?: number }) {
   const tex = useMemo(() => makePlanetTex("#6a3020", "#c06030", true), []);
   useFrame((_, dt) => {
     if (!root.current || !core.current) return;
-    root.current.position.z += dt * seed.speed;
+    root.current.position.z += flybyDt(dt) * seed.speed;
     core.current.rotation.y += dt * seed.spin;
     if (moon.current) {
       phase.current += dt * seed.moonSpeed * Math.sqrt(seed.density);
@@ -1524,7 +1525,7 @@ function WhiteDwarfBody({ delay = 0 }: { delay?: number }) {
   }, []);
   useFrame((_, dt) => {
     if (!root.current || !core.current) return;
-    root.current.position.z += dt * seed.speed;
+    root.current.position.z += flybyDt(dt) * seed.speed;
     core.current.rotation.y += dt * seed.spin;
     if (debris.current) {
       const posAttr = debris.current.geometry.getAttribute("position") as THREE.BufferAttribute;
@@ -1634,7 +1635,7 @@ function _BinaryThreeBody({ delay = 0 }: { delay?: number }) {
 
   useFrame((_, dt) => {
     if (!root.current || !starA.current || !starB.current || !planet.current) return;
-    root.current.position.z += dt * seed.speed;
+    root.current.position.z += flybyDt(dt) * seed.speed;
     const s = dyn.current;
     const step = Math.min(dt, 0.05);
     s.binaryPhase += step * 1.35 * Math.sqrt((seed.mA + seed.mB) / seed.sep);
@@ -1744,8 +1745,8 @@ function RogueDwarfPlanet({ delay = 0 }: { delay?: number }) {
   const tex = useMemo(() => makePlanetTex("#7a6a58", "#3a3228"), []);
   useFrame((_, dt) => {
     if (!root.current || !body.current) return;
-    root.current.position.z += dt * seed.speed;
-    root.current.position.x += dt * seed.vx;
+    root.current.position.z += flybyDt(dt) * seed.speed;
+    root.current.position.x += flybyDt(dt) * seed.vx;
     body.current.rotation.y += dt * seed.spin;
     if (root.current.position.z > 12) resetFar(root.current, 18);
   });
@@ -1802,9 +1803,9 @@ function _DistantDriftingNebula({
 
   useFrame((_, dt) => {
     if (!ref.current) return;
-    ref.current.position.x += dt * seed.vx;
-    ref.current.position.y += dt * seed.vy;
-    ref.current.position.z += dt * seed.vz;
+    ref.current.position.x += flybyDt(dt) * seed.vx;
+    ref.current.position.y += flybyDt(dt) * seed.vy;
+    ref.current.position.z += flybyDt(dt) * seed.vz;
     ref.current.material.rotation += dt * seed.spin;
     if (Math.abs(ref.current.position.x) > 75) respawn();
   });
@@ -1855,9 +1856,9 @@ function CometBody({ delay = 0 }: { delay?: number }) {
   );
   useFrame((_, dt) => {
     if (!g.current) return;
-    g.current.position.z += dt * seed.speed;
-    g.current.position.x += dt * seed.vx;
-    g.current.position.y += dt * seed.vy;
+    g.current.position.z += flybyDt(dt) * seed.speed;
+    g.current.position.x += flybyDt(dt) * seed.vx;
+    g.current.position.y += flybyDt(dt) * seed.vy;
     if (g.current.position.z > 14) resetFar(g.current, 20);
   });
   return (
@@ -1899,7 +1900,7 @@ function PulsarBody({ delay = 0 }: { delay?: number }) {
   );
   useFrame((state, dt) => {
     if (!g.current || !beam.current) return;
-    g.current.position.z += dt * seed.speed;
+    g.current.position.z += flybyDt(dt) * seed.speed;
     beam.current.rotation.z += dt * 8;
     const flash = 0.35 + 0.65 * Math.pow(0.5 + 0.5 * Math.sin(state.clock.elapsedTime * 14), 8);
     g.current.scale.setScalar(seed.scale * (0.85 + flash * 0.25));
@@ -2147,8 +2148,8 @@ function _CosmicDustRibbons() {
     sheets.forEach((sh, i) => {
       const sp = refs.current[i];
       if (!sp) return;
-      sp.position.x += dt * sh.vx;
-      sp.position.y += dt * sh.vy;
+      sp.position.x += flybyDt(dt) * sh.vx;
+      sp.position.y += flybyDt(dt) * sh.vy;
       sp.material.rotation += dt * sh.spin;
       if (Math.abs(sp.position.x) > 70) {
         sp.position.x = -Math.sign(sp.position.x) * 65;

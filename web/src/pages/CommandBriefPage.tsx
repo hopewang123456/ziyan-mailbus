@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { useEventStream } from "../lib/cockpit/useEventStream";
 import { ErrorAlert } from "../components/ErrorAlert";
 import { DemoWizard } from "../components/DemoWizard";
 
@@ -70,18 +71,10 @@ export function CommandBriefPage() {
 
   // ── 统计摘要 ──
   // P4 孪生强化：指标卡口径切统一 metrics 端点（B1/B2——驾驶舱数据全经语义层，口径与管理中心同源）
-  const [metrics, setMetrics] = useState<{ points?: Array<{ metric?: string; value?: number; error?: string }> }>({});
-  useEffect(() => {
-    void api<{ points?: Array<{ metric?: string; value?: number; error?: string }> }>("/api/metrics/query").then((r) => {
-      if (r.ok && r.data) setMetrics(r.data);
-    });
-    const timer = window.setInterval(() => {
-      void api<{ points?: Array<{ metric?: string; value?: number; error?: string }> }>("/api/metrics/query").then((r) => {
-        if (r.ok && r.data) setMetrics(r.data);
-      });
-    }, 30000);
-    return () => window.clearInterval(timer);
-  }, []);
+  // P5：指标切 SSE 差量推送（/api/metrics/stream，双栈流端点）；EventSource 不可用降级轮询
+  const streamed = useEventStream<{ points?: Array<{ metric?: string; value?: number; error?: string }> }>("/api/metrics/stream");
+  const fallback = useMetricsPollingFallback();
+  const metrics = streamed ?? fallback;
   const mv = (id: string) => {
     const p = (metrics.points || []).find((x) => x.metric === id);
     return p && p.value !== undefined ? p.value : null;
@@ -248,4 +241,20 @@ function NavCard({ title, desc, href, sub }: { title: string; desc: string; href
       {sub && <p className="mt-0.5 text-[10px] text-mute">{sub}</p>}
     </a>
   );
+}
+
+/** SSE 不可用时的 30s 轮询兜底（EventSource 全支持，此为极端环境保险）。 */
+function useMetricsPollingFallback(): { points?: Array<{ metric?: string; value?: number; error?: string }> } {
+  const [m, setM] = useState<{ points?: Array<{ metric?: string; value?: number; error?: string }> }>({});
+  useEffect(() => {
+    if (typeof EventSource !== "undefined") return; // 有 SSE 则不轮询（环境常量，hooks 顺序恒定）
+    let alive = true;
+    const pull = () => api<{ points?: Array<{ metric?: string; value?: number; error?: string }> }>("/api/metrics/query").then((r) => {
+      if (alive && r.ok && r.data) setM(r.data);
+    });
+    void pull();
+    const t = window.setInterval(pull, 30000);
+    return () => { alive = false; window.clearInterval(t); };
+  }, []);
+  return m;
 }

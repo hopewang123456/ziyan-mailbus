@@ -83,27 +83,30 @@ export function CommandWindow({ state }: { state: CommandWindowState }) {
     });
   }, [state.open, identity]);
 
-  // 被唤起消息轮询：开窗时拉 + 30s 周期；去重后追加进会话流（D1 中途被唤起可见可响应）
+  // 被唤起消息（P5 升级为 SSE 推送：/api/command/inbox/stream 差量快照；开窗即订阅，去重后追加进会话流）
   useEffect(() => {
-    if (!state.open) return;
-    let alive = true;
-    const tick = async () => {
-      const r = await api<{
-        unread?: number;
-        items?: Array<{ id: string; source: string; ts?: string; text?: string; tone?: string; actions?: Array<{ action: string; label: string; task_id: string }> }>;
-      }>("/api/command/inbox");
-      if (!alive || !r.ok || !r.data) return;
-      const fresh = (r.data.items || []).filter((it) => !seenIds.current.has(it.id));
-      if (fresh.length) {
-        for (const it of fresh) seenIds.current.add(it.id);
-        setFlow((f) => [...f, ...fresh.map(toFlowItem)]);
+    if (!state.open || typeof EventSource === "undefined") return;
+    const es = new EventSource("/api/command/inbox/stream");
+    const onSnap = (ev: MessageEvent) => {
+      try {
+        const d = JSON.parse(ev.data) as {
+          unread?: number;
+          items?: Array<{ id: string; source: string; ts?: string; text?: string; tone?: string; actions?: Array<{ action: string; label: string; task_id: string }> }>;
+        };
+        const fresh = (d.items || []).filter((it) => !seenIds.current.has(it.id));
+        if (fresh.length) {
+          for (const it of fresh) seenIds.current.add(it.id);
+          setFlow((f) => [...f, ...fresh.map(toFlowItem)]);
+        }
+      } catch {
+        // 脏帧忽略
       }
     };
-    void tick();
-    const timer = window.setInterval(tick, 30000);
+    es.addEventListener("snapshot", onSnap as EventListener);
+    es.onmessage = onSnap as (ev: MessageEvent) => void;
     return () => {
-      alive = false;
-      window.clearInterval(timer);
+      es.removeEventListener("snapshot", onSnap as EventListener);
+      es.close();
     };
   }, [state.open]);
 
