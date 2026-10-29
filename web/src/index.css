@@ -307,6 +307,38 @@ a:focus-visible {
   padding: 0.85rem 0.95rem;
 }
 
+/* P5：DataTable 正经表格（ApiListPage 套壳替换） */
+.hud-table-th {
+  position: sticky;
+  top: 0;
+  padding: 0.4rem 0.6rem;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgba(191, 219, 254, 0.72);
+  background: rgba(6, 12, 26, 0.92);
+  border-bottom: 1px solid rgba(125, 211, 252, 0.18);
+  white-space: nowrap;
+}
+
+.hud-table-td {
+  padding: 0.42rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 26rem;
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.hud-table-row:nth-child(odd) .hud-table-td {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.hud-table-row:hover .hud-table-td {
+  background: rgba(125, 211, 252, 0.07);
+}
+
 .soft-details {
   border-radius: 22px;
   border: 1px solid rgba(230, 238, 248, 0.08);

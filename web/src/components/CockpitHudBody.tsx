@@ -12,6 +12,7 @@ import { ClinicPage } from "../pages/ClinicPage";
 import { InboxPage } from "../pages/InboxPage";
 import { CommandBriefPage } from "../pages/CommandBriefPage";
 import { ApiListPage } from "../pages/thin/ApiListPage";
+import { IntakeTablePage, TaskTablePage, HumanQueueTablePage } from "../pages/thin/TablePages";
 import { TokensTodayPage } from "../pages/thin/TokensTodayPage";
 import { MetricsBoard } from "./metrics/MetricsBoard";
 import { TaskTracePage } from "../pages/thin/TaskTracePage";
@@ -144,13 +145,13 @@ function OtherCards() {
       render={(id) => {
         switch (id) {
           case "intake":
-            return <ApiListPage title={t("intake")} path="/api/intake" listKey="intakes" />;
+            return <IntakeTablePage />;
           case "workflows":
             return <WorkflowBoardPage />;
           case "content":
-            return <ApiListPage title={t("content")} path="/api/tasks?limit=40" listKey="tasks" />;
+            return <TaskTablePage />;
           case "pipeline":
-            return <ApiListPage title={t("pipeline")} path="/api/human-queue?status=pending" listKey="items" />;
+            return <HumanQueueTablePage />;
           case "inbox":
             return <InboxPage />;
           case "bulletin":
