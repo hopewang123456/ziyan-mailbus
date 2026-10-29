@@ -1,5 +1,5 @@
 import { Canvas, useFrame } from "@react-three/fiber";
-import { flybyDt } from "../lib/cockpit/flybyIntensity";
+import { flybyDt, getMsgFlow } from "../lib/cockpit/flybyIntensity";
 import { memo, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import {
@@ -659,23 +659,29 @@ function StarField() {
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       vertexColors: true,
-      uniforms: { uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) } },
+      uniforms: {
+        uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+        // P4 三批末刀：总线粒子=消息流速（星尘增益，青移+放大+提亮）
+        uFlow: { value: 0 },
+      },
       vertexShader: `
         attribute float size;
         varying vec3 vColor;
         uniform float uPixelRatio;
+        uniform float uFlow;
         void main() {
-          vColor = color;
+          vColor = mix(color, vec3(0.35, 0.85, 1.0), uFlow * 0.35);
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = size * uPixelRatio * (300.0 / -mv.z);
+          gl_PointSize = size * (1.0 + uFlow * 0.55) * uPixelRatio * (300.0 / -mv.z);
           gl_Position = projectionMatrix * mv;
         }
       `,
       fragmentShader: `
         varying vec3 vColor;
+        uniform float uFlow;
         void main() {
           float d = length(gl_PointCoord - 0.5);
-          float a = smoothstep(0.5, 0.0, d);
+          float a = smoothstep(0.5, 0.0, d) * (0.75 + uFlow * 0.25);
           gl_FragColor = vec4(vColor, a * 0.95);
         }
       `,
@@ -687,6 +693,8 @@ function StarField() {
     if (!ref.current) return;
     ref.current.position.z += flybyDt(dt) * 4.2;
     if (ref.current.position.z > 50) ref.current.position.z = 0;
+    // 总线粒子：消息流速增益（无消息渐暗回落）
+    mat.uniforms.uFlow.value = getMsgFlow(dt);
   });
 
   return <points ref={ref} geometry={geom} material={mat} />;

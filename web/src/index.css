@@ -307,6 +307,41 @@ a:focus-visible {
   padding: 0.85rem 0.95rem;
 }
 
+/* P4 三批：星体活跃光环（workload 真值驱动，--pulse 0~1 控制亮度与脉冲速率） */
+.cp-orbit-node.is-busy {
+  position: relative;
+}
+
+.cp-orbit-node.is-busy::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  border: 1px solid rgba(125, 211, 252, calc(0.25 + var(--pulse, 0.3) * 0.55));
+  box-shadow: 0 0 calc(6px + var(--pulse, 0.3) * 14px)
+    rgba(56, 189, 248, calc(var(--pulse, 0.3) * 0.5));
+  animation: cp-orbit-pulse calc(2.6s - var(--pulse, 0.3) * 1.6s) ease-in-out infinite;
+  pointer-events: none;
+}
+
+.cp-orbit-node.is-offline.is-busy::after {
+  border-color: rgba(148, 163, 184, 0.25);
+  box-shadow: none;
+  animation: none;
+}
+
+@keyframes cp-orbit-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.22);
+    opacity: 1;
+  }
+}
+
 /* P5：DataTable 正经表格（ApiListPage 套壳替换） */
 .hud-table-th {
   position: sticky;

@@ -1,7 +1,7 @@
 import { createRoot, type Root } from "react-dom/client";
 import { useLayoutEffect, useRef } from "react";
 import { SpaceFlybyScene } from "./SpaceFlyby";
-import { intensityFromMetrics, setFlybyIntensity } from "../lib/cockpit/flybyIntensity";
+import { intensityFromMetrics, setFlybyIntensity, setMsgFlowFromTotal } from "../lib/cockpit/flybyIntensity";
 import { useEventStream, type MetricsPointsPayload } from "../lib/cockpit/useEventStream";
 
 /**
@@ -13,6 +13,9 @@ function useFlybyIntensityStream() {
   const payload = useEventStream<MetricsPointsPayload>("/api/metrics/stream");
   if (payload?.points) {
     setFlybyIntensity(intensityFromMetrics(payload.points));
+    // P4 末刀：总线粒子=消息流速（相邻快照差分）
+    const total = payload.points.find((p) => p.metric === "bus.messages_total");
+    setMsgFlowFromTotal(total?.value ?? null);
   }
 }
 

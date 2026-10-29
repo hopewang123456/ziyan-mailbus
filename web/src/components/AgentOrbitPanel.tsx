@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   agentFrameworkLabel,
+  agentOrbitBucket,
   matchesOrbitFilter,
   type AgentRow,
   type OrbitFilter,
@@ -61,13 +62,29 @@ function toRows(raw: AgentsResp["agents"]): AgentRow[] {
 }
 
 /** 齐套门禁：全部 agent 静+动均存在才上环 */
+type WorkloadMap = Record<string, { active?: number; queued?: number; inbox?: number }>;
+
 export function AgentOrbitPanel() {
   const [onlineMap, setOnlineMap] = useState<OnlineMap>({});
+  const [workload, setWorkload] = useState<WorkloadMap>({});
   useEffect(() => {
     let alive = true;
     const tick = async () => {
       const m = await fetchOnlineMap();
       if (alive) setOnlineMap(m);
+      // P4 三批：星体活跃光环——workload 真值（活跃任务+排队步骤+收件箱）
+      try {
+        const w = await api<{ agents?: Record<string, { active_tasks?: number; queued_steps?: number; inbox_pending?: number }> }>("/api/workload");
+        if (alive && w.ok && w.data?.agents) {
+          const map: WorkloadMap = {};
+          for (const [id, a] of Object.entries(w.data.agents)) {
+            map[id] = { active: a.active_tasks ?? 0, queued: a.queued_steps ?? 0, inbox: a.inbox_pending ?? 0 };
+          }
+          setWorkload(map);
+        }
+      } catch {
+        // workload 失败不影响在线图
+      }
     };
     void tick();
     const timer = window.setInterval(tick, 30000);
@@ -253,16 +270,42 @@ export function AgentOrbitPanel() {
     [roster, filter],
   );
 
+  // P4 三批二刀：轨道=职位（framework 桶分环）——每桶一环，环半径按桶序递增，
+  // 组内角度偏移错开；all 视图看分环结构，桶过滤时单环居中。
   const nodes = useMemo(() => {
-    const n = Math.max(filtered.length, 1);
-    return filtered.map((ag, i) => {
-      const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
-      return {
-        ag,
-        left: 50 + Math.cos(ang) * 42,
-        top: 50 + Math.sin(ang) * 36,
-      };
+    const buckets = new Map<string, typeof filtered>();
+    for (const ag of filtered) {
+      const b = agentOrbitBucket(ag);
+      const list = buckets.get(b) || [];
+      list.push(ag);
+      buckets.set(b, list);
+    }
+    const order = [...buckets.keys()].sort();
+    const ringRadii: Record<string, { rx: number; ry: number }> = {};
+    order.forEach((b, idx) => {
+      const rx = order.length === 1 ? 42 : 28 + (idx * 28) / Math.max(1, order.length - 1);
+      ringRadii[b] = { rx, ry: rx * 0.86 };
     });
+    const out: {
+      ag: (typeof filtered)[number];
+      left: number;
+      top: number;
+      bucket: string;
+    }[] = [];
+    for (const [b, list] of buckets) {
+      const n = Math.max(list.length, 1);
+      const offset = order.indexOf(b) * 0.35;
+      list.forEach((ag, i) => {
+        const ang = ((i + offset) / n) * Math.PI * 2 - Math.PI / 2;
+        out.push({
+          ag,
+          left: 50 + Math.cos(ang) * ringRadii[b].rx,
+          top: 50 + Math.sin(ang) * ringRadii[b].ry,
+          bucket: b,
+        });
+      });
+    }
+    return out;
   }, [filtered]);
 
   async function launch(id: string, mode: "browser" | "cli" | "client") {
@@ -383,7 +426,7 @@ export function AgentOrbitPanel() {
           </button>
         </div>
       ) : (
-        <div className="cp-orbit-wrap">
+        <div className="cp-orbit-wrap" data-orbits={new Set(nodes.map((n) => n.bucket)).size}>
           <div className="cp-orbit-ring" aria-hidden />
           <div className="cp-orbit-core" aria-hidden>
             <div className="cp-orbit-binary">
@@ -391,21 +434,28 @@ export function AgentOrbitPanel() {
               <span className="cp-orbit-star companion" />
             </div>
           </div>
-          {nodes.map(({ ag, left, top }) => {
+          {nodes.map(({ ag, left, top, bucket }) => {
             const on = selected?.id === ag.id;
             const fw = agentFrameworkLabel(ag);
             const label = ag.name || ag.id;
+            // P4 三批：活跃单位（任务+步骤+未读）→ 光环强度 0~1（css var 驱动脉冲速率）
+            const wl = workload[ag.id];
+            const units = (wl?.active ?? 0) + (wl?.queued ?? 0) * 0.5 + Math.min(10, wl?.inbox ?? 0) * 0.1;
+            const intensity = Math.min(1, units / 6);
+            const busy = intensity > 0.08;
             return (
               <button
                 key={ag.id}
                 type="button"
-                className={`cp-orbit-node${on ? " is-on" : ""}${onlineMap[ag.id] === false ? " is-offline" : ""}`}
+                className={`cp-orbit-node${on ? " is-on" : ""}${onlineMap[ag.id] === false ? " is-offline" : ""}${busy ? " is-busy" : ""}`}
                 style={{
                   left: `${left}%`,
                   top: `${top}%`,
+                  ...(busy ? ({ "--pulse": intensity.toFixed(2) } as React.CSSProperties) : {}),
                   ...(onlineMap[ag.id] === false ? { filter: "grayscale(0.9) brightness(0.55)" } : {}),
                 }}
-                aria-label={`${label}${fw ? ` · ${fw}` : ""}${onlineMap[ag.id] === false ? " · 离线" : ""}`}
+                title={busy ? `${label} · 活跃 ${wl?.active ?? 0} 任务 / ${wl?.queued ?? 0} 步骤 / ${wl?.inbox ?? 0} 未读` : label}
+                aria-label={`${label}${fw ? ` · ${fw}` : ""} · 轨道 ${bucket}${onlineMap[ag.id] === false ? " · 离线" : ""}${busy ? ` · 活跃 ${wl?.active ?? 0}` : ""}`}
                 aria-pressed={on}
                 onClick={() => {
                   setLaunchErr("");

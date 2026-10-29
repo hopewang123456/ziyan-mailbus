@@ -49,3 +49,28 @@ export function intensityFromMetrics(points: { metric: string; value: number | n
     (m.get("alerts.active") ?? 0) * 0.2;
   return 0.55 + Math.min(1.65, units / 8);
 }
+
+
+// P4 三批末刀：总线粒子=消息流速
+// bus.messages_total 变化率（条/分钟）→ 星尘流增益 0~1（60 条/分 封顶）
+let msgFlow = 0;
+let msgPrev: { total: number; at: number } | null = null;
+
+/** 由相邻两次 metrics 快照的 bus.messages_total 差值算流速并写入。 */
+export function setMsgFlowFromTotal(total: number | null | undefined, nowMs = Date.now()): void {
+  if (typeof total !== "number" || !Number.isFinite(total)) return;
+  if (msgPrev) {
+    const dtMin = (nowMs - msgPrev.at) / 60_000;
+    if (dtMin > 0.02) {
+      const rate = Math.max(0, (total - msgPrev.total) / dtMin);
+      msgFlow = Math.min(1, rate / 60);
+    }
+  }
+  msgPrev = { total, at: nowMs };
+}
+
+/** 场景帧循环读当前流增益（含缓慢回落：无消息时渐暗）。 */
+export function getMsgFlow(dtSec = 0): number {
+  msgFlow = Math.max(0, msgFlow - dtSec * 0.02); // 无新消息时 ~50s 衰减完
+  return msgFlow;
+}

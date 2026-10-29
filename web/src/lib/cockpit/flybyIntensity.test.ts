@@ -61,3 +61,34 @@ describe("setFlybyIntensity / flybyDt", () => {
     expect(_flybyState().target).toBe(1); // 非法值回落 1
   });
 });
+
+import { getMsgFlow, setMsgFlowFromTotal } from "./flybyIntensity";
+
+describe("msgFlow（总线粒子=消息流速）", () => {
+  it("相邻快照差分→流速增益", () => {
+    setMsgFlowFromTotal(100, 0);
+    setMsgFlowFromTotal(160, 60_000); // 1 分钟 60 条 → 封顶 1
+    expect(getMsgFlow()).toBeCloseTo(1);
+  });
+
+  it("慢流量按比例", () => {
+    setMsgFlowFromTotal(200, 0);
+    setMsgFlowFromTotal(215, 60_000); // 15 条/分 → 0.25
+    expect(getMsgFlow()).toBeCloseTo(0.25);
+  });
+
+  it("无新消息渐暗回落", () => {
+    setMsgFlowFromTotal(0, 0);
+    setMsgFlowFromTotal(60, 60_000);
+    let v = 0;
+    for (let i = 0; i < 300; i++) v = getMsgFlow(1 / 60); // ~5s
+    expect(v).toBeLessThan(1);
+    expect(v).toBeGreaterThan(0);
+  });
+
+  it("total 回退不计负", () => {
+    setMsgFlowFromTotal(500, 0);
+    setMsgFlowFromTotal(400, 60_000); // 重启清零场景
+    expect(getMsgFlow()).toBeCloseTo(0);
+  });
+});
