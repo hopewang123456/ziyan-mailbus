@@ -29,12 +29,34 @@ public class MiscController {
     private final Path dataDir;
     private final TaskRepository tasks;
     private final DemoService demo;
+    private final io.github.hopewang123456.mailbus.app.TokenAdminService tokenAdmin;
 
     public MiscController(Environment env, TaskRepository tasks, InboxService inbox,
-                          io.github.hopewang123456.mailbus.app.ArchiveService archive) {
+                          io.github.hopewang123456.mailbus.app.ArchiveService archive,
+                          jakarta.servlet.http.HttpServletRequest request) {
         this.dataDir = SharedRoots.resolveDataDir(env.getProperty("mailbus.data-dir"));
         this.tasks = tasks;
         this.demo = new DemoService(inbox, archive);
+        this.tokenAdmin = new io.github.hopewang123456.mailbus.app.TokenAdminService(this.dataDir);
+        this.request = request;
+    }
+
+    private final jakarta.servlet.http.HttpServletRequest request;
+
+    /** python client_context_from_handler 对等。 */
+    private io.github.hopewang123456.mailbus.app.TokenAdminService.ClientContext clientContext() {
+        return new io.github.hopewang123456.mailbus.app.TokenAdminService.ClientContext(
+                request.getRemoteAddr(),
+                request.getHeader("Authorization") == null ? "" : request.getHeader("Authorization"),
+                request.getHeader("X-API-Key") == null ? "" : request.getHeader("X-API-Key"));
+    }
+
+    /** python live_auth_config 对等（读 store config auth 段）。 */
+    private Map<String, Object> liveAuthConfig() {
+        Map<String, Object> cfg = JsonFiles.readMap(dataDir.resolve("config.json"));
+        Map<String, Object> auth = cfg != null && cfg.get("auth") instanceof Map<?, ?> a
+                ? new LinkedHashMap<>(cast(a)) : new LinkedHashMap<>();
+        return Map.of("auth", (Object) auth);
     }
 
     /** POST /api/demo/run — 一键演示链（java DemoService：返回叙事行）。 */
@@ -160,19 +182,29 @@ public class MiscController {
         return ni("agents recruit（招募机制）");
     }
 
+    /** GET /api/config/mailbus-token — ensure + masked status（python handle_mailbus_token GET）。 */
     @GetMapping("/api/config/mailbus-token")
     public ResponseEntity<Map<String, Object>> tokenGet() {
-        return ni("config mailbus-token（token 生命周期）");
+        return ResponseEntity.ok(tokenAdmin.statusView());
     }
 
+    /** POST /api/config/mailbus-token 与 /rotate 同义（python handler POST 分支=rotate）。 */
     @PostMapping("/api/config/mailbus-token")
     public ResponseEntity<Map<String, Object>> tokenPost() {
-        return ni("config mailbus-token POST（token 生命周期）");
+        return tokenRotate();
     }
 
+    /** POST /api/config/mailbus-token/rotate — 双路径（白名单免旧 token / 其余须出示）。 */
     @PostMapping("/api/config/mailbus-token/rotate")
     public ResponseEntity<Map<String, Object>> tokenRotate() {
-        return ni("config mailbus-token rotate（token 生命周期）");
+        var result = tokenAdmin.rotate(clientContext(), liveAuthConfig());
+        if (Boolean.TRUE.equals(result.get("ok"))) {
+            return ResponseEntity.ok(Map.of(
+                    "status", "ok", "token", result.get("token"), "message", "rotated_once"));
+        }
+        return ResponseEntity.status(401).body(Map.of(
+                "status", "error", "error", "unauthorized",
+                "error_code", "unauthorized"));
     }
 
     @GetMapping("/api/clinic/tools")
@@ -239,5 +271,10 @@ public class MiscController {
 
     private static String str(Object o) {
         return o == null ? "" : String.valueOf(o);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> cast(Map<?, ?> m) {
+        return (Map<String, Object>) m;
     }
 }
