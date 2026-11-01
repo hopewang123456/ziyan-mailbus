@@ -164,9 +164,18 @@ public class MiscController {
         return ni("tasks gates deny（workflow engine 未直译）");
     }
 
+    /** GET /api/tasks/trace?id= — E9 生命周期回放时序（python task_trace 直译）。 */
     @GetMapping("/api/tasks/trace")
-    public ResponseEntity<Map<String, Object>> taskTrace() {
-        return ni("tasks trace（生命周期回放机制）");
+    public ResponseEntity<Map<String, Object>> taskTrace(@org.springframework.web.bind.annotation.RequestParam(required = false) String id) {
+        if (id == null || id.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("status", "error", "error", "id required"));
+        }
+        try {
+            return ResponseEntity.ok(new io.github.hopewang123456.mailbus.app.TaskTraceService(dataDir, tasks)
+                    .trace(id.trim()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(404).body(Map.of("status", "error", "error", String.valueOf(e.getMessage())));
+        }
     }
 
     /** GET /api/agents/active — 三级门禁活跃视图（python list_active_agents 直译）。 */
@@ -254,9 +263,26 @@ public class MiscController {
         return ni("dev reload（热重载机制）");
     }
 
+    /** POST /api/drill/video-publish — check-n8n 探测（python run_video_publish_drill check 模式）。 */
     @PostMapping("/api/drill/video-publish")
-    public ResponseEntity<Map<String, Object>> drillVideoPublish() {
-        return ni("drill video-publish（演练机制）");
+    public ResponseEntity<Map<String, Object>> drillVideoPublish(@org.springframework.web.bind.annotation.RequestBody(required = false) Map<String, Object> body) {
+        String mode = body != null && body.get("mode") != null ? String.valueOf(body.get("mode")).toLowerCase() : "check-n8n";
+        if (!mode.contains("n8n")) {
+            return ni("drill mode=" + mode + "（完整演练链需 python 工具链）");
+        }
+        var probe = new io.github.hopewang123456.mailbus.app.TaskTraceService(dataDir, tasks)
+                .probeN8nWebhook(System.getenv("N8N_PUBLISH_WEBHOOK_URL"));
+        boolean ok = Boolean.TRUE.equals(probe.get("ok"));
+        Map<String, Object> step = new LinkedHashMap<>();
+        step.put("id", "n8n_probe");
+        step.put("status", ok ? "pass" : "fail");
+        step.put("detail", probe);
+        return ResponseEntity.ok(Map.of(
+                "status", ok ? "ok" : "error",
+                "ok", ok,
+                "mode", "check-n8n",
+                "steps", List.of(step),
+                "warnings", List.of()));
     }
 
     /** GET /api/internal-llm/status — python llm_status=probe_all 对等。 */

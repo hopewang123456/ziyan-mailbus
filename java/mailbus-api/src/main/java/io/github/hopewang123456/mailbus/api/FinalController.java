@@ -35,8 +35,12 @@ public class FinalController {
     private final TaskRepository tasks;
     private final TaskService taskService;
     private final HumanQueueService humanQueue;
+    private final io.github.hopewang123456.mailbus.ports.AgentDirectory agentDirectory;
 
-    public FinalController(Environment env, TaskRepository tasks, TaskService taskService) {
+    public FinalController(Environment env, TaskRepository tasks, TaskService taskService,
+                          @org.springframework.beans.factory.annotation.Qualifier("agentDirectory")
+                          io.github.hopewang123456.mailbus.ports.AgentDirectory agentDirectory) {
+        this.agentDirectory = agentDirectory;
         this.dataDir = SharedRoots.resolveDataDir(env.getProperty("mailbus.data-dir"));
         this.tasks = tasks;
         this.taskService = taskService;
@@ -216,9 +220,27 @@ public class FinalController {
         return ni("chain budget apply（ollama 决策机制）");
     }
 
+    /** POST /api/launch — AgentDirectory.launch java 语义（CLI 推送探测）。 */
     @PostMapping("/api/launch")
-    public ResponseEntity<Map<String, Object>> launchPost() {
-        return ni("launch（launch_agent 机制）");
+    public ResponseEntity<Map<String, Object>> launchPost(@org.springframework.web.bind.annotation.RequestBody Map<String, Object> body) {
+        String agent = body.get("agent") == null ? "" : String.valueOf(body.get("agent")).trim();
+        if (agent.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "agent required"));
+        }
+        var card = agentDirectory.findById(agent);
+        if (card.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("error", "agent '" + agent + "' not found"));
+        }
+        var r = agentDirectory.launch(agent, "ping");
+        boolean ok = r.ok();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("status", ok ? "ok" : "error");
+        out.put("agent", agent);
+        out.put("message", ok ? "Launched " + agent + " (cli)" : "launch failed rc=" + r.exitCode());
+        if (r.error() != null && !r.error().isEmpty()) {
+            out.put("hint", r.error());
+        }
+        return ResponseEntity.status(ok ? 200 : 500).body(out);
     }
 
     @PostMapping("/api/skill-use")
