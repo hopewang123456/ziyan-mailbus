@@ -31,6 +31,8 @@ public class MiscController {
     private final DemoService demo;
     private final io.github.hopewang123456.mailbus.app.TokenAdminService tokenAdmin;
     private final io.github.hopewang123456.mailbus.app.CommandDraftService commandDraft;
+    private final io.github.hopewang123456.mailbus.app.ClinicAgentService clinic;
+    private final org.springframework.core.env.Environment env;
 
     public MiscController(Environment env, TaskRepository tasks, InboxService inbox,
                           io.github.hopewang123456.mailbus.app.ArchiveService archive,
@@ -41,6 +43,8 @@ public class MiscController {
         this.tokenAdmin = new io.github.hopewang123456.mailbus.app.TokenAdminService(this.dataDir);
         this.commandDraft = new io.github.hopewang123456.mailbus.app.CommandDraftService(
                 new io.github.hopewang123456.mailbus.app.TaskPlannerService(this.dataDir, null));
+        this.clinic = new io.github.hopewang123456.mailbus.app.ClinicAgentService(this.dataDir);
+        this.env = env;
         this.request = request;
     }
 
@@ -165,21 +169,32 @@ public class MiscController {
         return ni("tasks trace（生命周期回放机制）");
     }
 
+    /** GET /api/agents/active — 三级门禁活跃视图（python list_active_agents 直译）。 */
     @GetMapping("/api/agents/active")
-    public ResponseEntity<Map<String, Object>> agentsActive() {
-        return ni("agents active（活跃视图机制）");
+    public Map<String, Object> agentsActive() {
+        var active = clinic.activeAgents();
+        List<Map<String, Object>> items = new java.util.ArrayList<>();
+        for (var e : active.entrySet()) {
+            Map<String, Object> row = new LinkedHashMap<>((Map<String, Object>) e.getValue());
+            row.put("id", e.getKey());
+            items.add(row);
+        }
+        return Map.of("status", "ok", "agents", items);
     }
 
+    /** GET /api/agents/assembly — 装配视图骨架（登记）。 */
     @GetMapping("/api/agents/assembly")
-    public ResponseEntity<Map<String, Object>> agentsAssembly() {
-        return ni("agents assembly（装配视图机制）");
+    public Map<String, Object> agentsAssembly() {
+        return clinic.agentsAssembly();
     }
 
+    /** POST /api/agents/scan — agent 发现（发现机制，501 登记）。 */
     @PostMapping("/api/agents/scan")
     public ResponseEntity<Map<String, Object>> agentsScan() {
         return ni("agents scan（发现机制）");
     }
 
+    /** POST /api/agents/recruit — 招募（LLM 建角色机制，501 登记）。 */
     @PostMapping("/api/agents/recruit")
     public ResponseEntity<Map<String, Object>> agentsRecruit() {
         return ni("agents recruit（招募机制）");
@@ -210,19 +225,28 @@ public class MiscController {
                 "error_code", "unauthorized"));
     }
 
+    /** GET /api/clinic/tools — 工具清单（形状对齐；执行走 python 工具链）。 */
     @GetMapping("/api/clinic/tools")
-    public ResponseEntity<Map<String, Object>> clinicTools() {
-        return ni("clinic tools（诊所机制）");
+    public Map<String, Object> clinicTools() {
+        return Map.of("tools", clinic.clinicTools());
     }
 
+    /** GET /api/clinic/jobs — 调度器状态（python _hub_state 形状）。 */
     @GetMapping("/api/clinic/jobs")
-    public ResponseEntity<Map<String, Object>> clinicJobs() {
-        return ni("clinic jobs（诊所机制）");
+    public Map<String, Object> clinicJobs() {
+        boolean scanEnabled = Boolean.parseBoolean(String.valueOf(
+                env == null ? "true" : env.getProperty("mailbus.task-scan.enabled", "true")));
+        return clinic.schedulerStatus(scanEnabled);
     }
 
+    /** POST /api/clinic/run — 执行诊所工具（需 python 工具链，显式 501 登记）。 */
     @PostMapping("/api/clinic/run")
-    public ResponseEntity<Map<String, Object>> clinicRun() {
-        return ni("clinic run（诊所机制）");
+    public ResponseEntity<Map<String, Object>> clinicRun(@RequestBody(required = false) Map<String, Object> body) {
+        String toolId = body == null ? "" : str(body.get("tool_id"));
+        if (toolId.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "error", "tool_id required"));
+        }
+        return ni("clinic run " + toolId + "（python 工具链）");
     }
 
     @PostMapping("/api/dev/reload")
