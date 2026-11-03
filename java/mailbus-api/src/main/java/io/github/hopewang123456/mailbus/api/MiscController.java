@@ -46,9 +46,16 @@ public class MiscController {
         this.clinic = new io.github.hopewang123456.mailbus.app.ClinicAgentService(this.dataDir);
         this.env = env;
         this.request = request;
+        this.gateEngine = new io.github.hopewang123456.mailbus.app.GateEngineService(
+                this.dataDir, tasks,
+                new io.github.hopewang123456.mailbus.app.HumanQueueService(this.dataDir,
+                        java.time.Clock.systemDefaultZone()),
+                new io.github.hopewang123456.mailbus.app.StepDispatcher(this.dataDir,
+                        java.time.Clock.systemDefaultZone()));
     }
 
     private final jakarta.servlet.http.HttpServletRequest request;
+    private final io.github.hopewang123456.mailbus.app.GateEngineService gateEngine;
 
     /** python client_context_from_handler 对等。 */
     private io.github.hopewang123456.mailbus.app.TokenAdminService.ClientContext clientContext() {
@@ -152,16 +159,29 @@ public class MiscController {
 
     // ── 以下为机制重底座的显式 501（逐条登记，批 A8）──
 
+    /** POST /api/tasks/{id}/gates/{gate_id}/approve — python on_gate_approve 核心直译（批五）。 */
     @PostMapping("/api/tasks/{id}/gates/{gate_id}/approve")
     public ResponseEntity<Map<String, Object>> taskGateApprove(@PathVariable("id") String id,
-                                                               @PathVariable("gate_id") String gateId) {
-        return ni("tasks gates approve（workflow engine 未直译）");
+                                                               @PathVariable("gate_id") String gateId,
+                                                               @RequestBody(required = false) Map<String, Object> body) {
+        var result = gateEngine.approve(id, gateId, body == null ? Map.of() : body);
+        return gateResponse(result);
     }
 
+    /** POST /api/tasks/{id}/gates/{gate_id}/deny — python on_gate_deny 核心直译（批五）。 */
     @PostMapping("/api/tasks/{id}/gates/{gate_id}/deny")
     public ResponseEntity<Map<String, Object>> taskGateDeny(@PathVariable("id") String id,
-                                                            @PathVariable("gate_id") String gateId) {
-        return ni("tasks gates deny（workflow engine 未直译）");
+                                                            @PathVariable("gate_id") String gateId,
+                                                            @RequestBody(required = false) Map<String, Object> body) {
+        var result = gateEngine.deny(id, gateId, body == null ? Map.of() : body);
+        return gateResponse(result);
+    }
+
+    private static ResponseEntity<Map<String, Object>> gateResponse(Map<String, Object> result) {
+        int http = result.get("http") instanceof Number n ? n.intValue() : (Boolean.TRUE.equals(result.get("ok")) ? 200 : 400);
+        Map<String, Object> body = new LinkedHashMap<>(result);
+        body.remove("http");
+        return ResponseEntity.status(http).body(body);
     }
 
     /** GET /api/tasks/trace?id= — E9 生命周期回放时序（python task_trace 直译）。 */
