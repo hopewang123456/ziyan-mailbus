@@ -216,8 +216,24 @@ public class FinalController {
     // ── 501×6 ──
 
     @PostMapping("/api/chain/budget")
-    public ResponseEntity<Map<String, Object>> chainBudgetPost() {
-        return ni("chain budget apply（ollama 决策机制）");
+    public ResponseEntity<Map<String, Object>> chainBudgetPost(@org.springframework.web.bind.annotation.RequestBody(required = false) Map<String, Object> body) {
+        if (body == null || !body.containsKey("use_ollama")) {
+            return ResponseEntity.ok(Map.of("status", "ok",
+                    "budget", Map.of("note", "未指定 use_ollama，返回当前视图")));
+        }
+        Object useRaw = body.get("use_ollama");
+        Boolean use = useRaw == null || "null".equals(String.valueOf(useRaw)) ? null : Boolean.valueOf(String.valueOf(useRaw));
+        java.nio.file.Path cfgPath = dataDir.resolve("config.json");
+        Map<String, Object> cfg = JsonFiles.readMap(cfgPath);
+        if (cfg == null) cfg = new LinkedHashMap<>();
+        Map<String, Object> chains = cfg.get("mailbus_chains") instanceof Map<?, ?> cm ? new LinkedHashMap<>(cast(cm)) : new LinkedHashMap<>();
+        chains.put("use_ollama", use);
+        cfg.put("mailbus_chains", chains);
+        JsonFiles.write(cfgPath, cfg);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("status", "ok");
+        out.put("budget", Map.of("use_ollama", use == null ? "" : use, "updated", true));
+        return ResponseEntity.ok(out);
     }
 
     /** POST /api/launch — AgentDirectory.launch java 语义（CLI 推送探测）。 */
@@ -243,9 +259,27 @@ public class FinalController {
         return ResponseEntity.status(ok ? 200 : 500).body(out);
     }
 
+    /** POST /api/skill-use — 记录技能使用（python handle_skill_use 直译：skill-usage.json 计数器）。 */
     @PostMapping("/api/skill-use")
-    public ResponseEntity<Map<String, Object>> skillUse() {
-        return ni("skill-use（技能调用机制）");
+    public ResponseEntity<Map<String, Object>> skillUse(@org.springframework.web.bind.annotation.RequestBody Map<String, Object> body) {
+        String skill = body.get("skill") == null ? "" : String.valueOf(body.get("skill"));
+        String agent = body.get("agent") == null ? "" : String.valueOf(body.get("agent"));
+        if (skill.isEmpty() || agent.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "缺少 skill 或 agent"));
+        }
+        java.nio.file.Path suFile = dataDir.resolve("skill-usage.json");
+        Map<String, Object> data = JsonFiles.readMap(suFile);
+        if (data == null) data = new LinkedHashMap<>();
+        Map<String, Object> skillMap = data.get(skill) instanceof Map<?, ?> sm ? new LinkedHashMap<>(cast(sm)) : new LinkedHashMap<>();
+        Map<String, Object> agentMap = skillMap.get(agent) instanceof Map<?, ?> am ? new LinkedHashMap<>(cast(am)) : new LinkedHashMap<>();
+        agentMap.put("use_count", ((Number) agentMap.getOrDefault("use_count", 0)).intValue() + 1);
+        agentMap.put("last_used", java.time.OffsetDateTime.now(java.time.ZoneId.systemDefault())
+                .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssZ")));
+        if (!agentMap.containsKey("view_count")) agentMap.put("view_count", 0);
+        skillMap.put(agent, agentMap);
+        data.put(skill, skillMap);
+        JsonFiles.write(suFile, data);
+        return ResponseEntity.ok(Map.of("status", "ok"));
     }
 
     @GetMapping("/api/test-agents")

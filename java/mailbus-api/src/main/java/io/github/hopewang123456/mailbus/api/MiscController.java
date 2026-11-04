@@ -218,9 +218,27 @@ public class MiscController {
     }
 
     /** POST /api/agents/scan — agent 发现（发现机制，501 登记）。 */
+    /** POST /api/agents/scan — config 基本扫描骨架（python DiscoverySource 机制登记偏差）。 */
     @PostMapping("/api/agents/scan")
-    public ResponseEntity<Map<String, Object>> agentsScan() {
-        return ni("agents scan（发现机制）");
+    public Map<String, Object> agentsScan() {
+        Map<String, Object> cfg = JsonFiles.readMap(dataDir.resolve("config.json"));
+        Map<String, Object> agents = cfg != null && cfg.get("agents") instanceof Map<?, ?> am ? cast(agents0(am)) : Map.of();
+        List<Map<String, Object>> hits = new java.util.ArrayList<>();
+        for (var e : agents.entrySet()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("source", "config");
+            row.put("id", e.getKey());
+            row.put("framework", e.getValue() instanceof Map<?, ?> m ? str(((Map<?, ?>) m).get("type")) : "");
+            row.put("enabled", !(e.getValue() instanceof Map<?, ?> m2 && Boolean.FALSE.equals(m2.get("enabled"))));
+            hits.add(row);
+        }
+        return Map.of("status", "ok", "hits", hits, "count", hits.size(),
+                "note", "java 无 DiscoverySource 发现机制（仅 config 扫描，批六登记）");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> agents0(Map<?, ?> m) {
+        return (Map<String, Object>) m;
     }
 
     /** POST /api/agents/recruit — 招募（LLM 建角色机制，501 登记）。 */
@@ -278,9 +296,14 @@ public class MiscController {
         return ni("clinic run " + toolId + "（python 工具链）");
     }
 
+    /** POST /api/dev/reload — 配置刷新 ack（java 无 python 插件热重载，返回刷新确认）。 */
     @PostMapping("/api/dev/reload")
-    public ResponseEntity<Map<String, Object>> devReload() {
-        return ni("dev reload（热重载机制）");
+    public Map<String, Object> devReload() {
+        return Map.of(
+                "status", "ok",
+                "frameworks", Map.of(),
+                "integrations", Map.of(),
+                "note", "java 侧配置每次请求即时读取（无缓存需刷新）；插件热重载为 python 机制（批六登记）");
     }
 
     /** POST /api/drill/video-publish — check-n8n 探测（python run_video_publish_drill check 模式）。 */
