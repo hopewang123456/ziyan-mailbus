@@ -84,8 +84,8 @@ class MailbusMetricsTest {
         // store 侧最小 fixture：任务池 + human-queue + alerts + audit + ledger
         Files.createDirectories(dataDir.resolve("tasks"));
         Files.writeString(dataDir.resolve("tasks/t-1.json"), """
-                {"task_id": "t-1", "status": "running", "created_at": "2026-10-28T01:00:00Z",
-                 "updated_at": "2026-10-28T02:00:00Z"}
+                {"task_id": "t-1", "status": "running", "created_at": "2026-11-04T01:00:00Z",
+                 "updated_at": "2026-11-04T02:00:00Z"}
                 """);
         Files.writeString(dataDir.resolve("human-queue.json"), """
                 {"items": [{"id": "h1", "status": "pending"}, {"id": "h2", "status": "done"}]}
@@ -95,8 +95,8 @@ class MailbusMetricsTest {
                 """);
         Files.createDirectories(dataDir.resolve("system"));
         Files.writeString(dataDir.resolve("system/audit.jsonl"),
-                "{\"event\": \"human_gate.resolve\", \"ts\": \"2026-10-28T01:00:00Z\"}\n"
-                + "{\"event\": \"other\", \"ts\": \"2026-10-28T01:00:00Z\"}\n");
+                "{\"event\": \"human_gate.resolve\", \"ts\": \"2026-11-04T01:00:00Z\"}\n"
+                + "{\"event\": \"other\", \"ts\": \"2026-11-04T01:00:00Z\"}\n");
         String today = java.time.LocalDate.now(
                 java.time.ZoneId.of("Asia/Shanghai")).toString();
         Files.createDirectories(dataDir.resolve("ledger"));
