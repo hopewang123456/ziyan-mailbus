@@ -307,28 +307,86 @@ def resolve_paths(data_dir: str) -> dict:
 
 import hashlib
 
-_LOCK_ROOT = os.environ.get("MAILBUS_LOCK_DIR") or (
-    tempfile.gettempdir() if sys.platform == "win32" else "/tmp"
-)
-GLOBAL_LOCK_FILE = os.path.join(_LOCK_ROOT, "mailbus.lock")
+# D16 批1（消息存储 SoT 统一）：锁根随数据走共享卷，python/java 双栈才能跨进程互斥。
+# 优先级：MAILBUS_LOCK_DIR env > <data_dir>/.locks > 平台 temp 兜底（目录不可写时）。
+_LOCK_ROOT_CACHE: str | None = None
+
+
+def _resolve_lock_root() -> str:
+    global _LOCK_ROOT_CACHE
+    if _LOCK_ROOT_CACHE:
+        return _LOCK_ROOT_CACHE
+    env = (os.environ.get("MAILBUS_LOCK_DIR") or "").strip()
+    if env:
+        root = env
+    else:
+        from lib.infra.constants import DEFAULT_DATA_DIR  # 局部 import 防循环依赖
+
+        root = os.path.join(DEFAULT_DATA_DIR, ".locks")
+    try:
+        os.makedirs(root, exist_ok=True)
+    except OSError:
+        root = tempfile.gettempdir() if sys.platform == "win32" else "/tmp"
+    _LOCK_ROOT_CACHE = root
+    return root
+
+
+def reset_lock_root_cache() -> None:
+    """清空锁根缓存（测试中切换 MAILBUS_DATA/MAILBUS_LOCK_DIR 后重解析用）。"""
+    global _LOCK_ROOT_CACHE
+    _LOCK_ROOT_CACHE = None
+
+
+def _global_lock_file() -> str:
+    return os.path.join(_resolve_lock_root(), "mailbus.lock")
 
 
 def get_lock_root() -> str:
-    """Mailbus 文件锁根目录（Windows 为 %TEMP%，Unix 为 /tmp）。"""
-    return _LOCK_ROOT
+    """Mailbus 文件锁根目录（默认 <data_dir>/.locks，env MAILBUS_LOCK_DIR 可覆盖）。"""
+    return _resolve_lock_root()
+
+
+def _store_relative_key(norm: str) -> str:
+    """锁 hash 键：data_dir 内相对路径（统一正斜杠、Windows 统一小写）。
+
+    双栈容器内挂载路径不同（python /app/shared/store vs java /app/store），
+    绝对路径 hash 会失配——data_dir 内目标一律用相对键；不在 data_dir
+    树内（如临时目录）退回绝对路径（同样正斜杠/小写规范化）。
+    """
+    from lib.infra.constants import DEFAULT_DATA_DIR
+
+    base = os.path.normpath(os.path.abspath(DEFAULT_DATA_DIR))
+    key = norm
+    try:
+        rel = os.path.relpath(norm, base)
+        if rel != os.pardir and not rel.startswith(os.pardir + os.sep):
+            key = rel
+    except ValueError:  # Windows 跨盘 relpath
+        pass
+    key = key.replace("\\", "/")
+    if sys.platform == "win32":
+        key = key.lower()
+    return key
 
 
 def _lock_path(path: str = "") -> str:
-    """生成锁文件路径：有 path 用 per-file 锁，否则用全局锁。"""
+    """生成锁文件路径：有 path 用 per-file 锁，否则用全局锁。
+
+    规范化规则（_store_relative_key → sha256 前 16 位）与 java 侧
+    CrossProcessFileLock 逐字节一致——双栈必须命中同一个锁文件。
+    """
     if path:
-        h = hashlib.sha256(path.encode()).hexdigest()[:16]
-        return os.path.join(_LOCK_ROOT, f"mailbus-{h}.lock")
-    return GLOBAL_LOCK_FILE
+        norm = os.path.normpath(os.path.abspath(path))
+        h = hashlib.sha256(_store_relative_key(norm).encode("utf-8")).hexdigest()[:16]
+        return os.path.join(_resolve_lock_root(), f"mailbus-{h}.lock")
+    return _global_lock_file()
 
 
 def _try_acquire_lock(lock_fd, *, non_blocking: bool = True) -> bool:
     if sys.platform == "win32":
         try:
+            # region 固定字节 [0,1)：与 java FileChannel.lock(0,1) 对称互斥
+            os.lseek(lock_fd.fileno(), 0, os.SEEK_SET)
             msvcrt.locking(
                 lock_fd.fileno(),
                 msvcrt.LK_NBLCK if non_blocking else msvcrt.LK_LOCK,
@@ -339,9 +397,11 @@ def _try_acquire_lock(lock_fd, *, non_blocking: bool = True) -> bool:
             return False
     flags = fcntl.LOCK_EX | (fcntl.LOCK_NB if non_blocking else 0)
     try:
-        fcntl.flock(lock_fd, flags)
+        # POSIX record lock region [0,1)（D16 批1：原 flock 整文件锁与
+        # java FileChannel.lock 的 fcntl region 锁不互斥，必须同为 record lock）
+        fcntl.lockf(lock_fd, flags, 1, 0, os.SEEK_SET)
         return True
-    except BlockingIOError:
+    except OSError:
         return False
 
 
@@ -352,7 +412,25 @@ def _release_lock(lock_fd) -> None:
         except OSError:
             pass
     else:
-        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        try:
+            fcntl.lockf(lock_fd, fcntl.LOCK_UN, 1, 0, os.SEEK_SET)
+        except OSError:
+            pass
+
+
+# 进程内 per-lock 互斥（D16 批1）：POSIX record lock 在同进程内不互斥
+# （且任意 fd close 会释放本进程全部 region lock），线程锁必须先行。
+_LOCK_MUTEXES: dict = {}
+_LOCK_MUTEXES_GUARD = threading.Lock()
+
+
+def _lock_mutex(lock_file: str):
+    with _LOCK_MUTEXES_GUARD:
+        m = _LOCK_MUTEXES.get(lock_file)
+        if m is None:
+            m = threading.Lock()
+            _LOCK_MUTEXES[lock_file] = m
+        return m
 
 
 def _open_lock_file(lock_file: str, *, retries: int = 8):
@@ -384,61 +462,72 @@ def _held_locks() -> set[str]:
 def file_lock(timeout: float = 10.0, path: str = ""):
     """文件锁 — 防止多个进程同时写同一份文件（带超时，防死锁，支持同线程重入）。
 
+    双层互斥（D16 批1）：进程内 per-lock 线程锁 + 跨进程 OS record lock
+    （win: msvcrt.locking 字节 [0,1) / unix: fcntl.lockf region [0,1)），
+    与 java CrossProcessFileLock 命中同一锁文件、同一字节区域。
+
     同线程重入场景：``json_write`` 内部自带 ``file_lock``，而调用方（如 token_store）
     外层已对同一 path 持有锁时，嵌套调用应直接通过而非自我死锁。
     """
-    os.makedirs(_LOCK_ROOT, exist_ok=True)
+    os.makedirs(_resolve_lock_root(), exist_ok=True)
     lock_file = _lock_path(path)
+    global_file = _global_lock_file()
     held = _held_locks()
     # 同线程重入：已持有该锁或全局兜底锁 → 直接通过
-    if lock_file in held or (lock_file != GLOBAL_LOCK_FILE and GLOBAL_LOCK_FILE in held):
+    if lock_file in held or (lock_file != global_file and global_file in held):
         yield
         return
-    lock_fd = _open_lock_file(lock_file)
+    mutex = _lock_mutex(lock_file)
     deadline = now_ts() + timeout
     acquired = False
+    mutex_acquired = False
     effective = lock_file
+    lock_fd = None
     try:
+        # 进程内互斥先行（小步轮询，避免异常路径下无限等待）
+        while not mutex.acquire(timeout=0.1):
+            if now_ts() >= deadline:
+                raise TimeoutError(f"无法获取进程内文件锁 (path={path}, timeout={timeout}s)")
+        mutex_acquired = True
+        lock_fd = _open_lock_file(lock_file)
         while now_ts() < deadline:
             if _try_acquire_lock(lock_fd, non_blocking=True):
                 acquired = True
                 break
             time.sleep(0.1)
         if not acquired:
-            fallback = GLOBAL_LOCK_FILE
-            if lock_file != fallback:
+            if lock_file != global_file:
                 lock_fd.close()
-                lock_fd = open(fallback, "w")
+                lock_fd = _open_lock_file(global_file)
                 deadline2 = now_ts() + 5.0
                 while now_ts() < deadline2:
                     if _try_acquire_lock(lock_fd, non_blocking=True):
                         acquired = True
-                        effective = fallback
+                        effective = global_file
                         break
                     time.sleep(0.1)
             if not acquired:
                 raise TimeoutError(f"无法获取文件锁 (path={path}, timeout={timeout}s)")
         held.add(effective)
         yield
-    except Exception:
-        raise
     finally:
         held.discard(effective)
         if acquired:
             _release_lock(lock_fd)
-        lock_fd.close()
-        if lock_file != GLOBAL_LOCK_FILE:
-            try:
-                os.unlink(lock_file)
-            except OSError:
-                pass
+        if lock_fd is not None:
+            lock_fd.close()
+        # D16 批1：不再 unlink 锁文件——跨进程下 unlink 有 inode 竞态
+        # （等待者持旧 inode 锁，后来者建新 inode 双持）；stale 锁文件无害
+        # （OS 锁随 fd 释放），由 stale-lock 清理命令兜底。
+        if mutex_acquired:
+            mutex.release()
 
 
 @contextlib.contextmanager
 def named_lock(name: str, *, blocking: bool = False, timeout: float = 10.0):
     """进程级命名锁（如 mailbus-scan）。"""
-    os.makedirs(_LOCK_ROOT, exist_ok=True)
-    path = os.path.join(_LOCK_ROOT, f"{name}.lock")
+    os.makedirs(_resolve_lock_root(), exist_ok=True)
+    path = os.path.join(_resolve_lock_root(), f"{name}.lock")
     lock_fd = open(path, "w")
     acquired = False
     deadline = now_ts() + (timeout if blocking else 0.0)

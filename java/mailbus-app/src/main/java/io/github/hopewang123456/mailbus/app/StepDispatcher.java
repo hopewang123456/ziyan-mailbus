@@ -2,6 +2,7 @@ package io.github.hopewang123456.mailbus.app;
 
 import io.github.hopewang123456.mailbus.infra.ids.Ids;
 import io.github.hopewang123456.mailbus.infra.json.JsonFiles;
+import io.github.hopewang123456.mailbus.infra.lock.CrossProcessFileLock;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -199,38 +200,42 @@ public class StepDispatcher {
         if (!Files.isDirectory(inboxFile.getParent())) {
             return false;
         }
-        Map<String, Object> doc = JsonFiles.readMap(inboxFile);
-        if (doc == null) {
-            doc = new LinkedHashMap<>();
-            doc.put("agent", to);
-            doc.put("messages", new ArrayList<Map<String, Object>>());
-        }
-        Object msgsObj = doc.get("messages");
-        List<Map<String, Object>> messages = msgsObj instanceof List<?> l ? (List<Map<String, Object>>) (List<?>) l
-                : new ArrayList<>();
-        int stepNum = intOr(step.get("step"), 1);
-        String stepId = str(step.getOrDefault("step_id", "s" + stepNum));
-        String content = "📋 【%s】pipeline 步骤 (step_id=%s)\n任务文件: %s\n结果写入: %s\n"
-                .formatted(taskId, stepId, orderPath, resultRef)
-                + "请读取任务文件执行，完成后写结果文件（含 pipeline_step 与 step_id）。\n\n"
-                + "⚠️ 必须写入结果文件才能完成。";
-        Map<String, Object> msg = new LinkedHashMap<>();
-        msg.put("id", msgId);
-        msg.put("from", "mailbus");
-        msg.put("to", to);
-        msg.put("type", "task");
-        msg.put("priority", "normal");
-        msg.put("state", "pending");
-        msg.put("task_id", taskId);
-        msg.put("pipeline_step", stepNum);
-        msg.put("step_id", stepId);
-        msg.put("content", content);
-        msg.put("created_at", fsm.nowIso());
-        messages.add(msg);
-        doc.put("messages", messages);
-        doc.put("has_unread", true);
-        JsonFiles.write(inboxFile, doc);
-        return true;
+        // D16 批1：inbox.json 是双栈共享 SoT，读改写必须与 python file_lock 跨进程互斥
+        //（CrossProcessFileLock 与 python 命中同一锁文件、同一字节区域）。
+        return CrossProcessFileLock.withLock(inboxFile, dataDir, () -> {
+            Map<String, Object> doc = JsonFiles.readMap(inboxFile);
+            if (doc == null) {
+                doc = new LinkedHashMap<>();
+                doc.put("agent", to);
+                doc.put("messages", new ArrayList<Map<String, Object>>());
+            }
+            Object msgsObj = doc.get("messages");
+            List<Map<String, Object>> messages = msgsObj instanceof List<?> l ? (List<Map<String, Object>>) (List<?>) l
+                    : new ArrayList<>();
+            int stepNum = intOr(step.get("step"), 1);
+            String stepId = str(step.getOrDefault("step_id", "s" + stepNum));
+            String content = "📋 【%s】pipeline 步骤 (step_id=%s)\n任务文件: %s\n结果写入: %s\n"
+                    .formatted(taskId, stepId, orderPath, resultRef)
+                    + "请读取任务文件执行，完成后写结果文件（含 pipeline_step 与 step_id）。\n\n"
+                    + "⚠️ 必须写入结果文件才能完成。";
+            Map<String, Object> msg = new LinkedHashMap<>();
+            msg.put("id", msgId);
+            msg.put("from", "mailbus");
+            msg.put("to", to);
+            msg.put("type", "task");
+            msg.put("priority", "normal");
+            msg.put("state", "pending");
+            msg.put("task_id", taskId);
+            msg.put("pipeline_step", stepNum);
+            msg.put("step_id", stepId);
+            msg.put("content", content);
+            msg.put("created_at", fsm.nowIso());
+            messages.add(msg);
+            doc.put("messages", messages);
+            doc.put("has_unread", true);
+            JsonFiles.write(inboxFile, doc);
+            return true;
+        });
     }
 
     private static String firstNonEmpty(Object... values) {

@@ -11,6 +11,8 @@ from unittest.mock import MagicMock
 sys.modules.setdefault("fcntl", MagicMock())
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import pytest
+
 import lib.infra.utils as _utils
 
 
@@ -19,7 +21,15 @@ def _noop_file_lock(timeout=10.0, path=""):
     yield
 
 
-_utils.file_lock = _noop_file_lock
+@pytest.fixture(autouse=True)
+def _noop_locks(monkeypatch):
+    """file_lock 降级 noop（仅本模块生效）。
+
+    模块级 ``_utils.file_lock = _noop_file_lock`` 会永久污染 utils 全局，
+    全量序下后续测试 json_write 不拿锁、不建锁目录（D16 批1 暴露的前序债）。
+    """
+    monkeypatch.setattr(_utils, "file_lock", _noop_file_lock)
+
 
 from lib.application.workflow.intake.spawn_rules import (
     bridge_reconcile,
