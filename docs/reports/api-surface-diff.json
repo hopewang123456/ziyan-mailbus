@@ -1,13 +1,13 @@
 {
-  "generated_at": "2026-10-28T03:37:09.284275+00:00",
+  "generated_at": "2026-11-11T15:11:15.476259+00:00",
   "source": {
     "python": "http://127.0.0.1:9816",
     "java": "http://127.0.0.1:9815"
   },
   "summary": {
-    "python_endpoints": 36,
-    "java_endpoints": 38,
-    "both": 36,
+    "python_endpoints": 141,
+    "java_endpoints": 143,
+    "both": 141,
     "python_only": 0,
     "java_only": 0,
     "exempted_not_implemented": 2
@@ -39,14 +39,80 @@
     },
     {
       "method": "GET",
+      "path": "/api/agent-profile/{}",
+      "py_summary": "agent profile",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
       "path": "/api/agents",
       "py_summary": "agent 列表与配置（含 access/agent.json registry）",
       "java_summary": ""
     },
     {
       "method": "GET",
+      "path": "/api/agents/active",
+      "py_summary": "active agents",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/agents/assembly",
+      "py_summary": "agent assembly",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
       "path": "/api/agents/{}/unread",
       "py_summary": "指定 agent 的未读计数",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/alerts",
+      "py_summary": "alerts",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/align",
+      "py_summary": "align",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/avatars/manifest",
+      "py_summary": "avatars manifest",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/bulletin",
+      "py_summary": "bulletin",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/bulletin/permit",
+      "py_summary": "bulletin permit get",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/chain/budget",
+      "py_summary": "chain budget",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/clinic/jobs",
+      "py_summary": "clinic jobs",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/clinic/tools",
+      "py_summary": "clinic tools",
       "java_summary": ""
     },
     {
@@ -63,8 +129,74 @@
     },
     {
       "method": "GET",
+      "path": "/api/config",
+      "py_summary": "config",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/config/mailbus-token",
+      "py_summary": "mailbus token",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/demo/trace",
+      "py_summary": "demo trace",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/discover",
+      "py_summary": "discover",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/doctor",
+      "py_summary": "doctor",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/external-tools",
+      "py_summary": "external tools",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/failover/metrics",
+      "py_summary": "failover metrics",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/frameworks",
+      "py_summary": "frameworks",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/harness-reports/{}",
+      "py_summary": "harness report",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
       "path": "/api/health",
       "py_summary": "服务健康探测",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/heartbeat",
+      "py_summary": "heartbeat",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/human-queue",
+      "py_summary": "human queue list",
       "java_summary": ""
     },
     {
@@ -77,6 +209,54 @@
       "method": "GET",
       "path": "/api/inbox/{}",
       "py_summary": "指定 agent 的 inbox 内容（?status_filter/?limit）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/intake",
+      "py_summary": "intake list",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/intake/{}",
+      "py_summary": "intake get",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/intake/{}/tasks",
+      "py_summary": "intake tasks",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/internal-llm/health",
+      "py_summary": "internal llm health",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/internal-llm/status",
+      "py_summary": "internal llm status",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/launch",
+      "py_summary": "list launchable",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/locale/errors",
+      "py_summary": "locale errors",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/manager/pending",
+      "py_summary": "manager pending",
       "java_summary": ""
     },
     {
@@ -111,8 +291,122 @@
     },
     {
       "method": "GET",
+      "path": "/api/patrol-reports",
+      "py_summary": "patrol reports",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/permission",
+      "py_summary": "permission",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/ping/{}",
+      "py_summary": "ping",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
       "path": "/api/positions",
       "py_summary": "职位目录（发令窗口起草面板：候选池+inputs schema+实时空闲态）",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/replies",
+      "py_summary": "replies",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/reports",
+      "py_summary": "reports",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/reviews",
+      "py_summary": "code reviews",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/reviews/projects",
+      "py_summary": "code reviews projects",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/reviews/{}",
+      "py_summary": "code review detail",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/search",
+      "py_summary": "search",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/send-msg",
+      "py_summary": "send msg",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/compose-files",
+      "py_summary": "compose files list",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/env",
+      "py_summary": "settings env get",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/integrations",
+      "py_summary": "integrations",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/paths",
+      "py_summary": "settings paths",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/section/{}",
+      "py_summary": "settings section get",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings/sections",
+      "py_summary": "settings sections",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/skill-usage",
+      "py_summary": "skill usage",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/skill-use",
+      "py_summary": "skill use",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/skills/index",
+      "py_summary": "skills index",
       "java_summary": ""
     },
     {
@@ -135,6 +429,30 @@
     },
     {
       "method": "GET",
+      "path": "/api/tasks/audit/pending",
+      "py_summary": "task audit pending",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/tasks/audit/stats",
+      "py_summary": "task audit stats",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/tasks/audit/stats/trend",
+      "py_summary": "task audit trend",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/tasks/trace",
+      "py_summary": "task trace",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
       "path": "/api/tasks/{}",
       "py_summary": "任务详情",
       "java_summary": ""
@@ -147,6 +465,24 @@
     },
     {
       "method": "GET",
+      "path": "/api/templates",
+      "py_summary": "templates",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/test-agents",
+      "py_summary": "test agents",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/tokens/summary",
+      "py_summary": "token summary",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
       "path": "/api/workflows",
       "py_summary": "工作流模板清单（registry SoT）",
       "java_summary": ""
@@ -154,7 +490,13 @@
     {
       "method": "GET",
       "path": "/api/workflows/{}",
-      "py_summary": "工作流模板详情",
+      "py_summary": "workflow get",
+      "java_summary": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/workload",
+      "py_summary": "workload",
       "java_summary": ""
     },
     {
@@ -171,8 +513,74 @@
     },
     {
       "method": "POST",
+      "path": "/api/a2a/sdk/{}",
+      "py_summary": "A2A SDK 面（官方 Task 形状；0.2/0.3 双方法名）",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/a2a/tasks",
+      "py_summary": "a2a tasks create",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/actions/update/{}/{}",
+      "py_summary": "actions update",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-instances",
+      "py_summary": "agent instance upsert",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-instances/discover",
+      "py_summary": "agent instance discover",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-instances/load-roles",
+      "py_summary": "agent instance load roles",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-instances/test-connection",
+      "py_summary": "agent instance test connection",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/agents/recruit",
+      "py_summary": "agent recruit",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/agents/scan",
+      "py_summary": "agent scan",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/agents/{}/enable",
+      "py_summary": "role enable",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
       "path": "/api/agents/{}/step-result",
-      "py_summary": "agent 工单执行回执（落 msg-results + 立即推进）",
+      "py_summary": "agent step result",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/align",
+      "py_summary": "align",
       "java_summary": ""
     },
     {
@@ -183,8 +591,98 @@
     },
     {
       "method": "POST",
+      "path": "/api/attachments/upload",
+      "py_summary": "attachment upload",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/bulletin/permit",
+      "py_summary": "bulletin permit",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/bulletin/post",
+      "py_summary": "bulletin post",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/chain/budget",
+      "py_summary": "chain budget",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/clinic/run",
+      "py_summary": "clinic run",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
       "path": "/api/command/draft",
       "py_summary": "发令草稿预演（D4：tier0→LLM 无副作用）",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/config/mailbus-token",
+      "py_summary": "mailbus token",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/config/mailbus-token/rotate",
+      "py_summary": "mailbus token rotate",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/demo/clean",
+      "py_summary": "demo clean",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/demo/run",
+      "py_summary": "demo run",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/dev/reload",
+      "py_summary": "dev reload",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/drill/video-publish",
+      "py_summary": "drill video publish",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/frameworks/{}/disable",
+      "py_summary": "framework disable",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/frameworks/{}/enable",
+      "py_summary": "framework enable",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/human-queue/{}/resolve",
+      "py_summary": "human queue resolve",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/identities/{}",
+      "py_summary": "identity rename",
       "java_summary": ""
     },
     {
@@ -207,8 +705,128 @@
     },
     {
       "method": "POST",
+      "path": "/api/intake/spawn-analyze",
+      "py_summary": "intake spawn analyze",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/intake/{}/gates/{}/approve",
+      "py_summary": "intake gate approve",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/intake/{}/gates/{}/deny",
+      "py_summary": "intake gate deny",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/intake/{}/spawn",
+      "py_summary": "intake spawn",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/internal-llm/dry-run",
+      "py_summary": "internal llm dry run",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/internal-llm/rebuild-rag",
+      "py_summary": "internal llm rebuild rag",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/launch",
+      "py_summary": "launch",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/mark-read/{}",
+      "py_summary": "mark read",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/metrics/layout",
+      "py_summary": "metrics layout",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/metrics/rules/{}",
+      "py_summary": "metrics rule patch",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/metrics/snapshot",
+      "py_summary": "metrics snapshot",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/permission",
+      "py_summary": "permission",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/positions/{}",
+      "py_summary": "position update",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/send-msg",
+      "py_summary": "send msg",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/settings/env",
+      "py_summary": "settings env patch",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/settings/section/services/probe",
+      "py_summary": "settings services probe",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/settings/section/{}",
+      "py_summary": "settings section patch",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/skill-use",
+      "py_summary": "skill use",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/audit",
+      "py_summary": "task audit",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
       "path": "/api/tasks/create",
       "py_summary": "建任务（v3 A2A Envelope；legacy→410）",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/update",
+      "py_summary": "task update",
       "java_summary": ""
     },
     {
@@ -219,8 +837,20 @@
     },
     {
       "method": "POST",
+      "path": "/api/tasks/{}/gates/{}/approve",
+      "py_summary": "task gate approve",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/tasks/{}/gates/{}/deny",
+      "py_summary": "task gate deny",
+      "java_summary": ""
+    },
+    {
+      "method": "POST",
       "path": "/api/workflows/{}",
-      "py_summary": "创建/更新工作流模板",
+      "py_summary": "workflow save",
       "java_summary": ""
     },
     {
@@ -236,12 +866,12 @@
     {
       "method": "GET",
       "path": "/api/events",
-      "reason": "java 显式 501：依赖 java 独有存储，无 python 对等实现"
+      "reason": "java 事件流增强（msg_events 派生投影，D16 已转正）；消息 SoT 已统一为 python inbox.json"
     },
     {
       "method": "GET",
       "path": "/api/trace/{}",
-      "reason": "java 显式 501：依赖 java 独有存储，无 python 对等实现"
+      "reason": "java 事件流增强（msg_events 派生投影，D16 已转正）；消息 SoT 已统一为 python inbox.json"
     }
   ]
 }

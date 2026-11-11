@@ -20,8 +20,8 @@ import java.util.Map;
  * Ops surface (M2): agents census, trace stream, acceptance, recent events,
  * inbox archive. All thin — every controller delegates to app services.
  *
- * <p>501 惯例（D13 双栈对等）：依赖 java 独有存储、无 python 对等实现的
- * 端点显式 501 + 记录，不返回空壳假装可用。
+ * <p>D16 批4：消息存储 SoT 统一后，{@code /api/trace}、{@code /api/events}
+ * 已转正（不再是 501）。
  */
 @RestController
 public class OpsController {
@@ -30,19 +30,19 @@ public class OpsController {
     private final ArchiveService archive;
     private final AcceptanceService acceptance;
     private final io.github.hopewang123456.mailbus.app.MessageQueryService query;
-    private final MessageEventLog events;
+    private final io.github.hopewang123456.mailbus.app.MessageTraceService traceService;
     private final io.github.hopewang123456.mailbus.app.StatusService status;
 
     public OpsController(PatrolService patrol, ArchiveService archive,
                          AcceptanceService acceptance,
                          io.github.hopewang123456.mailbus.app.MessageQueryService query,
-                         MessageEventLog events,
+                         io.github.hopewang123456.mailbus.app.MessageTraceService traceService,
                          io.github.hopewang123456.mailbus.app.StatusService status) {
         this.patrol = patrol;
         this.archive = archive;
         this.acceptance = acceptance;
         this.query = query;
-        this.events = events;
+        this.traceService = traceService;
         this.status = status;
     }
 
@@ -74,18 +74,18 @@ public class OpsController {
     }
 
     /**
-     * 501（2026-10-27 PY4-A 拍板）：消息事件流依赖 java 独有的 SQLite
-     * {@code msg_events} 表，python 侧无同源事件日志（消息文件布局也不同）。
-     * 双栈同池前提（消息存储 SoT 统一）达成前，此端点显式声明不对等。
+     * D16 批4 转正：消息快照读统一 SoT（python inbox.json 投影），事件流读 java
+     * append-only {@code msg_events}（D4 派生投影）。消息已归档但事件仍在时照常返回。
      */
     @GetMapping("/api/trace/{messageId}")
     public ResponseEntity<Map<String, Object>> trace(@PathVariable String messageId) {
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
-                "status", "error",
-                "error", "not_implemented",
-                "message", "message event stream is java-only (SQLite msg_events); "
-                        + "no python counterpart until message storage SoT is unified",
-                "message_id", messageId));
+        return traceService.trace(messageId)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
+                        "status", "error",
+                        "error", "not_found",
+                        "message", "no message or events for this id",
+                        "message_id", messageId)));
     }
 
     @GetMapping("/api/acceptance")
@@ -94,18 +94,10 @@ public class OpsController {
         return Map.of("ok", acceptance.allOk(), "items", items);
     }
 
-    /**
-     * 501（2026-10-27 PY4-A 拍板）：同 {@code /api/trace/{id}}——全局事件流
-     * 依赖 java 独有的 SQLite {@code msg_events} 表。
-     */
+    /** D16 批4 转正：最近事件（java 侧派生事件流，供 UI/排障）。 */
     @GetMapping("/api/events")
-    public ResponseEntity<Map<String, Object>> recentEvents(@RequestParam(defaultValue = "50") int limit) {
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
-                "status", "error",
-                "error", "not_implemented",
-                "message", "message event stream is java-only (SQLite msg_events); "
-                        + "no python counterpart until message storage SoT is unified",
-                "limit", Math.min(Math.max(limit, 1), 500)));
+    public Map<String, Object> recentEvents(@RequestParam(defaultValue = "50") int limit) {
+        return traceService.recentEvents(limit);
     }
 
     @PostMapping("/api/inbox/{agent}/archive")

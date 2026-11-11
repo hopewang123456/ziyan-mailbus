@@ -25,9 +25,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 REPORT_PATH = REPO / "docs" / "reports" / "api-surface-diff.json"
 
-# 显式不对等豁免（2026-10-27 PY4-A 拍板）：java 侧显式 501 声明「无 python 对等
-# 实现」的端点。这些不是缺口——补齐前提是消息存储 SoT 统一（D15 之后）。
-# 键为 (METHOD, 归一化 path)，与 surface_set 的键同形。
+# 显式豁免登记（D16 批4，消息存储 SoT 统一后）：python inbox.json 是唯一消息 SoT，
+# java 侧 /api/trace 与 /api/events 已转正实现（消息快照读统一 SoT，事件流读 java
+# append-only msg_events —— D4 派生投影）。python 无事件日志，故这两个端点仍是
+# java-only，但属「java 语义增强」而非缺口。
 EXEMPT_NOT_IMPLEMENTED = {
     ("GET", "/api/events"),
     ("GET", "/api/trace/{}"),
@@ -118,7 +119,8 @@ def main() -> int:
         "python_only": [{"method": m, "path": p, "summary": py_set[(m, p)]} for m, p in py_only],
         "java_only": [{"method": m, "path": p, "summary": java_set[(m, p)]} for m, p in java_only],
         "exempted": [{"method": m, "path": p,
-                      "reason": "java 显式 501：依赖 java 独有存储，无 python 对等实现"}
+                      "reason": "java 事件流增强（msg_events 派生投影，D16 已转正）；"
+                                "消息 SoT 已统一为 python inbox.json"}
                      for m, p in exempted],
     }
     out = Path(args.out)
@@ -138,7 +140,7 @@ def main() -> int:
         for e in report["java_only"]:
             print(f"  {e['method']:6} {e['path']}  # {e['summary']}")
     if exempted:
-        print("\n[显式不对等豁免（java 501）]")
+        print("\n[显式豁免登记（java 事件流增强）]")
         for e in report["exempted"]:
             print(f"  {e['method']:6} {e['path']}  # {e['reason']}")
     print(f"\n报告：{out}")

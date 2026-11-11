@@ -412,17 +412,30 @@ public class MailbusCommand {
 
         private final io.github.hopewang123456.mailbus.app.ReconcileService reconcile;
         private final io.github.hopewang123456.mailbus.ports.StoreMigrator.Factory migratorFactory;
+        private final io.github.hopewang123456.mailbus.app.MsgIndexProjectionService projector;
 
         public ReconcileCommand(io.github.hopewang123456.mailbus.app.ReconcileService reconcile,
-                                io.github.hopewang123456.mailbus.ports.StoreMigrator.Factory migratorFactory) {
+                                io.github.hopewang123456.mailbus.ports.StoreMigrator.Factory migratorFactory,
+                                io.github.hopewang123456.mailbus.app.MsgIndexProjectionService projector) {
             this.reconcile = reconcile;
             this.migratorFactory = migratorFactory;
+            this.projector = projector;
         }
 
         @Parameters(index = "0", description = "python store path (contains inbox/)") String pythonStore;
 
+        /** D16 批4：投影全量重建模式——先按 python SoT 重刷 msg_index，再对账。 */
+        @picocli.CommandLine.Option(names = "--rebuild",
+                description = "Rebuild msg_index from python SoT before reconciling")
+        boolean rebuild;
+
         @Override
         public Integer call() {
+            if (rebuild) {
+                var report = projector.rebuild();
+                System.out.printf("msg_index rebuilt: agents=%d messages=%d warnings=%d%n",
+                        report.agents(), report.messages(), report.warnings());
+            }
             var r = reconcile.reconcile(java.nio.file.Path.of(pythonStore),
                     migratorFactory.forRoot(java.nio.file.Path.of(pythonStore)));
             System.out.printf("python=%d  java=%d  java-only=%d%n", r.pythonTotal(), r.javaTotal(), r.javaOnlyCount());
@@ -435,7 +448,8 @@ public class MailbusCommand {
                 System.out.println("  per-agent delta (py-jv): " + r.perAgentDelta());
             }
             r.notes().forEach(n -> System.out.println("  note: " + n));
-            return r.javaOnlyCount() == 0 ? 0 : 2; // exit 2 = fabrication detected (java has unknowns)
+            // exit 2 = 投影滞后（跑 `mailbus msg-index rebuild` 后应归零），不是伪造
+            return r.javaOnlyCount() == 0 ? 0 : 2;
         }
     }
 

@@ -140,6 +140,14 @@ public class MailbusApplication {
         return new io.github.hopewang123456.mailbus.app.MessageQueryService(projection);
     }
 
+    /** D16 批4：/api/trace、/api/events 转正（SoT 快照 + msg_events 事件流）。 */
+    @Bean
+    io.github.hopewang123456.mailbus.app.MessageTraceService messageTraceService(
+            io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxStore projection,
+            io.github.hopewang123456.mailbus.ports.MessageEventLog events) {
+        return new io.github.hopewang123456.mailbus.app.MessageTraceService(projection, events);
+    }
+
     /** D16 批3：写路径落 python inbox.json（跨进程锁内读改写，python 状态机/格式）。 */
     @Bean
     io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxWriter pythonInboxWriter(

@@ -10,14 +10,16 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * Dual-run reconciliation (M4): python store (live) vs java store (migrated
- * snapshot). Reports totals, per-state distribution, per-agent deltas and
- * java-only ids — the go/no-go evidence for "switchable".
+ * D16 批4：消息存储 SoT 统一后的对账口径 —— python {@code inbox.json} 是唯一
+ * 事实源，java {@code msg_index} 降级为投影缓存。
  *
- * Semantics: the java side is a point-in-time migration, so python > java on
- * a live system is expected growth, not drift. What matters: java NEVER has
- * messages python lacks (fabrication), and unmapped state words surface as
- * notes, never guesses.
+ * <p>因此：
+ * <ul>
+ *   <li>{@code javaOnly} 不再意味「伪造」，而是<b>投影滞后</b>——用
+ *       {@code mailbus msg-index rebuild} 全量重刷即可归零；</li>
+ *   <li>{@code python > java} 是正常状态（投影未重建时），不是漂移；</li>
+ *   <li>状态词表两侧已同源（python 终态口径），未知状态仍以 notes 暴露，不做猜测。</li>
+ * </ul>
  */
 public class ReconcileService {
 
@@ -74,11 +76,12 @@ public class ReconcileService {
         }
 
         List<String> notes = new ArrayList<>(py.warnings());
-        notes.add("point-in-time: python>java on a live system is growth, not drift");
+        notes.add("files lead: msg_index is a projection of python inbox.json "
+                + "(rebuild with `mailbus msg-index rebuild`)");
         if (javaOnly.size() > 0) {
-            notes.add("java-only ids include BOTH java-local test traffic AND messages the "
-                    + "python side archived/cleaned after the migration snapshot — "
-                    + "verify against archive/ trees before treating as fabrication");
+            notes.add("java-only ids = projection lag, NOT fabrication: "
+                    + "run `mailbus msg-index rebuild` (or `mailbus migrate-shards` "
+                    + "for pre-D16 java shard files) and re-run");
         }
         return new Report(py.messages().size(),
                 javaStates.values().stream().mapToLong(Long::longValue).sum(),
