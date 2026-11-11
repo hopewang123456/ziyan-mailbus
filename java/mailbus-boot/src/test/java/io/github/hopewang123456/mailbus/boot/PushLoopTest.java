@@ -1,9 +1,9 @@
 package io.github.hopewang123456.mailbus.boot;
 
-import io.github.hopewang123456.mailbus.adapters.filestore.FileMessageStore;
+import io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxStore;
+import io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxWriter;
 import io.github.hopewang123456.mailbus.adapters.frameworks.CliAgentDirectory;
 import io.github.hopewang123456.mailbus.adapters.sqlite.SqliteEventLog;
-import io.github.hopewang123456.mailbus.adapters.sqlite.SqliteMessageRepository;
 import io.github.hopewang123456.mailbus.app.InboxService;
 import io.github.hopewang123456.mailbus.app.PushService;
 import io.github.hopewang123456.mailbus.domain.message.MessageState;
@@ -23,13 +23,27 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** M3 scan/push loop: agent cards + declarative argv launcher + state flip. */
+/** M3 scan/push loop: agent cards + declarative argv launcher + state flip (D16 批3: python SoT). */
 class PushLoopTest {
 
     @TempDir
     Path tmp;
 
     private SingleConnectionDataSource ds;
+
+    private PythonInboxStore projection() {
+        return new PythonInboxStore(tmp);
+    }
+
+    private InboxService inbox(java.time.Clock clock, io.github.hopewang123456.mailbus.ports.MessageEventLog events) {
+        return new InboxService(new PythonInboxWriter(tmp, clock), projection(), events, clock);
+    }
+
+    private PushService push(java.time.Clock clock,
+                             io.github.hopewang123456.mailbus.ports.MessageEventLog events,
+                             io.github.hopewang123456.mailbus.ports.AgentDirectory directory) {
+        return new PushService(projection(), new PythonInboxWriter(tmp, clock), directory, events);
+    }
 
     @BeforeEach
     void setUp() {
@@ -46,11 +60,9 @@ class PushLoopTest {
     void fakeCliAgentPushesPendingToPushed() {
         var jdbc = new JdbcTemplate(ds);
         var events = new SqliteEventLog(jdbc, Clock.systemUTC());
-        var repo = new FileMessageStore.FileIndexedMessages(
-                new FileMessageStore(tmp), new SqliteMessageRepository(jdbc));
         var directory = new CliAgentDirectory(jdbc, Clock.systemUTC());
-        var inbox = new InboxService(repo, events, Clock.systemUTC());
-        var push = new PushService(repo, directory, events);
+        var inbox = inbox(Clock.systemUTC(), events);
+        var push = push(Clock.systemUTC(), events, directory);
         var cards = new PushService.Cards(directory);
 
         // declarative argv with {MSG} slot — a harmless echo command (no shell)
@@ -64,7 +76,7 @@ class PushLoopTest {
 
         assertEquals(1, r.pushed());
         assertEquals(0, r.failed());
-        assertEquals(MessageState.PUSHED, repo.findById(m.id()).orElseThrow().state());
+        assertEquals(MessageState.PUSHED, projection().findById(m.id()).orElseThrow().record().state());
         assertTrue(events.eventsOf(m.id()).stream()
                 .anyMatch(e -> "pushed".equals(e.kind()) && e.detail().contains("hello m3")));
 
@@ -101,11 +113,9 @@ class PushLoopTest {
                 "wsl not present");
         var jdbc = new JdbcTemplate(ds);
         var events = new SqliteEventLog(jdbc, Clock.systemUTC());
-        var repo = new FileMessageStore.FileIndexedMessages(
-                new FileMessageStore(tmp), new SqliteMessageRepository(jdbc));
         var directory = new CliAgentDirectory(jdbc, Clock.systemUTC());
-        var inbox = new InboxService(repo, events, Clock.systemUTC());
-        var push = new PushService(repo, directory, events);
+        var inbox = inbox(Clock.systemUTC(), events);
+        var push = push(Clock.systemUTC(), events, directory);
 
         new PushService.Cards(directory).add("agent-wsl", "cli", "wsl", Map.of(
                 "push_argv", List.of("echo", "wsl-pushed:{MSG}"), "timeout_s", 30));
@@ -113,8 +123,7 @@ class PushLoopTest {
         var r = push.pushPending("agent-wsl");
 
         assertEquals(1, r.pushed(), "wsl -e echo must run via the dispatcher");
-        assertTrue(events.eventsOf(
-                        repo.findByAgentAndState("agent-wsl", MessageState.PUSHED).get(0).id())
+        assertTrue(events.eventsOf(projection().messagesOf("agent-wsl").get(0).record().id())
                 .stream().anyMatch(e -> "pushed".equals(e.kind())));
     }
 
@@ -130,11 +139,9 @@ class PushLoopTest {
     void failedSpawnStaysPendingAndLogsEvent() {
         var jdbc = new JdbcTemplate(ds);
         var events = new SqliteEventLog(jdbc, Clock.systemUTC());
-        var repo = new FileMessageStore.FileIndexedMessages(
-                new FileMessageStore(tmp), new SqliteMessageRepository(jdbc));
         var directory = new CliAgentDirectory(jdbc, Clock.systemUTC());
-        var inbox = new InboxService(repo, events, Clock.systemUTC());
-        var push = new PushService(repo, directory, events);
+        var inbox = inbox(Clock.systemUTC(), events);
+        var push = push(Clock.systemUTC(), events, directory);
 
         new PushService.Cards(directory).add("agent-dead", "cli", "windows", Map.of(
                 "push_argv", List.of("definitely-not-a-command-xyz", "{MSG}"), "timeout_s", 5));
@@ -144,7 +151,7 @@ class PushLoopTest {
 
         assertEquals(0, r.pushed());
         assertEquals(1, r.failed());
-        assertEquals(MessageState.PENDING, repo.findById(m.id()).orElseThrow().state());
+        assertEquals(MessageState.PENDING, projection().findById(m.id()).orElseThrow().record().state());
         assertTrue(events.eventsOf(m.id()).stream().anyMatch(e -> "push_failed".equals(e.kind())));
     }
 }

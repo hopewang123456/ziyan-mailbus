@@ -2,7 +2,7 @@ package io.github.hopewang123456.mailbus.app;
 
 import io.github.hopewang123456.mailbus.domain.message.MessageState;
 import io.github.hopewang123456.mailbus.ports.MessageEventLog;
-import io.github.hopewang123456.mailbus.ports.MessageRepository;
+import io.github.hopewang123456.mailbus.ports.MessageProjection;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -15,18 +15,20 @@ import java.util.TreeSet;
  * PENDING detection + agent census. Runs on a schedule from boot; appends
  * patrol_stale events and keeps the scheduler heartbeat current — the data
  * the acceptance check reads.
+ *
+ * <p>D16 批3：消息源切到 python inbox.json 投影（SoT），不再读 java 索引。
  */
 public class PatrolService {
 
     public record PatrolReport(int staleCount, List<String> agents) {}
 
-    private final MessageRepository repository;
+    private final MessageProjection projection;
     private final MessageEventLog events;
     private final io.github.hopewang123456.mailbus.ports.Notifier notifier;
 
-    public PatrolService(MessageRepository repository, MessageEventLog events,
+    public PatrolService(MessageProjection projection, MessageEventLog events,
                          io.github.hopewang123456.mailbus.ports.Notifier notifier) {
-        this.repository = repository;
+        this.projection = projection;
         this.events = events;
         this.notifier = notifier;
     }
@@ -37,7 +39,15 @@ public class PatrolService {
         List<String> roster = new ArrayList<>();
         for (String agent : agents) {
             roster.add(agent);
-            for (var m : repository.findStalePending(agent, cutoff)) {
+            for (var view : projection.messagesOf(agent)) {
+                var m = view.record();
+                if (m.state() != MessageState.PENDING) {
+                    continue;
+                }
+                if (m.createdAt() == null || m.createdAt().equals(Instant.EPOCH)
+                        || !m.createdAt().isBefore(cutoff)) {
+                    continue;
+                }
                 events.append(m.id(), agent, "patrol_stale", MessageState.PENDING.name(),
                         MessageState.PENDING.name(), "pending beyond " + staleAfter);
                 stale++;

@@ -16,7 +16,7 @@ import java.util.TreeMap;
 public class StatusService {
 
     private static final java.util.Set<String> TERMINAL = java.util.Set.of(
-            "DONE", "ACKNOWLEDGED", "REJECTED", "ARCHIVED", "CLOSED", "FAILED", "SENT");
+            "DONE", "REJECTED", "ARCHIVED", "CLOSED", "FAILED", "SENT");
 
     private final MessageProjection projection;
 

@@ -140,6 +140,13 @@ public class MailbusApplication {
         return new io.github.hopewang123456.mailbus.app.MessageQueryService(projection);
     }
 
+    /** D16 批3：写路径落 python inbox.json（跨进程锁内读改写，python 状态机/格式）。 */
+    @Bean
+    io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxWriter pythonInboxWriter(
+            org.springframework.core.env.Environment env, Clock clock) {
+        return new io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxWriter(dataDir(env), clock);
+    }
+
     /** D16 批2：msg_index 全量重建（索引降级为投影缓存，可随时丢弃重刷）。 */
     @Bean
     io.github.hopewang123456.mailbus.app.MsgIndexProjectionService msgIndexProjectionService(
@@ -186,11 +193,11 @@ public class MailbusApplication {
 
     @Bean
     io.github.hopewang123456.mailbus.app.PushService pushService(
-            @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
-            io.github.hopewang123456.mailbus.ports.MessageRepository repo,
+            io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxStore projection,
+            io.github.hopewang123456.mailbus.ports.MessageInboxWriter writer,
             io.github.hopewang123456.mailbus.ports.AgentDirectory directory,
             io.github.hopewang123456.mailbus.ports.MessageEventLog events) {
-        return new io.github.hopewang123456.mailbus.app.PushService(repo, directory, events);
+        return new io.github.hopewang123456.mailbus.app.PushService(projection, writer, directory, events);
     }
 
     @Bean
@@ -244,11 +251,10 @@ public class MailbusApplication {
 
     @Bean
     io.github.hopewang123456.mailbus.app.PatrolService patrolService(
-            @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
-            io.github.hopewang123456.mailbus.ports.MessageRepository repo,
+            io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxStore projection,
             io.github.hopewang123456.mailbus.ports.MessageEventLog events,
             io.github.hopewang123456.mailbus.ports.Notifier notifier) {
-        return new io.github.hopewang123456.mailbus.app.PatrolService(repo, events, notifier);
+        return new io.github.hopewang123456.mailbus.app.PatrolService(projection, events, notifier);
     }
 
     @Bean
@@ -282,10 +288,10 @@ public class MailbusApplication {
     }
 
     @Bean
-    ArchiveService archiveService(@org.springframework.beans.factory.annotation.Qualifier("messageRepository")
-                                  MessageRepository repo, FileMessageStore files,
+    ArchiveService archiveService(io.github.hopewang123456.mailbus.ports.MessageInboxWriter writer,
+                                  io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxStore projection,
                                   io.github.hopewang123456.mailbus.ports.MessageEventLog events) {
-        return new ArchiveService(repo, files, events);
+        return new ArchiveService(writer, projection, events);
     }
 
     @Bean
@@ -294,11 +300,11 @@ public class MailbusApplication {
     }
 
     @Bean
-    InboxService inboxService(@org.springframework.beans.factory.annotation.Qualifier("messageRepository")
-                               MessageRepository messages,
-                               io.github.hopewang123456.mailbus.ports.MessageEventLog events,
-                               Clock clock) {
-        return new InboxService(messages, events, clock);
+    InboxService inboxService(io.github.hopewang123456.mailbus.ports.MessageInboxWriter writer,
+                              io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxStore projection,
+                              io.github.hopewang123456.mailbus.ports.MessageEventLog events,
+                              Clock clock) {
+        return new InboxService(writer, projection, events, clock);
     }
 
     // ── M2a 任务引擎（python tasks/*.json 共享任务池，M2-S1）────────────────

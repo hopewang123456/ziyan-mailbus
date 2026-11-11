@@ -1,6 +1,7 @@
 package io.github.hopewang123456.mailbus.boot;
 
-import io.github.hopewang123456.mailbus.adapters.filestore.FileMessageStore;
+import io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxStore;
+import io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxWriter;
 import io.github.hopewang123456.mailbus.adapters.sqlite.SqliteEventLog;
 import io.github.hopewang123456.mailbus.adapters.sqlite.SqliteMessageRepository;
 import io.github.hopewang123456.mailbus.app.ArchiveService;
@@ -43,10 +44,10 @@ class EventStreamTest {
     void sendAckArchiveEmitsOrderedEvents() {
         var jdbc = new JdbcTemplate(ds);
         var events = new SqliteEventLog(jdbc, Clock.systemUTC());
-        var repo = new FileMessageStore.FileIndexedMessages(
-                new FileMessageStore(tmp), new SqliteMessageRepository(jdbc));
-        var inbox = new InboxService(repo, events, Clock.systemUTC());
-        var archive = new ArchiveService(repo, new FileMessageStore(tmp), events);
+        var projection = new PythonInboxStore(tmp);
+        var writer = new PythonInboxWriter(tmp, Clock.systemUTC());
+        var inbox = new InboxService(writer, projection, events, Clock.systemUTC());
+        var archive = new ArchiveService(writer, projection, events);
 
         var m = inbox.send("agent-ev", "tester", "event stream probe");
         inbox.acknowledge(m.id());
@@ -54,10 +55,10 @@ class EventStreamTest {
 
         List<String> kinds = events.eventsOf(m.id()).stream()
                 .map(e -> e.kind() + ":" + e.stateFrom() + "->" + e.stateTo()).toList();
+        // D16 批3：ack 按 python 状态机（非 task 直接 done），不再伪造 PROCESSING 中间态
         assertEquals(List.of(
                 "created:null->PENDING",
-                "state:PENDING->PROCESSING",
-                "state:PROCESSING->DONE",
+                "state:PENDING->DONE",
                 "archived:DONE->ARCHIVED"), kinds);
 
         // trace renders the stream

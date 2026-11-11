@@ -16,6 +16,11 @@
       <groupId>io.github.hopewang123456</groupId>
       <artifactId>mailbus-ports</artifactId>
     </dependency>
+    <!-- D16 批3：inbox.json 写路径复用 infra CrossProcessFileLock（与 python 同锁文件契约） -->
+    <dependency>
+      <groupId>io.github.hopewang123456</groupId>
+      <artifactId>mailbus-infra</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-jdbc</artifactId>

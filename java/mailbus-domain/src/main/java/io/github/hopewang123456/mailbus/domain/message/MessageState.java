@@ -25,10 +25,11 @@ public enum MessageState {
     /**
      * Terminal states — no further transitions. D16 批2：与 python
      * {@code _TERMINAL_STATES = {done, closed, rejected, failed, archived, sent}}
-     * 对齐（未读数口径双栈同源），java 侧 ACKNOWLEDGED 同样终态。
+     * 对齐（未读数口径双栈同源）。注意 python 的 acknowledged 仍是<b>非终态</b>
+     * （ack→processing→done 的中间态），故 java ACKNOWLEDGED 不再算终态。
      */
     public boolean isTerminal() {
-        return this == DONE || this == ACKNOWLEDGED || this == REJECTED
+        return this == DONE || this == REJECTED
                 || this == ARCHIVED || this == CLOSED || this == FAILED || this == SENT;
     }
 
@@ -53,7 +54,8 @@ public enum MessageState {
             case RESENDING -> next == PUSHED || next == PROCESSING || next == FAILED
                     || next == PENDING;
             case DONE -> next == ACKNOWLEDGED || next == ARCHIVED;
-            case ACKNOWLEDGED -> next == ARCHIVED;
+            case ACKNOWLEDGED -> next == PROCESSING || next == DONE || next == REJECTED
+                    || next == ARCHIVED;
             case REJECTED, FAILED, CLOSED, ARCHIVED, SENT -> false;
         };
     }

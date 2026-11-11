@@ -1,6 +1,8 @@
 package io.github.hopewang123456.mailbus.boot;
 
 import io.github.hopewang123456.mailbus.adapters.filestore.FileMessageStore;
+import io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxStore;
+import io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxWriter;
 import io.github.hopewang123456.mailbus.adapters.memory.InMemoryMessageRepository;
 import io.github.hopewang123456.mailbus.adapters.migration.PythonStoreReader;
 import io.github.hopewang123456.mailbus.adapters.sqlite.SqliteMessageRepository;
@@ -83,15 +85,18 @@ class MigrationFlowTest {
         assertEquals(2, second.filesSkipped());
         assertEquals(0, second.filesWritten());
 
-        // archive settles the DONE message: file moves, index flips
-        ArchiveService archive = new ArchiveService(repo, files,
+        // D16 批3：归档作用在 python SoT（pyStore）上，格式为 backlog-<stamp>.json
+        ArchiveService archive = new ArchiveService(
+                new PythonInboxWriter(pyStore, Clock.systemUTC()),
+                new PythonInboxStore(pyStore),
                 new io.github.hopewang123456.mailbus.adapters.sqlite.SqliteEventLog(
                         new JdbcTemplate(ds), Clock.systemUTC()));
         ArchiveService.Outcome out = archive.archiveSettled("agent-a");
         assertEquals(1, out.archived());
-        assertEquals("ARCHIVED", repo.findById("msg-m2").orElseThrow().state().name());
-        assertTrue(Files.isRegularFile(
-                tmp.resolve("archive").resolve("agent-a").resolve("2026-08-15").resolve("msg-m2.json")));
+        assertTrue(new PythonInboxStore(pyStore).findById("msg-m2").isEmpty());
+        try (var s = Files.list(pyStore.resolve("archive").resolve("agent-a"))) {
+            assertTrue(s.anyMatch(p -> p.getFileName().toString().startsWith("backlog-")));
+        }
 
         // trace speaks
         assertTrue(archive.trace("msg-m2").toString().contains("ARCHIVED"));

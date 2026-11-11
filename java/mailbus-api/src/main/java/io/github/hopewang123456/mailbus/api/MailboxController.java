@@ -75,7 +75,7 @@ public class MailboxController {
         return ResponseEntity.ok(Map.of("status", "ok", "msg_id", record.id()));
     }
 
-    /** POST /api/mark-read/{agent} — 逐消息标记已读（java acknowledge 语义）。 */
+    /** POST /api/mark-read/{agent} — 逐消息标记已读（python process_mark_read 语义）。 */
     @PostMapping("/api/mark-read/{agent}")
     public ResponseEntity<Map<String, Object>> markRead(@PathVariable("agent") String agent,
                                                         @RequestBody Map<String, Object> body) {
@@ -83,19 +83,17 @@ public class MailboxController {
         if (msgIds.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "fatal", "detail", "缺少 msg_ids"));
         }
+        List<String> ids = msgIds.stream().map(String::valueOf).toList();
+        List<String> markedIds = inbox.markRead(agent, ids);
+        java.util.Set<String> markedSet = new java.util.HashSet<>(markedIds);
         List<Map<String, Object>> results = new ArrayList<>();
-        int marked = 0;
         for (Object id : msgIds) {
-            var acked = inbox.acknowledge(String.valueOf(id));
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("msg_id", id);
-            row.put("ok", acked.isPresent());
+            row.put("ok", markedSet.contains(String.valueOf(id)));
             results.add(row);
-            if (acked.isPresent()) {
-                marked++;
-            }
         }
-        return ResponseEntity.ok(Map.of("status", "ok", "marked", marked, "results", results));
+        return ResponseEntity.ok(Map.of("status", "ok", "marked", markedIds.size(), "results", results));
     }
 
     /** POST /api/actions/update/{agent}/{msg_id} — 更新消息 action 字段。 */

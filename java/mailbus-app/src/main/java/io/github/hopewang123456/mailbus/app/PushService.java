@@ -3,7 +3,8 @@ package io.github.hopewang123456.mailbus.app;
 import io.github.hopewang123456.mailbus.domain.message.MessageState;
 import io.github.hopewang123456.mailbus.ports.AgentDirectory;
 import io.github.hopewang123456.mailbus.ports.MessageEventLog;
-import io.github.hopewang123456.mailbus.ports.MessageRepository;
+import io.github.hopewang123456.mailbus.ports.MessageInboxWriter;
+import io.github.hopewang123456.mailbus.ports.MessageProjection;
 
 import java.util.List;
 import java.util.Map;
@@ -13,27 +14,37 @@ import java.util.Map;
  * with a launcher config, push PENDING messages via the CLI (at-least-once,
  * python M2 first-dispatch idempotency semantics: PENDING -> PUSHED on
  * successful spawn, failed spawns stay PENDING for the next sweep).
+ *
+ * <p>D16 批3：消息源/写回都切到 python inbox.json（唯一 SoT）——读投影找 PENDING，
+ * 成功后按 python pusher 语义置 pushed（pushed_count+1 / last_pushed_at）。
  */
 public class PushService {
 
     public record PushReport(int pushed, int failed) {}
 
-    private final MessageRepository repository;
+    private final MessageProjection projection;
+    private final MessageInboxWriter writer;
     private final AgentDirectory directory;
     private final MessageEventLog events;
 
-    public PushService(MessageRepository repository, AgentDirectory directory, MessageEventLog events) {
-        this.repository = repository;
+    public PushService(MessageProjection projection, MessageInboxWriter writer,
+                       AgentDirectory directory, MessageEventLog events) {
+        this.projection = projection;
+        this.writer = writer;
         this.directory = directory;
         this.events = events;
     }
 
     public PushReport pushPending(String agent) {
         int pushed = 0, failed = 0;
-        for (var m : repository.findByAgentAndState(agent, MessageState.PENDING)) {
+        for (var view : projection.messagesOf(agent)) {
+            var m = view.record();
+            if (m.state() != MessageState.PENDING) {
+                continue;
+            }
             AgentDirectory.LaunchResult r = directory.launch(agent, m.content());
             if (r.ok()) {
-                repository.save(m.withState(MessageState.PUSHED, java.time.Instant.now()));
+                writer.markPushed(m.id());
                 events.append(m.id(), agent, "pushed", MessageState.PENDING.name(),
                         MessageState.PUSHED.name(), abbreviate(r.outputDigest()));
                 pushed++;

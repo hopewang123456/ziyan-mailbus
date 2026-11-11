@@ -26,7 +26,7 @@ import java.util.concurrent.Callable;
                 MailbusCommand.TraceCommand.class, MailbusCommand.AcceptanceCommand.class, MailbusCommand.AgentAddCommand.class,
                 MailbusCommand.AgentsCommand.class, MailbusCommand.PushCommand.class, MailbusCommand.TestConnectionCommand.class, MailbusCommand.AgentsImportCommand.class,
                 MailbusCommand.AgentEnableCommand.class, MailbusCommand.ReconcileCommand.class,
-                MailbusCommand.MsgIndexCommand.class})
+                MailbusCommand.MsgIndexCommand.class, MailbusCommand.MigrateShardsCommand.class})
 public class MailbusCommand {
 
     @Component
@@ -472,6 +472,31 @@ public class MailbusCommand {
                 report.warningSample().forEach(w -> System.err.println("  warn: " + w));
                 return 0;
             }
+        }
+    }
+
+    /**
+     * D16 批3（D5）：旧 java {@code <msg-id>.json} 单文件消息一次性回迁进
+     * 对应 agent 的 inbox.json（幂等：id 已存在跳过；源文件移到 legacy-shards/）。
+     */
+    @Component
+    @Command(name = "migrate-shards",
+            description = "D16: migrate legacy java <msg-id>.json shards into python inbox.json (idempotent)")
+    public static class MigrateShardsCommand implements Callable<Integer> {
+
+        private final io.github.hopewang123456.mailbus.ports.MessageInboxWriter writer;
+
+        public MigrateShardsCommand(io.github.hopewang123456.mailbus.ports.MessageInboxWriter writer) {
+            this.writer = writer;
+        }
+
+        @Override
+        public Integer call() {
+            var report = writer.migrateLegacyShards();
+            System.out.printf("legacy shards migrated: agents=%d migrated=%d skipped=%d%n",
+                    report.agents(), report.migrated(), report.skipped());
+            report.warnings().forEach(w -> System.err.println("  warn: " + w));
+            return 0;
         }
     }
 }
