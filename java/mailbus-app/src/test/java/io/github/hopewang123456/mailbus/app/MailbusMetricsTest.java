@@ -94,9 +94,11 @@ class MailbusMetricsTest {
                 {"alerts": [{"id": "a1"}, {"id": "a2"}]}
                 """);
         Files.createDirectories(dataDir.resolve("system"));
+        // interventions_week 取 now-7d 窗口，fixture 必须用相对当前的时间戳（固定日期会过期）
+        String recent = java.time.Instant.now().minus(java.time.Duration.ofHours(1)).toString();
         Files.writeString(dataDir.resolve("system/audit.jsonl"),
-                "{\"event\": \"human_gate.resolve\", \"ts\": \"2026-11-04T01:00:00Z\"}\n"
-                + "{\"event\": \"other\", \"ts\": \"2026-11-04T01:00:00Z\"}\n");
+                "{\"event\": \"human_gate.resolve\", \"ts\": \"" + recent + "\"}\n"
+                + "{\"event\": \"other\", \"ts\": \"" + recent + "\"}\n");
         String today = java.time.LocalDate.now(
                 java.time.ZoneId.of("Asia/Shanghai")).toString();
         Files.createDirectories(dataDir.resolve("ledger"));
