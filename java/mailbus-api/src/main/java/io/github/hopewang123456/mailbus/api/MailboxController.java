@@ -1,10 +1,10 @@
 package io.github.hopewang123456.mailbus.api;
 
 import io.github.hopewang123456.mailbus.app.InboxService;
+import io.github.hopewang123456.mailbus.app.MessageQueryService;
 import io.github.hopewang123456.mailbus.app.SharedRoots;
 import io.github.hopewang123456.mailbus.infra.json.JsonFiles;
 import io.github.hopewang123456.mailbus.ports.AgentDirectory;
-import io.github.hopewang123456.mailbus.ports.MessageRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.env.Environment;
 import org.springframework.http.ResponseEntity;
@@ -25,21 +25,21 @@ import java.util.Map;
  * 邮箱面（批 A8，2026-10-29）— python handlers_inbox 对等：
  * GET/POST /api/send-msg · POST /api/mark-read/{agent} ·
  * POST /api/actions/update/{agent}/{msg_id} · GET /api/replies。
- * 消息走 java MessageRepository（一消息一文件），与 python inbox.json 不同源（已知差异）。
+ * D16 批2：读面（replies / actions/update 定位）切到 python inbox.json 投影。
  */
 @RestController
 public class MailboxController {
 
     private final InboxService inbox;
     private final AgentDirectory agents;
-    private final MessageRepository messages;
+    private final MessageQueryService query;
 
     public MailboxController(InboxService inbox,
                              @Qualifier("agentDirectory") AgentDirectory agents,
-                             @Qualifier("messageRepository") MessageRepository messages) {
+                             MessageQueryService query) {
         this.inbox = inbox;
         this.agents = agents;
-        this.messages = messages;
+        this.query = query;
     }
 
     /** POST /api/send-msg — 手动发送（from 默认 api；agent 未注册 404）。 */
@@ -107,8 +107,8 @@ public class MailboxController {
         if (action.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "fatal", "detail", "缺少 action"));
         }
-        var found = messages.findById(msgId);
-        if (found.isEmpty() || !agent.equals(found.get().toAgent())) {
+        var found = query.findById(msgId);
+        if (found.isEmpty() || !agent.equals(found.get().record().toAgent())) {
             return ResponseEntity.status(404).body(Map.of("error", "not_found", "detail", "inbox not found"));
         }
         // MsgRecord 无 action 字段——java 第一版返回合并视图不落盘（消息模型差异登记）
@@ -117,34 +117,10 @@ public class MailboxController {
                 "note", "java MsgRecord 无 action 字段，合并视图不落盘（批 A8 登记）"));
     }
 
-    /** GET /api/replies — 各 agent 回复（type in reply/forward/task_reply）。 */
+    /** GET /api/replies — 各 agent 回复（python 直读口径，D16 批2 切投影）。 */
     @GetMapping("/api/replies")
     public Map<String, Object> replies() {
-        Map<String, Object> results = new LinkedHashMap<>();
-        for (var card : agents.findAll()) {
-            String name = card.id();
-            List<Map<String, Object>> replies = new ArrayList<>();
-            for (var m : messages.findByAgentAndState(name, null)) {
-                String type = m.type() == null ? "" : m.type();
-                if (!type.equals("reply") && !type.equals("forward") && !type.equals("task_reply")) {
-                    continue;
-                }
-                Map<String, Object> row = new LinkedHashMap<>();
-                row.put("id", m.id());
-                row.put("from", m.fromAgent());
-                row.put("type", m.type());
-                row.put("content", m.content());
-                String status = m.state() == null ? "" : m.state().name().toLowerCase();
-                row.put("status", status);
-                row.put("state", status);
-                row.put("created_at", m.createdAt() == null ? "" : m.createdAt().toString());
-                replies.add(row);
-            }
-            if (!replies.isEmpty()) {
-                results.put(name, replies);
-            }
-        }
-        return results;
+        return query.replies();
     }
 
     @SuppressWarnings("unchecked")

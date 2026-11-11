@@ -2,7 +2,6 @@ package io.github.hopewang123456.mailbus.api;
 
 import io.github.hopewang123456.mailbus.app.AcceptanceService;
 import io.github.hopewang123456.mailbus.app.ArchiveService;
-import io.github.hopewang123456.mailbus.app.InboxService;
 import io.github.hopewang123456.mailbus.app.PatrolService;
 import io.github.hopewang123456.mailbus.ports.MessageEventLog;
 import org.springframework.http.HttpStatus;
@@ -30,18 +29,19 @@ public class OpsController {
     private final PatrolService patrol;
     private final ArchiveService archive;
     private final AcceptanceService acceptance;
-    private final InboxService inbox;
+    private final io.github.hopewang123456.mailbus.app.MessageQueryService query;
     private final MessageEventLog events;
     private final io.github.hopewang123456.mailbus.app.StatusService status;
 
     public OpsController(PatrolService patrol, ArchiveService archive,
-                         AcceptanceService acceptance, InboxService inbox,
+                         AcceptanceService acceptance,
+                         io.github.hopewang123456.mailbus.app.MessageQueryService query,
                          MessageEventLog events,
                          io.github.hopewang123456.mailbus.app.StatusService status) {
         this.patrol = patrol;
         this.archive = archive;
         this.acceptance = acceptance;
-        this.inbox = inbox;
+        this.query = query;
         this.events = events;
         this.status = status;
     }
@@ -67,9 +67,10 @@ public class OpsController {
         return Map.of("agents", names, "count", names.size());
     }
 
+    /** D16 批2：未读数切到 python SoT 投影（非终态消息数，与 python 同口径）。 */
     @GetMapping("/api/agents/{agent}/unread")
     public Map<String, Object> unread(@PathVariable String agent) {
-        return Map.of("agent", agent, "unread", inbox.unreadCount(agent));
+        return Map.of("agent", agent, "unread", query.unread(agent));
     }
 
     /**

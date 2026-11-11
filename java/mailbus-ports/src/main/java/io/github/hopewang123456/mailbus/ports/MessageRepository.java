@@ -45,4 +45,12 @@ public interface MessageRepository {
     default java.util.List<String> allIds() {
         return java.util.List.of();
     }
+
+    /**
+     * D16 批2：投影全量重建（msg_index 从「索引」降级为「投影缓存」，files lead）。
+     * 默认实现逐个 upsert（无删除能力），索引实现应覆盖为「清空 + 全量写入」。
+     */
+    default void replaceAll(java.util.List<MsgRecord> records) {
+        records.forEach(this::save);
+    }
 }

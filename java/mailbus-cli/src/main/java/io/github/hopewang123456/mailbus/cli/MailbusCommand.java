@@ -25,7 +25,8 @@ import java.util.concurrent.Callable;
                 MailbusCommand.DemoCommand.class, MailbusCommand.ArchiveCommand.class,
                 MailbusCommand.TraceCommand.class, MailbusCommand.AcceptanceCommand.class, MailbusCommand.AgentAddCommand.class,
                 MailbusCommand.AgentsCommand.class, MailbusCommand.PushCommand.class, MailbusCommand.TestConnectionCommand.class, MailbusCommand.AgentsImportCommand.class,
-                MailbusCommand.AgentEnableCommand.class, MailbusCommand.ReconcileCommand.class})
+                MailbusCommand.AgentEnableCommand.class, MailbusCommand.ReconcileCommand.class,
+                MailbusCommand.MsgIndexCommand.class})
 public class MailbusCommand {
 
     @Component
@@ -97,7 +98,6 @@ public class MailbusCommand {
     @Component
     @Command(name = "migrate", description = "Migrate a Python mailbus store into the Java layout (idempotent)")
     public static class MigrateCommand implements Callable<Integer> {
-
         private final MigrationService migration;
         private final io.github.hopewang123456.mailbus.ports.StoreMigrator.Factory migratorFactory;
         private final MigrationService.ShardWriter shards;
@@ -436,6 +436,42 @@ public class MailbusCommand {
             }
             r.notes().forEach(n -> System.out.println("  note: " + n));
             return r.javaOnlyCount() == 0 ? 0 : 2; // exit 2 = fabrication detected (java has unknowns)
+        }
+    }
+
+    /**
+     * D16 批2：msg_index 投影维护。python {@code inbox.json} 是唯一消息 SoT，
+     * java SQLite msg_index 降级为投影缓存 —— 可随时全量丢弃重建。
+     */
+    @Component
+    @Command(name = "msg-index", description = "D16: msg_index projection maintenance (files lead)",
+            subcommands = MailbusCommand.MsgIndexCommand.Rebuild.class)
+    public static class MsgIndexCommand implements Callable<Integer> {
+
+        @Override
+        public Integer call() {
+            System.err.println("usage: mailbus msg-index rebuild");
+            return 2;
+        }
+
+        @Component
+        @Command(name = "rebuild", description = "Rebuild msg_index from python inbox.json (full replace)")
+        public static class Rebuild implements Callable<Integer> {
+
+            private final io.github.hopewang123456.mailbus.app.MsgIndexProjectionService projector;
+
+            public Rebuild(io.github.hopewang123456.mailbus.app.MsgIndexProjectionService projector) {
+                this.projector = projector;
+            }
+
+            @Override
+            public Integer call() {
+                var report = projector.rebuild();
+                System.out.printf("msg_index rebuilt: agents=%d messages=%d warnings=%d%n",
+                        report.agents(), report.messages(), report.warnings());
+                report.warningSample().forEach(w -> System.err.println("  warn: " + w));
+                return 0;
+            }
         }
     }
 }

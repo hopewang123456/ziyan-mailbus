@@ -123,6 +123,32 @@ public class MailbusApplication {
         return new FileMessageStore(Path.of(env.getProperty("mailbus.data-dir", "./store")));
     }
 
+    /**
+     * D16 批2：python {@code inbox/<agent>/inbox.json} 读投影 —— 唯一消息 SoT
+     * 的 java 适配层（读面；写路径批3 落同一文件）。
+     */
+    @Bean
+    io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxStore pythonInboxStore(
+            org.springframework.core.env.Environment env) {
+        return new io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxStore(dataDir(env));
+    }
+
+    /** D16 批2：查询面（inbox/unread/replies）统一走 python 投影。 */
+    @Bean
+    io.github.hopewang123456.mailbus.app.MessageQueryService messageQueryService(
+            io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxStore projection) {
+        return new io.github.hopewang123456.mailbus.app.MessageQueryService(projection);
+    }
+
+    /** D16 批2：msg_index 全量重建（索引降级为投影缓存，可随时丢弃重刷）。 */
+    @Bean
+    io.github.hopewang123456.mailbus.app.MsgIndexProjectionService msgIndexProjectionService(
+            io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxStore projection,
+            @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
+            MessageRepository repo) {
+        return new io.github.hopewang123456.mailbus.app.MsgIndexProjectionService(projection, repo);
+    }
+
     @Bean
     @ConditionalOnProperty(name = "mailbus.storage", havingValue = "sqlite", matchIfMissing = true)
     MessageRepository sqliteIndex(org.springframework.jdbc.core.JdbcTemplate jdbc) {
@@ -227,9 +253,8 @@ public class MailbusApplication {
 
     @Bean
     io.github.hopewang123456.mailbus.app.StatusService statusService(
-            @org.springframework.beans.factory.annotation.Qualifier("messageRepository")
-            io.github.hopewang123456.mailbus.ports.MessageRepository repo) {
-        return new io.github.hopewang123456.mailbus.app.StatusService(repo);
+            io.github.hopewang123456.mailbus.adapters.filestore.PythonInboxStore projection) {
+        return new io.github.hopewang123456.mailbus.app.StatusService(projection);
     }
 
     @Bean

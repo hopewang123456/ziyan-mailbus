@@ -111,6 +111,18 @@ public class SqliteMessageRepository implements MessageRepository {
         return jdbc.queryForList("SELECT id FROM msg_index ORDER BY id", String.class);
     }
 
+    /**
+     * D16 批2：msg_index 降级为投影缓存——全量重建（清空 + 按 python SoT 重刷）。
+     * 与 python 侧 reconcile 口径一致：files lead，索引可随时丢弃重建。
+     */
+    @Override
+    public void replaceAll(List<MsgRecord> records) {
+        jdbc.update("DELETE FROM msg_index");
+        for (MsgRecord r : records) {
+            save(r);
+        }
+    }
+
     private static String filePathOf(MsgRecord r) {
         // Relative store path — files-as-SoT layout: inbox/<agent>/<id>.json
         return "inbox/" + r.toAgent() + "/" + r.id() + ".json";
