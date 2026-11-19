@@ -1,102 +1,100 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
-import { ConsolePageHeader, ConsoleSection, ConsoleTable, ConsoleTag } from "../../components/console/ConsoleKit";
+import { ConsolePageHeader, ConsoleSection } from "../../components/console/ConsoleKit";
 
-/** 管理中心概览（P3）— 系统健康 + 关键实体计数 + 指标快照（B 类报表入口）。 */
-
-type MetricsResp = { points?: Array<{ metric?: string; value?: number; error?: string; unit?: string }> };
-type AgentsResp = {
-  agents?: Record<string, { name?: string; type?: string; role?: string; framework?: string }>;
+type Overview = {
+  employees_total: number;
+  employees_active: number;
+  employees_pending: number;
+  employees_offline: number;
+  agents_total: number;
+  agents_enabled: number;
+  agents_online: number;
+  agents_busy: number;
+  teams: number;
+  positions: number;
+  seats_occupied: number;
+  tasks_total: number;
+  tasks_active: number;
+  tasks_running: number;
+  tasks_blocked: number;
+  tasks_done: number;
+  tasks_failed_today: number;
+  approvals_pending: number;
+  messages_total: number;
+  workflows_total: number;
+  workflows_published: number;
+  skills_total: number;
+  skills_enabled: number;
 };
-type PositionsResp = { positions?: Array<{ role_type?: number; name_zh?: string; candidates?: unknown[] }> };
-type IdentitiesResp = { identities?: Array<{ id?: string; display_name?: string; role?: string }> };
-type ManagerResp = { counts?: Record<string, number>; total?: number };
 
+/** 管理中心概览：所有数值均来自 GET /api/overview。 */
 export function ConsoleOverviewPage() {
-  const [metrics, setMetrics] = useState<MetricsResp | null>(null);
-  const [agents, setAgents] = useState<AgentsResp | null>(null);
-  const [positions, setPositions] = useState<PositionsResp | null>(null);
-  const [identities, setIdentities] = useState<IdentitiesResp | null>(null);
-  const [manager, setManager] = useState<ManagerResp | null>(null);
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    void Promise.all([
-      api<MetricsResp>("/api/metrics/query"),
-      api<AgentsResp>("/api/agents"),
-      api<PositionsResp>("/api/positions"),
-      api<IdentitiesResp>("/api/identities"),
-      api<ManagerResp>("/api/manager/pending"),
-    ]).then(([m, a, p, i, mg]) => {
-      if (m.ok && m.data) setMetrics(m.data);
-      if (a.ok && a.data) setAgents(a.data);
-      if (p.ok && p.data) setPositions(p.data);
-      if (i.ok && i.data) setIdentities(i.data);
-      if (mg.ok && mg.data) setManager(mg.data);
-      const e = [m, a, p, i, mg].filter((r) => !r.ok).map((r) => ("error" in r ? r.error : ""));
-      if (e.length) setErr(e.filter(Boolean).join("; "));
+    let alive = true;
+    void api<Overview>("/api/overview").then((result) => {
+      if (!alive) return;
+      setLoading(false);
+      if (result.ok) {
+        setOverview(result.data);
+        setErr("");
+      } else {
+        setErr(result.error);
+      }
     });
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const points = metrics?.points || [];
-  const m = (id: string) => points.find((p) => p.metric === id);
-  const val = (id: string) => {
-    const p = m(id);
-    return p && p.value !== undefined ? p.value : "—";
-  };
+  const value = (key: keyof Overview) => overview?.[key] ?? "—";
 
   return (
     <>
       <ConsolePageHeader
         title="管理中心"
-        description="mailbus 协同管理总览 — 配置、管理、集成与指标治理（P3）"
+        description="员工、Agent、任务、审批、消息与工作流的真实运营快照"
       />
       {err && <p className="mb-4 text-xs text-flare">{err}</p>}
+      {loading && <p className="mb-4 text-xs text-mute">正在加载运营总览…</p>}
 
-      <ConsoleSection title="关键指标（口径 SoT：metrics-manifest.json）">
+      <ConsoleSection title="当前工作负载">
         <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="活跃任务" value={val("tasks.active")} />
-          <Stat label="未读消息" value={val("bus.unread")} />
-          <Stat label="在线 agent" value={val("agents.online")} />
-          <Stat label="活跃告警" value={val("alerts.active")} danger />
-          <Stat label="消息总量" value={val("bus.messages_total")} />
-          <Stat label="人工待办" value={val("humanqueue.pending")} />
-          <Stat label="今日失败" value={val("tasks.failed_today")} danger />
-          <Stat label="今日 Token（估）" value={val("tokens.today_estimated")} />
+          <Stat label="活跃任务" value={value("tasks_active")} />
+          <Stat label="运行中" value={value("tasks_running")} />
+          <Stat label="阻塞任务" value={value("tasks_blocked")} danger />
+          <Stat label="待裁决审批" value={value("approvals_pending")} />
+          <Stat label="在线 Agent" value={value("agents_online")} />
+          <Stat label="忙碌 Agent" value={value("agents_busy")} />
+          <Stat label="离线员工" value={value("employees_offline")} danger />
+          <Stat label="今日失败任务" value={value("tasks_failed_today")} danger />
         </div>
       </ConsoleSection>
 
-      <ConsoleSection title="实体规模">
+      <ConsoleSection title="组织与实体规模">
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat label="员工总数" value={value("employees_total")} />
+          <Stat label="在职员工" value={value("employees_active")} />
+          <Stat label="待审核员工" value={value("employees_pending")} />
+          <Stat label="已占用工位" value={value("seats_occupied")} />
+          <Stat label="团队" value={value("teams")} />
+          <Stat label="岗位" value={value("positions")} />
+          <Stat label="Agent（启用/总数）" value={`${value("agents_enabled")} / ${value("agents_total")}`} />
+          <Stat label="技能包（启用/总数）" value={`${value("skills_enabled")} / ${value("skills_total")}`} />
+          <Stat label="消息总量" value={value("messages_total")} />
+        </div>
+      </ConsoleSection>
+
+      <ConsoleSection title="交付累计">
         <div className="grid gap-2.5 sm:grid-cols-3">
-          <Stat label="注册 agent" value={Object.keys(agents?.agents || {}).length || "—"} />
-          <Stat label="职位（role_type）" value={positions?.positions?.length ?? "—"} />
-          <Stat label="内置身份" value={identities?.identities?.length ?? "—"} />
+          <Stat label="任务（完成/总数）" value={`${value("tasks_done")} / ${value("tasks_total")}`} />
+          <Stat label="工作流（已发布/总数）" value={`${value("workflows_published")} / ${value("workflows_total")}`} />
+          <Stat label="待审核员工" value={value("employees_pending")} />
         </div>
-      </ConsoleSection>
-
-      <ConsoleSection title="内置身份（D2/D15）">
-        <ConsoleTable
-          rows={identities?.identities || []}
-          rowKey={(r, i) => String(r.id || i)}
-          empty="未发现内置身份"
-          columns={[
-            { key: "id", header: "身份 ID", render: (r) => <span className="font-mono">{r.id}</span> },
-            { key: "name", header: "显示名", render: (r) => r.display_name || "—" },
-            { key: "role", header: "角色", render: (r) => <ConsoleTag>{r.role || "—"}</ConsoleTag> },
-          ]}
-        />
-      </ConsoleSection>
-
-      <ConsoleSection title="待我处理（协调台聚合）">
-        <ConsoleTable
-          rows={Object.entries(manager?.counts || {}).map(([k, v]) => ({ k, v }))}
-          rowKey={(r) => r.k}
-          empty="暂无待处理事项"
-          columns={[
-            { key: "k", header: "类别", render: (r) => r.k },
-            { key: "v", header: "数量", render: (r) => String(r.v) },
-          ]}
-        />
       </ConsoleSection>
     </>
   );

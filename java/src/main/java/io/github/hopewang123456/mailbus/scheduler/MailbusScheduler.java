@@ -1,0 +1,66 @@
+package io.github.hopewang123456.mailbus.scheduler;
+
+import io.github.hopewang123456.mailbus.config.AppProperties;
+import io.github.hopewang123456.mailbus.dispatch.FileBusIngress;
+import io.github.hopewang123456.mailbus.dispatch.OutboxDispatcher;
+import io.github.hopewang123456.mailbus.identity.IdentityService;
+import io.github.hopewang123456.mailbus.workflow.ApprovalService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.time.Instant;
+
+/** 后台巡检：心跳超时、审批超时、outbox 派发与 file_bus 入站。 */
+@Component
+public class MailbusScheduler {
+
+    private static final Logger log = LoggerFactory.getLogger(MailbusScheduler.class);
+
+    private final AppProperties properties;
+    private final IdentityService identity;
+    private final ApprovalService approvals;
+    private final OutboxDispatcher dispatcher;
+    private final FileBusIngress ingress;
+
+    public MailbusScheduler(AppProperties properties, IdentityService identity,
+                            ApprovalService approvals, OutboxDispatcher dispatcher,
+                            FileBusIngress ingress) {
+        this.properties = properties;
+        this.identity = identity;
+        this.approvals = approvals;
+        this.dispatcher = dispatcher;
+        this.ingress = ingress;
+    }
+
+    @Scheduled(fixedDelayString = "${mailbus.heartbeat-sweep-seconds}000")
+    public void heartbeatSweep() {
+        try {
+            long cutoff = Instant.now().getEpochSecond()
+                    - properties.heartbeatTimeoutSeconds();
+            identity.markStaleOffline(cutoff);
+        } catch (Exception exception) {
+            log.warn("心跳巡检失败", exception);
+        }
+    }
+
+    @Scheduled(fixedDelayString = "${mailbus.dispatch-interval-seconds}000")
+    public void dispatch() {
+        try {
+            approvals.sweepExpired();
+        } catch (Exception exception) {
+            log.warn("审批超时扫描失败", exception);
+        }
+        try {
+            dispatcher.tick();
+        } catch (Exception exception) {
+            log.warn("outbox 派发失败", exception);
+        }
+        try {
+            ingress.pollOnce();
+        } catch (Exception exception) {
+            log.warn("file_bus 入站扫描失败", exception);
+        }
+    }
+}

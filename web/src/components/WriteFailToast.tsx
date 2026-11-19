@@ -20,7 +20,7 @@ function shortPath(path?: string): string {
 
 /**
  * M3 UX 债：写操作失败的全局 toast（此前错误只落在页面角落的小字，
- * 驾驶舱验收按钮失败曾被当作「点了没反应」）。api() 层在写方法
+ * 写操作失败曾被当作「点了没反应」）。api() 层在写方法
  * 失败时派 mailbus:write-failed，这里聚合并展示。
  */
 export function WriteFailToast() {
@@ -64,8 +64,8 @@ export function WriteFailToast() {
           </p>
           {t.status === 401 && (
             <p className="mt-1 text-[12px]">
-              <Link className="underline decoration-red-400/60 underline-offset-2" to="/">
-                去舰桥齿轮旋钮配置 API Token →
+              <Link className="underline decoration-red-400/60 underline-offset-2" to="/console">
+                返回管理中心重新登录 →
               </Link>
             </p>
           )}

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 /**
  * P5 毛刺清理：ApiListPage 的 FormishView 递归键值套壳 → 正经表格列表。
- * 列定义驱动；空态/加载态统一；行点击可选。样式沿用驾驶舱 soft-* 体系。
+ * 列定义驱动；空态/加载态统一；行点击可选。样式沿用 soft-* 体系。
  */
 
 export type Col<T> = {

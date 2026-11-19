@@ -1,0 +1,5336 @@
+/* Ziyan 办公大楼：暖木色 + 暖光玻璃 + 轻动画。独立于管理端暗色主题。 */
+
+.twin-root {
+  --ink: #4a382b;
+  --muted: #9a7e66;
+  --cream: #fff4e6;
+  --honey: #f0b57b;
+  --terracotta: #e2836a;
+  --sage: #93b79a;
+  --online: #4fb183;
+  --busy: #e79a3c;
+  --offline: #bfae9d;
+
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(1200px 700px at 12% -6%, #ffe9cd 0%, transparent 60%),
+    radial-gradient(1000px 620px at 88% 6%, #ffd9bd 0%, transparent 58%),
+    linear-gradient(170deg, #fff7ec 0%, #fdecd9 52%, #f7e0c8 100%);
+  color: var(--ink);
+  font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  /* hidden 仍允许程序化滚动（focus/scrollIntoView 会导致整页左移），clip 彻底禁止 */
+  overflow: hidden;
+  overflow: clip;
+  z-index: 20;
+}
+
+/* 缓慢漂移的暖光，让页面有呼吸感（静态，避免大面积重绘拖慢帧率） */
+.twin-root::before {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  background:
+    radial-gradient(520px 420px at 22% 18%, rgba(255, 214, 168, 0.4), transparent 68%),
+    radial-gradient(620px 460px at 78% 26%, rgba(255, 228, 198, 0.36), transparent 70%);
+  pointer-events: none;
+}
+
+/* 顶部暖光光束 */
+.twin-root::after {
+  content: "";
+  position: absolute;
+  left: -14%;
+  top: -24%;
+  width: 62%;
+  height: 82%;
+  background: linear-gradient(125deg, rgba(255, 246, 230, 0.42) 0%, rgba(255, 246, 230, 0) 62%);
+  transform: rotate(-4deg);
+  pointer-events: none;
+}
+
+/* ── 顶栏 ───────────────────────────────────────────── */
+.twin-header {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 28px 14px;
+}
+
+.twin-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  font-size: 20px;
+  color: #fff;
+  background: linear-gradient(145deg, #f7b58c, #e07b62);
+  box-shadow: 0 10px 22px rgba(224, 123, 98, 0.34);
+}
+
+.twin-brand h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: #43301f;
+}
+
+.twin-brand p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.twin-metrics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(255, 252, 246, 0.86);
+  border: 1px solid rgba(226, 190, 160, 0.6);
+  font-size: 12.5px;
+  color: #6b5540;
+  box-shadow: 0 5px 14px rgba(160, 118, 82, 0.1);
+}
+
+.metric-ghost {
+  background: rgba(255, 255, 255, 0.4);
+  border-style: dashed;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-online { background: var(--online); box-shadow: 0 0 0 3px rgba(79, 177, 131, 0.18); }
+.dot-busy { background: var(--busy); box-shadow: 0 0 0 3px rgba(231, 154, 60, 0.18); }
+.dot-offline { background: var(--offline); }
+.dot-empty { background: #ddc8b2; }
+
+/* ── 舞台 ───────────────────────────────────────────── */
+.twin-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  z-index: 2;
+}
+
+.twin-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.twin-scene {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  perspective: 2400px;
+  perspective-origin: 50% 50%;
+}
+
+.scene-scale {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+}
+
+.building {
+  position: absolute;
+  left: -700px;
+  top: -380px;
+  width: 1400px;
+  height: 900px;
+  transform-style: preserve-3d;
+  transform: rotateX(54deg) rotateZ(-42deg);
+  transition: transform 0.55s cubic-bezier(0.22, 0.8, 0.3, 1);
+}
+
+/* 外壳与楼层共用的 3D 容器：只重建这一层，园区动画保持连续 */
+.building-core {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+/* ── 大楼外壳 ───────────────────────────────────────── */
+.shell {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  cursor: pointer;
+}
+
+/* 展开楼层时用 opacity 隐藏外壳：几何与 3D 层级不变，且只改合成层，成本远低于重建 DOM
+ * focused 模式同样支持 peek：is-peek 隐藏外壳露出内部，!is-peek 显示外壳呈现整楼体量
+ * detail 模式完全切换到独立 2D 视图，所有 3D 元素都隐藏 */
+.twin-root.is-peek .shell,
+.twin-root.is-focused .shell {
+  pointer-events: none;
+}
+.twin-root.is-detail .shell,
+.twin-root.is-detail .twin-stage,
+.twin-root.is-detail .sky,
+.twin-root.is-detail .twin-scene,
+.twin-root.is-detail .site,
+.twin-root.is-detail .building,
+.twin-root.is-detail .building-core,
+.twin-root.is-detail .floor-tabs {
+  display: none !important;
+}
+
+.twin-root.is-peek .shell .shell-wall,
+.twin-root.is-peek .shell .shell-roof {
+  opacity: 0;
+}
+
+/* focused 默认显示外壳（可 hover peek 露出内部），peek 时才隐藏 */
+.twin-root.is-focused.is-peek .shell .shell-wall,
+.twin-root.is-focused.is-peek .shell .shell-roof {
+  opacity: 0;
+}
+
+.twin-root.is-focused:not(.is-peek) .shell .shell-wall,
+.twin-root.is-focused:not(.is-peek) .shell .shell-roof {
+  opacity: 1;
+}
+
+.shell-wall {
+  position: absolute;
+  overflow: hidden;
+  background: linear-gradient(180deg, #f7e6cd 0%, #f0d9b8 58%, #e5c69d 100%);
+  box-shadow: inset 0 0 70px rgba(255, 255, 255, 0.45);
+}
+
+.shell-wall-s {
+  left: 0;
+  top: 100%;
+  width: 100%;
+  transform-origin: center top;
+  transform: rotateX(90deg);
+}
+
+.shell-wall-e {
+  left: 100%;
+  top: 0;
+  height: 100%;
+  transform-origin: left center;
+  transform: rotateY(-90deg);
+  background: linear-gradient(180deg, #eed7b4 0%, #e2c69f 60%, #d5b58a 100%);
+  filter: brightness(0.95);
+}
+
+.shell-wall-w {
+  top: 0;
+  height: 100%;
+  transform-origin: right center;
+  transform: rotateY(90deg);
+  background: linear-gradient(180deg, #f3dfc0 0%, #e8cda7 60%, #dbb98d 100%);
+}
+
+/* 幕墙：竖向龙骨 + 横向窗带 */
+.facade-skin {
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.6) 0 4px, transparent 4px 52px),
+    repeating-linear-gradient(180deg, rgba(126, 158, 166, 0.4) 0 44px, transparent 44px 76px);
+  opacity: 0.8;
+}
+
+/* 单扇窗：室内光、玻璃反光与窗棂分层，夜间不会再像一块实心灯箱 */
+.facade-win {
+  position: absolute;
+  width: 5.6%;
+  height: 6.4%;
+  overflow: hidden;
+  border-radius: 2px;
+  background: linear-gradient(180deg, rgba(150, 178, 192, 0.34), rgba(118, 146, 166, 0.2));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  transition: background 0.8s ease, box-shadow 0.8s ease;
+}
+
+/* 室内层：白天只保留微弱反射，夜间再按窗格点亮 */
+.facade-win::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.28), transparent 52%);
+  opacity: 0.5;
+  transition: opacity 0.8s ease, background 0.8s ease;
+}
+
+/* 玻璃高光覆盖在室内光之上，窗棂保持清晰 */
+.facade-win::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, transparent 47%, rgba(28, 32, 42, 0.58) 47% 53%, transparent 53%),
+    linear-gradient(180deg, transparent 56%, rgba(28, 32, 42, 0.52) 56% 60%, transparent 60%),
+    linear-gradient(118deg, rgba(255, 255, 255, 0.22) 0 9%, transparent 9% 61%, rgba(255, 255, 255, 0.07) 61% 68%, transparent 68%);
+}
+
+.shell-wall-e .facade-skin {
+  opacity: 0.62;
+}
+
+.facade-sign {
+  position: absolute;
+  left: 50%;
+  top: 62px;
+  transform: translateX(-50%);
+  padding: 8px 22px;
+  border-radius: 10px;
+  background: rgba(255, 250, 240, 0.92);
+  border: 1px solid rgba(226, 190, 160, 0.8);
+  color: #c9714e;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+  box-shadow: 0 10px 20px rgba(150, 104, 66, 0.16);
+}
+
+.facade-entry {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 240px;
+  height: 190px;
+  transform: translateX(-50%);
+  border-radius: 16px 16px 0 0;
+  background: linear-gradient(180deg, rgba(255, 214, 160, 0.85), rgba(255, 186, 120, 0.7));
+  box-shadow:
+    inset 0 0 0 3px rgba(255, 248, 236, 0.9),
+    0 0 40px rgba(255, 196, 130, 0.6);
+}
+
+.facade-entry::before {
+  content: "";
+  position: absolute;
+  left: -26px;
+  top: -22px;
+  width: 292px;
+  height: 24px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fdf3e2, #e9c9a0);
+  box-shadow: 0 6px 14px rgba(150, 104, 66, 0.24);
+}
+
+.facade-entry::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  margin-left: -1.5px;
+  background: rgba(255, 250, 240, 0.85);
+}
+
+/* 屋顶 */
+.shell-roof {
+  position: absolute;
+  inset: 0;
+  border-radius: 34px;
+  background: linear-gradient(150deg, #f6ddbb 0%, #e6c69f 62%, #d8b489 100%);
+  box-shadow:
+    inset 0 0 0 3px rgba(255, 255, 255, 0.5),
+    inset 0 0 80px rgba(180, 140, 95, 0.3),
+    0 30px 60px rgba(120, 80, 45, 0.26);
+  transform-style: preserve-3d;
+}
+
+.roof-pad {
+  position: absolute;
+  left: 62%;
+  top: 12%;
+  width: 156px;
+  height: 112px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #e6d0ac 0 56%, #f8ecda 57%);
+  box-shadow: inset 0 0 0 4px rgba(188, 152, 112, 0.55);
+  transform: translateZ(4px);
+}
+
+.roof-shed {
+  position: absolute;
+  left: 42%;
+  top: 28%;
+  width: 250px;
+  height: 178px;
+  border-radius: 14px;
+  background: linear-gradient(150deg, #fdf1de, #ecd5b2);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.7),
+    0 10px 0 rgba(199, 166, 126, 0.9),
+    0 26px 30px rgba(120, 80, 45, 0.24);
+  transform: translateZ(6px);
+}
+
+.roof-shed::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  right: 14px;
+  bottom: 14px;
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(90deg, rgba(150, 175, 178, 0.35) 0 3px, transparent 3px 34px),
+    repeating-linear-gradient(180deg, rgba(150, 175, 178, 0.35) 0 3px, transparent 3px 30px);
+}
+
+.roof-unit {
+  position: absolute;
+  width: 78px;
+  height: 52px;
+  border-radius: 8px;
+  background: linear-gradient(150deg, #ecdfc9, #d2bea0);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.6),
+    0 10px 16px rgba(120, 80, 45, 0.24);
+  transform: translateZ(10px);
+}
+
+.roof-unit.u1 { left: 14%; top: 16%; }
+.roof-unit.u2 { left: 74%; top: 60%; }
+
+/* 夜间：幕墙亮灯 */
+.twin-root.is-night .shell-wall {
+  background: linear-gradient(180deg, #3d3b45 0%, #33323c 58%, #292934 100%);
+}
+
+.twin-root.is-night .shell-roof {
+  background: linear-gradient(150deg, #4a4550 0%, #3a3540 62%, #302c36 100%);
+}
+
+/* 夜间幕墙：深色玻璃为主，灯光交给一扇扇窗，避免整面发亮 */
+.twin-root.is-night .facade-skin {
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 236, 200, 0.1) 0 3px, transparent 3px 52px),
+    repeating-linear-gradient(180deg, rgba(255, 206, 146, 0.1) 0 2px, transparent 2px 76px);
+  opacity: 1;
+}
+
+/* 夜间：暖光位于玻璃后面；顶部暗角与下方桌面剪影让透光有纵深 */
+.twin-root.is-night .facade-win {
+  background: linear-gradient(160deg, rgba(62, 76, 98, 0.46), rgba(20, 25, 36, 0.82));
+  box-shadow: inset 0 0 0 1px rgba(181, 205, 222, 0.1);
+}
+
+.twin-root.is-night .facade-win::before {
+  background: linear-gradient(145deg, rgba(136, 166, 194, 0.2), rgba(14, 19, 29, 0.36));
+  opacity: 0.46;
+}
+
+.twin-root.is-night .facade-win.is-lit::before,
+.twin-root.is-night .facade-win.is-soft::before {
+  background:
+    linear-gradient(180deg, rgba(25, 29, 38, 0.4) 0 16%, transparent 16% 66%, rgba(57, 43, 34, 0.36) 66% 74%, rgba(25, 27, 31, 0.46) 74%),
+    linear-gradient(90deg, rgba(255, 232, 194, 0.5), rgba(255, 190, 115, 0.88) 58%, rgba(255, 214, 157, 0.64));
+}
+
+.twin-root.is-night .facade-win.is-lit::before {
+  opacity: 0.94;
+}
+
+.twin-root.is-night .facade-win.is-soft::before {
+  opacity: 0.4;
+}
+
+.twin-root.is-night .facade-win.is-lit {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 226, 187, 0.42),
+    inset 0 5px 9px rgba(18, 22, 32, 0.28);
+}
+
+.twin-root.is-night .facade-win.is-soft {
+  box-shadow: inset 0 0 0 1px rgba(255, 220, 177, 0.22);
+}
+
+.twin-root.is-night .facade-sign {
+  background: rgba(38, 36, 46, 0.9);
+  border-color: rgba(255, 200, 140, 0.4);
+  color: #ffc98f;
+  box-shadow: 0 0 26px rgba(255, 176, 96, 0.4);
+}
+
+.twin-root.is-night .facade-entry {
+  background: linear-gradient(180deg, rgba(255, 206, 140, 0.92), rgba(255, 176, 100, 0.8));
+  box-shadow:
+    inset 0 0 0 3px rgba(255, 240, 214, 0.85),
+    0 0 56px rgba(255, 190, 110, 0.7);
+}
+
+.floor-group {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: opacity 0.45s ease, filter 0.45s ease;
+}
+
+.floor-group.is-dimmed {
+  opacity: 0.4;
+  filter: saturate(0.75) blur(0.4px);
+}
+
+/* 楼层不再整体漂浮：三层大图层持续动画会明显拖慢帧率 */
+.floor-lift {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+.floor-slab {
+  position: absolute;
+  inset: 0;
+  border-radius: 34px;
+  background: linear-gradient(158deg, #fff8ec 0%, #fcead4 62%, #f7e0c4 100%);
+  box-shadow:
+    0 0 0 1px rgba(222, 182, 146, 0.95),
+    inset 0 0 54px rgba(240, 190, 140, 0.35),
+    0 26px 60px rgba(140, 92, 54, 0.22);
+  transform-style: preserve-3d;
+  transition: box-shadow 0.35s ease, background 0.35s ease;
+  cursor: pointer;
+}
+
+.floor-slab:hover {
+  box-shadow:
+    0 0 0 1px rgba(226, 131, 106, 0.7),
+    0 0 0 7px rgba(255, 196, 156, 0.22),
+    inset 0 0 54px rgba(240, 190, 140, 0.35),
+    0 26px 60px rgba(140, 92, 54, 0.24);
+}
+
+.floor-group.is-active .floor-slab {
+  background: linear-gradient(158deg, #fffcf6 0%, #fff2e0 60%, #fce8d2 100%);
+  box-shadow:
+    0 0 0 2px rgba(226, 131, 106, 0.55),
+    0 0 34px rgba(255, 186, 140, 0.55),
+    0 0 0 10px rgba(255, 190, 145, 0.16),
+    0 32px 74px rgba(150, 104, 66, 0.24);
+}
+
+.slab-edge {
+  position: absolute;
+  background: #edd6bb;
+  box-shadow: inset 0 -6px 12px rgba(150, 104, 66, 0.16);
+}
+
+.slab-edge-s {
+  left: 0;
+  top: 100%;
+  width: 100%;
+  height: 18px;
+  border-radius: 0 0 20px 20px;
+  transform-origin: center top;
+  transform: rotateX(-90deg);
+}
+
+.slab-edge-e {
+  left: 100%;
+  top: 0;
+  width: 18px;
+  height: 100%;
+  border-radius: 0 20px 20px 0;
+  transform-origin: left center;
+  transform: rotateY(90deg);
+}
+
+/* ── 房间 ───────────────────────────────────────────── */
+.room {
+  position: absolute;
+  transform-style: preserve-3d;
+}
+
+.room-floor {
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  background-color: #f9e7cb;
+  /* 浅橡木地板：横向木板缝 + 竖向错缝 + 暖色底 */
+  background-image:
+    repeating-linear-gradient(0deg,
+      rgba(203, 160, 112, 0.26) 0 1px,
+      transparent 1px 32px),
+    repeating-linear-gradient(90deg,
+      rgba(255, 255, 255, 0.5) 0 2px,
+      transparent 2px 104px),
+    linear-gradient(160deg, #fbe9cf 0%, #f5dcb9 55%, #f0d4ab 100%);
+  border: 2px solid rgba(232, 202, 164, 0.95);
+  transform: translateZ(1px);
+  box-shadow:
+    inset 0 3px 0 rgba(255, 255, 255, 0.85),
+    inset 0 0 52px rgba(222, 172, 112, 0.18);
+}
+
+.room-bullpen .room-floor { background-color: #f6e0be; }
+.room-focus .room-floor { background-color: #f2edd4; }
+.room-meeting .room-floor { background-color: #f8e3d0; }
+.room-lounge .room-floor { background-color: #f8ddbf; }
+.room-reception .room-floor { background-color: #fbe7cf; }
+
+.wall {
+  position: absolute;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.92) 0 2px,
+      transparent 2px 64px
+    ),
+    linear-gradient(180deg, #fffdf8 0%, #fbf3e6 58%, #f6e9d6 100%);
+  border: 1px solid rgba(255, 255, 255, 0.98);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 1),
+    inset 0 -12px 18px rgba(206, 172, 130, 0.16),
+    0 0 0 1px rgba(216, 192, 160, 0.4);
+  pointer-events: none;
+}
+
+.wall-n,
+.wall-s {
+  left: 0;
+  width: 100%;
+  transform-origin: center bottom;
+  transform: rotateX(-90deg);
+}
+
+.wall-w,
+.wall-e {
+  transform-origin: right center;
+  transform: rotateY(90deg);
+}
+
+.room-label {
+  position: absolute;
+  left: 14px;
+  top: -36px;
+  height: 28px;
+  padding: 0 14px;
+  line-height: 24px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 2px solid #f1d8b6;
+  color: #a97f52;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  transform-origin: left bottom;
+  transform: rotateX(-90deg);
+  box-shadow: 0 5px 12px rgba(172, 130, 86, 0.18);
+  pointer-events: none;
+}
+
+/* ── 家具 ───────────────────────────────────────────── */
+.decor {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+.rug {
+  position: absolute;
+  left: -20px;
+  top: -20px;
+  border-radius: 46px;
+  background:
+    radial-gradient(circle at 50% 45%, #ffffff 0%, #fffdf8 62%, #f8f1e6 100%);
+  transform: translateZ(2px);
+  box-shadow:
+    0 0 0 8px rgba(255, 255, 255, 0.42),
+    inset 0 0 34px rgba(214, 184, 146, 0.14);
+}
+
+.meeting-table {
+  position: absolute;
+  left: -82px;
+  top: -52px;
+  width: 164px;
+  height: 104px;
+  border-radius: 52px;
+  background: linear-gradient(160deg, #fffaf1 0%, #f9ecd8 100%);
+  box-shadow:
+    inset 0 0 0 2px #f2ddc0,
+    inset 0 3px 0 #fff,
+    0 8px 0 #ecd3ae,
+    0 14px 22px rgba(168, 122, 74, 0.18);
+  transform: translateZ(22px);
+}
+
+.meeting-chair {
+  position: absolute;
+  width: 36px;
+  height: 32px;
+  border-radius: 12px;
+  background: linear-gradient(155deg, #fffdf8, #fbeedc);
+  box-shadow:
+    0 0 0 2px #f0dcc2,
+    0 4px 0 #ead2b3,
+    0 8px 12px rgba(160, 116, 70, 0.14);
+  transform: translateZ(15px);
+}
+
+.meeting-chair.c1 { left: -112px; top: -40px; }
+.meeting-chair.c2 { left: 78px; top: -40px; }
+.meeting-chair.c3 { left: -112px; top: 22px; }
+.meeting-chair.c4 { left: 78px; top: 22px; }
+
+.sofa-main {
+  position: absolute;
+  left: -84px;
+  top: -30px;
+  width: 168px;
+  height: 58px;
+  border-radius: 20px;
+  background: linear-gradient(155deg, #fff9ef, #fbebd6);
+  box-shadow:
+    inset 0 0 0 2px #f2ddc1,
+    inset 0 3px 0 #fff,
+    0 8px 0 #efd8b8,
+    0 14px 20px rgba(168, 122, 74, 0.16);
+  transform: translateZ(18px);
+}
+
+.sofa-back {
+  position: absolute;
+  left: -84px;
+  top: -74px;
+  width: 168px;
+  height: 44px;
+  border-radius: 16px 16px 6px 6px;
+  background: linear-gradient(180deg, #fffaf2, #fbead4);
+  box-shadow: inset 0 0 0 2px #f2ddc1;
+  transform-origin: center bottom;
+  transform: rotateX(-90deg);
+}
+
+.sofa-arm {
+  position: absolute;
+  width: 22px;
+  height: 58px;
+  border-radius: 12px;
+  background: linear-gradient(155deg, #fff9ef, #f8e6cf);
+  transform: translateZ(30px);
+  box-shadow:
+    inset 0 0 0 2px #f2ddc1,
+    0 6px 12px rgba(168, 122, 74, 0.14);
+}
+
+.sofa-arm.left { left: -104px; top: -30px; }
+.sofa-arm.right { left: 84px; top: -30px; }
+
+.coffee-table {
+  position: absolute;
+  left: -46px;
+  top: 40px;
+  width: 92px;
+  height: 50px;
+  border-radius: 26px;
+  background: linear-gradient(160deg, #fffaf1, #f9e9d3);
+  box-shadow:
+    inset 0 0 0 2px #f2ddc0,
+    0 5px 0 #eed6b5,
+    0 10px 16px rgba(168, 122, 74, 0.14);
+  transform: translateZ(13px);
+}
+
+.reception-counter {
+  position: absolute;
+  left: -90px;
+  top: -26px;
+  width: 180px;
+  height: 52px;
+  border-radius: 26px;
+  background: linear-gradient(160deg, #fffaf2, #f9e7d0);
+  box-shadow:
+    inset 0 0 0 2px #f0dabf,
+    inset 0 3px 0 #fff,
+    0 9px 0 #ecd3af,
+    0 16px 24px rgba(168, 122, 74, 0.16);
+  transform: translateZ(30px);
+}
+
+.reception-glow {
+  position: absolute;
+  left: -70px;
+  top: -60px;
+  width: 140px;
+  height: 80px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 226, 170, 0.62), transparent 70%);
+  transform: translateZ(46px);
+  animation: glowPulse 5s ease-in-out infinite;
+}
+
+/* 盆栽：白色圆盆 + 三团叶子 */
+.plant {
+  position: absolute;
+  width: 34px;
+  height: 30px;
+  transform: translateZ(24px);
+}
+.plant::before {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: -18px;
+  width: 38px;
+  height: 34px;
+  border-radius: 50% 50% 46% 46%;
+  background:
+    radial-gradient(circle at 28% 34%, #b3dd9f 0%, #8cc47f 46%, #6da468 100%);
+  box-shadow:
+    inset -3px -4px 0 rgba(72, 118, 68, 0.25),
+    0 5px 9px rgba(88, 122, 74, 0.2);
+}
+.plant::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  width: 26px;
+  height: 20px;
+  border-radius: 5px 5px 11px 11px;
+  background: linear-gradient(180deg, #ffffff, #f2eadd);
+  box-shadow:
+    inset 0 0 0 2px #ece0cf,
+    0 4px 7px rgba(150, 110, 70, 0.18);
+}
+
+.plant.p1 { left: -150px; top: 60px; }
+.plant.p2 { left: 128px; top: 62px; }
+.plant.p3 { left: -10px; top: 104px; }
+
+/* ── 工位 ───────────────────────────────────────────── */
+.seat {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+}
+
+.desk-top {
+  position: absolute;
+  left: -46px;
+  top: -26px;
+  width: 92px;
+  height: 52px;
+  border-radius: 16px;
+  background: linear-gradient(160deg, #fffaf1 0%, #faeedb 55%, #f7e6cd 100%);
+  box-shadow:
+    inset 0 0 0 2px #f2ddc1,
+    inset 0 3px 0 #fff,
+    0 5px 0 #ecd4b0,
+    0 12px 20px rgba(160, 116, 70, 0.16);
+  transform: translateZ(16px);
+}
+
+.desk-monitor {
+  position: absolute;
+  left: -25px;
+  top: -60px;
+  width: 50px;
+  height: 38px;
+  border-radius: 7px;
+  background: linear-gradient(160deg, #ffffff 0%, #f4efe6 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.9),
+    0 3px 8px rgba(140, 108, 70, 0.18);
+  transform-origin: center bottom;
+  transform: rotateX(-90deg);
+}
+
+/* 屏幕：淡蓝白，像参考图里的电脑 */
+.desk-monitor::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 4px;
+  background: linear-gradient(165deg, #eaf6fd 0%, #cbe7f7 55%, #b5d9ef 100%);
+  opacity: 0.95;
+  animation: screenFlicker 5.5s ease-in-out infinite;
+}
+
+.seat:nth-child(3n) .desk-monitor::after { animation-delay: -1.7s; }
+.seat:nth-child(4n) .desk-monitor::after { animation-delay: -3.1s; }
+
+/* 显示器支架 */
+.desk-monitor-stand {
+  position: absolute;
+  left: -5px;
+  top: -24px;
+  width: 10px;
+  height: 12px;
+  background: linear-gradient(#e8e2d8, #cfc6b6);
+  border-radius: 2px;
+  transform: translateZ(17px);
+}
+.desk-monitor-stand::after {
+  content: "";
+  position: absolute;
+  left: -7px;
+  bottom: -3px;
+  width: 24px;
+  height: 5px;
+  border-radius: 3px;
+  background: #e0d8ca;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+/* 键盘 */
+.desk-keyboard {
+  position: absolute;
+  left: -26px;
+  top: 6px;
+  width: 52px;
+  height: 16px;
+  border-radius: 5px;
+  background: linear-gradient(#f5f0e6, #e6ded0);
+  box-shadow: inset 0 0 0 1px #d4c9b6, 0 2px 4px rgba(140, 108, 70, 0.12);
+  transform: translateZ(17px);
+}
+.desk-keyboard::after {
+  content: "";
+  position: absolute;
+  inset: 2px 3px;
+  border-radius: 3px;
+  background:
+    repeating-linear-gradient(90deg, #c9bfae 0 2px, transparent 2px 5px),
+    repeating-linear-gradient(0deg, #c9bfae 0 2px, transparent 2px 5px);
+  opacity: 0.5;
+}
+
+/* 鼠标 */
+.desk-mouse {
+  position: absolute;
+  left: 30px;
+  top: 8px;
+  width: 12px;
+  height: 18px;
+  border-radius: 6px 6px 8px 8px;
+  background: linear-gradient(#f8f3ea, #e4dccb);
+  box-shadow: inset 0 0 0 1px #cdc2ae, 0 2px 3px rgba(140, 108, 70, 0.12);
+  transform: translateZ(17px);
+}
+.desk-mouse::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  width: 4px;
+  height: 6px;
+  border-radius: 2px;
+  background: #cdc2ae;
+}
+
+/* 马克杯 */
+.desk-mug {
+  position: absolute;
+  left: 30px;
+  top: -18px;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px 4px 6px 6px;
+  background: linear-gradient(160deg, #fff, #f0e6d6);
+  box-shadow: inset 0 0 0 1.5px #e0d2ba, 0 2px 4px rgba(140, 108, 70, 0.14);
+  transform: translateZ(18px);
+}
+.desk-mug::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  top: 3px;
+  width: 6px;
+  height: 8px;
+  border: 2px solid #e0d2ba;
+  border-left: none;
+  border-radius: 0 5px 5px 0;
+}
+.desk-mug::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 10px;
+  height: 4px;
+  border-radius: 50%;
+  background: #b8d8ec;
+  opacity: 0.7;
+}
+
+.desk-chair {
+  position: absolute;
+  left: -16px;
+  top: 18px;
+  width: 32px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(155deg, #fffdf8, #f8e7d2);
+  box-shadow:
+    0 0 0 2px #f0dcc1,
+    0 4px 8px rgba(160, 116, 70, 0.14);
+  transform: translateZ(10px);
+}
+
+.seat-empty {
+  position: absolute;
+  left: -40px;
+  top: -22px;
+  width: 80px;
+  height: 44px;
+  border-radius: 14px;
+  border: 2px dashed rgba(226, 196, 160, 0.85);
+  background: rgba(255, 255, 255, 0.42);
+  transform: translateZ(13px);
+}
+
+.seat-person {
+  --fig-scale: 1.55;
+  position: absolute;
+  left: -48px;
+  top: -30px;
+  width: 96px;
+  height: 78px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transform: translateZ(18px);
+  transform-style: preserve-3d;
+  transition: filter 0.18s ease;
+}
+
+.seat-person:hover { filter: brightness(1.08) saturate(1.05); }
+
+/* 萌系小人：大头 + 大眼 + 腮红 + 小手臂（配置时可作为 2.5D 形象备选） */
+.person-figure {
+  position: absolute;
+  left: 21px;
+  top: 0;
+  width: 50px;
+  height: 58px;
+  transform: translateZ(9px) scale(var(--fig-scale, 1.55));
+  filter: drop-shadow(0 5px 7px rgba(140, 96, 62, 0.3));
+}
+
+.person-figure i {
+  position: absolute;
+  display: block;
+}
+
+/* 腿 */
+.p-leg {
+  top: 44px;
+  width: 7px;
+  height: 9px;
+  border-radius: 3px 3px 2px 2px;
+  background: linear-gradient(180deg, #6b5a4e 0%, #4a3d33 100%);
+  box-shadow: 0 0 0 1.2px rgba(80, 60, 45, 0.4);
+}
+.p-leg.l1 { left: 17px; }
+.p-leg.l2 { left: 26px; }
+
+/* 脚 */
+.p-foot {
+  top: 51px;
+  width: 10px;
+  height: 6px;
+  border-radius: 5px 5px 3px 3px;
+  background: linear-gradient(180deg, #5a4a3e 0%, #3a2f27 100%);
+  box-shadow: 0 0 0 1.2px rgba(70, 52, 38, 0.45);
+}
+.p-foot.f1 { left: 15px; }
+.p-foot.f2 { left: 25px; }
+
+/* 手臂：从身体两侧伸出的短袖 */
+.p-arm {
+  top: 32px;
+  width: 8px;
+  height: 12px;
+  border-radius: 4px;
+  background: linear-gradient(160deg, var(--shirt, #f6c9a0), color-mix(in srgb, var(--shirt, #f6c9a0) 70%, #a87758));
+  box-shadow: 0 0 0 1.5px rgba(150, 105, 75, 0.28);
+  transform-origin: top center;
+}
+.p-arm.a1 { left: 5px; transform: rotate(18deg); }
+.p-arm.a2 { left: 37px; transform: rotate(-18deg); }
+
+.p-body {
+  left: 13px;
+  top: 31px;
+  width: 24px;
+  height: 15px;
+  border-radius: 10px 10px 8px 8px;
+  background: linear-gradient(160deg, var(--shirt, #f6c9a0), color-mix(in srgb, var(--shirt, #f6c9a0) 68%, #b07f5e));
+  box-shadow:
+    0 0 0 1.5px rgba(150, 105, 75, 0.3),
+    inset 0 2px 0 rgba(255, 255, 255, 0.5);
+}
+/* 衣服上的小纽扣 */
+.p-body::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  width: 2px;
+  height: 2px;
+  margin-left: -1px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 5px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* 衣领：小 V 字 */
+.p-collar {
+  left: 19px;
+  top: 30px;
+  width: 12px;
+  height: 6px;
+  border-radius: 0 0 6px 6px;
+  background: rgba(255, 255, 255, 0.85);
+  clip-path: polygon(0 0, 50% 100%, 100% 0);
+}
+
+/* 工牌挂绳 + 胸卡（坐姿小人） */
+.p-lanyard {
+  left: 23px;
+  top: 32px;
+  width: 4px;
+  height: 6px;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(180deg, #7fb2dd, #4f86c6);
+  box-shadow: 0 0 0 1px rgba(60, 100, 140, 0.3);
+}
+.p-badge {
+  left: 20px;
+  top: 38px;
+  width: 9px;
+  height: 6px;
+  border-radius: 1.5px;
+  background: linear-gradient(160deg, #fffdf8, #e9f1f8);
+  box-shadow:
+    0 0 0 1px rgba(90, 130, 170, 0.42),
+    inset 0 -1.6px 0 rgba(120, 160, 200, 0.24);
+}
+.p-badge::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 5px;
+  height: 1px;
+  border-radius: 1px;
+  background: #9db8cf;
+  box-shadow: 0 2px 0 #cfdcea;
+}
+
+/* 眼镜（坐姿小人） */
+.p-glasses {
+  left: 10px;
+  top: 15px;
+  width: 30px;
+  height: 10px;
+}
+.p-glasses::before,
+.p-glasses::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 11px;
+  height: 9px;
+  border-radius: 4px;
+  border: 1.3px solid rgba(72, 62, 56, 0.7);
+  background: linear-gradient(180deg, rgba(205, 233, 245, 0.5), rgba(178, 214, 232, 0.26));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+.p-glasses::before { left: 0; }
+.p-glasses::after { right: 0; }
+
+.p-head {
+  left: 9px;
+  top: 1px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 28%, #fff5ec 0%, #fcdcbe 56%, #f4c69e 100%);
+  box-shadow:
+    0 0 0 1.8px rgba(160, 115, 82, 0.28),
+    inset 0 -3px 0 rgba(224, 168, 128, 0.32);
+}
+
+/* 头发：带刘海和侧面发束 */
+.p-hair {
+  left: 7px;
+  top: -2px;
+  width: 36px;
+  height: 22px;
+  border-radius: 18px 18px 10px 10px;
+  background: linear-gradient(165deg, var(--hair, #f0d28c) 0%, color-mix(in srgb, var(--hair, #f0d28c) 70%, #8d6a4c) 100%);
+  box-shadow:
+    0 0 0 1.8px rgba(140, 100, 70, 0.28),
+    inset 0 2px 0 rgba(255, 255, 255, 0.4);
+}
+/* 刘海：中间分缝 */
+.p-hair::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  width: 3px;
+  height: 10px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--hair, #f0d28c) 50%, #6b4f35);
+}
+/* 侧面小揪揪 */
+.p-hair::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: 4px;
+  width: 12px;
+  height: 10px;
+  border-radius: 0 10px 10px 4px;
+  background: inherit;
+  box-shadow: 0 0 0 1.5px rgba(140, 100, 70, 0.28);
+}
+
+/* 眉毛 */
+.p-brow {
+  width: 7px;
+  height: 2.5px;
+  top: 14px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--hair, #f0d28c) 45%, #5a4030);
+}
+.p-brow.b1 { left: 12px; transform: rotate(-8deg); }
+.p-brow.b2 { left: 31px; transform: rotate(8deg); }
+
+/* 眼睛：大圆点 + 双层高光 */
+.p-eye {
+  width: 7px;
+  height: 8px;
+  top: 17px;
+  border-radius: 50%;
+  background: #3a2a24;
+}
+.p-eye.e1 { left: 13px; }
+.p-eye.e2 { left: 30px; }
+.p-eye::after {
+  content: "";
+  position: absolute;
+  left: 1.3px;
+  top: 1px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+.p-eye::before {
+  content: "";
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 1.6px;
+  height: 1.6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* 嘴巴：小微笑 */
+.p-mouth {
+  left: 22px;
+  top: 26px;
+  width: 6px;
+  height: 3px;
+  border-radius: 0 0 6px 6px;
+  border-bottom: 1.5px solid #c97a6a;
+}
+
+/* 腮红 */
+.p-blush {
+  width: 7px;
+  height: 4px;
+  top: 23px;
+  border-radius: 50%;
+  background: rgba(248, 150, 150, 0.6);
+}
+.p-blush.b1 { left: 8px; }
+.p-blush.b2 { left: 35px; }
+
+.p-dot {
+  right: -2px;
+  bottom: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--online);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(60, 120, 90, 0.3);
+}
+
+.seat-person.status-busy .p-dot { background: var(--busy); }
+.seat-person.status-offline .p-dot { background: var(--offline); }
+.seat-person.status-offline .person-figure { filter: grayscale(0.55) opacity(0.85); }
+
+/* 名字气泡：白底 + 粉/紫/蓝描边 + 同色文字（参考图的 NOAH / MIA 标签） */
+.person-plate {
+  position: absolute;
+  left: 50%;
+  top: -40px;
+  padding: 3px 11px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 15px;
+  color: var(--tag-text, #e06c9f);
+  background: rgba(255, 255, 255, 0.97);
+  border: 2px solid var(--tag, #f5b8d0);
+  box-shadow: 0 5px 10px rgba(168, 120, 140, 0.16);
+  white-space: nowrap;
+  transform-origin: center bottom;
+  transform: translateX(-50%) rotateX(-90deg);
+}
+
+/* 气泡底部小尖角 */
+.person-plate::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.97);
+  border-right: 2px solid var(--tag, #f5b8d0);
+  border-bottom: 2px solid var(--tag, #f5b8d0);
+  transform: rotate(45deg);
+}
+
+.seat-person.is-selected .person-plate {
+  background: var(--tag, #f5b8d0);
+  color: #fff;
+  box-shadow: 0 6px 14px rgba(200, 120, 150, 0.34);
+}
+.seat-person.is-selected .person-plate::after {
+  background: var(--tag, #f5b8d0);
+}
+
+/* ── 人物状态动画 ────────────────────────────────────── */
+
+/* online：轻柔呼吸 + 头微晃，像在看屏幕打字 */
+.seat-person.status-online .person-figure {
+  animation: breathe 3.6s ease-in-out infinite, headBob 4.2s ease-in-out infinite;
+}
+
+/* busy：身体快速小幅抖动（敲键盘节奏）+ 颜色偏热 */
+.seat-person.status-busy .person-figure {
+  animation: typeShake 0.28s ease-in-out infinite;
+}
+.seat-person.status-busy .p-body {
+  filter: saturate(1.2) brightness(1.06);
+}
+.seat-person.status-busy .desk-monitor::after {
+  background: linear-gradient(160deg, #ffb37a, #e8824a);
+  animation: busyPulse 1.1s ease-in-out infinite;
+}
+
+/* offline：整个人物"趴下"，身体压扁 + 头前倾 + 屏幕熄 */
+.seat-person.status-offline .person-figure {
+  animation: nap 4s ease-in-out infinite;
+}
+.seat-person.status-offline .desk-monitor::after {
+  background: linear-gradient(160deg, #6a6157, #4a4136);
+  opacity: 0.55;
+  animation: none;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: translateZ(7px) translateY(0) scale(var(--fig-scale, 1.18)); }
+  50%      { transform: translateZ(8px) translateY(-1px) scale(calc(var(--fig-scale, 1.18) * 1.02)); }
+}
+@keyframes headBob {
+  0%, 100% { transform: translateZ(7px) rotate(-1deg) scale(var(--fig-scale, 1.18)); }
+  50%      { transform: translateZ(7px) rotate(1deg) scale(var(--fig-scale, 1.18)); }
+}
+@keyframes typeShake {
+  0%, 100% { transform: translateZ(7px) translateX(0) rotate(0) scale(var(--fig-scale, 1.18)); }
+  25%      { transform: translateZ(7px) translateX(0.6px) rotate(0.8deg) scale(var(--fig-scale, 1.18)); }
+  75%      { transform: translateZ(7px) translateX(-0.6px) rotate(-0.8deg) scale(var(--fig-scale, 1.18)); }
+}
+@keyframes busyPulse {
+  0%, 100% { opacity: 0.85; }
+  50%      { opacity: 1; }
+}
+@keyframes nap {
+  0%, 100% { transform: translateZ(2px) rotateX(38deg) translateY(3px) scale(var(--fig-scale, 1.18)) scaleY(0.72); }
+  50%      { transform: translateZ(3px) rotateX(32deg) translateY(2px) scale(var(--fig-scale, 1.18)) scaleY(0.76); }
+}
+
+/* 在线 / 忙碌：手臂小幅敲键盘，让"打字"看得出来 */
+.seat-person.status-online .p-arm.a1 {
+  animation: seatTypeL 0.62s ease-in-out infinite alternate;
+}
+.seat-person.status-online .p-arm.a2 {
+  animation: seatTypeR 0.62s ease-in-out infinite alternate-reverse;
+}
+.seat-person.status-busy .p-arm.a1 {
+  animation: seatTypeL 0.34s ease-in-out infinite alternate;
+}
+.seat-person.status-busy .p-arm.a2 {
+  animation: seatTypeR 0.34s ease-in-out infinite alternate-reverse;
+}
+@keyframes seatTypeL {
+  from { transform: rotate(18deg) translateY(0); }
+  to   { transform: rotate(26deg) translateY(-1.4px); }
+}
+@keyframes seatTypeR {
+  from { transform: rotate(-18deg) translateY(0); }
+  to   { transform: rotate(-26deg) translateY(-1.4px); }
+}
+
+/* ── 坐姿待机动作：喝水 / 伸懒腰 / 张望 / 打电话 ───────── */
+
+/* 喝水：左手抬到嘴边 + 手里的小水杯，身体微微后仰 */
+.seat-person.idle-drink .person-figure {
+  animation: seatDrinkLean 3.4s ease-in-out infinite;
+}
+.seat-person.idle-drink .p-arm.a1 {
+  animation: seatDrinkArm 3.4s ease-in-out infinite;
+}
+.seat-person.idle-drink .p-arm.a2 {
+  animation: none;
+}
+.seat-person.idle-drink .p-arm.a1::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: 9px;
+  width: 6px;
+  height: 7px;
+  border-radius: 1px 1px 3px 3px;
+  background: linear-gradient(180deg, #eaf7ff, #bfe3f3);
+  box-shadow: inset 0 0 0 1px #ffffff;
+}
+@keyframes seatDrinkArm {
+  0%, 14%, 100% { transform: rotate(18deg); }
+  32%, 76%      { transform: rotate(-118deg); }
+}
+@keyframes seatDrinkLean {
+  0%, 14%, 100% { transform: translateZ(9px) scale(var(--fig-scale, 1.55)) rotate(0deg); }
+  32%, 76%      { transform: translateZ(9px) scale(var(--fig-scale, 1.55)) rotate(-3deg); }
+}
+
+/* 伸懒腰：双臂上举 + 身体纵向拉长 */
+.seat-person.idle-stretch .person-figure {
+  animation: seatStretch 3s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+.seat-person.idle-stretch .p-arm.a1 {
+  animation: seatStretchArmL 3s ease-in-out infinite;
+}
+.seat-person.idle-stretch .p-arm.a2 {
+  animation: seatStretchArmR 3s ease-in-out infinite;
+}
+@keyframes seatStretch {
+  0%, 40%, 100% { transform: translateZ(9px) scale(var(--fig-scale, 1.55)); }
+  62%           { transform: translateZ(9px) scale(var(--fig-scale, 1.55)) scaleY(1.13) translateY(-2px); }
+}
+@keyframes seatStretchArmL {
+  0%, 40%, 100% { transform: rotate(18deg); }
+  62%           { transform: rotate(178deg); }
+}
+@keyframes seatStretchArmR {
+  0%, 40%, 100% { transform: rotate(-18deg); }
+  62%           { transform: rotate(-178deg); }
+}
+
+/* 张望：左右轻轻转头（连带身体微摆） */
+.seat-person.idle-look .person-figure {
+  animation: seatLook 3.6s ease-in-out infinite;
+}
+@keyframes seatLook {
+  0%, 100% { transform: translateZ(9px) scale(var(--fig-scale, 1.55)) rotate(0deg); }
+  25%      { transform: translateZ(9px) scale(var(--fig-scale, 1.55)) rotate(-3.5deg); }
+  75%      { transform: translateZ(9px) scale(var(--fig-scale, 1.55)) rotate(3.5deg); }
+}
+
+/* 打电话：右手抬到耳边 + 手机 */
+.seat-person.idle-phone .p-arm.a2 {
+  animation: seatPhoneArm 4.2s ease-in-out infinite;
+}
+.seat-person.idle-phone .p-arm.a2::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: 8px;
+  width: 5px;
+  height: 9px;
+  border-radius: 2px;
+  background: linear-gradient(#5b6b7a, #33414d);
+  box-shadow: inset 0 0 0 1px #8ea3b3;
+}
+@keyframes seatPhoneArm {
+  0%, 12%, 100% { transform: rotate(-18deg); }
+  26%, 82%      { transform: rotate(148deg); }
+}
+
+/* ── 桌面小物件（纯 CSS，零 DOM 开销） ──────────────── */
+
+/* 笔记本：桌面左后方，白色小本子 */
+.desk-top::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 10px;
+  width: 20px;
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(145deg, #ffffff, #f1ece2);
+  box-shadow:
+    inset 0 0 0 1.5px #e9e0d2,
+    0 2px 3px rgba(150, 112, 72, 0.14);
+  transform: rotate(-4deg) translateZ(18px);
+}
+/* 笔记本屏幕亮：online/busy 时顶部一道反光 */
+.seat-person.status-online .desk-top::before {
+  box-shadow:
+    inset 0 0 0 1.5px #e9e0d2,
+    inset 0 4px 0 rgba(203, 231, 247, 0.9);
+}
+.seat-person.status-busy .desk-top::before {
+  box-shadow:
+    inset 0 0 0 1.5px #e9e0d2,
+    inset 0 4px 0 rgba(255, 214, 170, 0.9);
+}
+
+/* 水杯：桌面右后方，马卡龙色小杯 */
+.desk-top::after {
+  content: "";
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  width: 10px;
+  height: 9px;
+  border-radius: 3px 3px 4px 4px;
+  background: linear-gradient(160deg, #ffffff, #cbb6e8);
+  box-shadow:
+    inset 0 0 0 1.5px #ffffff,
+    inset 0 -2px 0 rgba(150, 120, 190, 0.25);
+  transform: translateZ(18px);
+}
+
+/* 椅子：加靠背（后方弧形） */
+.desk-chair {
+  position: absolute;
+  left: -16px;
+  top: 18px;
+  width: 32px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(150deg, #fff2e0, #f2d9bb);
+  box-shadow: 0 0 0 2px rgba(214, 178, 138, 0.6), 0 4px 8px rgba(150, 104, 66, 0.14);
+  transform: translateZ(10px);
+}
+.desk-chair::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  width: 22px;
+  height: 14px;
+  margin-left: -11px;
+  border-radius: 11px 11px 4px 4px;
+  background: linear-gradient(150deg, #fff2e0, #e8cfab);
+  box-shadow: 0 0 0 2px rgba(214, 178, 138, 0.55);
+}
+/* offline：椅子微微后倾表示没人 */
+.seat-person.status-offline .desk-chair {
+  transform: translateZ(10px) rotateX(-12deg);
+}
+
+/* ── 房间细节：墙面 + 地毯 + 门牌 ───────────────────── */
+
+/* 地毯纹理：白色轻柔绒面，透出下面木地板 */
+.room .rug {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 26px;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(255, 255, 255, 0.62) 0%, rgba(255, 253, 247, 0.34) 58%, rgba(255, 250, 240, 0.12) 100%);
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.4);
+}
+
+/* 墙：奶油白 + 底部暖阴影 */
+.wall {
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 1),
+    inset 0 -14px 20px rgba(206, 172, 130, 0.16),
+    0 0 0 1px rgba(216, 192, 160, 0.4);
+}
+.wall-n { box-shadow: inset 0 -10px 16px rgba(206, 172, 130, 0.14), inset 0 2px 0 #fff; }
+.wall-s { box-shadow: inset 0 12px 16px rgba(206, 172, 130, 0.12), inset 0 2px 0 #fff; }
+
+/* 门牌：白色胶囊 */
+.room-label {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: #a97f52;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 2px solid #f1d8b6;
+  box-shadow: 0 5px 12px rgba(172, 130, 86, 0.18);
+  text-shadow: none;
+}
+
+/* 房间牌前的小圆点，强化小游戏 UI 感 */
+.room-label::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.7;
+  vertical-align: 1px;
+}
+
+/* 不同房间用不同粉彩描边 */
+.room-meeting .room-label { background: #fff; border-color: #b8d8ec; color: #5b8bab; }
+.room-lounge .room-label   { background: #fff; border-color: #f6cf9f; color: #c08a43; }
+.room-reception .room-label{ background: #fff; border-color: #f3b9c8; color: #cd7191; }
+.room-focus .room-label    { background: #fff; border-color: #b9dcc4; color: #5f9a76; }
+.room-bullpen .room-label  { background: #fff; border-color: #f1d8b6; color: #a97f52; }
+
+/* ── 门 / doorway ────────────────────────────────────── */
+
+/* 在某面墙上开缺口，用 room-floor 的地板色填进去，视觉上"穿墙"通。 */
+.room .doorway {
+  position: absolute;
+  z-index: 2;
+  /* room-floor 同色，看起来像地板延伸出去 */
+  background: var(--floor, #f0e1c8);
+  box-shadow:
+    inset 0 0 0 2.5px #e9d8bd,
+    inset 0 0 10px rgba(0, 0, 0, 0.08);
+}
+/* 门板：暖橡木色，圆角，带高光与门把手 */
+.room .doorway::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 3px;
+  background:
+    linear-gradient(180deg, #e2bd8a 0%, #c89664 55%, #a97748 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(110, 72, 36, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -2px 4px rgba(90, 58, 28, 0.25);
+  transition: transform 160ms cubic-bezier(0.34, 1.3, 0.64, 1), opacity 150ms ease-out;
+}
+/* 门把手：一个小圆点，位于门板活动端 */
+.room .doorway::before {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff6e0, #c9a24a 70%, #8a6a28);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
+  z-index: 3;
+  transition: transform 160ms cubic-bezier(0.34, 1.3, 0.64, 1), opacity 150ms ease-out;
+}
+
+/* 横向门（n/s 墙）：铰链在左，沿 X 收缩打开 */
+.room .doorway-n::after,
+.room .doorway-s::after {
+  transform-origin: left center;
+}
+.room .doorway-n::before,
+.room .doorway-s::before {
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.room.door-open .doorway-n::after,
+.room.door-open .doorway-s::after {
+  transform: scaleX(0.06);
+}
+.room.door-open .doorway-n::before,
+.room.door-open .doorway-s::before {
+  transform: translate(-28px, -50%) scale(0.4);
+  opacity: 0;
+}
+
+/* 纵向门（w/e 墙）：铰链在上，沿 Y 收缩打开 */
+.room .doorway-w::after,
+.room .doorway-e::after {
+  transform-origin: center top;
+}
+.room .doorway-w::before,
+.room .doorway-e::before {
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.room.door-open .doorway-w::after,
+.room.door-open .doorway-e::after {
+  transform: scaleY(0.06);
+}
+.room.door-open .doorway-w::before,
+.room.door-open .doorway-e::before {
+  transform: translate(-50%, -28px) scale(0.4);
+  opacity: 0;
+}
+
+/* 给 room-floor 一个 CSS 变量，让 doorway 自动同色 */
+.room { --floor: #f6e0be; }
+.room-meeting { --floor: #f8e3d0; }
+.room-lounge  { --floor: #f8ddbf; }
+.room-reception { --floor: #fbe7cf; }
+.room-bullpen { --floor: #f6e0be; }
+.room-focus   { --floor: #f2edd4; }
+
+/* ── Walker（走动的人） ───────────────────────────────── */
+
+.walkers-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform-style: preserve-3d;
+  z-index: 1;
+}
+
+.walker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 44px;
+  height: 50px;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.walker-figure {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(7px);
+  filter: drop-shadow(0 4px 6px rgba(140, 96, 62, 0.26));
+}
+
+/* 腿 */
+.w-leg {
+  position: absolute;
+  top: 38px;
+  width: 6px;
+  height: 8px;
+  border-radius: 3px 3px 2px 2px;
+  background: linear-gradient(180deg, #6b5a4e 0%, #4a3d33 100%);
+  box-shadow: 0 0 0 1.2px rgba(80, 60, 45, 0.4);
+}
+.w-leg.l1 { left: 14px; }
+.w-leg.l2 { left: 22px; }
+
+/* 脚 */
+.w-foot {
+  position: absolute;
+  top: 44px;
+  width: 9px;
+  height: 5px;
+  border-radius: 5px 5px 3px 3px;
+  background: linear-gradient(180deg, #5a4a3e 0%, #3a2f27 100%);
+  box-shadow: 0 0 0 1.2px rgba(70, 52, 38, 0.45);
+}
+.w-foot.f1 { left: 12px; }
+.w-foot.f2 { left: 22px; }
+
+/* 手臂 */
+.w-arm {
+  position: absolute;
+  top: 28px;
+  width: 7px;
+  height: 11px;
+  border-radius: 4px;
+  background: linear-gradient(160deg, var(--shirt, #f6c9a0), color-mix(in srgb, var(--shirt, #f6c9a0) 70%, #a87758));
+  box-shadow: 0 0 0 1.5px rgba(150, 105, 75, 0.28);
+  transform-origin: top center;
+}
+.w-arm.a1 { left: 4px; transform: rotate(18deg); }
+.w-arm.a2 { left: 33px; transform: rotate(-18deg); }
+
+/* 身体 */
+.w-body {
+  position: absolute;
+  left: 11px;
+  top: 27px;
+  width: 22px;
+  height: 14px;
+  border-radius: 10px 10px 8px 8px;
+  background: linear-gradient(160deg, var(--shirt, #f6c9a0), color-mix(in srgb, var(--shirt, #f6c9a0) 68%, #b07f5e));
+  box-shadow:
+    0 0 0 1.5px rgba(150, 105, 75, 0.3),
+    inset 0 2px 0 rgba(255, 255, 255, 0.5);
+}
+.w-body::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  width: 2px;
+  height: 2px;
+  margin-left: -1px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 5px 0 rgba(255, 255, 255, 0.7);
+}
+
+/* 衣领 */
+.w-collar {
+  position: absolute;
+  left: 16px;
+  top: 26px;
+  width: 12px;
+  height: 6px;
+  border-radius: 0 0 6px 6px;
+  background: rgba(255, 255, 255, 0.85);
+  clip-path: polygon(0 0, 50% 100%, 100% 0);
+}
+
+/* 头 */
+.w-head {
+  position: absolute;
+  left: 7px;
+  top: 1px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 28%, #fff5ec 0%, #fcdcbe 56%, #f4c69e 100%);
+  box-shadow:
+    0 0 0 1.8px rgba(160, 115, 82, 0.28),
+    inset 0 -3px 0 rgba(224, 168, 128, 0.32);
+}
+
+/* 头发 */
+.w-hair {
+  position: absolute;
+  left: 5px;
+  top: -2px;
+  width: 34px;
+  height: 21px;
+  border-radius: 17px 17px 10px 10px;
+  background: linear-gradient(165deg, var(--hair, #f0d28c) 0%, color-mix(in srgb, var(--hair, #f0d28c) 70%, #8d6a4c) 100%);
+  box-shadow:
+    0 0 0 1.8px rgba(140, 100, 70, 0.28),
+    inset 0 2px 0 rgba(255, 255, 255, 0.4);
+}
+.w-hair::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 6px;
+  width: 3px;
+  height: 9px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--hair, #f0d28c) 50%, #6b4f35);
+}
+.w-hair::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: 4px;
+  width: 11px;
+  height: 9px;
+  border-radius: 0 9px 9px 4px;
+  background: inherit;
+  box-shadow: 0 0 0 1.5px rgba(140, 100, 70, 0.28);
+}
+
+/* 眉毛 */
+.w-brow {
+  position: absolute;
+  width: 6px;
+  height: 2px;
+  top: 13px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--hair, #f0d28c) 45%, #5a4030);
+}
+.w-brow.b1 { left: 10px; transform: rotate(-8deg); }
+.w-brow.b2 { left: 28px; transform: rotate(8deg); }
+
+/* 眼睛 */
+.w-eye {
+  position: absolute;
+  width: 6px;
+  height: 7px;
+  top: 16px;
+  border-radius: 50%;
+  background: #3a2a24;
+}
+.w-eye.e1 { left: 11px; }
+.w-eye.e2 { left: 27px; }
+.w-eye::after {
+  content: "";
+  position: absolute;
+  left: 1.1px;
+  top: 1px;
+  width: 2.6px;
+  height: 2.6px;
+  border-radius: 50%;
+  background: #fff;
+}
+.w-eye::before {
+  content: "";
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 1.4px;
+  height: 1.4px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+/* 嘴巴 */
+.w-mouth {
+  position: absolute;
+  left: 19px;
+  top: 24px;
+  width: 6px;
+  height: 3px;
+  border-radius: 0 0 6px 6px;
+  border-bottom: 1.5px solid #c97a6a;
+}
+
+/* 腮红 */
+.w-blush {
+  position: absolute;
+  width: 6px;
+  height: 3.5px;
+  top: 21px;
+  border-radius: 50%;
+  background: rgba(248, 150, 150, 0.6);
+}
+.w-blush.b1 { left: 6px; }
+.w-blush.b2 { left: 32px; }
+
+/* 工牌挂绳 + 胸卡 */
+.w-lanyard {
+  left: 20px;
+  top: 26px;
+  width: 4px;
+  height: 6px;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(180deg, #7fb2dd, #4f86c6);
+  box-shadow: 0 0 0 1px rgba(60, 100, 140, 0.3);
+}
+.w-badge {
+  left: 18px;
+  top: 31px;
+  width: 9px;
+  height: 6px;
+  border-radius: 1.5px;
+  background: linear-gradient(160deg, #fffdf8, #e9f1f8);
+  box-shadow:
+    0 0 0 1px rgba(90, 130, 170, 0.42),
+    inset 0 -1.6px 0 rgba(120, 160, 200, 0.24);
+}
+.w-badge::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 5px;
+  height: 1px;
+  border-radius: 1px;
+  background: #9db8cf;
+  box-shadow: 0 2px 0 #cfdcea;
+}
+
+/* 眼镜：两片镜片，部分员工佩戴 */
+.w-glasses {
+  left: 8px;
+  top: 14px;
+  width: 28px;
+  height: 9px;
+}
+.w-glasses::before,
+.w-glasses::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 11px;
+  height: 9px;
+  border-radius: 4px;
+  border: 1.3px solid rgba(72, 62, 56, 0.7);
+  background: linear-gradient(180deg, rgba(205, 233, 245, 0.5), rgba(178, 214, 232, 0.26));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+.w-glasses::before { left: 0; }
+.w-glasses::after { right: 0; }
+
+/* 长发：在头部右侧垂下一缕 */
+.w-hair.w-hair-long::after {
+  right: -5px;
+  top: 9px;
+  width: 10px;
+  height: 24px;
+  border-radius: 5px 5px 9px 9px;
+  background: inherit;
+  box-shadow: 0 0 0 1.5px rgba(140, 100, 70, 0.24);
+}
+
+/* 背包：走在路上时背在身后 */
+.w-backpack {
+  left: 12px;
+  top: 25px;
+  width: 22px;
+  height: 17px;
+  border-radius: 7px 7px 6px 6px;
+  background: linear-gradient(160deg, #9dbd99 0%, #7c9c78 100%);
+  box-shadow:
+    0 0 0 1.5px rgba(70, 95, 68, 0.32),
+    inset 0 2px 0 rgba(255, 255, 255, 0.28);
+}
+.w-backpack::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  width: 6px;
+  height: 4px;
+  margin-left: -3px;
+  border-radius: 3px;
+  background: #6f8d6b;
+}
+
+/* 手里的东西：随动作变化 */
+.w-item {
+  z-index: 4;
+  left: 34px;
+  top: 33px;
+}
+.w-item-coffee {
+  width: 8px;
+  height: 9px;
+  border-radius: 2px 2px 4px 4px;
+  background: linear-gradient(180deg, #ffffff, #f2e6d4);
+  box-shadow:
+    inset 0 0 0 1.4px #ffffff,
+    inset 0 -3px 0 #c98f5e,
+    0 2px 4px rgba(120, 90, 60, 0.24);
+}
+.w-item-water {
+  width: 8px;
+  height: 10px;
+  border-radius: 2px 2px 4px 4px;
+  background: linear-gradient(180deg, #f2fbff, #bfe3f3);
+  box-shadow:
+    inset 0 0 0 1.4px #ffffff,
+    inset 0 -4px 0 rgba(120, 190, 220, 0.55),
+    0 2px 4px rgba(120, 140, 160, 0.22);
+}
+.w-item-folder {
+  width: 12px;
+  height: 9px;
+  border-radius: 1.5px 3px 3px 3px;
+  background: linear-gradient(180deg, #f7d68f, #e3b95f);
+  box-shadow:
+    0 0 0 1.2px rgba(160, 120, 50, 0.4),
+    inset 0 3px 0 rgba(255, 255, 255, 0.45);
+  transform: rotate(-8deg);
+}
+.w-item-laptop {
+  width: 13px;
+  height: 9px;
+  border-radius: 2px 2px 1px 1px;
+  background: linear-gradient(170deg, #7d8a97, #4c5763);
+  box-shadow:
+    0 0 0 1.2px rgba(50, 60, 70, 0.55),
+    inset 0 0 0 2px rgba(190, 210, 225, 0.5);
+  transform: rotate(-6deg);
+}
+
+/* 走动的人头顶名字气泡 */
+.walker-tag {
+  position: absolute;
+  left: 0;
+  top: -58px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 13px;
+  color: var(--tag-text, #e06c9f);
+  background: rgba(255, 255, 255, 0.97);
+  border: 2px solid var(--tag, #f5b8d0);
+  box-shadow: 0 4px 9px rgba(168, 120, 140, 0.16);
+  white-space: nowrap;
+  transform: translateX(-50%) scaleX(var(--facing, 1)); /* 抵消父级翻转，文字始终正向 */
+}
+
+/* 走路：整体上下起伏 + 身体轻微前后摆 */
+.walker.is-walking .walker-figure {
+  animation: walkBob 0.45s ease-in-out infinite, walkLean 0.9s ease-in-out infinite;
+}
+
+@keyframes walkBob {
+  0%, 100% { transform: translateZ(7px) translateY(0); }
+  50%      { transform: translateZ(7px) translateY(-1.5px); }
+}
+@keyframes walkLean {
+  0%, 100% { transform: translateZ(7px) rotate(-2deg); }
+  50%      { transform: translateZ(7px) rotate(2deg); }
+}
+
+/* ── 站立动作：3 种姿态 ────────────────────────────────── */
+
+/* typing：身体快速小幅度前后摇摆（像趴在工位敲键盘） */
+.walker.is-typing .walker-figure {
+  animation: typeFlick 0.18s ease-in-out infinite;
+  transform-origin: center 70%;
+}
+@keyframes typeFlick {
+  0%, 100% { transform: translateZ(7px) rotate(-2deg) scaleY(0.98); }
+  33%      { transform: translateZ(7px) rotate(1deg)  scaleY(1.02); }
+  66%      { transform: translateZ(7px) rotate(-0.5deg) scaleY(0.99); }
+}
+
+/* resting：慢速呼吸 + 轻微后仰（像在 lounge 拿咖啡看手机） */
+.walker.is-resting .walker-figure {
+  animation: loungeBreathe 2.8s ease-in-out infinite;
+  transform-origin: center 65%;
+}
+@keyframes loungeBreathe {
+  0%, 100% { transform: translateZ(7px) rotate(-5deg) scale(1); }
+  50%      { transform: translateZ(7px) rotate(-3deg) scale(1.04); }
+}
+
+/* standing：稳定站立 + 非常轻微的呼吸（聊天） */
+.walker.is-standing .walker-figure {
+  animation: standBreath 3.6s ease-in-out infinite;
+}
+@keyframes standBreath {
+  0%, 100% { transform: translateZ(7px) translateY(0) scale(1); }
+  50%      { transform: translateZ(7px) translateY(-0.5px) scale(1.015); }
+}
+
+/* meeting：开会时点头、偶尔侧身，像在发言 */
+.walker.is-meeting .walker-figure {
+  animation: meetBob 1.8s ease-in-out infinite;
+  transform-origin: center 74%;
+}
+@keyframes meetBob {
+  0%, 100% { transform: translateZ(7px) rotate(-1deg) translateY(0); }
+  35%      { transform: translateZ(7px) rotate(1.5deg) translateY(-1.5px); }
+  70%      { transform: translateZ(7px) rotate(-0.5deg) translateY(0); }
+}
+
+/* coffee：端着杯子轻轻晃 */
+.walker.is-coffee .walker-figure {
+  animation: coffeeSway 2.8s ease-in-out infinite;
+  transform-origin: center 76%;
+}
+@keyframes coffeeSway {
+  0%, 100% { transform: translateZ(7px) rotate(-3deg); }
+  50%      { transform: translateZ(7px) rotate(2.5deg); }
+}
+/* resting：瘫在沙发上，手里捏着杯子 */
+.walker.is-resting .walker-figure::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 8px;
+  width: 10px;
+  height: 9px;
+  border-radius: 2px 2px 4px 4px;
+  background: linear-gradient(180deg, #ffffff, #f0e6d6);
+  box-shadow:
+    inset 0 0 0 1.5px #ffffff,
+    0 2px 4px rgba(120, 90, 60, 0.22);
+}
+
+/* stretch：伸懒腰，纵向伸展 */
+.walker.is-stretch .walker-figure {
+  animation: stretchUp 2.4s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+@keyframes stretchUp {
+  0%, 55%, 100% { transform: translateZ(7px) scaleY(1); }
+  72%           { transform: translateZ(7px) scaleY(1.14) translateY(-2px); }
+  84%           { transform: translateZ(7px) scaleY(1.04) translateY(-0.5px); }
+}
+
+/* water：举杯喝水的完整动作 —— 抬手 → 仰头 → 两小口 → 放下 */
+.walker.is-water .walker-figure {
+  animation: sipWater 3.6s ease-in-out infinite;
+  transform-origin: center 72%;
+}
+@keyframes sipWater {
+  0%, 12%   { transform: translateZ(7px) rotate(-1deg) translateY(0); }
+  28%, 38%  { transform: translateZ(7px) rotate(2deg) translateY(-1px); }
+  50%       { transform: translateZ(7px) rotate(-1deg) translateY(0); }
+  62%, 72%  { transform: translateZ(7px) rotate(2deg) translateY(-1px); }
+  90%, 100% { transform: translateZ(7px) rotate(-1deg) translateY(0); }
+}
+/* 杯子：抬到嘴边，跟着仰头一起倾倒 */
+.walker.is-water .w-item-water {
+  animation: sipCup 3.6s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+@keyframes sipCup {
+  0%, 12%   { transform: translate(0, 0) rotate(0deg); }
+  24%, 42%  { transform: translate(-14px, -11px) rotate(-18deg); }
+  50%       { transform: translate(0, 0) rotate(0deg); }
+  58%, 76%  { transform: translate(-14px, -11px) rotate(-18deg); }
+  88%, 100% { transform: translate(0, 0) rotate(0deg); }
+}
+/* 喝水时头微微后仰 */
+.walker.is-water .w-head {
+  animation: sipHead 3.6s ease-in-out infinite;
+}
+.walker.is-water .w-mouth {
+  animation: sipMouth 3.6s ease-in-out infinite;
+}
+@keyframes sipHead {
+  0%, 12%, 50%, 88%, 100% { transform: rotate(0deg); }
+  24%, 42%, 58%, 76%      { transform: rotate(-5deg) translateY(-1px); }
+}
+@keyframes sipMouth {
+  0%, 16%, 46%, 54%, 84%, 100% { height: 3px; }
+  26%, 40%, 60%, 74%           { height: 5px; }
+}
+
+/* fetch：在饮水机前接水 —— 探身、伸手扶杯、水流注入杯子 */
+.walker.is-fetch .walker-figure {
+  animation: fetchLean 4.2s ease-in-out infinite;
+  transform-origin: center 78%;
+}
+@keyframes fetchLean {
+  0%, 100% { transform: translateZ(7px) rotate(-6deg) translateX(-1px); }
+  45%      { transform: translateZ(7px) rotate(-4deg) translateX(-2px) translateY(1px); }
+}
+/* 接水时右臂抬起托住杯子 */
+.walker.is-fetch .w-arm.a2 {
+  animation: fetchArm 4.2s ease-in-out infinite;
+  transform-origin: top center;
+}
+@keyframes fetchArm {
+  0%, 100% { transform: rotate(-38deg) translateX(-2px); }
+  45%      { transform: rotate(-42deg) translateX(-3px); }
+}
+/* 杯子停在龙头下方 */
+.walker.is-fetch .w-item-water {
+  left: 36px;
+  top: 28px;
+  transform: rotate(-8deg);
+}
+/* 从龙头落下的水流 */
+.w-stream {
+  left: 38px;
+  top: 12px;
+  z-index: 3;
+  width: 3px;
+  height: 17px;
+  border-radius: 2px;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      rgba(190, 232, 248, 0.95) 0 3px,
+      rgba(226, 246, 253, 0.55) 3px 6px
+    );
+  box-shadow: 0 0 4px rgba(150, 210, 235, 0.7);
+  animation: waterJet 0.7s linear infinite;
+}
+@keyframes waterJet {
+  0%   { background-position: 0 0; }
+  100% { background-position: 0 12px; }
+}
+/* 水流末端溅起的小水花 */
+.w-stream::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  bottom: -2px;
+  width: 7px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(200, 238, 250, 0.95), rgba(190, 232, 248, 0.2) 70%);
+  animation: waterSplash 0.7s ease-in-out infinite;
+}
+@keyframes waterSplash {
+  0%, 100% { transform: scale(0.8); opacity: 0.75; }
+  50%      { transform: scale(1.15); opacity: 1; }
+}
+
+/* chat：和同事聊天，点头 + 手臂小幅比划 */
+.walker.is-chat .walker-figure {
+  animation: chatBob 1.6s ease-in-out infinite;
+  transform-origin: center 74%;
+}
+@keyframes chatBob {
+  0%, 100% { transform: translateZ(7px) rotate(-2deg) translateY(0); }
+  50%      { transform: translateZ(7px) rotate(2deg) translateY(-1px); }
+}
+.walker.is-chat .w-arm.a1 { animation: chatArm 0.9s ease-in-out infinite alternate; }
+.walker.is-chat .w-arm.a2 { animation: chatArm2 0.9s ease-in-out infinite alternate-reverse; }
+@keyframes chatArm {
+  from { transform: rotate(18deg); }
+  to   { transform: rotate(32deg) translateY(-1px); }
+}
+@keyframes chatArm2 {
+  from { transform: rotate(-18deg); }
+  to   { transform: rotate(-32deg) translateY(-1px); }
+}
+
+/* phone：打电话，右手举到耳边 */
+.walker.is-phone .walker-figure {
+  animation: phoneBob 2.2s ease-in-out infinite;
+  transform-origin: center 74%;
+}
+@keyframes phoneBob {
+  0%, 100% { transform: translateZ(7px) rotate(0deg); }
+  50%      { transform: translateZ(7px) rotate(-1.6deg) translateY(-0.5px); }
+}
+.walker.is-phone .w-arm.a2 {
+  animation: walkerPhoneArm 2.6s ease-in-out infinite;
+}
+.walker.is-phone .w-arm.a2::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: 8px;
+  width: 5px;
+  height: 8px;
+  border-radius: 2px;
+  background: linear-gradient(#5b6b7a, #33414d);
+  box-shadow: inset 0 0 0 1px #8ea3b3;
+}
+@keyframes walkerPhoneArm {
+  0%, 10%, 100% { transform: rotate(-18deg); }
+  30%, 85%      { transform: rotate(148deg); }
+}
+
+/* ── 办公设施 ───────────────────────────────────────── */
+.prop {
+  position: absolute;
+  display: block;
+}
+
+.prop-cooler {
+  width: 30px;
+  height: 26px;
+  border-radius: 8px;
+  background: linear-gradient(#ffffff, #eef5f7);
+  box-shadow:
+    inset 0 0 0 2px #d2e4e8,
+    inset 0 -6px 0 #e6eff1,
+    0 5px 10px rgba(140, 110, 80, 0.18);
+  transform: translateZ(24px);
+}
+
+/* 顶部水桶 */
+.prop-cooler::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: -14px;
+  width: 16px;
+  height: 18px;
+  border-radius: 50% 50% 42% 42%;
+  background: linear-gradient(160deg, #dff3fd 0%, #a9d8ea 60%, #8cc5db 100%);
+  box-shadow:
+    inset -2px -2px 4px rgba(100, 150, 170, 0.3),
+    0 0 0 2px rgba(255, 255, 255, 0.85);
+  transform: translateZ(20px);
+}
+
+/* 出水龙头 + 接水盘 */
+.prop-cooler::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 8px;
+  width: 12px;
+  height: 10px;
+  border-radius: 3px;
+  background: linear-gradient(#bfe3ee, #8fc4d6);
+  box-shadow: inset 0 0 0 1px #7fb0c4;
+}
+/* 纸杯架 + 接水盘（饮水机侧边的小配件） */
+.prop-cooler > i {
+  position: absolute;
+  display: block;
+}
+.cooler-cups {
+  right: -9px;
+  top: 4px;
+  width: 7px;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #ffffff 0 45%, #eef5f7 46% 100%);
+  box-shadow:
+    inset 0 0 0 1px #d2e4e8,
+    0 0 0 1px rgba(150, 180, 190, 0.28);
+}
+.cooler-cups::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -5px;
+  width: 7px;
+  height: 6px;
+  border-radius: 2px 2px 0 0;
+  background: linear-gradient(180deg, #e8f6fb, #cfe9f2);
+  box-shadow: 0 0 0 1px rgba(170, 205, 215, 0.5);
+}
+.cooler-drip {
+  left: 10px;
+  top: 19px;
+  width: 10px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(180deg, #cfe3e9, #b3ccd4);
+  box-shadow: 0 0 0 1px rgba(150, 180, 190, 0.35);
+}
+
+.prop-printer {
+  width: 36px;
+  height: 26px;
+  border-radius: 9px;
+  background: linear-gradient(#ffffff, #f6f0e6);
+  box-shadow:
+    inset 0 0 0 2px #eee2d2,
+    0 4px 8px rgba(140, 110, 80, 0.16);
+  transform: translateZ(13px);
+}
+
+.prop-printer::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: -5px;
+  width: 24px;
+  height: 8px;
+  border-radius: 3px;
+  background: #fffdf8;
+  box-shadow: 0 0 0 2px #efe4d4;
+}
+
+.prop-whiteboard {
+  width: 86px;
+  height: 46px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff, #f7fbfb);
+  border: 2px solid #e6ded2;
+  box-shadow: 0 4px 8px rgba(140, 110, 80, 0.14);
+  transform-origin: center bottom;
+  transform: rotateX(-90deg);
+}
+
+.prop-whiteboard::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 10px;
+  width: 46px;
+  height: 3px;
+  border-radius: 2px;
+  background: #f4b8c6;
+  box-shadow: 0 8px 0 #b8d8ec, 0 16px 0 #b9dcc4;
+}
+
+.prop-counter {
+  width: 120px;
+  height: 30px;
+  border-radius: 12px;
+  background: linear-gradient(#fffaf2, #f7e7d1);
+  box-shadow:
+    inset 0 0 0 2px #f0dcc0,
+    0 6px 12px rgba(150, 116, 76, 0.16);
+  transform: translateZ(26px);
+}
+
+.prop-counter::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 6px;
+  width: 14px;
+  height: 12px;
+  border-radius: 4px;
+  background: #fffdf8;
+  box-shadow: 22px 0 0 #fffdf8, 44px 0 0 #fffdf8;
+}
+
+.prop-cabinet {
+  width: 40px;
+  height: 26px;
+  border-radius: 8px;
+  background: linear-gradient(#fffaf2, #f6e8d4);
+  box-shadow:
+    inset 0 0 0 2px #eedcc2,
+    0 4px 8px rgba(150, 116, 76, 0.14);
+  transform: translateZ(24px);
+}
+
+.prop-trash {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(#ffffff, #eee5d7);
+  box-shadow: 0 3px 6px rgba(140, 110, 80, 0.16);
+  transform: translateZ(10px);
+}
+
+/* 咖啡机 */
+.prop-coffee {
+  width: 34px;
+  height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(160deg, #4a4038 0%, #2e2720 100%);
+  box-shadow:
+    inset 0 0 0 1.5px #1c1612,
+    inset 0 3px 0 rgba(255, 255, 255, 0.12),
+    0 5px 10px rgba(60, 40, 20, 0.3);
+  transform: translateZ(26px);
+}
+.prop-coffee::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  width: 14px;
+  height: 10px;
+  border-radius: 3px;
+  background: linear-gradient(#c8a878, #a88858);
+  box-shadow: inset 0 0 0 1px #8a6d3f;
+}
+.prop-coffee::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  top: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffd86b, #e8a33a);
+  box-shadow: 0 0 4px rgba(255, 200, 80, 0.6);
+}
+
+/* 纸杯架 / 一排杯子 */
+.prop-cups {
+  width: 56px;
+  height: 16px;
+  border-radius: 6px;
+  background: linear-gradient(#fff8ee, #f3e4cc);
+  box-shadow: inset 0 0 0 1.5px #e6d3b5, 0 3px 6px rgba(140, 110, 80, 0.12);
+  transform: translateZ(14px);
+}
+.prop-cups::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: -6px;
+  width: 8px;
+  height: 10px;
+  border-radius: 2px 2px 4px 4px;
+  background: linear-gradient(#fff, #f0e6d6);
+  box-shadow: inset 0 0 0 1px #e0d2ba;
+}
+.prop-cups::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: -6px;
+  width: 8px;
+  height: 10px;
+  border-radius: 2px 2px 4px 4px;
+  background: linear-gradient(#fff, #f0e6d6);
+  box-shadow: inset 0 0 0 1px #e0d2ba, 16px 0 0 #fff, 16px 0 0 1px #e0d2ba;
+}
+
+/* ── 新增办公陈设 ───────────────────────────────────── */
+
+/* 挂钟：挂墙的小圆钟，白盘 + 指针 */
+.prop-clock {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 34%, #ffffff 0%, #fdf8ef 62%, #efe3d0 100%);
+  box-shadow:
+    0 0 0 2.5px #e2d2ba,
+    0 3px 6px rgba(140, 110, 80, 0.2);
+  transform: translateZ(18px);
+}
+.prop-clock::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 5px;
+  width: 2px;
+  height: 8px;
+  border-radius: 1px;
+  background: #8a7563;
+  transform-origin: bottom center;
+  transform: rotate(28deg);
+}
+.prop-clock::after {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 12px;
+  width: 6px;
+  height: 2px;
+  border-radius: 1px;
+  background: #a8917c;
+  transform-origin: left center;
+  transform: rotate(-16deg);
+}
+
+/* 落地大绿植：陶盆 + 圆润树冠 */
+.prop-ftree {
+  width: 34px;
+  height: 38px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f4e6d2 0%, #e2cfb4 100%);
+  box-shadow:
+    inset 0 0 0 2px #d8c3a5,
+    0 6px 12px rgba(140, 110, 80, 0.2);
+  transform: translateZ(16px);
+}
+.prop-ftree::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: -27px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #c3e6b8 0%, #8ec792 62%, #67a06f 100%);
+  box-shadow:
+    -9px 9px 0 -3px #8ec692,
+    9px 8px 0 -3px #8ec692,
+    0 -6px 0 -7px #a9d8a0;
+}
+.prop-ftree::after {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: -10px;
+  width: 4px;
+  height: 12px;
+  border-radius: 2px;
+  background: #a98864;
+}
+
+/* 资料架 / 矮书架 */
+.prop-shelf {
+  width: 78px;
+  height: 24px;
+  border-radius: 5px;
+  background:
+    linear-gradient(180deg, #f3e2c8 0 45%, #e7d2b3 46% 100%);
+  box-shadow:
+    inset 0 0 0 2px #ddc6a4,
+    0 4px 8px rgba(150, 116, 76, 0.16);
+  transform: translateZ(22px);
+}
+.prop-shelf::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: -9px;
+  width: 8px;
+  height: 11px;
+  border-radius: 2px 2px 0 0;
+  background: #f2b6c6;
+  box-shadow:
+    10px 2px 0 #a9d8c4,
+    20px 0 0 #f2d98f,
+    30px 3px 0 #cbb6e8,
+    42px 1px 0 #a8c8ee,
+    53px 2px 0 #f6c9a0;
+}
+
+/* 冰箱 */
+.prop-fridge {
+  width: 34px;
+  height: 48px;
+  border-radius: 6px;
+  background: linear-gradient(160deg, #ffffff 0%, #eef4f6 100%);
+  box-shadow:
+    inset 0 0 0 2px #dbe4e8,
+    inset 0 -18px 0 rgba(220, 232, 236, 0.55),
+    0 6px 12px rgba(140, 130, 120, 0.2);
+  transform: translateZ(38px);
+}
+.prop-fridge::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 14px;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: #c3d2d9;
+}
+.prop-fridge::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 24px;
+  height: 2px;
+  background: #e3eaee;
+}
+
+/* 微波炉 */
+.prop-microwave {
+  width: 34px;
+  height: 22px;
+  border-radius: 4px;
+  background: linear-gradient(160deg, #f7f9fa 0%, #e4ebee 100%);
+  box-shadow:
+    inset 0 0 0 2px #d3dee3,
+    0 4px 8px rgba(140, 130, 120, 0.18);
+  transform: translateZ(20px);
+}
+.prop-microwave::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 18px;
+  height: 14px;
+  border-radius: 2px;
+  background: linear-gradient(160deg, #5b666e, #333b41);
+  box-shadow: inset 0 0 0 1px #8d9aa3;
+}
+.prop-microwave::before {
+  content: "";
+  position: absolute;
+  right: 5px;
+  top: 6px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #8fd3a8;
+  box-shadow: 0 8px 0 #cfd8dc;
+}
+
+/* 公告板 */
+.prop-notice {
+  width: 52px;
+  height: 36px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #f2dfbf, #e4cba4);
+  box-shadow:
+    inset 0 0 0 3px #d8bd94,
+    0 3px 7px rgba(150, 116, 76, 0.2);
+  transform: translateZ(14px);
+}
+.prop-notice::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  width: 14px;
+  height: 18px;
+  border-radius: 1px;
+  background: #ffffff;
+  box-shadow:
+    18px 2px 0 #fffbe8,
+    18px 2px 0 1px rgba(0, 0, 0, 0.04);
+}
+.prop-notice::after {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 5px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #ef9aa8;
+  box-shadow: 18px 2px 0 #8fbfe0;
+}
+
+/* 前台 logo 灯箱 */
+.prop-logo {
+  width: 90px;
+  height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(160deg, #ffffff, #fff3e2);
+  box-shadow:
+    inset 0 0 0 2px #f6e3c8,
+    0 0 14px 2px rgba(255, 214, 150, 0.55);
+  transform: translateZ(14px);
+}
+.prop-logo::after {
+  content: "ZIYAN";
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  color: #e08a5c;
+}
+
+/* 灭火器 */
+.prop-extinguisher {
+  width: 11px;
+  height: 20px;
+  border-radius: 4px 4px 5px 5px;
+  background: linear-gradient(160deg, #f0705f, #c33f31);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(150, 50, 40, 0.5),
+    0 3px 6px rgba(140, 60, 50, 0.24);
+  transform: translateZ(18px);
+}
+.prop-extinguisher::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: -5px;
+  width: 7px;
+  height: 6px;
+  border-radius: 2px 2px 0 0;
+  background: #5a5a5a;
+  box-shadow: 0 0 0 1px rgba(60, 60, 60, 0.4);
+}
+
+/* 茶水间台面小物：咖啡壶 + 杯子 */
+.table-mug {
+  position: absolute;
+  left: 46px;
+  top: 34px;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px 2px 4px 4px;
+  background: linear-gradient(180deg, #ffffff, #eee1cd);
+  box-shadow:
+    inset 0 0 0 1.4px #fff,
+    0 2px 4px rgba(140, 110, 80, 0.2);
+  transform: translateZ(18px);
+}
+.table-mug::after {
+  content: "";
+  position: absolute;
+  right: -4px;
+  top: 2px;
+  width: 4px;
+  height: 5px;
+  border-radius: 50%;
+  border: 1.4px solid #e8dcc8;
+  border-left-color: transparent;
+}
+
+/* 沙发靠垫 */
+.sofa-cushion {
+  position: absolute;
+  left: -42px;
+  top: -16px;
+  width: 26px;
+  height: 18px;
+  border-radius: 8px;
+  background: linear-gradient(160deg, #fbe6d4, #f0cbb0);
+  box-shadow: inset 0 0 0 2px #e8b99a;
+  transform: translateZ(24px);
+}
+.sofa-cushion::after {
+  content: "";
+  position: absolute;
+  left: 30px;
+  top: 0;
+  width: 26px;
+  height: 18px;
+  border-radius: 8px;
+  background: linear-gradient(160deg, #dbe9f7, #bcd4ec);
+  box-shadow: inset 0 0 0 2px #a9c4e0;
+}
+
+/* 会议桌上的纸张与矿泉水 */
+.table-papers {
+  position: absolute;
+  left: -34px;
+  top: -6px;
+  width: 26px;
+  height: 16px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #ffffff, #f7f2e8);
+  box-shadow:
+    0 0 0 1px rgba(200, 185, 165, 0.6),
+    0 3px 6px rgba(140, 110, 80, 0.14);
+  transform: translateZ(26px) rotate(-6deg);
+}
+.table-papers::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 17px;
+  height: 1.4px;
+  background: #c9d6e2;
+  box-shadow: 0 4px 0 #dbe3eb, 0 8px 0 #dbe3eb;
+}
+.table-bottles {
+  position: absolute;
+  left: 52px;
+  top: -10px;
+  width: 7px;
+  height: 16px;
+  border-radius: 3px 3px 4px 4px;
+  background: linear-gradient(180deg, #eaf6fb, #bcdcea);
+  box-shadow:
+    inset 0 0 0 1.2px #fff,
+    0 3px 6px rgba(120, 150, 170, 0.2);
+  transform: translateZ(26px);
+}
+.table-bottles::after {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 3px;
+  width: 7px;
+  height: 13px;
+  border-radius: 3px 3px 4px 4px;
+  background: linear-gradient(180deg, #eaf6fb, #bcdcea);
+  box-shadow: inset 0 0 0 1.2px #fff;
+}
+
+/* ── 工位小物 ───────────────────────────────────────── */
+
+/* 便利贴 */
+.desk-notes {
+  position: absolute;
+  left: -42px;
+  top: -4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 1px;
+  background: #ffe89a;
+  box-shadow:
+    0 0 0 1px rgba(210, 180, 80, 0.4),
+    0 2px 3px rgba(140, 110, 80, 0.14);
+  transform: rotate(-8deg);
+}
+.desk-notes::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2.5px;
+  width: 5px;
+  height: 1px;
+  background: rgba(180, 150, 60, 0.55);
+  box-shadow: 0 3px 0 rgba(180, 150, 60, 0.45);
+}
+
+/* 笔筒 */
+.desk-pen {
+  position: absolute;
+  left: 36px;
+  top: -26px;
+  width: 7px;
+  height: 8px;
+  border-radius: 2px 2px 3px 3px;
+  background: linear-gradient(180deg, #cfe3f2, #9dc0da);
+  box-shadow: inset 0 0 0 1px #87aec9;
+}
+.desk-pen::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: -5px;
+  width: 1.6px;
+  height: 6px;
+  border-radius: 1px;
+  background: #e88a6a;
+  box-shadow: 3px 1px 0 #7fb0a0, 5px -1px 0 #c9a24a;
+}
+
+/* 小台灯 */
+.desk-lamp {
+  position: absolute;
+  left: -44px;
+  top: 8px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50% 50% 40% 40%;
+  background: linear-gradient(160deg, #ffe6a8, #e8b45e);
+  box-shadow:
+    0 0 0 1.5px rgba(190, 150, 80, 0.5),
+    0 0 8px 2px rgba(255, 210, 130, 0.45);
+}
+
+/* 文件盒 */
+.desk-box {
+  position: absolute;
+  left: -25px;
+  top: -25px;
+  width: 12px;
+  height: 9px;
+  border-radius: 1.5px;
+  background: linear-gradient(180deg, #f0f4f8, #dbe4ee);
+  box-shadow:
+    0 0 0 1px rgba(160, 178, 196, 0.7),
+    inset 0 2px 0 #ffffff;
+}
+.desk-box::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 8px;
+  height: 1.2px;
+  background: #b6c6d6;
+  box-shadow: 0 2.6px 0 #c6d4e2;
+}
+
+/* 壁挂空调：出风口百叶 + 运行指示灯 */
+.prop-ac {
+  width: 44px;
+  height: 13px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #ffffff 0%, #eef3f6 100%);
+  box-shadow:
+    inset 0 0 0 1.5px #dfe6ea,
+    0 3px 6px rgba(140, 140, 140, 0.16);
+  transform: translateZ(22px);
+}
+.prop-ac::before {
+  content: "";
+  position: absolute;
+  right: 5px;
+  top: 3px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #8fdcae;
+  box-shadow: 0 0 4px #8fdcae;
+}
+.prop-ac::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  right: 9px;
+  bottom: 2.5px;
+  height: 4px;
+  border-radius: 1px;
+  background: repeating-linear-gradient(
+    180deg,
+    #cfd8de 0 1px,
+    rgba(255, 255, 255, 0) 1px 2.6px
+  );
+}
+
+/* 走廊电梯：井道 + 双开滑动门 */
+.elevator {
+  position: absolute;
+  width: 84px;
+  height: 56px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #f8f1e6 0%, #ecdfcd 100%);
+  box-shadow:
+    inset 0 0 0 3px #e2d2bb,
+    0 8px 16px rgba(140, 110, 80, 0.18);
+  transform: translateZ(24px);
+  z-index: 3;
+}
+.elev-frame {
+  position: absolute;
+  inset: 6px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #dfe7ec, #c8d5de);
+  box-shadow: inset 0 0 0 1px #b8c6d0;
+}
+.elev-door {
+  position: absolute;
+  bottom: 6px;
+  width: 36px;
+  height: 44px;
+  background: linear-gradient(180deg, #eef4f8 0%, #cdd9e2 100%);
+  box-shadow: inset 0 0 0 1px #b3c1cc;
+  transition: transform 0.5s cubic-bezier(0.34, 1.2, 0.64, 1);
+}
+.elev-door.d1 { left: 6px; border-radius: 0 0 0 5px; }
+.elev-door.d2 { right: 6px; border-radius: 0 0 5px 0; }
+.elevator.is-open .elev-door.d1 { transform: translateX(-34px); }
+.elevator.is-open .elev-door.d2 { transform: translateX(34px); }
+.elev-sign {
+  position: absolute;
+  left: 50%;
+  top: -11px;
+  margin-left: -12px;
+  width: 24px;
+  height: 13px;
+  border-radius: 3px;
+  background: #5b6b78;
+  color: #e8f3fa;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  display: grid;
+  place-items: center;
+}
+
+/* 坐姿小人的背包与长发 */
+.p-backpack {
+  left: 12px;
+  top: 32px;
+  width: 26px;
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(160deg, #9dbd99, #7c9c78);
+  box-shadow:
+    0 0 0 1.5px rgba(70, 95, 68, 0.3),
+    inset 0 2px 0 rgba(255, 255, 255, 0.26);
+}
+.p-hair.p-hair-long::after {
+  right: -4px;
+  top: 6px;
+  width: 12px;
+  height: 26px;
+  border-radius: 4px 10px 12px 8px;
+}
+
+/* ── 楼外环境（整楼视图） ───────────────────────────── */
+.sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+.twin-root.is-focused .sky { opacity: 0; }
+
+.sun {
+  position: absolute;
+  left: 8%;
+  top: 4%;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 222, 160, 0.95) 0%, rgba(255, 222, 160, 0.32) 46%, rgba(255, 222, 160, 0) 72%);
+  animation: sunPulse 8s ease-in-out infinite;
+}
+
+.sun-ring {
+  position: absolute;
+  left: 5.5%;
+  top: 1%;
+  width: 270px;
+  height: 270px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 238, 196, 0.5) 0%, rgba(255, 238, 196, 0) 68%);
+  animation: sunPulse 11s ease-in-out infinite reverse;
+}
+
+/* 月亮与星空：仅夜间显示 */
+.moon {
+  position: absolute;
+  left: 12%;
+  top: 6%;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+  opacity: 0;
+  background: radial-gradient(circle at 36% 32%, #fffaf0 0%, #ffeccb 52%, rgba(255, 226, 176, 0.18) 70%, transparent 74%);
+  box-shadow: 0 0 90px rgba(255, 236, 196, 0.42);
+  transition: opacity 1.2s ease;
+}
+
+.moon::after {
+  content: "";
+  position: absolute;
+  left: 24px;
+  top: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(226, 205, 168, 0.28);
+  box-shadow: 30px 34px 0 -8px rgba(226, 205, 168, 0.2);
+}
+
+.stars {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.4s ease;
+}
+
+.star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff6e6;
+  box-shadow: 0 0 6px rgba(255, 246, 230, 0.85);
+  animation: twinkle 4.5s ease-in-out infinite;
+}
+
+.twin-root.is-night .sun,
+.twin-root.is-night .sun-ring { opacity: 0; }
+.twin-root.is-night .moon { opacity: 1; }
+.twin-root.is-night .stars { opacity: 1; }
+.twin-root.is-night .cloud { background: rgba(186, 202, 228, 0.2); }
+
+.cloud {
+  position: absolute;
+  height: 44px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  will-change: transform;
+}
+
+.cloud::before,
+.cloud::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  background: inherit;
+}
+
+.cloud::before { left: 12%; top: -58%; width: 58%; height: 155%; }
+.cloud::after { right: 10%; top: -42%; width: 44%; height: 132%; }
+
+.cloud.c1 { top: 9%; left: -20%; width: 240px; animation: cloudDrift 82s linear infinite; }
+.cloud.c2 { top: 21%; left: -32%; width: 172px; opacity: 0.72; animation: cloudDrift 104s linear infinite 14s; }
+.cloud.c3 { top: 3%; left: -12%; width: 300px; opacity: 0.58; animation: cloudDrift 128s linear infinite 34s; }
+
+.site {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  /* 园区场景整体向摄像机方向推出，让树木/车辆/路面浮在建筑外壳前面。
+     building-core（建筑主体）的 DOM 顺序虽然在后，但 translateZ 更小会被 site 遮挡。 */
+  transform: translateZ(220px);
+}
+
+/* 聚焦楼层时直接隐藏室外；用 visibility 避免 opacity 把 3D 场景拍平 */
+.twin-root.is-focused .site {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* 夜间草坪改深色（不用 filter，避免合成层失效） */
+.twin-root.is-night .ground::before {
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.03) 0 88px, transparent 88px 176px),
+    radial-gradient(circle at 40% 34%, #46503f 0%, #3a4434 46%, #313a2d 100%);
+}
+
+.twin-root.is-night .avenue-h,
+.twin-root.is-night .avenue-v {
+  background: #3c4454;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+}
+
+.twin-root.is-night .sidewalk,
+.twin-root.is-night .walk-path,
+.twin-root.is-night .plaza {
+  background: #565b64;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+.twin-root.is-night .tree-leaf,
+.twin-root.is-night .pine-tier {
+  filter: brightness(0.72) saturate(0.9);
+}
+
+.twin-root.is-night .tree-trunk {
+  background: linear-gradient(90deg, #5f4b38, #45362a);
+}
+
+.twin-root.is-night .tree-branch {
+  background: linear-gradient(90deg, #5a422e, #3e2e20);
+}
+
+.twin-root.is-night .tree-shadow { background: rgba(12, 18, 12, 0.4); }
+
+/* 草坪铺满整屏，带修剪条纹；坐标系与楼体一致，方便摆放道路 */
+.ground {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(-60px);
+  transform-style: preserve-3d;
+}
+
+.ground::before {
+  content: "";
+  position: absolute;
+  left: -3800px;
+  top: -3050px;
+  width: 9000px;
+  height: 7000px;
+  background:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.07) 0 88px, transparent 88px 176px),
+    radial-gradient(circle at 40% 34%, #eef4de 0%, #dfeacb 46%, #cddcb4 100%);
+}
+
+/* 城市主干道 */
+.avenue-h {
+  position: absolute;
+  left: -3800px;
+  width: 9000px;
+  height: 96px;
+  background: #e9decd;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.45);
+}
+
+.avenue-h::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 46px;
+  border-top: 4px dashed rgba(255, 255, 255, 0.6);
+}
+
+.avenue-v {
+  position: absolute;
+  top: -3050px;
+  width: 96px;
+  height: 7000px;
+  background: #e9decd;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.45);
+}
+
+.avenue-v::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 46px;
+  border-left: 4px dashed rgba(255, 255, 255, 0.6);
+}
+
+.sidewalk {
+  position: absolute;
+  border-radius: 10px;
+  background: #f3eada;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+/* 斑马线与停止线直接落在路面坐标上，不使用贴图，日夜都清晰 */
+.crosswalk,
+.stop-line {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+}
+
+.crosswalk-ns {
+  width: 44px;
+  height: 96px;
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0 8px, transparent 8px 18px);
+}
+
+.crosswalk-ew {
+  width: 96px;
+  height: 44px;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.82) 0 8px, transparent 8px 18px);
+}
+
+.stop-line {
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.walk-path {
+  position: absolute;
+  left: 638px;
+  top: 1046px;
+  width: 124px;
+  height: 132px;
+  border-radius: 6px;
+  background: #f3eada;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.plaza {
+  position: absolute;
+  left: 520px;
+  top: 898px;
+  width: 360px;
+  height: 152px;
+  border-radius: 24px;
+  background: #f5ead9;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.6);
+}
+
+/* ── 围栏 ───────────────────────────────────────────── */
+.fence {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(-60px);
+  transform-style: preserve-3d;
+}
+
+.fence-rail {
+  position: absolute;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #fdf6ea, #dcc6a6);
+  box-shadow: 0 4px 8px rgba(120, 96, 68, 0.28);
+  transform: translateZ(34px);
+}
+
+.fence-rail.low {
+  transform: translateZ(16px);
+  opacity: 0.9;
+}
+
+.fence-post {
+  position: absolute;
+  width: 8px;
+  height: 50px;
+  margin-left: -4px;
+  margin-top: -50px;
+  border-radius: 3px 3px 1px 1px;
+  background: linear-gradient(90deg, #f7ecd9, #cfb691);
+  box-shadow: 0 0 0 1px rgba(160, 132, 96, 0.35);
+  transform-origin: center bottom;
+  transform: rotateX(-90deg);
+}
+
+/* 夜里让围栏透出一点轮廓（用颜色而非 filter，减少重绘） */
+.twin-root.is-night .fence-rail {
+  background: linear-gradient(180deg, #6d6355, #4b443a);
+}
+
+.twin-root.is-night .fence-post {
+  background: linear-gradient(90deg, #6f6557, #4c453b);
+}
+
+/* ── 红绿灯 ─────────────────────────────────────────── */
+.traffic-light {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform: translateZ(-60px);
+  transform-style: preserve-3d;
+}
+
+.tl-shadow {
+  position: absolute;
+  left: 3px;
+  top: 1px;
+  width: 52px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgba(42, 45, 40, 0.2);
+  transform: rotateZ(-18deg) translateZ(-1px);
+}
+
+.tl-base {
+  position: absolute;
+  left: -12px;
+  top: -8px;
+  width: 24px;
+  height: 16px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #a8aca5, #686f69);
+  box-shadow: inset 0 0 0 2px rgba(235, 238, 229, 0.35);
+  transform: translateZ(2px);
+}
+
+/* 灯杆与灯头在同一个直立坐标系中，灯头底边恰好落在 76px 高的杆顶。 */
+.tl-stand {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  transform-style: preserve-3d;
+  transform: rotateZ(var(--tl-yaw, 0deg)) rotateX(-90deg);
+}
+
+.tl-pole {
+  position: absolute;
+  left: -3px;
+  top: -76px;
+  width: 6px;
+  height: 76px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #e0e3dc 0%, #a7ada6 45%, #6f7771 100%);
+  box-shadow: inset -1px 0 1px rgba(41, 49, 44, 0.32);
+}
+
+.tl-pole::after {
+  content: "";
+  position: absolute;
+  left: -2px;
+  top: -2px;
+  width: 10px;
+  height: 7px;
+  border-radius: 2px;
+  background: #626b65;
+}
+
+.tl-head {
+  position: absolute;
+  left: -14px;
+  top: -142px;
+  width: 28px;
+  height: 66px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, #434b46, #282e2b 72%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    4px 5px 0 #1d2220,
+    5px 8px 12px rgba(0, 0, 0, 0.24);
+  transform-style: preserve-3d;
+}
+
+/* 灯壳右侧真实厚度，背向来车时仍能辨认设备轮廓。 */
+.tl-head::before {
+  content: "";
+  position: absolute;
+  left: 100%;
+  top: 4px;
+  width: 5px;
+  height: 58px;
+  border-radius: 0 3px 3px 0;
+  background: #1d2220;
+  transform-origin: left center;
+  transform: rotateY(90deg);
+}
+
+/* 独立的遮光罩不会随灯泡明暗一起淡出 */
+.tl-visor {
+  position: absolute;
+  left: 3px;
+  width: 22px;
+  height: 7px;
+  border-radius: 7px 7px 2px 2px;
+  background: linear-gradient(180deg, #171c1a, #303733);
+  transform: translateZ(4px);
+  backface-visibility: hidden;
+}
+
+.tl-visor.v-red { top: 2px; }
+.tl-visor.v-yellow { top: 21px; }
+.tl-visor.v-green { top: 40px; }
+
+.tl-lamp {
+  position: absolute;
+  left: 6px;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 2px solid rgba(15, 20, 18, 0.72);
+  border-radius: 50%;
+  opacity: 0.22;
+  transform: translateZ(2px);
+  backface-visibility: hidden;
+  animation-duration: 16s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
+}
+
+.tl-lamp.red {
+  top: 6px;
+  background: radial-gradient(circle at 36% 30%, #ffd4c9 0 10%, #ff7666 26%, #d83e35 72%);
+  box-shadow: inset 0 -2px 3px rgba(91, 15, 12, 0.45), 0 0 12px 3px rgba(255, 96, 80, 0.7);
+  animation-name: tlRed;
+}
+
+.tl-lamp.yellow {
+  top: 25px;
+  background: radial-gradient(circle at 36% 30%, #fff1bd 0 10%, #ffd36b 26%, #d7992d 72%);
+  box-shadow: inset 0 -2px 3px rgba(101, 65, 12, 0.42), 0 0 12px 3px rgba(255, 200, 90, 0.68);
+  animation-name: tlYellow;
+}
+
+.tl-lamp.green {
+  top: 44px;
+  background: radial-gradient(circle at 36% 30%, #d4ffe0 0 10%, #70e294 26%, #2b9c58 72%);
+  box-shadow: inset 0 -2px 3px rgba(14, 78, 41, 0.44), 0 0 12px 3px rgba(96, 214, 138, 0.64);
+  animation-name: tlGreen;
+}
+
+/* 横向：绿 0–7s、黄 7–8s、红 8–16s；纵向通过 -8s 延迟错相。 */
+@keyframes tlRed {
+  0%, 49.99% { opacity: 0.22; }
+  50%, 100% { opacity: 1; }
+}
+
+@keyframes tlYellow {
+  0%, 43.74% { opacity: 0.22; }
+  43.75%, 49.99% { opacity: 1; }
+  50%, 100% { opacity: 0.22; }
+}
+
+@keyframes tlGreen {
+  0%, 43.74% { opacity: 1; }
+  43.75%, 100% { opacity: 0.22; }
+}
+
+/* ── 路灯 ───────────────────────────────────────────── */
+.lamp {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform: translateZ(-60px);
+  transform-style: preserve-3d;
+}
+
+.lamp-pole {
+  position: absolute;
+  left: -2px;
+  top: -76px;
+  width: 4px;
+  height: 76px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #dfd2bd, #a89a85);
+  transform-origin: center bottom;
+  transform: rotateX(-90deg);
+}
+
+.lamp-head {
+  position: absolute;
+  left: -13px;
+  top: -13px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #fff8e4, #f4d091);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+  transform: translateZ(78px);
+  opacity: 0.75;
+}
+
+.lamp-glow {
+  position: absolute;
+  left: -58px;
+  top: -58px;
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 214, 140, 0.72), transparent 68%);
+  transform: translateZ(80px);
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+
+.twin-root.is-night .lamp-glow { opacity: 1; }
+
+.tree {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+}
+
+.tree-shadow {
+  position: absolute;
+  left: -34px;
+  top: -19px;
+  width: 68px;
+  height: 38px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(80, 96, 62, 0.25), rgba(110, 120, 85, 0.03) 72%);
+  transform: translateZ(1px);
+}
+
+/* 树冠、树干和分枝一起立起，保留少量侧转以呈现前后叶簇。 */
+.tree-stand {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  transform-style: preserve-3d;
+  transform: rotateZ(28deg) rotateX(-90deg);
+}
+
+/* 树干上细下粗，用 clip-path 做自然锥度；表面有纵向纹理和少量结疤。 */
+.tree-trunk {
+  position: absolute;
+  left: -5px;
+  top: -54px;
+  width: 10px;
+  height: 54px;
+  clip-path: polygon(20% 0, 80% 0, 100% 100%, 0% 100%);
+  background: linear-gradient(90deg, #6a4630 0%, #a0714a 30%, #bb8f62 50%, #8a5c3e 80%, #5b3c28 100%);
+  box-shadow:
+    inset -3px 0 3px rgba(49, 30, 18, 0.36),
+    inset 2px 0 0 rgba(220, 180, 130, 0.12),
+    2px 0 0 rgba(70, 48, 30, 0.12);
+}
+
+.tree-trunk::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 6px;
+  width: 1px;
+  height: 38px;
+  background: linear-gradient(180deg, rgba(255, 224, 181, 0.35), rgba(255, 224, 181, 0.05));
+}
+
+.tree-trunk::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 22px;
+  width: 3px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgba(48, 28, 18, 0.45);
+  box-shadow: -2px 12px 0 rgba(48, 28, 18, 0.35);
+}
+
+/* 5根分枝：左下、左上、右下、右上、顶。每组上下错开，角度不对称。 */
+.tree-branch {
+  position: absolute;
+  width: 4px;
+  height: 28px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #7a5538, #a6784d 60%, #5c3e2a);
+  transform-origin: center bottom;
+  box-shadow: inset -1px 0 1px rgba(40, 25, 16, 0.3);
+}
+
+.tree-branch.bl-l { left: -2px; top: -32px; height: 22px; transform: translateZ(-4px) rotateZ(-52deg); }
+.tree-branch.bl-u { left: -2px; top: -44px; height: 24px; transform: translateZ(3px) rotateZ(-30deg); }
+.tree-branch.br-l { left: -2px; top: -36px; height: 22px; transform: translateZ(-2px) rotateZ(48deg); }
+.tree-branch.br-u { left: -2px; top: -48px; height: 26px; transform: translateZ(4px) rotateZ(28deg); }
+.tree-branch.bt   { left: -2px; top: -54px; height: 22px; transform: translateZ(-3px) rotateZ(4deg); }
+
+.tree-leaves,
+.pine-crown {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+}
+
+/* 叶簇：扁平椭圆 + 细叶片纹理 + Z 轴错落层次，不再悬浮成球。 */
+.tree-leaf {
+  position: absolute;
+  display: block;
+  width: 42px;
+  height: 22px;
+  border-radius: 46% 54% 42% 58% / 62% 38% 62% 38%;
+  background:
+    linear-gradient(115deg, var(--leaf-a, #bedca4) 0%, var(--leaf-b, #7fae77) 58%, var(--leaf-c, #6e9c68) 100%);
+  box-shadow:
+    inset 0 2px 6px rgba(255, 255, 210, 0.22),
+    inset 0 -3px 8px rgba(40, 75, 38, 0.28);
+  transform: rotate(var(--leaf-tilt, 0deg)) scale(var(--leaf-scale, 1)) translateZ(var(--leaf-z, 0px));
+}
+
+/* 小叶片叠加在主叶簇上，制造更自然的叶簇感。 */
+.tree-leaf::before,
+.tree-leaf::after {
+  content: "";
+  position: absolute;
+  display: block;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--leaf-a, #bedca4) 0%, var(--leaf-b, #7fae77) 100%);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 210, 0.2);
+}
+
+.tree-leaf::before {
+  width: 14px;
+  height: 10px;
+  left: 8px;
+  top: -2px;
+  transform: rotate(-22deg);
+}
+
+.tree-leaf::after {
+  width: 12px;
+  height: 9px;
+  right: 4px;
+  bottom: -2px;
+  transform: rotate(18deg);
+}
+
+/* round 型：叶簇 3D 错落分布，前后层次分明 */
+.tree-leaf.l1  { left: -24px; top: -66px;  --leaf-tilt: -12deg; --leaf-scale: 1.15; --leaf-z: 18px; }
+.tree-leaf.l2  { left: -54px; top: -58px;  width: 40px; height: 20px; --leaf-tilt: 18deg; --leaf-z: -22px; }
+.tree-leaf.l3  { left: 14px;  top: -58px;  width: 40px; height: 22px; --leaf-tilt: -24deg; --leaf-z: 12px; }
+.tree-leaf.l4  { left: -34px; top: -88px;  width: 46px; height: 22px; --leaf-tilt: 28deg;  --leaf-scale: 0.95; --leaf-z: -32px; }
+.tree-leaf.l5  { left: -4px;  top: -90px;  width: 38px; height: 20px; --leaf-tilt: -14deg; --leaf-scale: 0.9; --leaf-z: 26px; }
+.tree-leaf.l6  { left: -62px; top: -72px;  width: 36px; height: 18px; --leaf-tilt: -32deg; --leaf-z: -14px; }
+.tree-leaf.l7  { left: 28px;  top: -76px;  width: 38px; height: 18px; --leaf-tilt: 24deg; --leaf-z: 20px; }
+.tree-leaf.l8  { left: -14px; top: -106px; width: 34px; height: 20px; --leaf-tilt: 4deg;   --leaf-scale: 0.85; --leaf-z: 8px; }
+.tree-leaf.l9  { left: -44px; top: -50px;  width: 30px; height: 16px; --leaf-tilt: 34deg; --leaf-z: -18px; }
+.tree-leaf.l10 { left: 10px;  top: -48px;  width: 32px; height: 18px; --leaf-tilt: -28deg; --leaf-z: 14px; }
+
+/* tall 型：叶簇沿主干向上错落，Z 值稍大 */
+.tree.v-tall .tree-trunk { top: -68px; height: 68px; }
+.tree.v-tall .tree-branch.bl-l { top: -38px; height: 24px; transform: translateZ(-4px) rotateZ(-44deg); }
+.tree.v-tall .tree-branch.bl-u { top: -54px; height: 26px; transform: translateZ(3px) rotateZ(-24deg); }
+.tree.v-tall .tree-branch.br-l { top: -42px; height: 24px; transform: translateZ(-2px) rotateZ(42deg); }
+.tree.v-tall .tree-branch.br-u { top: -58px; height: 28px; transform: translateZ(4px) rotateZ(22deg); }
+.tree.v-tall .tree-leaf.l1  { left: -20px; top: -90px;  --leaf-tilt: -8deg; --leaf-scale: 1.1; --leaf-z: 24px; }
+.tree.v-tall .tree-leaf.l2  { left: -36px; top: -74px;  width: 36px; height: 20px; --leaf-tilt: 20deg; --leaf-z: -28px; }
+.tree.v-tall .tree-leaf.l3  { left: 8px;   top: -76px;  width: 36px; height: 20px; --leaf-tilt: -26deg; --leaf-z: 16px; }
+.tree.v-tall .tree-leaf.l4  { left: -28px; top: -118px; width: 40px; height: 22px; --leaf-tilt: 30deg; --leaf-scale: 0.95; --leaf-z: -36px; }
+.tree.v-tall .tree-leaf.l5  { left: 0;     top: -120px; width: 34px; height: 20px; --leaf-tilt: -16deg; --leaf-scale: 0.9; --leaf-z: 32px; }
+.tree.v-tall .tree-leaf.l6  { left: -46px; top: -102px; width: 30px; height: 18px; --leaf-tilt: -34deg; --leaf-z: -18px; }
+.tree.v-tall .tree-leaf.l7  { left: 20px;  top: -102px; width: 32px; height: 18px; --leaf-tilt: 26deg; --leaf-z: 24px; }
+.tree.v-tall .tree-leaf.l8  { left: -16px; top: -140px; width: 30px; height: 20px; --leaf-tilt: 2deg; --leaf-scale: 0.85; --leaf-z: 10px; }
+.tree.v-tall .tree-leaf.l9  { left: -40px; top: -66px;  width: 28px; height: 16px; --leaf-tilt: 36deg; --leaf-z: -22px; }
+.tree.v-tall .tree-leaf.l10 { left: 14px;  top: -64px;  width: 28px; height: 16px; --leaf-tilt: -30deg; --leaf-z: 18px; }
+
+/* wide 型：叶簇横向铺开，形成伞状，Z 值最大 */
+.tree.v-wide .tree-trunk { top: -44px; height: 44px; }
+.tree.v-wide .tree-branch.bl-l { top: -28px; height: 22px; transform: translateZ(-4px) rotateZ(-62deg); }
+.tree.v-wide .tree-branch.bl-u { top: -38px; height: 22px; transform: translateZ(3px) rotateZ(-46deg); }
+.tree.v-wide .tree-branch.br-l { top: -30px; height: 22px; transform: translateZ(-2px) rotateZ(60deg); }
+.tree.v-wide .tree-branch.br-u { top: -40px; height: 22px; transform: translateZ(4px) rotateZ(44deg); }
+.tree.v-wide .tree-leaf.l1  { left: -30px; top: -56px;  --leaf-tilt: -14deg; --leaf-scale: 1.2; --leaf-z: 20px; }
+.tree.v-wide .tree-leaf.l2  { left: -68px; top: -50px;  width: 52px; height: 20px; --leaf-tilt: 20deg; --leaf-z: -26px; }
+.tree.v-wide .tree-leaf.l3  { left: 22px;  top: -52px;  width: 52px; height: 20px; --leaf-tilt: -26deg; --leaf-z: 14px; }
+.tree.v-wide .tree-leaf.l4  { left: -50px; top: -76px;  width: 50px; height: 22px; --leaf-tilt: 30deg; --leaf-scale: 1; --leaf-z: -34px; }
+.tree.v-wide .tree-leaf.l5  { left: 8px;   top: -78px;  width: 50px; height: 22px; --leaf-tilt: -16deg; --leaf-z: 30px; }
+.tree.v-wide .tree-leaf.l6  { left: -80px; top: -66px;  width: 42px; height: 18px; --leaf-tilt: -34deg; --leaf-z: -16px; }
+.tree.v-wide .tree-leaf.l7  { left: 46px;  top: -68px;  width: 42px; height: 18px; --leaf-tilt: 28deg; --leaf-z: 22px; }
+.tree.v-wide .tree-leaf.l8  { left: -18px; top: -94px;  width: 42px; height: 20px; --leaf-tilt: 6deg; --leaf-scale: 0.95; --leaf-z: 12px; }
+.tree.v-wide .tree-leaf.l9  { left: -92px; top: -44px;  width: 34px; height: 16px; --leaf-tilt: 38deg; --leaf-z: -20px; }
+.tree.v-wide .tree-leaf.l10 { left: 58px;  top: -46px;  width: 34px; height: 16px; --leaf-tilt: -30deg; --leaf-z: 16px; }
+
+/* 松树：4层独立锯齿轮廓，层间互相覆盖。 */
+.tree.v-pine .tree-trunk { left: -4px; top: -60px; width: 8px; height: 60px; }
+
+.pine-tier {
+  position: absolute;
+  display: block;
+  background:
+    repeating-linear-gradient(108deg, transparent 0 7px, rgba(235, 255, 211, 0.08) 7px 9px),
+    linear-gradient(95deg, var(--leaf-c, #4a6f48) 0%, var(--leaf-b, #6b9566) 46%, var(--leaf-a, #a9cf9b) 70%, var(--leaf-b, #6b9566) 100%);
+  box-shadow: inset -4px -3px 6px rgba(30, 56, 32, 0.22);
+}
+
+/* 每层不同 clip-path 锯齿，从宽到尖自然收束；Z 值由下往上错落增强 3D 感 */
+.pine-tier.p1 {
+  left: -44px; top: -88px;  width: 88px; height: 72px; transform: translateZ(-16px);
+  clip-path: polygon(50% 0, 62% 18%, 55% 20%, 72% 42%, 63% 44%, 86% 72%, 75% 74%, 100% 100%, 62% 92%, 50% 100%, 36% 92%, 0% 100%, 24% 74%, 12% 72%, 36% 44%, 28% 42%, 44% 20%, 38% 18%);
+}
+.pine-tier.p2 {
+  left: -36px; top: -118px; width: 72px; height: 64px; transform: translateZ(14px);
+  clip-path: polygon(50% 0, 60% 14%, 54% 16%, 70% 36%, 62% 38%, 82% 64%, 72% 66%, 100% 100%, 60% 92%, 50% 100%, 38% 92%, 0% 100%, 26% 66%, 16% 64%, 38% 38%, 30% 36%, 46% 16%, 40% 14%);
+}
+.pine-tier.p3 {
+  left: -28px; top: -146px; width: 56px; height: 56px; transform: translateZ(-10px);
+  clip-path: polygon(50% 0, 58% 12%, 52% 14%, 68% 30%, 60% 32%, 78% 56%, 70% 58%, 100% 100%, 58% 92%, 50% 100%, 40% 92%, 0% 100%, 28% 58%, 20% 56%, 42% 32%, 34% 30%, 46% 14%, 42% 12%);
+}
+.pine-tier.p4 {
+  left: -18px; top: -170px; width: 36px; height: 46px; transform: translateZ(20px);
+  clip-path: polygon(50% 0, 54% 10%, 50% 12%, 62% 24%, 56% 26%, 72% 46%, 66% 48%, 100% 100%, 54% 92%, 50% 100%, 44% 92%, 0% 100%, 32% 48%, 28% 46%, 46% 26%, 42% 24%, 50% 12%, 46% 10%);
+}
+
+/* ── 行驶车辆 ───────────────────────────────────────── */
+.lane {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform: translateZ(-52px);
+  transform-style: preserve-3d;
+}
+
+.car-drive {
+  position: absolute;
+  will-change: transform;
+  transform-style: preserve-3d;
+}
+
+.car {
+  position: absolute;
+  width: 84px;
+  height: 42px;
+  margin: -21px 0 0 -42px;
+  border-radius: 16px 22px 22px 16px;
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.5),
+    0 10px 18px rgba(110, 90, 70, 0.28);
+  transform-style: preserve-3d;
+}
+
+/* 车底暗色车身：抬高的车体与地面之间形成厚度，不再是纸片 */
+.car::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: inherit;
+  background: rgba(46, 38, 30, 0.55);
+  transform: translateZ(-12px);
+}
+
+/* 车型：尺寸、圆角、车顶各不相同 */
+.car.k-suv {
+  width: 94px;
+  height: 46px;
+  margin: -23px 0 0 -47px;
+  border-radius: 12px 18px 18px 12px;
+}
+
+.car.k-van {
+  width: 104px;
+  height: 46px;
+  margin: -23px 0 0 -52px;
+  border-radius: 9px 13px 13px 9px;
+}
+
+.car.k-truck {
+  width: 118px;
+  height: 46px;
+  margin: -23px 0 0 -59px;
+  border-radius: 5px 10px 10px 5px;
+}
+
+.car-cab { display: none; }
+
+.k-truck .car-cab {
+  display: block;
+  position: absolute;
+  left: 4px;
+  top: 3px;
+  width: 34px;
+  height: 40px;
+  border-radius: 4px 8px 8px 4px;
+  background: rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.38);
+}
+
+.car-roof {
+  position: absolute;
+  left: 18px;
+  top: 7px;
+  width: 42px;
+  height: 28px;
+  border-radius: 8px 10px 10px 8px;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.k-suv .car-roof {
+  left: 20px;
+  top: 6px;
+  width: 50px;
+  height: 34px;
+}
+
+.k-van .car-roof {
+  left: 26px;
+  top: 5px;
+  width: 52px;
+  height: 36px;
+  border-radius: 6px;
+}
+
+.k-truck .car-roof { display: none; }
+
+/* 车窗与车轮，避免所有车都是一个色块 */
+.car-glass {
+  position: absolute;
+  background: rgba(108, 138, 160, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  border-radius: 3px;
+}
+
+.car-glass.front { right: 9px; top: 10px; width: 11px; height: 22px; }
+.car-glass.back { right: 26px; top: 10px; width: 10px; height: 22px; }
+
+.car-wheel {
+  position: absolute;
+  width: 14px;
+  height: 8px;
+  border-radius: 4px;
+  background: #3a352f;
+  transform: translateZ(-12px);
+}
+
+.car-wheel.w1 { left: 14px; top: -3px; }
+.car-wheel.w2 { right: 14px; top: -3px; }
+.car-wheel.w3 { left: 14px; bottom: -3px; }
+.car-wheel.w4 { right: 14px; bottom: -3px; }
+
+.car-light {
+  position: absolute;
+  width: 9px;
+  height: 10px;
+  border-radius: 3px;
+  background: #fff4d2;
+}
+
+.car-light.front { right: 4px; top: 16px; }
+.car-light.back { left: 4px; bottom: 16px; }
+
+.twin-root.is-night .car-light {
+  background: #fff1c4;
+  box-shadow: 0 0 12px 3px rgba(255, 224, 150, 0.8);
+}
+
+/* ── 行人 ───────────────────────────────────────────── */
+.walker {
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  animation-name: walk-x;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.walker.walk-x-rev { animation-name: walk-x-rev; }
+.walker.walk-y { animation-name: walk-y; }
+.walker.walk-y-rev { animation-name: walk-y-rev; }
+
+.walker-shadow {
+  position: absolute;
+  left: -15px;
+  top: -7px;
+  width: 30px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(78, 83, 61, 0.3), rgba(96, 104, 76, 0.04) 72%);
+}
+
+.walker-figure {
+  position: absolute;
+  left: -11px;
+  top: -47px;
+  width: 22px;
+  height: 47px;
+  transform-origin: center bottom;
+  transform-style: preserve-3d;
+  /* 三分之四侧面朝向镜头，正面与侧面都能看见。 */
+  transform: rotateZ(24deg) rotateX(-90deg);
+}
+
+/* 办公楼内的走动小人：和坐姿小人保持同样大小、以脚下为中心。
+   用独立的 scale 属性，动作动画改 transform 时不会把缩放覆盖掉。 */
+.walkers-layer .walker-figure {
+  left: -25px;
+  top: -29px;
+  width: 50px;
+  height: 58px;
+  transform-origin: center center;
+  scale: 1.7;
+  transform: translateZ(7px);
+}
+
+.walker-figure i {
+  position: absolute;
+  display: block;
+}
+
+.walker-body {
+  left: 4px;
+  top: 13px;
+  width: 14px;
+  height: 19px;
+  border-radius: 6px 6px 4px 4px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0 16%, transparent 17%),
+    linear-gradient(90deg, var(--shirt, #e98f72), var(--shirt, #e98f72));
+  box-shadow:
+    inset -3px 0 4px rgba(70, 42, 32, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+  transform: translateZ(3px);
+  transform-style: preserve-3d;
+}
+
+/* 衣服的右侧面与背面，形成真正的体积而非一张正面贴图。 */
+.walker-body::before {
+  content: "";
+  position: absolute;
+  left: 100%;
+  top: 1px;
+  width: 6px;
+  height: 18px;
+  border-radius: 0 3px 3px 0;
+  background: var(--shirt, #e98f72);
+  box-shadow: inset -3px 0 4px rgba(55, 35, 28, 0.3);
+  transform-origin: left center;
+  transform: rotateY(90deg);
+}
+
+.walker-body::after {
+  content: "";
+  position: absolute;
+  inset: 1px 0 0;
+  border-radius: inherit;
+  background: var(--shirt, #e98f72);
+  box-shadow: inset 0 0 5px rgba(55, 35, 28, 0.24);
+  transform: translateZ(-6px) rotateY(180deg);
+}
+
+.walker-neck {
+  left: 9px;
+  top: 10px;
+  width: 4px;
+  height: 5px;
+  border-radius: 2px;
+  background: #eeb48c;
+  transform: translateZ(1px);
+}
+
+.walker-head {
+  left: 5px;
+  top: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 48% 52% 46% 50%;
+  background: radial-gradient(circle at 32% 28%, #ffe9d2 0%, #f4c09a 58%, #d99c79 100%);
+  box-shadow: inset -1px -1px 2px rgba(113, 67, 43, 0.16);
+  transform: translateZ(4px);
+  transform-style: preserve-3d;
+}
+
+.walker-head::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  top: -2px;
+  width: 14px;
+  height: 7px;
+  border-radius: 70% 62% 35% 28%;
+  background: linear-gradient(120deg, var(--hair, #6b4a33), #3e3028);
+  transform: translateZ(1px);
+}
+
+.walker-head::after {
+  content: "";
+  position: absolute;
+  left: 100%;
+  top: 2px;
+  width: 5px;
+  height: 9px;
+  border-radius: 0 50% 50% 3px;
+  background: linear-gradient(180deg, var(--hair, #6b4a33) 0 38%, #d99c79 40% 100%);
+  transform-origin: left center;
+  transform: rotateY(90deg);
+}
+
+.walker-face {
+  left: 2px;
+  top: 4px;
+  width: 8px;
+  height: 6px;
+  background:
+    radial-gradient(circle at 22% 35%, #594235 0 0.7px, transparent 1px),
+    radial-gradient(circle at 72% 35%, #594235 0 0.7px, transparent 1px),
+    radial-gradient(ellipse at 52% 82%, rgba(157, 83, 69, 0.72) 0 0.8px, transparent 1.2px);
+  transform: translateZ(1px);
+}
+
+/* 手臂有袖口与手部，前后两臂错开并反向摆动。 */
+.walker-arm {
+  top: 14px;
+  width: 5px;
+  height: 16px;
+  border-radius: 3px;
+  background: var(--shirt, #e98f72);
+  box-shadow: inset -2px 0 2px rgba(66, 41, 31, 0.2);
+  transform-origin: top center;
+  animation: armSwing 0.7s ease-in-out infinite alternate;
+}
+
+.walker-arm::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  width: 5px;
+  height: 5px;
+  border-radius: 45% 45% 55% 55%;
+  background: #efb58e;
+}
+
+.walker-arm.left { left: 0; --limb-z: 6px; animation-delay: -0.35s; }
+.walker-arm.right { left: 18px; --limb-z: -3px; }
+
+/* 双腿分属前后两个深度，鞋底让落地位置更清楚。 */
+.walker-leg {
+  top: 31px;
+  width: 5px;
+  height: 13px;
+  border-radius: 2.5px;
+  background: linear-gradient(90deg, #6c5948, #473b33);
+  transform-origin: top center;
+  animation: legSwing 0.7s ease-in-out infinite alternate;
+}
+
+.walker-leg::after {
+  content: "";
+  position: absolute;
+  left: -1px;
+  bottom: -3px;
+  width: 7px;
+  height: 4px;
+  border-radius: 3px 3px 2px 2px;
+  background: #3c3530;
+  box-shadow: 1px 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.walker-leg.left { left: 6px; --limb-z: -2px; }
+.walker-leg.right { left: 12px; --limb-z: 3px; animation-delay: -0.35s; }
+
+/* ── 楼层牌 ─────────────────────────────────────────── */
+.floor-badge {
+  position: absolute;
+  width: 206px;
+  height: 86px;
+  padding: 11px 15px;
+  border-radius: 16px;
+  background: rgba(255, 252, 246, 0.95);
+  border: 1px solid rgba(226, 190, 160, 0.7);
+  box-shadow: 0 12px 26px rgba(150, 104, 66, 0.16);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  transform-origin: left bottom;
+  transform: rotateX(-90deg);
+  transition: opacity 0.35s ease;
+}
+
+/* 整楼外观状态下收起楼层吊牌，悬停展开后再出现 */
+.twin-root.is-overview:not(.is-peek) .floor-badge {
+  opacity: 0;
+}
+
+.badge-level {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #d9744f;
+}
+
+.badge-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a382b;
+}
+
+.badge-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* ── 楼层标签（屏幕空间） ───────────────────────────── */
+.floor-tabs {
+  position: absolute;
+  right: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 178px;
+  z-index: 4;
+}
+
+.floor-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 11px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(226, 190, 160, 0.7);
+  background: rgba(255, 252, 246, 0.82);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(150, 104, 66, 0.1);
+  transition: transform 0.22s ease, background 0.22s ease, box-shadow 0.22s ease;
+  font-family: inherit;
+}
+
+.floor-tab:hover { transform: translateX(-3px); background: #fffdf8; }
+
+.floor-tab.is-active {
+  background: linear-gradient(145deg, #fff1e2, #ffdcc4);
+  border-color: rgba(226, 131, 106, 0.7);
+  box-shadow: 0 12px 26px rgba(226, 131, 106, 0.24);
+}
+
+.tab-level {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #d9744f;
+}
+
+.tab-title { font-size: 13px; font-weight: 600; }
+
+.tab-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ── 员工详情抽屉 ───────────────────────────────────── */
+.seat-drawer {
+  position: absolute;
+  right: 22px;
+  top: 14px;
+  width: 316px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(255, 252, 246, 0.94);
+  border: 1px solid rgba(226, 190, 160, 0.75);
+  box-shadow: 0 20px 48px rgba(150, 104, 66, 0.2);
+  backdrop-filter: blur(10px);
+  z-index: 5;
+  animation: drawerIn 0.28s ease-out;
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 14px;
+}
+
+.drawer-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  font-weight: 600;
+  color: #7c4a30;
+  background: linear-gradient(150deg, #ffe6cc, #f8bd96);
+  box-shadow: 0 0 0 3px #fff, 0 0 0 5px rgba(79, 177, 131, 0.42);
+}
+
+.drawer-avatar.status-busy { box-shadow: 0 0 0 3px #fff, 0 0 0 5px rgba(231, 154, 60, 0.45); }
+.drawer-avatar.status-offline { box-shadow: 0 0 0 3px #fff, 0 0 0 5px rgba(191, 174, 157, 0.4); filter: grayscale(0.4); }
+
+.drawer-head strong { display: block; font-size: 15px; }
+.drawer-head p { margin: 3px 0 0; font-size: 11.5px; color: var(--muted); }
+
+.drawer-close {
+  margin-left: auto;
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+
+.drawer-close:hover { background: rgba(226, 190, 160, 0.25); }
+
+.drawer-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drawer-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 12.5px;
+}
+
+.drawer-list dt { color: var(--muted); flex: none; }
+.drawer-list dd { margin: 0; text-align: right; color: #55422f; }
+
+.status-text.status-online { color: #3a9b70; }
+.status-text.status-busy { color: #c07c1c; }
+.status-text.status-offline { color: #9a8776; }
+
+/* Agent 绑定与执行态投影 */
+.drawer-agent-tag,
+.drawer-task-state,
+.drawer-node-state {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  vertical-align: middle;
+}
+.drawer-agent-tag {
+  color: #7a63b5;
+  background: rgba(195, 176, 238, 0.32);
+}
+.drawer-task-state {
+  color: #3e9e78;
+  background: rgba(167, 220, 196, 0.36);
+}
+.drawer-node-state {
+  color: #a5762a;
+  background: rgba(242, 212, 143, 0.4);
+}
+.drawer-progress-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.drawer-progress {
+  display: inline-block;
+  width: 96px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(200, 180, 160, 0.3);
+}
+.drawer-progress i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #a9d8c4, #8ab4e8);
+}
+
+.mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 11.5px; }
+
+.drawer-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.btn-primary,
+.btn-ghost {
+  flex: 1;
+  padding: 9px 0;
+  border-radius: 11px;
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.btn-primary {
+  background: linear-gradient(145deg, #f3a98a, #e2836a);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(226, 131, 106, 0.3);
+}
+
+.btn-ghost {
+  background: rgba(255, 252, 246, 0.9);
+  border-color: rgba(226, 190, 160, 0.75);
+  color: #6b5540;
+}
+
+/* ── 底栏 ───────────────────────────────────────────── */
+.twin-footer {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 28px 14px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+/* ── 动画 ───────────────────────────────────────────── */
+@keyframes sunPulse {
+  0%, 100% { transform: scale(1); opacity: 0.92; }
+  50% { transform: scale(1.07); opacity: 1; }
+}
+
+@keyframes cloudDrift {
+  from { transform: translateX(0); }
+  to { transform: translateX(150vw); }
+}
+
+@keyframes screenFlicker {
+  0%, 100% { opacity: 0.72; }
+  42% { opacity: 0.95; }
+  68% { opacity: 0.8; }
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.9; }
+}
+
+@keyframes drawerIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 行人沿人行道往返，带轻微起伏 */
+@keyframes walk-x {
+  from { transform: translateX(-1400px); }
+  to { transform: translateX(2400px); }
+}
+
+@keyframes walk-x-rev {
+  from { transform: translateX(2400px); }
+  to { transform: translateX(-1400px); }
+}
+
+@keyframes walk-y {
+  from { transform: translateY(-1200px); }
+  to { transform: translateY(2200px); }
+}
+
+@keyframes walk-y-rev {
+  from { transform: translateY(2200px); }
+  to { transform: translateY(-1200px); }
+}
+
+@keyframes walkBob {
+  from { transform: translateY(0) scale(1); }
+  to { transform: translateY(-1.6px) scale(1.06); }
+}
+
+@keyframes legSwing {
+  from { transform: translateZ(var(--limb-z, 0px)) rotate(-18deg); }
+  to { transform: translateZ(var(--limb-z, 0px)) rotate(18deg); }
+}
+
+@keyframes armSwing {
+  from { transform: translateZ(var(--limb-z, 0px)) rotate(14deg); }
+  to { transform: translateZ(var(--limb-z, 0px)) rotate(-14deg); }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.28; }
+  50% { opacity: 1; }
+}
+
+/* ── 夜间配色 ───────────────────────────────────────── */
+.twin-root.is-night {
+  --ink: #ecdfcd;
+  --muted: #b3a390;
+  background:
+    radial-gradient(1100px 680px at 12% -8%, #33405f 0%, transparent 62%),
+    radial-gradient(900px 560px at 86% 4%, #3c3a56 0%, transparent 58%),
+    linear-gradient(170deg, #131a2c 0%, #1c2438 52%, #26304a 100%);
+}
+
+.twin-root.is-night::before {
+  background:
+    radial-gradient(520px 420px at 22% 18%, rgba(120, 146, 196, 0.24), transparent 68%),
+    radial-gradient(620px 460px at 78% 26%, rgba(140, 128, 190, 0.2), transparent 70%);
+}
+
+.twin-root.is-night::after {
+  background: linear-gradient(125deg, rgba(200, 216, 246, 0.14) 0%, rgba(200, 216, 246, 0) 62%);
+}
+
+.twin-root.is-night .twin-brand h1 { color: #f6ead9; }
+
+.twin-root.is-night .metric {
+  background: rgba(34, 42, 64, 0.72);
+  border-color: rgba(255, 214, 168, 0.26);
+  color: #e9dcc8;
+}
+
+.twin-root.is-night .metric-ghost {
+  background: rgba(34, 42, 64, 0.42);
+  color: #b3a390;
+}
+
+.metric-clock {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+
+.twin-root.is-night .floor-tab {
+  background: rgba(32, 40, 62, 0.76);
+  border-color: rgba(255, 214, 168, 0.24);
+  color: #f0e4d2;
+}
+
+.twin-root.is-night .floor-tab:hover { background: rgba(46, 56, 82, 0.92); }
+
+.twin-root.is-night .floor-tab.is-active {
+  background: linear-gradient(145deg, rgba(226, 131, 106, 0.5), rgba(80, 92, 138, 0.55));
+  border-color: rgba(255, 186, 140, 0.6);
+}
+
+.twin-root.is-night .tab-meta { color: #b3a390; }
+
+.twin-root.is-night .seat-drawer {
+  background: rgba(28, 36, 56, 0.94);
+  border-color: rgba(255, 214, 168, 0.22);
+  color: #f0e4d2;
+}
+
+.twin-root.is-night .drawer-head p { color: #b0a08c; }
+.twin-root.is-night .drawer-list dd { color: #e2d3bf; }
+
+.twin-root.is-night .btn-ghost {
+  background: rgba(46, 56, 82, 0.8);
+  border-color: rgba(255, 214, 168, 0.24);
+  color: #eadcc8;
+}
+
+.twin-root.is-night .twin-footer { color: #a99a87; }
+
+/* 夜里室内灯光更亮 */
+.twin-root.is-night .desk-monitor::after { opacity: 0.98; }
+.twin-root.is-night .floor-slab {
+  box-shadow:
+    0 0 0 1px rgba(222, 182, 146, 0.95),
+    inset 0 0 54px rgba(255, 196, 132, 0.5),
+    0 26px 60px rgba(40, 30, 20, 0.5);
+}
+
+/* 夜间展开/聚焦后，室内暖光更强，像整层都开着灯 */
+.twin-root.is-night.is-peek .floor-slab,
+.twin-root.is-night.is-focused .floor-group.is-active .floor-slab {
+  background: linear-gradient(158deg, #fff8ea 0%, #ffedcf 62%, #ffe2bd 100%);
+  box-shadow:
+    0 0 0 2px rgba(255, 210, 150, 0.6),
+    inset 0 0 70px rgba(255, 200, 130, 0.55),
+    0 26px 60px rgba(0, 0, 0, 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sun,
+  .sun-ring,
+  .cloud,
+  .desk-monitor::after,
+  .reception-glow,
+  .car-drive,
+  .walker,
+  .walker-figure,
+  .walker-leg,
+  .walker-arm,
+  .star,
+  .tl-lamp {
+    animation: none;
+  }
+}
+
+/* ── Header detail 模式 ───────────────────────────────── */
+
+.twin-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 14px 5px 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.74);
+  border: 2px solid rgba(241, 216, 182, 0.95);
+  box-shadow: 0 8px 18px rgba(140, 110, 70, 0.14);
+}
+
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(160, 130, 90, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+  color: #f6ead9;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 160ms, border-color 160ms, transform 120ms;
+}
+.btn-back:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(200, 160, 100, 0.45);
+}
+.btn-back:active {
+  transform: translateY(1px);
+}
+
+.detail-title {
+  color: #f6ead9;
+  font-size: 15px;
+  letter-spacing: 0.3px;
+}
+.detail-title strong {
+  color: #e8b77a;
+  font-weight: 700;
+}
+
+.detail-stats {
+  color: #bfa88a;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* 白天模式：头部是浅色底，文字必须转深色 */
+.twin-root.is-day .detail-title { color: #6b5440; }
+.twin-root.is-day .detail-title strong { color: #c1804a; }
+.twin-root.is-day .btn-back {
+  color: #6b5440;
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(200, 168, 130, 0.6);
+}
+.twin-root.is-day .btn-back:hover {
+  background: #fff;
+  border-color: rgba(180, 140, 95, 0.75);
+}
+.twin-root.is-day .detail-stats {
+  color: #8a6f52;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+/* ── FloorDetailView（全屏独立 2D 办公室） ──────────── */
+
+/* 天蓝背景 + 窗光，像参考图的小游戏外框 */
+.floor-detail {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  overflow: clip;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(255, 246, 214, 0.95) 0%, rgba(255, 246, 214, 0) 42%),
+    linear-gradient(180deg, #cbe8f8 0%, #b9def3 46%, #d8ecf7 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  transform-style: preserve-3d;
+}
+
+/* 斜射进来的窗光 */
+.floor-detail::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(114deg,
+      rgba(255, 249, 226, 0) 30%,
+      rgba(255, 247, 214, 0.52) 43%,
+      rgba(255, 252, 236, 0.18) 52%,
+      rgba(255, 249, 226, 0) 64%);
+  pointer-events: none;
+}
+
+/* 缩放容器：用缩放后的真实尺寸参与居中 */
+.detail-scaler {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+/* 整层木地板底座：圆角厚板 + 漂浮阴影 */
+.detail-floor {
+  position: relative;
+  border-radius: 30px;
+  transform-origin: top left;
+  background-color: #f5dfbd;
+  background-image:
+    repeating-linear-gradient(0deg,
+      rgba(191, 143, 92, 0.3) 0 1px,
+      transparent 1px 38px),
+    repeating-linear-gradient(90deg,
+      rgba(255, 255, 255, 0.4) 0 2px,
+      transparent 2px 128px),
+    linear-gradient(160deg, #fbe9cf 0%, #f3d8b2 60%, #eed0a6 100%);
+  box-shadow:
+    0 16px 0 #e2c296,
+    0 46px 76px rgba(110, 150, 180, 0.32),
+    inset 0 3px 0 rgba(255, 255, 255, 0.92);
+}
+
+.detail-rooms {
+  position: absolute;
+  inset: 0;
+}
+
+.floor-detail-hint {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #7d654d;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 6px 16px rgba(120, 150, 175, 0.22);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+
+/* ── detail 模式：扁平化，修掉 rotate 导致不可见的元素 ── */
+
+.floor-detail .floor-slab,
+.floor-detail .floor-lift,
+.floor-detail .floor-group {
+  transform: none !important;
+  animation: none !important;
+  opacity: 1 !important;
+}
+.floor-detail .slab-edge {
+  display: none;
+}
+.floor-detail .room {
+  transform-style: flat;
+  opacity: 1 !important;
+}
+.floor-detail .walkers-layer {
+  transform-style: flat;
+  z-index: 10;
+}
+
+/* 墙面改为厚边框，形成"墙体厚度"的立体感 */
+.floor-detail .room-floor {
+  border: 14px solid #fffcf5;
+  border-radius: 26px;
+  box-shadow:
+    0 7px 0 #ead6ba,
+    0 18px 32px rgba(150, 115, 70, 0.14),
+    inset 0 2px 0 rgba(255, 255, 255, 0.95);
+}
+.floor-detail .wall {
+  display: none;
+}
+
+/* 门洞：在厚边框上开一个地板色缺口 */
+.floor-detail .doorway {
+  display: block;
+  background: var(--floor, #f9e7cb);
+  box-shadow: none;
+}
+/* 顶视图门板：可见，带厚度感；开门时向房间内侧旋转收折 */
+.floor-detail .doorway::after {
+  display: block;
+  inset: 1px;
+}
+.floor-detail .doorway::before {
+  display: block;
+}
+.floor-detail .doorway-n { top: 0 !important; height: 16px !important; }
+.floor-detail .doorway-s { top: auto !important; bottom: 0 !important; height: 16px !important; }
+.floor-detail .doorway-w { left: 0 !important; width: 16px !important; }
+.floor-detail .doorway-e { left: auto !important; right: 0 !important; width: 16px !important; }
+
+/* 上墙的浅蓝窗带，强化小游戏画面感 */
+.floor-detail .room-floor::before {
+  content: "";
+  position: absolute;
+  left: 9%;
+  right: 9%;
+  top: -14px;
+  height: 13px;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, #e6f4fd 0%, #b9e0f5 100%);
+  box-shadow:
+    inset 0 0 0 2px #ffffff,
+    inset 0 -4px 6px rgba(120, 170, 200, 0.2);
+  pointer-events: none;
+}
+
+/* 门牌：平铺在房间左上角 */
+.floor-detail .room-label {
+  transform: none;
+  left: 22px;
+  top: 20px;
+  height: 26px;
+  line-height: 22px;
+  font-size: 12px;
+}
+
+/* 显示器：从立起来改成桌面上的扁屏幕 */
+.floor-detail .desk-monitor {
+  transform: none;
+  left: -28px;
+  top: -26px;
+  width: 56px;
+  height: 22px;
+  border-radius: 6px;
+  background: linear-gradient(160deg, #f6fafd 0%, #d5e2ec 100%);
+  box-shadow:
+    inset 0 0 0 2px #ffffff,
+    0 3px 0 #c9b08d,
+    0 7px 12px rgba(140, 102, 62, 0.22);
+}
+.floor-detail .desk-monitor::after {
+  inset: 3px;
+  border-radius: 4px;
+  background: linear-gradient(165deg, #9ed8f6 0%, #63b9e6 55%, #3f9fd4 100%);
+  opacity: 1;
+}
+
+/* 屏幕底座，让显示器更像一台电脑 */
+.floor-detail .desk-monitor::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 10px;
+  height: 5px;
+  margin-left: -5px;
+  border-radius: 0 0 3px 3px;
+  background: #d9c7ab;
+}
+
+/* 桌面加深轮廓，和白色圆毯拉开层次 */
+.floor-detail .desk-top {
+  background: linear-gradient(160deg, #fbe7c6 0%, #f4d7a9 60%, #efcd98 100%);
+  box-shadow:
+    inset 0 0 0 2px #dfba87,
+    inset 0 2px 0 rgba(255, 255, 255, 0.7),
+    0 5px 0 #d9b17c,
+    0 11px 17px rgba(150, 110, 70, 0.24);
+}
+.floor-detail .desk-chair {
+  background: linear-gradient(155deg, #fffdf8, #f7e4c8);
+  box-shadow:
+    0 0 0 2px #e6cba6,
+    0 4px 0 #dfc09a,
+    0 8px 12px rgba(160, 116, 70, 0.2);
+}
+
+/* 详情视图：显示器平铺在桌面上，不需要支架 */
+.floor-detail .desk-monitor-stand { display: none; }
+.floor-detail .desk-keyboard {
+  left: -24px;
+  top: 4px;
+  width: 48px;
+  height: 14px;
+}
+.floor-detail .desk-mouse {
+  left: 28px;
+  top: 6px;
+}
+.floor-detail .desk-mug {
+  left: 28px;
+  top: -16px;
+}
+
+/* 每个工位下方的白色毛绒圆毯 */
+.floor-detail .seat::before {
+  content: "";
+  position: absolute;
+  left: -52px;
+  top: -40px;
+  width: 104px;
+  height: 86px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 46%, #fffdf7 0%, #fdf7ec 58%, #f7eddd 100%);
+  box-shadow:
+    0 0 0 5px rgba(255, 250, 240, 0.55),
+    0 7px 12px rgba(170, 130, 90, 0.1);
+}
+
+/* 名字气泡：平铺在头顶 */
+.floor-detail .person-plate {
+  transform: translateX(-50%);
+  top: -36px;
+}
+
+/* 白板：平铺贴在上墙 */
+.floor-detail .prop-whiteboard {
+  transform: none;
+  top: 22px !important;
+}
+
+/* 沙发靠背：平铺在沙发上方 */
+.floor-detail .sofa-back {
+  transform: none;
+  top: -48px;
+  height: 26px;
+  border-radius: 14px 14px 8px 8px;
+}
+
+/* ── 协同：A2A 消息 / 结对讨论 / 任务链路 ─────────────── */
+
+.btn-collab {
+  margin-left: 6px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #f19bc0 0%, #a98ae6 100%);
+  box-shadow: 0 5px 12px rgba(190, 120, 180, 0.32);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-collab:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(190, 120, 180, 0.4);
+}
+.btn-collab:active { transform: translateY(0) scale(0.97); }
+
+.collab-layer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1400px;
+  height: 900px;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 30;
+}
+
+.collab-lines {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+.collab-line {
+  stroke: #79aee0;
+  stroke-width: 1.6;
+  stroke-dasharray: 5 6;
+  animation: collabDash 1s linear infinite;
+}
+.collab-pair-line {
+  stroke: #e28ab4;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 2 8;
+  animation: collabDash 1.5s linear infinite;
+}
+@keyframes collabDash {
+  to { stroke-dashoffset: -24; }
+}
+
+.collab-bubble {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  max-width: 230px;
+  min-width: 46px;
+  padding: 6px 10px 8px;
+  border-radius: 12px 12px 12px 4px;
+  background: rgba(255, 255, 255, 0.97);
+  color: #4b3f33;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  box-shadow:
+    0 6px 16px rgba(60, 90, 120, 0.22),
+    0 0 0 1.5px rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+  will-change: left, top, opacity;
+}
+.collab-bubble::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 0 0 3px 0;
+  background: inherit;
+  transform: rotate(45deg);
+}
+.collab-bubble-name {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #6b93bd;
+}
+
+.collab-pair-tag {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f6a9c8, #b79aef);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  box-shadow: 0 5px 12px rgba(170, 110, 170, 0.35);
+  white-space: nowrap;
+}
+
+/* 头顶的三个点：结对讨论中 */
+.w-speech {
+  position: absolute;
+  left: 16px;
+  top: -104px;
+  display: flex;
+  gap: 3px;
+  padding: 5px 8px;
+  border-radius: 10px 10px 10px 3px;
+  background: #fff;
+  box-shadow: 0 4px 10px rgba(90, 120, 150, 0.22);
+}
+.w-speech i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #b99ae0;
+  animation: wSpeech 1.1s ease-in-out infinite;
+}
+.w-speech i:nth-child(2) { animation-delay: 0.16s; }
+.w-speech i:nth-child(3) { animation-delay: 0.32s; }
+@keyframes wSpeech {
+  0%, 100% { transform: translateY(0); opacity: 0.55; }
+  50% { transform: translateY(-3px); opacity: 1; }
+}
+
+/* 任务徽标：接力推进中的任务名 */
+.walker-task {
+  position: absolute;
+  left: 0;
+  top: -92px;
+  transform: translateX(-50%) scaleX(var(--facing, 1));
+  max-width: 148px;
+  padding: 2px 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fff2c9, #ffd9a8);
+  color: #a5762a;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  box-shadow: 0 4px 10px rgba(160, 120, 60, 0.26);
+}
+
+.walker.is-pair .walker-figure {
+  animation: pairTalk 2.1s ease-in-out infinite;
+  transform-origin: center 72%;
+}
+.walker.is-pair .w-arm.a1 { animation: pairArm 1.1s ease-in-out infinite alternate; }
+.walker.is-pair .w-arm.a2 { animation: pairArm 1.1s ease-in-out infinite alternate-reverse; }
+@keyframes pairTalk {
+  0%, 100% { transform: translateZ(7px) rotate(-1.5deg) translateY(0); }
+  45% { transform: translateZ(7px) rotate(1.8deg) translateY(-1px); }
+}
+@keyframes pairArm {
+  from { transform: rotate(-6deg); }
+  to { transform: rotate(8deg); }
+}
+
+/* ── 右侧协同面板 ───────────────────────────── */
+
+.collab-dock {
+  position: absolute;
+  right: 22px;
+  top: 20px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 252px;
+  padding: 14px 14px 12px;
+  border-radius: 18px;
+  background: rgba(255, 253, 248, 0.9);
+  box-shadow:
+    0 18px 38px rgba(80, 110, 140, 0.22),
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  color: #5c4c3c;
+  font-size: 11.5px;
+  transition: right 0.24s ease;
+}
+/* 详情抽屉打开时协同面板左移，避免遮挡 */
+.floor-detail.has-drawer .collab-dock {
+  right: 354px;
+}
+.collab-dock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.collab-dock-head strong {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: #4a3a2a;
+}
+.collab-peers {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #3e9e78;
+  background: rgba(167, 220, 196, 0.35);
+}
+.collab-peers i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3e9e78;
+  box-shadow: 0 0 0 3px rgba(62, 158, 120, 0.18);
+}
+.collab-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.collab-section h4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #9c8a76;
+  text-transform: uppercase;
+}
+.collab-section h4 em {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-style: normal;
+  letter-spacing: 0.04em;
+}
+.collab-section h4 em.is-live { color: #3e9e78; background: rgba(167, 220, 196, 0.4); }
+.collab-section h4 em.is-sim { color: #b08545; background: rgba(242, 212, 143, 0.42); }
+.collab-empty {
+  margin: 0;
+  padding: 6px 2px;
+  color: #b3a594;
+  font-size: 11px;
+}
+.collab-msg-list,
+.collab-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.collab-msg-list li {
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(238, 245, 252, 0.78);
+}
+.collab-msg-route {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #6b93bd;
+}
+.collab-msg-route i { font-style: normal; color: #b3c5d8; }
+.collab-msg-list p {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #4b3f33;
+}
+.collab-task-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 6px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(255, 246, 228, 0.85);
+}
+.collab-task-title {
+  font-size: 11.5px;
+  font-weight: 800;
+  color: #58452f;
+}
+.collab-task-meta {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: #9c8a76;
+  white-space: nowrap;
+}
+.collab-task-track {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 3px;
+  margin-top: 2px;
+}
+.collab-task-track i {
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(190, 170, 145, 0.28);
+}
+.collab-task-track i.is-done {
+  background: linear-gradient(90deg, #f2b6c6, #c3b0ee);
+}
+.collab-pair-btn {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #f19bc0 0%, #a98ae6 100%);
+  box-shadow: 0 8px 16px rgba(190, 120, 180, 0.3);
+  transition: transform 0.15s ease;
+}
+.collab-pair-btn:hover { transform: translateY(-1px); }
+.collab-pair-btn:active { transform: translateY(0) scale(0.98); }
+
+@media (max-width: 1180px) {
+  .collab-dock {
+    width: 210px;
+    right: 14px;
+    top: 14px;
+    padding: 11px;
+  }
+  .collab-msg-list li:nth-child(3) { display: none; }
+}
+@media (max-width: 980px) {
+  /* 窄屏优先展示员工详情，收起协同面板 */
+  .floor-detail.has-drawer .collab-dock { display: none; }
+}
+

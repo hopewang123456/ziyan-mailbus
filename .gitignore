@@ -3,11 +3,13 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 dist/
-!java/dist/
 build/
 web/node_modules/
 web/dist/
 docs/dist/
+
+# Java / Maven build output
+/java/target/
 
 # Runtime data (do not commit)
 store/
@@ -62,7 +64,6 @@ docker-agents/comfyui-data/
 access/hermes/.sync/
 
 # Runtime messages / ad-hoc scripts
-python/bus/send/
 outbox/
 patrol_reports/
 mnt/
@@ -113,38 +114,20 @@ access/transport/agent-h/
 access/transport/agent-m/
 access/transport/agent-n/
 access/transport/agent-k/
-python/config/agents/*.override.json
-!config/agents/*.override.example.json
-!config/agents/*.example.json
-python/config/mailbus/launch-ports.json
-!config/mailbus/launch-ports.example.json
 README.local.md
 team-pack/
 access/external-tools/registry.json
 access/external-tools/grants.json
 !access/external-tools/*.example.json
 
-# Demo transports that ARE published live under examples/
-!examples/
-
-# Test / tool scratch
-python/tests/_tmp_codex_home/
-python/tools/tmp-launch-resp.json
-python/tools/tmp-*.json
+# Test scratch
 .pytest_cache/
 
-# Local-only diagnostic / migration scripts (contain machine paths or team roster)
-python/tools/_*.py
-python/tools/_*.sh
-python/tools/smoke_*.py
-python/tools/smoke-*.py
-python/tools/health-overview.py
-python/tools/ops0_provision_browser_auth.py
+# Local-only diagnostic scripts (contain machine paths or team roster)
 docker-agents/migrate-hermes-home-to-e.sh
 /_*.txt
 /_*.ps1
 /_*.sh
 /_*.json
 
-# mailbus-j build artifacts
-java/**/target/
+

@@ -1,69 +1,69 @@
 # mailbus
 
-File-based **Agent-to-Agent** message bus. Framework-agnostic: Hermes, OpenClaw, Codex, OpenCode, Claude Code, and more via adapters.
+Agent message bus built with layered FastAPI + SQLite, plus a shared React
+cockpit (`web/`).
 
-No Redis / RabbitMQ required — messages are JSON files, CLI push, agent ack.
+The Python service is a layered FastAPI application backed by SQLite:
+domain rules in `mailbus/core`, use cases in `mailbus/application`,
+adapters in `mailbus/adapters`, HTTP mapping in `mailbus/api`, and
+composition in `mailbus/bootstrap`. Runtime data lives under `data/`
+(override with `MAILBUS_DATA_DIR`).
 
-## Pick your implementation
-
-mailbus ships **multiple language implementations of the same bus** — one
-repo, one contract, your choice of runtime:
-
-| Directory | Implementation | Status |
-|---|---|---|
-| `python/` | Python >= 3.10 (`pip install -e .`) | **stable** |
-| `java/` | Java 17+ / Spring Boot 3 (`mvn -pl mailbus-boot -am package`) | preview (core landed, dual-run verified) |
-| `web/` | Shared React cockpit (both implementations serve it) | shared |
-| `shared/` | Language-neutral assets: `store/` runtime data, `docker-agents/`, `skills/`, `rules/`, `access/`, `contracts/openapi-v0.json` | shared |
-
-**The contract is the same** whichever you run: same store layout (files as
-the source of truth), same REST API surface (`shared/contracts/openapi-v0.json`),
-same cockpit UI. A `migrate` / `reconcile` pair moves and audits a store
-between implementations — dual-run and switch when you're ready.
-
-### Quick start - Python
+## Quick start
 
 ```bash
 cd python
-pip install -e .
-mailbus demo          # full lifecycle in one command
-mailbus serve         # cockpit on :9814
+pip install -e ".[dev]"
+uvicorn mailbus.bootstrap.main:app --port 9814
 ```
 
-### Quick start - Java
+- Health: `GET http://127.0.0.1:9814/api/health`
+- OpenAPI: `GET http://127.0.0.1:9814/api/openapi.json`
+- Tests: `python -m pytest -q`
+- Contract export: `python tools/export_openapi.py`
+
+Log in through `POST /api/identity/bootstrap/super-admin` on first run.
+
+## Java backend
+
+`java/` mirrors the Python service with Spring Boot 3.3 / JDK 17 and matches the
+OpenAPI contract in `shared/contracts/generated/openapi.json` (81 paths / 99
+operations). It shares the SQLite schema and `data/` directory, so teams without
+Python experience can build on it directly:
 
 ```bash
 cd java
-mvn -pl mailbus-boot -am package -DskipTests
-java -jar mailbus-boot/target/mailbus-boot-0.1.0.jar demo   # CLI mode
-java -jar mailbus-boot/target/mailbus-boot-0.1.0.jar        # serve on :9815
+mvn spring-boot:run
 ```
 
-More per-implementation details: `python/README.md`, `java/README.md`.
+See [java/README.md](java/README.md) for configuration and extension notes.
 
-## Adding another language
+## Layout
 
-The layout is the contract: a new implementation gets one top-level
-directory, talks to the shared store layout under `shared/store`, serves
-the same REST contract, and can host the same `web/` cockpit. Nothing
-else in the repo needs to move.
+| Directory | Contents |
+|---|---|
+| `python/` | Python service (`mailbus` package, tests, contract export) |
+| `java/` | Java service (Spring Boot 3.3, same contract as Python) |
+| `web/` | React cockpit |
+| `shared/` | Language-neutral assets and generated contracts |
+| `config/` | Static seed data (office layout) |
+| `data/` | Runtime state: SQLite database, file-bus and MCP queues |
+| `docs/` | Product and design documents |
 
-## Optional
+## Layering
 
-- An agent CLI (Claude Code / Codex / Hermes / OpenClaw / OpenCode) or a remote A2A endpoint — only for connecting your own agents
-- Ollama (local routing), Docker + Compose, AgentMemory, Obsidian Vault — enhancement layers, never required for the demo
-
-## Connect your own agents
-
-Settings page in the cockpit (three fields: `type / run_target /
-install_path`) or `mailbus agent-add` / the java CLI equivalent; the
-**Test connection** flow runs probe -> test push -> activity profile.
-
-```bash
-mailbus init --data-dir ./shared/store
-mailbus send agent-executor --msg "Hello" --from agent-dispatcher
-mailbus status
+```
+core → application → adapters → api → bootstrap
 ```
 
-Copy `python/migrate/env.template` -> `.env` and set keys / paths.
-**Never commit `.env`.**
+- `core` is pure domain logic (standard library only).
+- `application` owns one transaction per use case and the outbox.
+- `adapters` implement persistence, transport, clock and ids.
+- `api` only translates HTTP and resolves the caller.
+- `bootstrap` is the only place that knows filesystem paths.
+
+All permission checks go through `core.identity.policy.ensure_allowed`;
+write routes must declare a capability so guard G8 can verify them.
+
+The old Python stack (`python/lib`, `python/bus`, old `python/tools/`) was
+removed in the B7 cleanup.

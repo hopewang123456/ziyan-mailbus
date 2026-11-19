@@ -4,10 +4,20 @@ import { NavLink } from "react-router-dom";
 /**
  * 管理中心布局（P3，D6：协同管理后台——正经表格表单范式）。
  *
- * 与驾驶舱 Shell 的视觉分野：无星空/星云/3D 装饰；固定侧栏 + 顶栏 + 内容区
+ * 与孪生大屏的视觉分野：无星空/星云/3D 装饰；固定侧栏 + 顶栏 + 内容区
  * 的标准后台结构；沿用 mailbus 色板（abyss/hull/rail/frost/mute/mint）保持品牌一致。
  */
-export function ConsoleLayout({ nav, children }: { nav: ReactNode; children: ReactNode }) {
+export function ConsoleLayout({
+  nav,
+  children,
+  onLogout,
+  logoutBusy,
+}: {
+  nav: ReactNode;
+  children: ReactNode;
+  onLogout?: () => void;
+  logoutBusy?: boolean;
+}) {
   return (
     <div className="flex min-h-screen bg-abyss text-frost">
       <aside className="fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-rail bg-hull">
@@ -18,10 +28,20 @@ export function ConsoleLayout({ nav, children }: { nav: ReactNode; children: Rea
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3" aria-label="管理导航">
           {nav}
         </nav>
-        <div className="border-t border-rail px-4 py-3">
-          <a href="/" className="text-[11px] text-mute transition hover:text-frost">
-            ← 返回驾驶舱
+        <div className="space-y-2 border-t border-rail px-4 py-3">
+          <a href="/twin" className="block text-[11px] text-mute transition hover:text-frost">
+            孪生大屏 →
           </a>
+          {onLogout && (
+            <button
+              type="button"
+              className="w-full rounded border border-rail px-2 py-1 text-left text-[11px] text-mute transition hover:text-frost disabled:opacity-40"
+              disabled={logoutBusy}
+              onClick={onLogout}
+            >
+              {logoutBusy ? "正在退出…" : "退出登录"}
+            </button>
+          )}
         </div>
       </aside>
       <main className="ml-56 min-w-0 flex-1">

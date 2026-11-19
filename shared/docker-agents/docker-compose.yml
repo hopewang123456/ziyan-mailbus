@@ -45,7 +45,7 @@ services:
       - ${HERMES_DATA:-./workspaces/hermes-data}:/hermes-data/.hermes:ro
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - DATA_DIR=/mailbus/shared/store
+      - MAILBUS_DATA_DIR=/mailbus/data
       - TZ=Asia/Shanghai
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
       # Defaults only — compose sync override injects config/services docker profile
@@ -73,7 +73,6 @@ services:
       - MAILBUS_PLANS_ROOT=/mailbus/shared/plans
       - TEAM_PACK_ROOT=/mailbus/team-pack
     restart: unless-stopped
-    command: ["python3", "-m", "bus", "serve", "--host", "0.0.0.0", "--port", "9814", "--data-dir", "/mailbus/shared/store"]
 
   iii-init:
     image: busybox:1.36
@@ -158,9 +157,7 @@ services:
       # profiles/*/memories symlink 指向 Vault 记忆树；hermes 0.19 ensure_hermes_home
       # 会 mkdir memories，dangling symlink 直接 FileExistsError——挂真源让链路生效
       - /mnt/e/Obsidian/Vaults/Agent/02-members/022-category/0221-hermes/02214-memory:/mnt/e/Obsidian/Vaults/Agent/02-members/022-category/0221-hermes/02214-memory
-      - ../store:/mailbus/store
-      - ../../python/lib:/mailbus/python/lib:ro
-      - ../../python/tools:/mailbus/python/tools:ro
+      - ../data:/mailbus/store
       - ../skills:/mailbus/shared/skills:ro
       - ../rules:/mailbus/shared/rules:ro
       - ../access:/mailbus/shared/access:ro
@@ -168,10 +165,10 @@ services:
       - ../access/hermes/.sync:/mailbus/access/hermes/.sync
       # Runtime skills SoT = Vault via profiles/*/skills under HERMES_DATA;
       # .sync is optional framework-skill mirror only (not Hermes load path).
-      - ../store/inbox:/home/hermes/inbox:ro
+      - ../data/inbox:/home/hermes/inbox:ro
     environment:
       - HERMES_HOME=/home/hermes/.hermes
-      - DATA_DIR=/mailbus/shared/store
+      - DATA_DIR=/mailbus/data
       - PYTHONPATH=/mailbus
       - AGENTMEMORY_URL=http://iii-engine:3111
       - TZ=Asia/Shanghai
@@ -202,9 +199,7 @@ services:
       - mailbus-net
     volumes:
       - ${OPENCLAW_WORKSPACE:-./workspaces/openclaw}:/workspace
-      - ../store:/mailbus/store
-      - ../../python/tools:/mailbus/python/tools:ro
-      - ../../python/lib:/mailbus/python/lib:ro
+      - ../data:/mailbus/store
       # 热挂 entrypoint，避免每次改配对逻辑都要 rebuild 镜像
       - ./openclaw-agent/entrypoint.sh:/entrypoint.sh:ro
       - ../skills:/mailbus/shared/skills:ro
@@ -214,7 +209,7 @@ services:
       - ${OPENCLAW_WORKSPACE:-./workspaces/openclaw}/memory:/workspace/memory
       - ../access:/mailbus/shared/access:ro
       - ../access/external-tools:/mailbus/shared/external-tools:ro
-      - ../store/inbox:/inbox:ro
+      - ../data/inbox:/inbox:ro
       - ${HERMES_DATA:-./workspaces/hermes-data}:/hermes-secrets:ro
     environment:
       - TZ=Asia/Shanghai
@@ -247,9 +242,7 @@ services:
     networks:
       - mailbus-net
     volumes:
-      - ../store:/mailbus/store
-      - ../../python/tools:/mailbus/python/tools:ro
-      - ../../python/lib:/mailbus/python/lib:ro
+      - ../data:/mailbus/store
       - ../skills:/mailbus/shared/skills:ro
       - ../rules:/mailbus/shared/rules:ro
       - ../access:/mailbus/shared/access:ro
@@ -307,9 +300,7 @@ services:
     networks:
       - mailbus-net
     volumes:
-      - ../store:/mailbus/store
-      - ../../python/tools:/mailbus/python/tools:ro
-      - ../../python/lib:/mailbus/python/lib:ro
+      - ../data:/mailbus/store
       - ../skills:/mailbus/shared/skills:ro
       - ../rules:/mailbus/shared/rules:ro
       - ../access:/mailbus/shared/access:ro
@@ -359,8 +350,7 @@ services:
     networks:
       - mailbus-net
     volumes:
-      - ../store:/mailbus/store
-      - ../../python/tools:/mailbus/python/tools:ro
+      - ../data:/mailbus/store
       - ../skills:/mailbus/shared/skills:ro
       - ../rules:/mailbus/shared/rules:ro
       - ../access:/mailbus/shared/access:ro
@@ -405,7 +395,7 @@ services:
       - mailbus-net
     volumes:
       - ${DSH_WORKSPACE:-./workspaces/dsh}:/home/dsh/.dsh
-      - ../store:/mailbus/store
+      - ../data:/mailbus/store
       - ../skills:/mailbus/shared/skills:ro
       - ../rules:/mailbus/shared/rules:ro
       - ../access:/mailbus/shared/access:ro

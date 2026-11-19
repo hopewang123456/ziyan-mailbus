@@ -1,5 +1,4 @@
-# Mailbus gate subset — e2e L-gates + V acceptance + Wave F3/F4 + web build.
-# Full suite: python -m pytest tests -q
+# mailbus gates — Python stack + web build.
 name: mailbus-gates
 
 on:
@@ -13,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: python  # monorepo: Python implementation subtree
+        working-directory: python
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,163 +21,11 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install -U pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install -e .
-          pip install pytest
-      - name: pytest e2e + v_suite + auth/cors + pipeline/settings/compose/device
+          pip install -e ".[dev]"
+      - name: pytest (guards + e2e + integration)
         env:
           PYTHONUTF8: "1"
-        run: |
-          python -m pytest tests/e2e -q \
-            tests/test_acceptance_v_suite.py \
-            tests/test_v6_enable_rollback.py \
-            tests/test_wave_f3_f4_gates.py \
-            tests/test_ports_import.py \
-            tests/test_application_clock_lint.py \
-            tests/test_transport_wave3.py \
-            tests/test_framework_entry_points.py \
-            tests/test_integration_entry_points.py \
-            tests/test_no_secrets_in_git.py \
-            tests/test_config_files.py \
-            tests/test_config_readers_no_example.py \
-            tests/test_mailbus_token.py \
-            tests/test_cors.py \
-            tests/test_doctor_auth.py \
-            tests/test_decouple_paths.py \
-            tests/test_compose_files.py \
-            tests/test_dispatch_governance.py \
-            tests/test_pipeline_step_failover.py \
-            tests/test_failover_after_two.py \
-            tests/test_failover_metrics.py \
-            tests/test_pipeline_trigger_p0.py \
-            tests/test_launch_ports_settings.py \
-            tests/test_sync_layers.py \
-            tests/test_device_bridge.py \
-            tests/test_p10_dispatch_delivery.py \
-            tests/test_connection_test.py \
-            tests/test_push_budget.py \
-            tests/test_dlq_and_loops.py \
-            tests/test_token_ledger.py \
-            tests/test_demo_chain.py \
-            tests/test_demo_api.py \
-            tests/test_wave3_onboarding.py \
-            tests/test_wave4_stations.py \
-            tests/test_wave5_observability.py \
-            tests/test_harness_production_wait.py \
-            tests/test_scan_poison_isolation.py \
-            tests/test_notify_channels.py \
-            tests/test_alert_wiring.py \
-            tests/test_acceptance_status.py \
-            tests/test_sentinel.py \
-            tests/test_receipt_reliability.py \
-            tests/test_tracker.py \
-            tests/test_api_error_envelope.py \
-            tests/test_cmd_retry.py \
-            tests/test_framework_spec.py \
-            tests/test_external_frameworks.py \
-            tests/test_agent_register.py \
-            tests/test_framework_skills.py \
-            tests/test_routes_openapi.py \
-            tests/test_api_surface_diff.py \
-            tests/test_sse_protocol.py \
-            tests/test_a2a_streaming.py -q
-
-  java:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: java
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "25"
-      - name: mvn test
-        run: mvn -B test
-
-  # 双栈 API 面对拍（D13 四件套常设项 / PY4-A DoD）：
-  # 起 python serve + java serve，跑 tools/api_surface_diff.py；
-  # 真缺口（豁免之外的单侧端点）→ 退出码非零 → job 失败。
-  api-surface-diff:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "25"
-      - name: Install python deps
-        working-directory: python
-        run: |
-          python -m pip install -U pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install -e .
-      - name: Build java
-        working-directory: java
-        run: mvn -B install -DskipTests
-      - name: Prepare diagonal smoke stores
-        run: |
-          mkdir -p .diag-java/roles/json .diag-java/inbox/agentA .diag-java/tasks
-          mkdir -p .diag-py/roles/json .diag-py/inbox/agentX .diag-py/tasks
-          cat > .diag-java/config.json <<'EOF'
-          {"agents": {"agentA": {"type": "cli"}}}
-          EOF
-          cat > .diag-py/config.json <<'EOF'
-          {"agents": {"agentX": {"type": "cli"}}, "auth": {"allow_write_without_token": true}}
-          EOF
-          cat > .diag-java/roles/json/role-types.json <<'EOF'
-          {"roles": {"1": {"key": "designer", "display": {"zh": "方案设计师"}, "candidates": ["agentA"]}}}
-          EOF
-          sed 's/agentA/agentX/' .diag-java/roles/json/role-types.json > .diag-py/roles/json/role-types.json
-      - name: Start python serve (9816)
-        working-directory: python
-        env:
-          PYTHONUTF8: "1"
-        run: |
-          nohup python -m bus serve --port 9816 --data-dir "$PWD/../.diag-py" \
-            > /tmp/py-serve.log 2>&1 &
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:9816/api/health > /dev/null; then break; fi
-            sleep 1
-          done
-          curl -sf http://127.0.0.1:9816/api/health
-      - name: Start java serve (9815)
-        working-directory: java
-        run: |
-          STORE="$(cd ../.diag-java && pwd)"
-          nohup mvn -B -pl mailbus-boot spring-boot:run \
-            -Dspring-boot.run.arguments="--mailbus.data-dir=$STORE --server.port=9815 --mailbus.task-scan.enabled=false" \
-            > /tmp/java-serve.log 2>&1 &
-          for i in $(seq 1 90); do
-            if curl -sf http://127.0.0.1:9815/api/health > /dev/null; then break; fi
-            sleep 2
-          done
-          curl -sf http://127.0.0.1:9815/api/health
-      - name: Run API surface diff
-        run: |
-          python tools/api_surface_diff.py \
-            --py http://127.0.0.1:9816 \
-            --java http://127.0.0.1:9815 \
-            --out docs/reports/api-surface-diff.json --python-only-mode report
-      - name: Run A2A diagonal check (SDK face)
-        env:
-          PYTHONUTF8: "1"
-        run: |
-          python tools/a2a_diagonal_check.py \
-            --py http://127.0.0.1:9816 \
-            --java http://127.0.0.1:9815 \
-            --py-agent agentX --java-agent agentA
-      - name: Upload diff report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: api-surface-diff
-          path: docs/reports/api-surface-diff.json
-          if-no-files-found: ignore
+        run: python -m pytest -q
 
   web:
     runs-on: ubuntu-latest

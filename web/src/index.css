@@ -41,7 +41,7 @@ body {
   color: var(--mute);
 }
 
-/* 字段旁 ? 悬浮说明（驾驶舱暗色浮层） */
+/* 字段旁 ? 悬浮说明（管理端暗色浮层） */
 .field-hint {
   position: relative;
   display: inline-flex;

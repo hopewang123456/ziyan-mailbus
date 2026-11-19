@@ -11,11 +11,11 @@ RUN apt-get update \
   && apt-get autoremove -y \
   && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir PyYAML
+# 运行依赖由镜像提供；源码经 ../..:/mailbus 挂载
+RUN pip install --no-cache-dir "fastapi>=0.115" "uvicorn[standard]>=0.30"
 
-# monorepo: python tree root (repo root stays at /mailbus)
 WORKDIR /mailbus/python
 
 EXPOSE 9814
 
-CMD ["python3", "-m", "bus", "serve", "--host", "0.0.0.0", "--port", "9814"]
+CMD ["python3", "-m", "uvicorn", "mailbus.bootstrap.main:app", "--host", "0.0.0.0", "--port", "9814"]

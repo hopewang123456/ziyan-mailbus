@@ -1,0 +1,634 @@
+import { useEffect, useRef, useState } from "react";
+import { seatStats, type Floor, type Room, type Seat } from "./types";
+import { Walker, type WalkerRoute } from "./Walker";
+import { chooseDoorWall, elevatorSpot, getDoorCenter } from "./pathfind";
+
+const WALL_H = 62;
+export const FLOOR_GAP = 520;
+
+const SHIRTS = ["#a8c8ee", "#cbb6e8", "#f6c9a0", "#a9d8c4", "#f2b6c6", "#f2d98f"];
+const HAIRS = ["#f0d28c", "#f4afcb", "#a9785b", "#c9bbec", "#6e5344", "#c98b65"];
+const TAGS = [
+  { tag: "#f5a9c8", text: "#e05893" },
+  { tag: "#c3b0ee", text: "#8a6bcf" },
+  { tag: "#a9c8f0", text: "#4f86c6" },
+  { tag: "#a7dcc4", text: "#3e9e78" },
+  { tag: "#f2d48f", text: "#c79b2e" },
+];
+
+function pick<T>(list: T[], seed: string): T {
+  let n = 0;
+  for (const ch of seed) n += ch.charCodeAt(0);
+  return list[n % list.length];
+}
+
+/** 稳定哈希：用于给工位分配固定的小摆件（台灯、文件盒等）。 */
+function seedNum(seed: string): number {
+  let n = 0;
+  for (let i = 0; i < seed.length; i += 1) n = (n * 31 + seed.charCodeAt(i)) % 9973;
+  return n;
+}
+
+interface SeatViewProps {
+  seat: Seat;
+  room: Room;
+  selected: boolean;
+  /** 该员工此刻正在走动，工位上不再渲染坐姿小人 */
+  walking?: boolean;
+  onSelect: (seat: Seat, room: Room) => void;
+}
+
+/** 坐姿小人的随机待机动作。 */
+type IdleAction = "type" | "drink" | "stretch" | "look" | "phone";
+
+function pickIdle(): IdleAction {
+  const r = Math.random();
+  if (r < 0.46) return "type";
+  if (r < 0.66) return "drink";
+  if (r < 0.79) return "stretch";
+  if (r < 0.91) return "look";
+  return "phone";
+}
+
+/** 俯视人物：头发 + 头 + 肩膀，坐在椅子上；姓名牌竖在工位后方。 */
+function SeatView({ seat, room, selected, walking = false, onSelect }: SeatViewProps) {
+  const agent = seat.agent;
+  const tag = agent ? pick(TAGS, agent.display_name) : null;
+  const [idle, setIdle] = useState<IdleAction>("type");
+
+  // 在线员工每隔几秒换一个待机动作：敲键盘 / 喝水 / 伸懒腰 / 张望 / 打电话
+  useEffect(() => {
+    if (!agent || agent.status !== "online") return;
+    let timer = 0;
+    const loop = (delay: number) => {
+      timer = window.setTimeout(() => {
+        setIdle(pickIdle());
+        loop(3800 + Math.random() * 4200);
+      }, delay);
+    };
+    loop(1800 + Math.random() * 4200);
+    return () => window.clearTimeout(timer);
+  }, [agent?.agent_id, agent?.display_name, agent?.status]);
+
+  const idleClass = agent && agent.status === "online" ? ` idle-${idle}` : "";
+  const sn = seedNum(seat.seat_id);
+  const hasLamp = sn % 3 === 0;
+  const hasBox = sn % 4 === 1;
+  return (
+    <div className="seat" style={{ left: seat.x, top: seat.y }}>
+      <div className="desk-top" />
+      <div className="desk-monitor" />
+      <div className="desk-monitor-stand" />
+      <div className="desk-keyboard" />
+      <div className="desk-mouse" />
+      <div className="desk-mug" />
+      <div className="desk-notes" />
+      <div className="desk-pen" />
+      {hasLamp ? <div className="desk-lamp" /> : null}
+      {hasBox ? <div className="desk-box" /> : null}
+      <div className="desk-chair" />
+      {agent && !walking ? (
+        <button
+          type="button"
+          className={`seat-person status-${agent.status}${idleClass}${selected ? " is-selected" : ""}`}
+          style={{
+            "--shirt": pick(SHIRTS, agent.display_name),
+            "--hair": pick(HAIRS, agent.agent_id ?? agent.display_name),
+            "--tag": tag!.tag,
+            "--tag-text": tag!.text,
+          } as React.CSSProperties}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(seat, room);
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          title={`${agent.display_name} · ${agent.position}`}
+        >
+          <span className="person-figure">
+            <i className="p-leg l1" />
+            <i className="p-leg l2" />
+            <i className="p-foot f1" />
+            <i className="p-foot f2" />
+            <i className="p-arm a1" />
+            <i className="p-arm a2" />
+            {sn % 6 === 0 ? <i className="p-backpack" /> : null}
+            <i className="p-body" />
+            <i className="p-collar" />
+            <i className="p-lanyard" />
+            <i className="p-badge" />
+            <i className="p-head" />
+            {sn % 5 === 0 || sn % 5 === 2 ? <i className="p-hair p-hair-long" /> : <i className="p-hair" />}
+            <i className="p-brow b1" />
+            <i className="p-brow b2" />
+            <i className="p-eye e1" />
+            <i className="p-eye e2" />
+            {sn % 100 < 42 ? <i className="p-glasses" /> : null}
+            <i className="p-mouth" />
+            <i className="p-blush b1" />
+            <i className="p-blush b2" />
+            <i className="p-dot" />
+          </span>
+          <span className="person-plate">{agent.display_name}</span>
+        </button>
+      ) : !agent ? (
+        <div className="seat-empty" />
+      ) : null}
+    </div>
+  );
+}
+
+/** 沿北墙依次排布挂件：让开左上角房间名牌与北墙门洞，放不下的直接跳过。 */
+function northRow(
+  roomW: number,
+  doorWall: "n" | "s" | "w" | "e",
+  widths: number[],
+): Array<number | null> {
+  const gap = 14;
+  const doorL = roomW / 2 - 50;
+  const doorR = roomW / 2 + 50;
+  const out: Array<number | null> = [];
+  let x = 150; // 左上角留给房间名牌
+  for (const w of widths) {
+    if (doorWall === "n" && x < doorR && x + w > doorL) x = doorR + gap;
+    if (x + w > roomW - 24) {
+      out.push(null);
+      continue;
+    }
+    out.push(x);
+    x += w + gap;
+  }
+  return out;
+}
+
+/** 饮水机：机身 + 水桶 + 龙头 + 纸杯架 + 接水盘。 */
+function Cooler({ style }: { style: React.CSSProperties }) {
+  return (
+    <span className="prop prop-cooler" style={style}>
+      <i className="cooler-cups" />
+      <i className="cooler-drip" />
+    </span>
+  );
+}
+
+/** 办公设施：饮水机、打印机、白板、茶水台、文件柜、垃圾桶、绿植、挂钟等。 */
+function Props({ room, doorWall }: { room: Room; doorWall: "n" | "s" | "w" | "e" }) {
+  // 地面道具统一贴四角摆放：北墙挂件走顶部条带（避开桌子），
+  // 落地道具放左右下角（避开最后一排椅子和门洞）。
+  const floorProps = [
+    <span key="ftree" className="prop prop-ftree" style={{ left: 16, top: room.h - 52 }} />,
+    <span key="ext" className="prop prop-extinguisher" style={{ left: room.w - 26, top: room.h - 96 }} />,
+  ];
+
+  if (room.kind === "meeting") {
+    const [wbX, shelfX, clockX, acX] = northRow(room.w, doorWall, [86, 78, 26, 44]);
+    return (
+      <>
+        {wbX !== null ? <span className="prop prop-whiteboard" style={{ left: wbX, top: 0 }} /> : null}
+        {shelfX !== null ? <span className="prop prop-shelf" style={{ left: shelfX, top: 0 }} /> : null}
+        {clockX !== null ? <span className="prop prop-clock" style={{ left: clockX, top: 0 }} /> : null}
+        {acX !== null ? <span className="prop prop-ac" style={{ left: acX, top: 2 }} /> : null}
+        <Cooler style={{ left: room.w - 54, top: 22 }} />
+        {floorProps}
+        <span className="prop prop-trash" style={{ left: room.w - 30, top: room.h - 70 }} />
+      </>
+    );
+  }
+
+  if (room.kind === "lounge") {
+    const [acX, , clockX] = northRow(room.w, doorWall, [44, 120, 26]);
+    return (
+      <>
+        <span className="prop prop-counter" style={{ left: 24, top: 26 }} />
+        <Cooler style={{ left: room.w - 64, top: 30 }} />
+        <span className="prop prop-coffee" style={{ left: 24, top: room.h - 60 }} />
+        <span className="prop prop-cups" style={{ left: 150, top: room.h - 48 }} />
+        <span className="prop prop-fridge" style={{ left: room.w - 74, top: room.h - 88 }} />
+        <span className="prop prop-microwave" style={{ left: 152, top: 30 }} />
+        {clockX !== null ? <span className="prop prop-clock" style={{ left: clockX, top: 0 }} /> : null}
+        {acX !== null ? <span className="prop prop-ac" style={{ left: acX, top: 2 }} /> : null}
+        {floorProps}
+        <span className="prop prop-trash" style={{ left: room.w - 30, top: room.h - 70 }} />
+      </>
+    );
+  }
+
+  if (room.kind === "reception") {
+    const [logoX, acX] = northRow(room.w, doorWall, [90, 44]);
+    return (
+      <>
+        {logoX !== null ? <span className="prop prop-logo" style={{ left: logoX, top: 0 }} /> : null}
+        {acX !== null ? <span className="prop prop-ac" style={{ left: acX, top: 2 }} /> : null}
+        <span className="prop prop-cabinet" style={{ left: 22, top: room.h - 52 }} />
+        <span className="prop prop-printer" style={{ left: room.w - 52, top: room.h - 52 }} />
+        <span className="prop prop-trash" style={{ left: room.w - 30, top: room.h - 70 }} />
+        {floorProps}
+      </>
+    );
+  }
+
+  const [acX, wbX, clockX, noticeX] = northRow(room.w, doorWall, [44, 86, 26, 52]);
+  return (
+    <>
+      {wbX !== null ? <span className="prop prop-whiteboard" style={{ left: wbX, top: 0 }} /> : null}
+      {clockX !== null ? <span className="prop prop-clock" style={{ left: clockX, top: 0 }} /> : null}
+      {noticeX !== null ? <span className="prop prop-notice" style={{ left: noticeX, top: 4 }} /> : null}
+      {acX !== null ? <span className="prop prop-ac" style={{ left: acX, top: 2 }} /> : null}
+      <Cooler style={{ left: room.w - 54, top: 22 }} />
+      <span className="prop prop-printer" style={{ left: room.w - 52, top: room.h - 52 }} />
+      <span className="prop prop-trash" style={{ left: room.w - 30, top: room.h - 70 }} />
+      {floorProps}
+    </>
+  );
+}
+
+/** 房间家具与设施，让空房间不再空落落。 */
+function RoomDecor({ room, doorWall }: { room: Room; doorWall: "n" | "s" | "w" | "e" }) {
+  const cx = room.w / 2;
+  const cy = room.h / 2;
+
+  return (
+    <>
+      {room.kind === "meeting" ? (
+        <div className="decor" style={{ left: cx, top: cy }}>
+          <span className="meeting-table" />
+          <span className="table-papers" />
+          <span className="table-bottles" />
+          <span className="meeting-chair c1" />
+          <span className="meeting-chair c2" />
+          <span className="meeting-chair c3" />
+          <span className="meeting-chair c4" />
+          <span className="plant p1" />
+          <span className="plant p2" />
+        </div>
+      ) : null}
+
+      {room.kind === "lounge" ? (
+        <div className="decor" style={{ left: cx, top: cy }}>
+          <span className="sofa-main" />
+          <span className="sofa-back" />
+          <span className="sofa-arm left" />
+          <span className="sofa-arm right" />
+          <span className="sofa-cushion" />
+          <span className="coffee-table" />
+          <span className="table-mug" />
+          <span className="plant p1" />
+          <span className="plant p2" />
+          <span className="plant p3" />
+        </div>
+      ) : null}
+
+      {room.kind === "reception" ? (
+        <div className="decor" style={{ left: cx, top: cy }}>
+          <span className="reception-counter" />
+          <span className="reception-glow" />
+          <span className="plant p1" />
+          <span className="plant p2" />
+        </div>
+      ) : null}
+
+      {room.kind === "bullpen" || room.kind === "focus" ? (
+        <div className="decor" style={{ left: 0, top: 0 }}>
+          <span className="rug" style={{ width: room.w - 40, height: room.h - 40 }} />
+          <span className="plant p1" style={{ left: 18, top: room.h - 46 }} />
+          <span className="plant p2" style={{ left: room.w - 52, top: 16 }} />
+        </div>
+      ) : null}
+
+      <div className="decor" style={{ left: 0, top: 0 }}>
+        <Props room={room} doorWall={doorWall} />
+      </div>
+    </>
+  );
+}
+
+function RoomView({
+  room,
+  doorWall,
+  selectedSeatId,
+  walkingSeatIds,
+  doorOpen,
+  onSelectSeat,
+}: {
+  room: Room;
+  doorWall: "n" | "s" | "w" | "e";
+  selectedSeatId: string | null;
+  walkingSeatIds: Set<string>;
+  doorOpen?: boolean;
+  onSelectSeat: (seat: Seat, room: Room) => void;
+}) {
+  const wall = doorWall;
+  const door =
+    wall === "n"
+      ? { x: room.w / 2, y: 0 }
+      : wall === "s"
+        ? { x: room.w / 2, y: room.h }
+        : wall === "w"
+          ? { x: 0, y: room.h / 2 }
+          : { x: room.w, y: room.h / 2 };
+  const doorStyle: React.CSSProperties = (() => {
+    const size = 84;
+    switch (wall) {
+      case "n": return { left: door.x - size / 2, top: -WALL_H, width: size, height: WALL_H };
+      case "s": return { left: door.x - size / 2, top: `calc(100% - ${WALL_H}px)`, width: size, height: WALL_H };
+      case "w": return { left: -WALL_H, top: door.y - size / 2, width: WALL_H, height: size };
+      case "e": return { left: `calc(100% - ${WALL_H}px)`, top: door.y - size / 2, width: WALL_H, height: size };
+    }
+  })();
+
+  return (
+    <div
+      className={`room room-${room.kind}${doorOpen ? " door-open" : ""}`}
+      style={{ left: room.x, top: room.y, width: room.w, height: room.h }}
+    >
+      <div className="room-floor" />
+      <span className="wall wall-n" style={{ top: -WALL_H, height: WALL_H }} />
+      <span className="wall wall-s" style={{ top: `calc(100% - ${WALL_H}px)`, height: WALL_H }} />
+      <span className="wall wall-w" style={{ left: -WALL_H, width: WALL_H, height: "100%" }} />
+      <span className="wall wall-e" style={{ left: `calc(100% - ${WALL_H}px)`, width: WALL_H, height: "100%" }} />
+      {/* 在主墙上开 doorway 缺口，用 room-floor 色填充，造成"穿墙"视觉 */}
+      <span className={`doorway doorway-${wall}`} style={doorStyle} />
+      <RoomDecor room={room} doorWall={wall} />
+      <span className="room-label">{room.name}</span>
+      {room.seats.map((seat) => (
+        <SeatView
+          key={seat.seat_id}
+          seat={seat}
+          room={room}
+          walking={!!seat.agent && walkingSeatIds.has(seat.seat_id)}
+          selected={selectedSeatId === seat.seat_id}
+          onSelect={onSelectSeat}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface FloorSlabProps {
+  floor: Floor;
+  index: number;
+  active: boolean;
+  dimmed: boolean;
+  selectedSeatId: string | null;
+  walkerRoutes?: WalkerRoute[];
+  onWalkerArrive?: (routeId: string) => void;
+  onSelectFloor: (floorId: string) => void;
+  onSelectSeat: (seat: Seat, room: Room) => void;
+}
+
+/** 走廊里的电梯：井道 + 双开滑动门，有人到门口时打开。 */
+function Elevator({ floor, open }: { floor: Floor; open: boolean }) {
+  const spot = elevatorSpot(floor);
+  return (
+    <div
+      className={`elevator${open ? " is-open" : ""}`}
+      style={{ left: spot.x - 42, top: spot.y - 28 }}
+    >
+      <span className="elev-frame" />
+      <span className="elev-door d1" />
+      <span className="elev-door d2" />
+      <span className="elev-sign">EV</span>
+    </div>
+  );
+}
+
+/** 门的开合状态：roomId → 引用计数，最后一个通过的人离开后再关门。 */
+function useDoors(floor: Floor) {
+  const [openCounts, setOpenCounts] = useState<Record<string, number>>({});
+  const closeTimers = useRef<Record<string, number>>({});
+
+  // 本层所有门洞中心坐标，供 walker 判断是否经过
+  const doors = floor.rooms.map((room) => {
+    const wall = chooseDoorWall(room, floor.rooms);
+    const c = getDoorCenter(room, wall);
+    return { roomId: room.room_id, wall, x: c.x, y: c.y };
+  });
+
+  const enter = (roomId: string) => {
+    if (closeTimers.current[roomId]) {
+      clearTimeout(closeTimers.current[roomId]);
+      delete closeTimers.current[roomId];
+    }
+    setOpenCounts((prev) => ({ ...prev, [roomId]: (prev[roomId] ?? 0) + 1 }));
+  };
+  const exit = (roomId: string) => {
+    // 延时 450ms 关闭，让开门动画播完
+    closeTimers.current[roomId] = window.setTimeout(() => {
+      setOpenCounts((prev) => {
+        const n = (prev[roomId] ?? 1) - 1;
+        const next = { ...prev };
+        if (n <= 0) delete next[roomId];
+        else next[roomId] = n;
+        return next;
+      });
+      delete closeTimers.current[roomId];
+    }, 450);
+  };
+
+  // 卸载时清掉未执行的定时器，避免对已卸载组件 setState
+  useEffect(
+    () => () => {
+      Object.values(closeTimers.current).forEach((t) => clearTimeout(t));
+      closeTimers.current = {};
+    },
+    [],
+  );
+
+  return { doors, openDoors: new Set(Object.keys(openCounts)), enter, exit };
+}
+
+export function FloorSlab({
+  floor,
+  index,
+  active,
+  dimmed,
+  selectedSeatId,
+  walkerRoutes = [],
+  onWalkerArrive,
+  onSelectFloor,
+  onSelectSeat,
+}: FloorSlabProps) {
+  const stats = seatStats(floor);
+  const walkingSeatIds = new Set(walkerRoutes.map((route) => route.seatId));
+  const { doors, openDoors, enter, exit } = useDoors(floor);
+  const elevSpot = elevatorSpot(floor);
+  const elevOpen = walkerRoutes.some((route) => {
+    const p = route.points[route.points.length - 1];
+    return Math.hypot(p.x - elevSpot.x, p.y - elevSpot.y) < 48;
+  });
+  return (
+    <div
+      className={`floor-group${active ? " is-active" : ""}${dimmed ? " is-dimmed" : ""}`}
+      style={{ transform: `translateZ(${index * FLOOR_GAP}px)` }}
+    >
+      <div className="floor-lift" style={{ animationDelay: `${index * -2.4}s` }}>
+        <div
+          className="floor-badge"
+          style={{ left: -230, top: 26 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectFloor(floor.floor_id);
+          }}
+        >
+          <span className="badge-level">{floor.level}F</span>
+          <span className="badge-name">{floor.name}</span>
+          <span className="badge-meta">
+            在线 {stats.online} · 空位 {stats.empty}
+          </span>
+        </div>
+
+        <div
+          className="floor-slab"
+          onClick={() => onSelectFloor(floor.floor_id)}
+          title={`点击进入 ${floor.name}`}
+        >
+          <div className="slab-edge slab-edge-s" />
+          <div className="slab-edge slab-edge-e" />
+          {floor.rooms.map((room) => (
+            <RoomView
+              key={room.room_id}
+              room={room}
+              doorWall={chooseDoorWall(room, floor.rooms)}
+              doorOpen={openDoors.has(room.room_id)}
+              selectedSeatId={selectedSeatId}
+              walkingSeatIds={walkingSeatIds}
+              onSelectSeat={onSelectSeat}
+            />
+          ))}
+          <Elevator floor={floor} open={elevOpen} />
+          {/* Walker 层：放在 rooms 之后，保证在房间地板之上、墙之下 */}
+          <div className="walkers-layer">
+            {walkerRoutes.map((route) => (
+              <Walker
+                key={route.id}
+                route={route}
+                doors={doors}
+                onDoorEnter={enter}
+                onDoorExit={exit}
+                onArrive={onWalkerArrive}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Detail 全屏独立视图 ──────────────────────────────────
+
+interface FloorDetailViewProps {
+  floor: Floor;
+  selection: { seat: Seat; room: Room } | null;
+  walkerRoutes?: WalkerRoute[];
+  onWalkerArrive?: (routeId: string) => void;
+  onSelectSeat: (seat: Seat, room: Room) => void;
+}
+
+/**
+ * 全屏独立办公室画面：
+ * - 单楼层、2D 俯视图、铺满 twin-body
+ * - 隐藏 3D stage / sky / building / shell
+ * - 楼层自动缩放适配窗口
+ * - Walker 全启用，人物在房间间走动
+ */
+export function FloorDetailView({
+  floor,
+  selection,
+  walkerRoutes = [],
+  onWalkerArrive,
+  onSelectSeat,
+}: FloorDetailViewProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  // 本层所有门洞 + 开合状态
+  const { doors, openDoors, enter, exit } = useDoors(floor);
+  const elevSpot = elevatorSpot(floor);
+  const elevOpen = walkerRoutes.some((route) => {
+    const p = route.points[route.points.length - 1];
+    return Math.hypot(p.x - elevSpot.x, p.y - elevSpot.y) < 48;
+  });
+
+  // 楼层包围盒（含墙厚），用于自适应缩放与居中
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const room of floor.rooms) {
+    minX = Math.min(minX, room.x - WALL_H);
+    minY = Math.min(minY, room.y - WALL_H);
+    maxX = Math.max(maxX, room.x + room.w + WALL_H);
+    maxY = Math.max(maxY, room.y + room.h + WALL_H);
+  }
+  const floorW = maxX - minX;
+  const floorH = maxY - minY;
+
+  useEffect(() => {
+    const padding = 56;
+    const apply = () => {
+      const wrap = wrapperRef.current;
+      if (!wrap) return;
+      const wrapW = wrap.clientWidth - padding * 2;
+      const wrapH = wrap.clientHeight - padding * 2;
+      const s = Math.min(wrapW / floorW, wrapH / floorH, 1);
+      setScale(s);
+    };
+
+    apply();
+    window.addEventListener("resize", apply);
+    return () => window.removeEventListener("resize", apply);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floor.floor_id, floorW, floorH]);
+
+  // 过滤出本层的 walker（公开布局用 seatId 匹配）
+  const floorSeatIds = new Set(floor.rooms.flatMap((r) => r.seats.map((s) => s.seat_id)));
+  const floorWalkers = walkerRoutes.filter((route) => floorSeatIds.has(route.seatId));
+  const walkingSeatIds = new Set(floorWalkers.map((route) => route.seatId));
+
+  return (
+    <div className={`floor-detail${selection ? " has-drawer" : ""}`} ref={wrapperRef}>
+      {/* scaler 用缩放后的实际尺寸参与居中布局 */}
+      <div
+        className="detail-scaler"
+        style={{ width: floorW * scale, height: floorH * scale }}
+      >
+        <div
+          className="detail-floor"
+          style={{
+            width: floorW,
+            height: floorH,
+            transform: `scale(${scale})`,
+          }}
+        >
+          <div
+            className="detail-rooms"
+            style={{ transform: `translate(${-minX}px, ${-minY}px)` }}
+          >
+            {floor.rooms.map((room) => (
+              <RoomView
+                key={room.room_id}
+                room={room}
+                doorWall={chooseDoorWall(room, floor.rooms)}
+                selectedSeatId={selection?.seat.seat_id ?? null}
+                walkingSeatIds={walkingSeatIds}
+                doorOpen={openDoors.has(room.room_id)}
+                onSelectSeat={onSelectSeat}
+              />
+            ))}
+            <Elevator floor={floor} open={elevOpen} />
+            <div className="walkers-layer">
+              {floorWalkers.map((route) => (
+                <Walker
+                  key={route.id}
+                  route={route}
+                  onArrive={onWalkerArrive}
+                  doors={doors}
+                  onDoorEnter={enter}
+                  onDoorExit={exit}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="floor-detail-hint">ESC 返回整楼 · 点击员工查看详情</div>
+    </div>
+  );
+}

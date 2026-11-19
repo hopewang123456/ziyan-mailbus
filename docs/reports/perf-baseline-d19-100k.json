@@ -1,0 +1,107 @@
+{
+  "generated_at": "2026-11-16T02:07:34",
+  "env": {
+    "python": "3.14.6",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "cpu_count": 32,
+    "work_dir": "C:\\Users\\hopew\\AppData\\Local\\Temp\\mailbus-perf-vfgnt2zq"
+  },
+  "config": {
+    "agents": 8,
+    "messages": 400,
+    "concurrency": 8,
+    "lock_procs": 4,
+    "lock_writes": 40,
+    "scales": [
+      100000
+    ],
+    "max_tasks": 2000,
+    "soak_seconds": 30,
+    "soak_prune": 0
+  },
+  "scenarios": {
+    "scale": {
+      "scales": [
+        {
+          "messages": 100000,
+          "tasks": 2000,
+          "store_mode": "jsonl",
+          "migration": {
+            "mode": "jsonl",
+            "migrated": 100000,
+            "legacy_messages": 100000
+          },
+          "inbox_file_mb": 0.04,
+          "messages_jsonl_mb": 34.23,
+          "append_latency_ms": {
+            "count": 20,
+            "mean": 17.38,
+            "p50": 16.55,
+            "p95": 21.52,
+            "p99": 39.28,
+            "max": 39.28
+          },
+          "full_read_ms": {
+            "count": 1,
+            "mean": 1877.85,
+            "p50": 1877.85,
+            "p95": 1877.85,
+            "p99": 1877.85,
+            "max": 1877.85
+          },
+          "warm_read_ms": {
+            "count": 2,
+            "mean": 2330.15,
+            "p50": 2182.86,
+            "p95": 2477.44,
+            "p99": 2477.44,
+            "max": 2477.44
+          },
+          "limited_read_ms": {
+            "count": 3,
+            "mean": 29.87,
+            "p50": 29.75,
+            "p95": 33.01,
+            "p99": 33.01,
+            "max": 33.01
+          },
+          "tasks_list_ms": {
+            "count": 2,
+            "mean": 7081.03,
+            "p50": 155.49,
+            "p95": 14006.58,
+            "p99": 14006.58,
+            "max": 14006.58
+          },
+          "trace_ms": {
+            "count": 2,
+            "mean": 1059.12,
+            "p50": 940.41,
+            "p95": 1177.83,
+            "p99": 1177.83,
+            "max": 1177.83
+          },
+          "metrics_point_ms": {
+            "count": 1,
+            "mean": 42.28,
+            "p50": 42.28,
+            "p95": 42.28,
+            "p99": 42.28,
+            "max": 42.28
+          },
+          "payloads": {
+            "full_total": 100000,
+            "tasks_total": 2001,
+            "trace_status": "ok",
+            "metric": "tasks.active"
+          },
+          "rss_delta_mb": 94.6
+        }
+      ],
+      "elapsed_s": 34.49
+    }
+  },
+  "failures": [],
+  "verdict": "ok",
+  "elapsed_s": 34.77
+}

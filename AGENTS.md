@@ -2,55 +2,54 @@
 
 ## Product
 
-**mailbus**: file-based Agent-to-Agent message bus. Framework-agnostic (Hermes, OpenClaw, Codex, Claude Code, …).
+**mailbus**: agent-to-agent message bus built with layered FastAPI + SQLite,
+plus a shared React cockpit (`web/`).
 
-## Repo roots
+## Repository map
 
 | Path | Role |
 |------|------|
-| `lib/` | Application code (Ports & Adapters) |
-| `lib/composition.py` | **Only** Composition Root |
-| `bus/` | CLI / serve entry (`python -m bus`) |
+| `python/mailbus/` | Python service (layered FastAPI + SQLite) |
+| `python/tests/` | guards, e2e and integration tests |
+| `python/tools/export_openapi.py` | exports the HTTP contract |
+| `java/` | Java service (Spring Boot 3.3, same HTTP contract) |
 | `web/` | Cockpit (React) |
-| `config/` | Seed / template config |
-| `store/` | Runtime data (local, gitignored secrets) |
-| `docker-agents/` | Compose stacks |
-| `docs/` | Often local/Vault (gitignored); public notes → `migrate/README.md` + `access/*/SPEC.md` |
-| `tests/` | pytest |
+| `config/` | Static seed data (office layout) |
+| `data/` | Runtime state (SQLite, file-bus / MCP queues), gitignored |
+| `shared/` | Language-neutral assets and generated contracts |
+| `docs/` | Product and design documents |
 
-## Architecture SoT
-
-- 代码分层/快速开始：本文件上方 [`ARCHITECTURE.md`](ARCHITECTURE.md)
-- 完整架构文档：Obsidian `Agent/01-mailbus/016-docs/0161-architecture/`（SoT）
-- Vault 计划：`Agent/01-mailbus/017-plans/`（Obsidian）
-- 路径/结构映射（可选）：`AGENT_VAULT_ROOT/_path-map.json`（Obsidian Agent 仓；未配置则跳过）
-
-## Dependency rule (target)
+## Python dependency rule
 
 ```
-tools/ · lib/api/  →  lib/application/  →  lib/interfaces/  ←  lib/adapters/
-                              ↓
-                         lib/domain/ · lib/core/
-                              ↓
-                         lib/infra/
+core → application → adapters → api → bootstrap
 ```
 
-- `application` must not import concrete `adapters.frameworks.*`
-- `adapters` must not import `application`
-- `domain` must not import upper layers
+- `core`: pure domain (standard library only, no clock/UUID/IO).
+- `application`: one use case per SQLite unit of work; outbox in the same transaction.
+- `adapters`: persistence, transports, clock, ids.
+- `api`: protocol translation only; resolves the caller, no permission rules.
+- `bootstrap`: the only layer that knows filesystem paths.
+
+Permissions: every write use case starts with
+`core.identity.policy.ensure_allowed`. Write routes must declare a capability
+(guard G8).
 
 ## How to work
 
-1. Read `ARCHITECTURE.md` + relevant package `Overview.md`
-2. Prefer DeepSeek for routine edits; use stronger models for cross-package moves
-3. Run a **targeted** pytest after changes; full suite for gate waves
-4. Never commit `.env` / secrets / personal agent rosters
+1. Read `python/ARCHITECTURE.md` and the target architecture plan in the Vault.
+2. Keep changes inside `python/`, `shared/contracts/generated/`, `config/`;
+   do not edit `web/` for Python tasks.
+3. Run targeted tests first: `python -m pytest tests/guards tests/e2e tests/integration -q`.
+4. Re-export the contract after API changes: `python tools/export_openapi.py`.
+5. Never commit `.env` / secrets / runtime data under `data/`.
 
 ## Quick commands
 
 ```bash
-pip install -e .
-mailbus init --data-dir ./store
-mailbus serve --host 0.0.0.0 --port 9814 --data-dir ./store
-pytest tests/test_import_layers.py -q
+cd python
+pip install -e ".[dev]"
+uvicorn mailbus.bootstrap.main:app --port 9814
+python -m pytest -q
+python tools/export_openapi.py
 ```

@@ -1,0 +1,16 @@
+{
+  "contract_version": "0.1.0",
+  "tool_count": 16,
+  "admin_skipped": [],
+  "contract_errors": [],
+  "python": {
+    "tool_count": 16,
+    "diff": {
+      "missing": [],
+      "extra": [],
+      "schema_mismatch": {},
+      "ok": true
+    }
+  },
+  "ok": true
+}

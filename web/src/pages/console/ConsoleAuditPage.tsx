@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { ConsolePageHeader, ConsoleSection, ConsoleTable, ConsoleTag } from "../../components/console/ConsoleKit";
 
@@ -25,25 +25,39 @@ type Alert = {
 export function ConsoleAuditPage() {
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  useEffect(() => {
-    void Promise.all([
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [s, a] = await Promise.all([
       api<AuditStats>("/api/tasks/audit/stats"),
       api<{ alerts?: Alert[] }>("/api/alerts"),
-    ]).then(([s, a]) => {
-      if (s.ok && s.data) setStats(s.data);
-      if (a.ok && a.data?.alerts) setAlerts(a.data.alerts);
-      const e = [s, a].filter((r) => !r.ok).map((r) => ("error" in r ? r.error : ""));
-      if (e.length) setErr(e.filter(Boolean).join("; "));
-    });
+    ]);
+    setLoading(false);
+    if (s.ok && s.data) setStats(s.data);
+    if (a.ok && a.data?.alerts) setAlerts(a.data.alerts);
+    const errors = [s, a].filter((r) => !r.ok).map((r) => (r.ok ? "" : r.error));
+    setErr(errors.filter(Boolean).join("；"));
   }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const sevTone = (s?: string) => (s === "critical" ? "danger" : s === "warn" ? "warn" : "default");
 
   return (
     <>
-      <ConsolePageHeader title="审计与告警" description="工单审核统计与最近告警（规则编辑在「指标与报表」）" />
+      <ConsolePageHeader
+        title="审计与告警"
+        description="工单审核统计与最近告警（规则编辑在「指标与报表」）"
+        actions={
+          <button type="button" className="hud-btn text-xs" onClick={() => void load()}>
+            刷新
+          </button>
+        }
+      />
       {err && <p className="mb-3 text-xs text-flare">{err}</p>}
 
       <ConsoleSection title="审核统计">
@@ -57,6 +71,7 @@ export function ConsoleAuditPage() {
         <ConsoleTable
           rows={Object.entries(stats?.by_reviewer || {}).map(([k, v]) => ({ reviewer: k, ...v }))}
           rowKey={(r) => r.reviewer}
+          loading={loading}
           empty="暂无审核数据"
           columns={[
             { key: "r", header: "审核人", render: (r) => <span className="font-mono">{r.reviewer}</span> },
@@ -72,6 +87,8 @@ export function ConsoleAuditPage() {
         <ConsoleTable
           rows={alerts}
           rowKey={(a, i) => a.id || String(i)}
+          loading={loading}
+          empty="暂无告警"
           columns={[
             {
               key: "sev",
@@ -79,7 +96,9 @@ export function ConsoleAuditPage() {
               render: (a) => <ConsoleTag tone={sevTone(a.severity) as "danger" | "warn" | "default"}>{a.severity || "info"}</ConsoleTag>,
             },
             { key: "type", header: "类型", render: (a) => <span className="font-mono">{a.type || "—"}</span> },
+            { key: "agent", header: "对象", render: (a) => a.agent || "—" },
             { key: "msg", header: "消息", render: (a) => <span className="text-mute">{(a.message || "").slice(0, 70)}</span> },
+            { key: "ts", header: "时间", render: (a) => <span className="text-mute">{a.ts || "—"}</span> },
           ]}
         />
       </ConsoleSection>

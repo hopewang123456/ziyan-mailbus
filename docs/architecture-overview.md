@@ -1,6 +1,6 @@
 # mailbus 架构总览（AI 助手知识库 · 2026-10-26）
 
-mailbus 是 AI agent 消息总线：python 与 java 双后端对等实现（同一 React 前端），file/A2A 传输，file-bus 降级。
+mailbus 是 AI agent 消息总线：Python FastAPI + SQLite 后端（`python/mailbus/`），file-bus / MCP / A2A 三种传输，共用 React 驾驶舱（`web/`）。
 
 ## 分层（python 侧）
 - `lib/interfaces/` — Port 协议层（19 个 Port：TaskFsmPort/HumanGatePort/MessageTransportPort/A2ATransportPort/IntegrationsPort 等 + L3 装配注册表）
@@ -12,9 +12,9 @@ mailbus 是 AI agent 消息总线：python 与 java 双后端对等实现（同�
 ## 关键概念
 - **职位≠角色（D3）**：工单节点按 role_type 职位展示（role-types.json SoT，含候选池与 inputs 起草表单 schema）；派发 pin>空闲优先>轮询（role_resolver）
 - **子言（D2/D15）**：内置主仓角色（builtin-identities.json），用户本人；id 稳定 display_name 可改；经 /api/command/inbox 聚合被唤起消息
-- **配置型 L3（D7）**：行为参数+实体+装配选择全声明式配置（config.json composition 段）；python 注册表+查表，java Spring 条件装配
-- **指标（B1-B7）**：metrics-manifest.json 双栈唯一口径真源；python 自研引擎（/api/metrics/query+时序），java Micrometer（/actuator/metrics/mailbus.*）
-- **A2A**：对齐 Google A2A JSON-RPC 1.0（lib/core/a2a），java 侧官方 a2a-java SDK 路线
+- **权限**：每个写用例首行调用 `core.identity.policy.ensure_allowed(subject, capability, resource)`；api 层仅 `deps.get_actor` 做 token→Actor
+- **Outbox 模式**：一个用例 = 一个 `SqliteUnitOfWork`（每 UoW 新建 WAL 连接）；状态变更与 outbox 同事务提交
+- **A2A**：对齐 Google A2A JSON-RPC 1.0，入口在 `api/routers/a2a.py`
 
 ## 常用端点
 - 发令：GET /api/positions（职位目录+表单 schema）、POST /api/command/draft（LLM 草稿预演）、POST /api/tasks/create（v3 envelope 创建）

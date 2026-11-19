@@ -1,0 +1,138 @@
+{
+  "site_id": "site-hq",
+  "name": "Mailbus 总部",
+  "org_name": "双子星智能体公司",
+  "floors": [
+    {
+      "floor_id": "f1",
+      "name": "一层 · 接待与协作",
+      "level": 1,
+      "rooms": [
+        {
+          "room_id": "f1-reception",
+          "name": "前台",
+          "kind": "reception",
+          "x": 60,
+          "y": 60,
+          "w": 300,
+          "h": 220,
+          "seats": [
+            { "seat_id": "f1-reception-s1", "x": 146, "y": 134, "rotation": 0 },
+            { "seat_id": "f1-reception-s2", "x": 274, "y": 134, "rotation": 0 }
+          ]
+        },
+        {
+          "room_id": "f1-bullpen",
+          "name": "开放工区 A",
+          "kind": "bullpen",
+          "x": 400,
+          "y": 60,
+          "w": 700,
+          "h": 420,
+          "seats": [
+            { "seat_id": "f1-bullpen-s1", "x": 486, "y": 134, "rotation": 0 },
+            { "seat_id": "f1-bullpen-s2", "x": 662, "y": 134, "rotation": 0 },
+            { "seat_id": "f1-bullpen-s3", "x": 838, "y": 134, "rotation": 0 },
+            { "seat_id": "f1-bullpen-s4", "x": 1014, "y": 134, "rotation": 0 },
+            { "seat_id": "f1-bullpen-s5", "x": 486, "y": 406, "rotation": 180 },
+            { "seat_id": "f1-bullpen-s6", "x": 662, "y": 406, "rotation": 180 },
+            { "seat_id": "f1-bullpen-s7", "x": 838, "y": 406, "rotation": 180 },
+            { "seat_id": "f1-bullpen-s8", "x": 1014, "y": 406, "rotation": 180 }
+          ]
+        },
+        {
+          "room_id": "f1-focus",
+          "name": "专注室",
+          "kind": "focus",
+          "x": 60,
+          "y": 520,
+          "w": 400,
+          "h": 300,
+          "seats": [
+            { "seat_id": "f1-focus-s1", "x": 146, "y": 594, "rotation": 0 },
+            { "seat_id": "f1-focus-s2", "x": 374, "y": 594, "rotation": 0 }
+          ]
+        },
+        {
+          "room_id": "f1-meeting",
+          "name": "大会议室",
+          "kind": "meeting",
+          "x": 500,
+          "y": 520,
+          "w": 400,
+          "h": 300,
+          "seats": []
+        },
+        {
+          "room_id": "f1-lounge",
+          "name": "茶水休息区",
+          "kind": "lounge",
+          "x": 940,
+          "y": 520,
+          "w": 400,
+          "h": 300,
+          "seats": []
+        }
+      ]
+    },
+    {
+      "floor_id": "f2",
+      "name": "二层 · 研发主战场",
+      "level": 2,
+      "rooms": [
+        {
+          "room_id": "f2-bullpen",
+          "name": "开放工区 B",
+          "kind": "bullpen",
+          "x": 60,
+          "y": 60,
+          "w": 760,
+          "h": 480,
+          "seats": [
+            { "seat_id": "f2-bullpen-s1", "x": 146, "y": 134, "rotation": 0 },
+            { "seat_id": "f2-bullpen-s2", "x": 342, "y": 134, "rotation": 0 },
+            { "seat_id": "f2-bullpen-s3", "x": 538, "y": 134, "rotation": 0 },
+            { "seat_id": "f2-bullpen-s4", "x": 734, "y": 134, "rotation": 0 },
+            { "seat_id": "f2-bullpen-s5", "x": 146, "y": 466, "rotation": 180 },
+            { "seat_id": "f2-bullpen-s6", "x": 342, "y": 466, "rotation": 180 },
+            { "seat_id": "f2-bullpen-s7", "x": 538, "y": 466, "rotation": 180 },
+            { "seat_id": "f2-bullpen-s8", "x": 734, "y": 466, "rotation": 180 }
+          ]
+        },
+        {
+          "room_id": "f2-focus",
+          "name": "静音专注室",
+          "kind": "focus",
+          "x": 860,
+          "y": 60,
+          "w": 480,
+          "h": 300,
+          "seats": [
+            { "seat_id": "f2-focus-s1", "x": 946, "y": 134, "rotation": 0 },
+            { "seat_id": "f2-focus-s2", "x": 1254, "y": 134, "rotation": 0 }
+          ]
+        },
+        {
+          "room_id": "f2-meeting",
+          "name": "评审室",
+          "kind": "meeting",
+          "x": 860,
+          "y": 400,
+          "w": 480,
+          "h": 260,
+          "seats": []
+        },
+        {
+          "room_id": "f2-lounge",
+          "name": "休息区",
+          "kind": "lounge",
+          "x": 60,
+          "y": 580,
+          "w": 1280,
+          "h": 260,
+          "seats": []
+        }
+      ]
+    }
+  ]
+}

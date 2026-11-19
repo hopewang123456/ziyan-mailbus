@@ -5,54 +5,26 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mailbus"
 version = "1.0.0"
-description = "mailbus AI agent message bus CLI"
+description = "mailbus AI agent message bus"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 dependencies = [
-  "PyYAML>=6.0",
-  "Markdown>=3.5",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
 ]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=7.0",
+  "httpx>=0.27",
 ]
-
-[project.scripts]
-# 消息总线 CLI（init/send/ack/scan/status/serve …）— README 快速开始用的入口
-mailbus = "bus.cli:main"
-# 运维编排 CLI（start/stop/doctor/portproxy/watchdog …）— 原 tools/mailbus.py
-mailbus-ops = "tools.mailbus:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["lib*", "bus*", "tools*"]
+include = ["mailbus*"]
 
-# pytest 收集配置：避开根目录的两个 WSL 死符号链接（.codex / codex），
-# 避免 pytest 自动 rootdir 上溯时 WinError 1920 把整个 collection 干掉。
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-norecursedirs = [
-  ".codex",
-  "codex",
-  "codex-review",
-  "store",
-  "web",
-  ".git",
-  ".workbuddy",
-  "lib",
-  "bus",
-  "tools",
-  "docker-agents",
-  "examples",
-  "external-tools",
-  "windows",
-  "scripts",
-  "skills",
-  "team-pack",
-  "access",
-  "migrate",
-  "plans",
-  "run",
-]
+addopts = "-p no:cacheprovider"
+norecursedirs = [".git", "__pycache__", ".pytest_cache", "data"]

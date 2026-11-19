@@ -1,372 +1,65 @@
 # mailbus
 
-文件级 **Agent-to-Agent** 消息总线。不绑定单一框架：通过 Adapter 接入 Hermes / OpenClaw / Codex / OpenCode / Claude Code 等。
+Agent 消息总线：分层 FastAPI + SQLite 后端，共用 React 驾驶舱（`web/`）。
 
-无需 Redis / RabbitMQ —— 消息存 JSON，CLI 推送，Agent 回 ack。
+Python 侧是分层 FastAPI 应用，持久化用 SQLite：领域规则在 `mailbus/core`，
+用例在 `mailbus/application`，适配器在 `mailbus/adapters`，HTTP 映射在
+`mailbus/api`，装配与路径在 `mailbus/bootstrap`。运行数据默认在 `data/`，
+可用 `MAILBUS_DATA_DIR` 覆盖。
 
-## 环境
-
-- Python ≥ 3.10
-- 可选：Docker、Ollama（本机路由）、AgentMemory
-
-## 快速开始（5 分钟，零依赖）
-
-不需要装任何 Agent 框架、不需要任何 API key——demo 角色是纯文件通信 + 预设回复：
+## 快速开始
 
 ```bash
-git clone https://github.com/hopewang123456/ziyan-mailbus.git
-cd mailbus/python   # monorepo：Python 实现
-pip install -e .
-
-# 一条命令：看到第一条工单完整流转
-#   建单 → 派工 → 投递 → 执行 → 回执 → 验收 → 归档
-mailbus demo
-
-# 装完先自诊一遍环境（Docker/路径/端口，有红灯给人话修复建议）
-mailbus doctor
-
-# 演示数据独立隔离在 store/demo/，随时一键清除
-mailbus demo --clean
+cd python
+pip install -e ".[dev]"
+uvicorn mailbus.bootstrap.main:app --port 9814
 ```
 
-想在浏览器里看：`mailbus serve --port 9814` 后打开驾驶舱——首次启动会出现引导卡片（语言 → 一键 demo → 接入引导），演示进行中有「演示模式」横幅。
+- 健康检查：`GET http://127.0.0.1:9814/api/health`
+- OpenAPI：`GET http://127.0.0.1:9814/api/openapi.json`
+- 测试：`python -m pytest -q`
+- 契约导出：`python tools/export_openapi.py`
 
-## 接入你自己的 Agent（第二步）
+首次启动通过 `POST /api/identity/bootstrap/super-admin` 创建超级管理员。
 
-demo 跑通后，接入真实框架只需三个字段（详见下文「注册一个新 agent」）：
+## Java 后端
+
+`java/` 提供与 Python 版同构的 Spring Boot 3.3 / JDK 17 实现，HTTP 契约对齐
+`shared/contracts/generated/openapi.json`（67 路径 / 82 操作），并与 Python 共用同一
+SQLite schema 与 `data/` 目录。不熟悉 Python 的团队可直接基于它二次开发：
 
 ```bash
-mailbus init --data-dir ./store
-mailbus serve --host 0.0.0.0 --port 9814 --data-dir ./store
+cd java
+mvn spring-boot:run
 ```
 
-设置页新建实例卡（`type / run_target / install_path`）→ 点「测试连接」：probe 可达 → 角色发现预览 → 试发等 ack，三段全绿即接好、角色自动上架。CLI 等价：`mailbus test-connection <instance_id>`。
-
-将 [`migrate/env.template`](migrate/env.template) 复制为 `.env` 并填写密钥/路径。**不要提交 `.env`。**
-
-### LLM / Ollama
-
-首次启动优先使用本机 Ollama（未配置时取 Ollama 列表中的第一个模型）。  
-若既无 Ollama 也无云端 API Key，驾驶舱会提示配置。
-
-模型 Provider 支持三种协议（对齐 Cursor 配置第三方模型的范式）：
-
-| 协议 | 端点/鉴权 | 说明 |
-|------|-----------|------|
-| `ollama` | 本机 `/api/chat` | `providers.local` |
-| `openai` | `/chat/completions` + `Bearer` | `providers.remote`（DeepSeek 等 OpenAI 兼容端点） |
-| `anthropic` | `/v1/messages` + `x-api-key` | `providers.claude`（`base_url` 留空=默认端点） |
-
-每个 provider 填 `protocol` / `base_url` / `model` / `api_key_env`（可选 `api_key`、`context_window`、`temperature`、`max_tokens` 等）。`api_key` 保存后掩码为 `***`，留空表示不更新；面板会标注「已配置 Key / 未配置 Key」。
-
-### 公共 Docker（最小栈）
-
-```bash
-cd docker-agents
-docker compose -f compose.public.yml up -d --build
-```
-
-完整本地团队栈请继续用 `docker-compose.yml` + 本机 `docker-compose.override.yml`（不入库）。
-override 只写 `${MAILBUS_HOST_ROOT}` / `${OPENCLAW_WORKSPACE}` 等变量；**绝对路径放进 `docker-agents/.env`（或设置页）**——这是与 Agent 运行时的唯一关联方式。
-勿把 Agent 树 junction/拷贝进 `docker-agents/workspaces/`；该目录仅作「未配置时」空占位。
-
-### 团队栈日启（Linux / macOS / Windows）
-
-规范入口（Linux/macOS **不需要** PowerShell）：
-
-```bash
-python tools/mailbus.py doctor
-python tools/mailbus.py start
-python tools/mailbus.py docker restart-mailbus
-```
-
-#### 薄启动脚本
-
-提供两个薄包装（Windows / Linux），仅定位仓库并调用 `python tools/mailbus.py start`：
-
-| 平台 | 脚本 | 前提 |
-|------|------|------|
-| Windows | `scripts/start-mailbus.bat` | `PATH` 中有 Python 3.11+（`python` 或 `py -3`）；团队栈需要 Docker Desktop + WSL |
-| Linux / macOS | `scripts/start-mailbus.sh` | `PATH` 中有 `python3` ≥ 3.11；团队栈需要 Docker |
-
-```bash
-# Linux / macOS
-bash scripts/start-mailbus.sh
-```
-
-```bat
-:: Windows（双击或终端运行）
-scripts\start-mailbus.bat
-```
-
-其它操作统一用 `python tools/mailbus.py <cmd>`（start / stop / doctor / smoke / portproxy / docker …）。
-
-#### 部署差异
-
-| | **Linux / macOS 原生** | **Windows + WSL 团队栈** |
-|--|------------------------|--------------------------|
-| 日启 | `python tools/mailbus.py start` 或 `mailbus serve` | 同一 Python 入口；可用薄 `scripts/start-mailbus.bat` |
-| 浏览器访问 API | 直接打开 `http://127.0.0.1:9814/` | 服务在 **WSL 内**、浏览器在 **Windows** 时，WSL IP / `wslrelay` 过期会导致 localhost 不通 |
-| 端口转发 | **不需要**（`portproxy` 为空操作） | `python tools/mailbus.py portproxy` 或 `windows/fix-wsl-localhost.ps1`（可能 UAC）。见 [`windows/README.md`](windows/README.md) |
-| Ollama | 本机 Ollama / `MAILBUS_OLLAMA_URL` | Windows 宿主机 Ollama + 可选 WSL 代理（仅 win32/wsl 启动路径） |
-
-Windows 专用端口转发脚本统一放在 [`windows/`](windows/)。
-
-#### 外部扩展（框架 / 集成）
-
-启动时发现（**无热加载**）：
-
-| 类型 | config | 环境变量 | pkg entry-points |
-|------|--------|----------|------------------|
-| 框架 Adapter | `frameworks.plugins` | `MAILBUS_FRAMEWORK_PLUGINS` | `mailbus.frameworks` |
-| Integrations | `integrations.plugins` | `MAILBUS_INTEGRATION_PLUGINS` | `mailbus.integrations` |
-
-规格：`module` 或 `module:callable`（callable 内调用 `register_framework` / `register_integration`）。严格失败：`*_PLUGINS_STRICT=1`。
-
-## 敏感数据与私有配置
-
-**不要把密钥或个人 Agent 名册提交进 Git。** 正式敏感/个人文件留本机；仓库只放 example。
-
-| 本机保留（已忽略） | 公开示例 |
-|--------------------|----------|
-| `.env`、`store/secrets.json`、`store/` | [`migrate/env.template`](migrate/env.template)、[`docker-agents/.env.example`](docker-agents/.env.example) |
-| `access/transport/<你的agent>/` | [`examples/transport/`](examples/transport/)（`agent-a` / `agent-coder` / `agent-chat`） |
-| `config/agents/<id>.override.json` | [`config/agents/*.override.example.json`](config/agents/) |
-| `config/mailbus/launch-ports.json` | [`launch-ports.example.json`](config/mailbus/launch-ports.example.json) |
-| `access/external-tools/registry.json`、`grants.json` | `*.example.json` |
-| compose override、Comfy 本机挂载 | `*.override.example.yml` |
-
-**运行时只读不带 `.example` 的实文件。** Clone 后：复制 `foo.example.json` → `foo.json`，填自己的密钥与 Agent id。详见 [`config/README.md`](config/README.md)。
-
-无敏感的公共种子（pipeline、agent-types 等）可直接以普通 JSON 提交。
-
-## 使用
-
-### 常用 CLI
-
-| 命令 | 作用 |
-|------|------|
-| `mailbus init --data-dir ./store` | （重建）`store/config.json`（seed + 本机覆盖合并） |
-| `mailbus serve --host 0.0.0.0 --port 9814` | HTTP API + 内置调度器 + 驾驶舱 |
-| `mailbus send <agent-id> --msg "..." --from <agent-id>` | 推送消息到 Agent 收件箱 |
-| `mailbus broadcast --msg "..."` | 发布公告板 |
-| `mailbus ack <msg-id> --agent <agent-id>` | 确认收到（驱动重试/退避） |
-| `mailbus scan --data-dir ./store` | 扫描收件箱并派发待处理消息 |
-| `mailbus status --data-dir ./store` | 查看 Agents / 队列 / 未读 |
-| `mailbus search --data-dir ./store --query ...` | 消息 / 目录检索 |
-| `mailbus agent-add <agent-id> --type <framework>` | 注册 Agent |
-| `mailbus launch <agent-id> --kind browser` | 启停 Agent 常驻进程 |
-| `mailbus review / recover / iteration` | 代码审查 / 任务 recover / 三轮迭代 |
-| `mailbus backup --data-dir ./store` | 备份 store |
-
-每个命令可用 `mailbus <cmd> --help` 查看选项。
-
-### 驾驶舱（Web UI）
-
-`mailbus serve` 后打开 `http://127.0.0.1:9814/`：
-
-- **舰桥（主入口）** —— `/` 驾驶舱旋钮与舰队视界
-- **逃生舱（侧栏）** —— `/legacy`；导航仅配置 / 诊所 / 协调台；其它旧直链回跳舰桥
-
-- **舰队 / 收件箱** —— Agent 实时状态、未读、发送与 ack
-- **任务** —— pipeline / FSM 状态、指派、审计（`?reviewer=`）、recover
-- **设置** —— **智能体 / 模型 / 框架运行时 / 总线运行段 / 路由端口** 均有 typed 面板；极少遗留段才走 JSON 逃生舱
-- **设置 / 资产路径** —— skill / rule / identity 三项根目录「默认 / 自定义」：默认 = 仓库内 `skills/` `rules/` `identities/`（含可提交 example）；自定义路径写进配置（亦可经 `.env` 的 `MAILBUS_*_ROOT`），覆盖默认
-- **设置 / 鉴权** —— 默认写 API 需 Token；可选开启无 Token 写 + CIDR 白名单（本机/WSL/Docker）；CORS Origin 白名单（默认不放行 `*`）
-- **设置 / Compose 文件** —— 加载/编辑/保存 `docker-compose*.yml`；**不**提供 up/down（启停归运维）
-- **门诊 / doctor** —— 一键健康检查；鉴权红灯：过宽 CIDR、OpenClaw Token 未配置；**已提交** compose 含相对 `../openclaw_space` / `Agent/docker` 或 `:-change-me` 亦红灯。`.env` 里写绝对路径关联本机 Agent 树是合法配置。
-
-### 发一条 A2A 消息
-
-```bash
-# agent-b 请 agent-a 评审 order-intake 流程
-mailbus send agent-a --msg "请评审 order-intake 流程" --from agent-b --data-dir ./store
-
-# 调度器扫到后查看状态
-mailbus status --data-dir ./store
-mailbus search --data-dir ./store --query order-intake
-```
-
-## 配置指南
-
-### 配置入口一览
-
-| 文件 | 作用 | 提交策略 |
-|------|------|----------|
-| `store/config.json` | 主配置：项目信息、`agents` 注册、`agent_types`、`smart_routing`、`org_defaults` 等 | gitignored（`mailbus init` 从 seed 生成） |
-| `config/agents/<id>.override.json` | 单 agent 覆盖：模型、launch 模板、超时 | 本机文件（提交 `<id>.override.example.json`） |
-| `config/mailbus/launch-ports.json` | agent id → 浏览器/API 端口映射 | 本机文件（提交 example） |
-| `access/transport/<id>/transport.json` | agent 的 transport 注册（框架、路径、可达性） | 本机文件（提交到 `examples/transport/`） |
-| `config/mailbus/agent-types.json` | 框架 push 命令模板 + 模型 CLI 参数 + launch 模板 | 可直接提交 |
-| `config/mailbus/base.json` | 公共 seed（ack/retry/archive 阈值、`org_defaults` demo 名册） | 可直接提交 |
-| `config/mailbus/compose-registry.json` | 逻辑 build 名 / agent id → docker-compose 服务名 | 可直接提交 |
-| `config/mailbus/role-types.json` | 角色类型 → 候选 agent（demo） | 可直接提交 |
-| `.env` | API keys / 路径 | **绝不提交**（用 `migrate/env.template`） |
-
-### 鉴权（`auth`）
-
-默认**所有写 API 需要有效 Token**（含本机）。推荐只在驾驶舱 **设置 → 鉴权** 改，勿手改散落文件。样例见 `examples/config.example.json`：
-
-| 键 | 说明 |
-|----|------|
-| `allow_write_without_token` | 默认 `false`；`true` 时仅 CIDR 白名单可无 Token 写 |
-| `write_without_token_cidrs` | CIDR 列表（可含 WSL/Docker 网段）；开启且列表空 ⇒ 仅 loopback |
-| `cors_origins` | Origin 白名单；空则不放行 `*` |
-
-### `store/config.json` 的 `agents` 对象
-
-`agents` 是 `agent_id → 配置` 的映射，运行时校验见 `lib/adapters/config/config_schema.py`：
-
-```json
-"agents": {
-  "agent-a": {
-    "name": "Agent A",
-    "role": "设计",
-    "type": "hermes",
-    "models": ["deepseek-chat"],
-    "inbox": "/path/to/store/inbox/agent-a/inbox.json",
-    "profile_paths": {
-      "identity": "/path/to/agent-a/IDENTITY.md",
-      "soul": "/path/to/agent-a/SOUL.md",
-      "skills_dirs": ["/path/to/skills/"],
-      "memory_dir": "/path/to/memory/"
-    }
-  }
-}
-```
-
-常用字段：
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `type` | string | **必填**，枚举：`hermes`、`hermes_profile`、`openclaw`、`opencode`、`codex`、`claude_code`、`cline`、`none` |
-| `name` / `role` | string | 显示名 / 职责（驾驶舱展示用） |
-| `models` | string[] | 模型名列表，需在 `agent_types.models` 中定义对应的 CLI 参数 |
-| `enabled` | bool | 是否启用该 agent |
-| `max_concurrency` | int | 并发上限（默认 1） |
-| `inbox` | string | 收件箱 JSON 路径 |
-| `profile_paths` | object | `identity` / `soul`（人设文件）、`skills_dirs`、`memory_dir` |
-| `webhook_url` / `webhook_secret` | string | 可选：消息推送 Webhook |
-| `launch` | object | 启动偏好（见下） |
-
-### 单 agent 覆盖：`config/agents/<id>.override.json`
-
-个人化配置不进 `store/config.json`，用 override 覆盖（不涉及 secrets，只放 launch/UI 偏好）：
-
-```json
-{
-  "models": ["deepseek-flash"],
-  "launch": {
-    "template": "claude_host",
-    "launch_via_api": true,
-    "has_browser": true,
-    "browser": { "kind": "claude_ttyd", "url": "http://127.0.0.1:{port}/", "web_port": "9260" }
-  },
-  "push_timeout_seconds": 900
-}
-```
-
-`launch.template` 引用 `config/mailbus/agent-types.json` 里的 `launch_templates`（如 `claude_host`、`codex_docker`、`hermes_dashboard`、`openclaw_gateway`、`opencode_cli`）。
-
-### 注册一个新 agent（一步）
-
-设置页 → 新建**实例卡**（三个字段：`type / run_target / install_path`）→ 点「测试连接」（probe → 角色发现预览 → 试发等 ack，三段全绿角色自动上架）→ 完成。
-
-原先的五步（手建 `transport.json` / `override.json` / `launch-ports.json` + 登记 + init merge）已由系统从实例卡**派生**：
-
-| 原手建文件 | 现在的来源 |
-|------------|-----------|
-| `transport.json`（docker 服务/管线、push cwd） | 框架默认 + 实例卡派生，显式落角色卡（`docker._derived` 标记），可在角色卡单点覆盖 |
-| `override.json`（launch/模型/超时） | 实例卡/角色卡字段；端口在角色加载时自动解析写入 |
-| `launch-ports.json` 端口映射 | 仅作默认表；角色卡 `launch.browser.*_port` 优先 |
-
-仅当容器服务名/端口与框架默认**不同**时才需要自定义（设置页角色卡或 `store/config.json` 覆盖对应字段即可）；CLI 侧等价 `mailbus test-connection <instance_id>`。装配结果（该角色最终加载哪些 skills/rules/人设、push 实际走哪条通道）见角色卡「装配结果」。
-
-### 模型与 push 命令
-
-`config/mailbus/agent-types.json` 的 `models` 定义每个模型对每个框架的 CLI 参数（例如 `deepseek-flash` → `opencode: --model deepseek/deepseek-chat`）。框架 `push` 命令模板（`hermes chat …`、`claude -p 'MSG'` 等）在同一文件顶层；`type: "none"` 表示纯文件通信、无 CLI 推送。
-
-### 实例 / 角色装配语义（skills / rules / 人设）
-
-配置页分两层：**实例卡**（框架级）与**角色卡**（个人级）。同一角色最终加载的内容按固定公式装配（实现见 `lib/adapters/config/assemble.py`）：
-
-| 维度 | 公式 | 冲突规则 |
-|------|------|----------|
-| **skills** | 角色私有 ∪ 技能组（`skill_groups[]` 多选）∪ 框架公共 | 同名覆盖：**角色 > 组 > 框架** |
-| **rules** | 框架 rules + 个人 rules | **框架优先**，永远排在个人前；**无**共享组 |
-| **人设** | 框架自动扫描（`SOUL.md`/`CLAUDE.md`/`AGENTS.md`）∪ 用户添加（`persona_files[]`） | 保存用户添加时 **V1** 校验路径存在，缺失提示「可能无法沟通」（V2 探活 → 诊所 backlog） |
-
-要点：
-
-- **实例层自定义 = 该框架实例下全员公共**；**角色层 = 仅自己 + 可选组**。私有不能关掉框架公共。
-- **skillgroup**：根下每个**一级子目录 = 一个组**，跨框架可复用。默认根为仓库 `skills/skillgroup/`（开箱）；本机 SoT 在 Obsidian Vault，可用 `MAILBUS_SKILLGROUP_ROOT` 指过去（如 `03-shared/skillgroup`），避免双源。
-- 角色卡多选组存到 `store/config.json` 的 `agents.<id>.skill_groups[]`；人设额外文件存 `agents.<id>.persona_files[]`。
-
-**运行环境字段的 SoT 在实例卡**（不在角色卡）：`run_target` / `install_path` / `host` / `custom_paths` / `distro` 由实例卡唯一持有，角色卡只读继承（`instance_id` 指针），不再双写。`type` / `run_target` 决定「框架跑在哪」；同一框架可多端多实例（如 `hermes@docker` 与 `hermes@wsl@ubuntu` 各建一个实例、各自加载角色）。
-
-**enabled 双层级**：
-
-- 角色级 `enabled` = 员工「退役 / 工作」（下线不删除，除非在框架实例配置里彻底删）。
-- 实例级 `enabled` = 该容器是否继续监测；关闭后该实例下所有角色下架。
-- 扫描验证（`/api/agents/scan`）写回实例级 `install_path/run_target/distro/gate_passed`，不覆盖角色级 `enabled`。mailbus 不改变 agent 框架自身配置，只做配置读取与通信桥接。
-
-### 默认角色指派（org_defaults）
-
-`store/config.json` 的 `org_defaults` 段定义各内置角色的默认 agent（reviewer / escalate / notify / scheduler / audit_reviewers 等）。开源 seed 用 demo id，见 `config/mailbus/base.json`：
-
-```json
-"org_defaults": {
-  "reviewer": "agent-a",
-  "notify_agents": ["agent-a", "agent-m"],
-  "scheduler": "agent-b",
-  "audit_reviewers": ["agent-a", "agent-f"]
-}
-```
-
-## Demo Agent
-
-公开示例使用通用 id：`agent-a` / `agent-b` / `agent-c`。  
-见 [`examples/demo-roster.json`](examples/demo-roster.json)。
-
-在驾驶舱 **配置中心** 注册自己的 Agent；自动发现后默认 **不启用**，需手动 enable。
-
-## 驾驶舱
-
-`mailbus serve` 后打开 `http://127.0.0.1:9814/`。旧版 UI：`/legacy`。
-
-## 架构
-
-Ports & Adapters 分层（详见 [`ARCHITECTURE.md`](ARCHITECTURE.md) 与 [`AGENTS.md`](AGENTS.md)）：
+详见 [java/README.md](java/README.md)。
+
+## 目录
+
+| 目录 | 内容 |
+|---|---|
+| `python/` | Python 服务（`mailbus` 包、测试、契约导出） |
+| `java/` | Java 服务（Spring Boot 3.3，与 Python 同契约） |
+| `web/` | React 驾驶舱 |
+| `shared/` | 语言中立资产与生成的契约 |
+| `config/` | 静态种子数据（办公布局） |
+| `data/` | 运行状态：SQLite、file_bus / MCP 队列 |
+| `docs/` | 产品与设计文档 |
+
+## 分层
 
 ```
-tools/ · lib/api/ → lib/application/ → lib/interfaces/ ← lib/adapters/
-                         ↓
-               lib/domain/ · lib/core/
-                         ↓
-                    lib/infra/
+core → application → adapters → api → bootstrap
 ```
 
-| 层 | 职责 |
-|----|------|
-| `lib/interfaces/` | Protocol 接口（原 `ports`） |
-| `lib/core/a2a/` | A2A 核心协议（原 `lib/transport`） |
-| `lib/application/` | 用例（workflow、harness、scan、push、orchestration 等） |
-| `lib/adapters/` | frameworks、plane、config（`CompositeConfigRepo`）、transport、container（`resolver.py`）等 |
-| `lib/infra/` | clock、路径、`mbus_log`、internal LLM 启动 |
+- `core` 纯领域逻辑，仅标准库。
+- `application` 一个用例一个事务，负责 outbox。
+- `adapters` 实现持久化、传输、时钟与 id。
+- `api` 只做 HTTP 转换与调用者解析。
+- `bootstrap` 是唯一知道文件路径的层。
 
-唯一 Composition Root：`lib/composition.py`（`build_a2a_transport`、`build_transport_bundle`、`build_config_repo` 等）。  
-各包有 `Overview.md` 目录地图。安装/路径迁移：[`migrate/README.md`](migrate/README.md)。  
-Harness 规则：`config.harness.rules_path`；链路模板：`config/mailbus/chains.template.json`。
+权限统一走 `core.identity.policy.ensure_allowed`；写路由必须声明 capability，
+由守卫 G8 校验。
 
-## 文档
-
-- 架构：[`ARCHITECTURE.md`](ARCHITECTURE.md)
-- Agent 入口：[`AGENTS.md`](AGENTS.md)
-- 迁移工具：[`migrate/README.md`](migrate/README.md)
-- Adapter：`access/<framework>/adapter/SPEC.md`
-- Harness：`tools/harness/`（公开 git 不发布 `/docs/`，多为本地/Vault 挂载）
-- 环境变量模板：`migrate/env.template`、`docker-agents/.env.example`
-
-## 许可证
-
-MIT
+旧 Python 栈（`python/lib`、`python/bus`、旧 `python/tools/`）已于 B7 清理移除。
