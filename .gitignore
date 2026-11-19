@@ -19,12 +19,21 @@ logs/
 *.tmp
 deliverables/
 
-# IDE / Cursor / Codex
+# IDE / Cursor / Codex / AI 工具本地状态（不入库）
 .vscode/
 .idea/
 .cursor/
 .codex/
 .codex
+/trae/
+.trae/
+.p0_data/
+.claude/
+.specstory/
+.gemini/
+.kiro/
+.windsurf/
+.aider*
 /codex
 *.swp
 *.swo
