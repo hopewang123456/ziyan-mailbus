@@ -29,7 +29,6 @@ from mailbus.adapters.transport.file_bus_inbox import FileBusInbox
 from mailbus.adapters.transport.mcp_pull import McpPullTransport
 from mailbus.adapters.transport.routing import RoutingTransport
 from mailbus.application.agents.directory import AgentDirectory
-from mailbus.core.identity.values import EmployeeStatus
 from mailbus.application.agents.service import AgentService
 from mailbus.application.approval.service import ApprovalService
 from mailbus.application.collab.messages import CollabMessageService
@@ -51,6 +50,7 @@ from mailbus.application.skills.service import SkillService
 from mailbus.application.workflow.service import WorkflowService
 from mailbus.application.workflow.tasks import TaskService
 from mailbus.bootstrap.settings import Settings
+from mailbus.core.identity.values import ON_DUTY_STATUSES
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +139,7 @@ class Container:
             employee = uow.employees.get(employee_id)
         if employee is None or not employee.endpoint_approved:
             return None
-        if employee.status not in (EmployeeStatus.ACTIVE, EmployeeStatus.OFFLINE):
+        if employee.status not in ON_DUTY_STATUSES:
             return None
         return employee.endpoint
 

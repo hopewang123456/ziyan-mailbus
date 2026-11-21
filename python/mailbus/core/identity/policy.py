@@ -9,19 +9,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mailbus.core.identity.models import Subject
-from mailbus.core.identity.values import AccountType, EmployeeStatus
+from mailbus.core.identity.values import AccountType, ON_DUTY_STATUSES
 from mailbus.core.shared.errors import PermissionDeniedError
 from mailbus.core.shared.values import Capability, DataScope
 
 # 需要 Agent 端点审核通过才能执行的外向动作
 _ENDPOINT_GATED: frozenset[Capability] = frozenset(
     {Capability.MESSAGE_SEND, Capability.TASK_DISPATCH, Capability.RESULT_SUBMIT}
-)
-
-# 账号可用状态：offline 仅表示心跳超时（在勤离席），可被心跳恢复，不等于停权；
-# 只有 pending（未激活）与 deregistered（已注销）不可用。
-_USABLE_STATUSES: frozenset[EmployeeStatus] = frozenset(
-    {EmployeeStatus.ACTIVE, EmployeeStatus.OFFLINE}
 )
 
 # 数据范围层级：self < team < global，用于判定“授予范围不得高于发起者”。
@@ -71,7 +65,7 @@ class Decision:
 
 def decide(subject: Subject, action: Capability, resource: Resource | None = None) -> Decision:
     target = resource or Resource(kind="identity")
-    if subject.status not in _USABLE_STATUSES:
+    if subject.status not in ON_DUTY_STATUSES:
         return Decision(False, "账号未激活或已注销")
     if Capability.ALL not in subject.capabilities and action not in subject.capabilities:
         return Decision(False, f"缺少能力 {action.value}")
@@ -90,7 +84,7 @@ def decide(subject: Subject, action: Capability, resource: Resource | None = Non
 
 def ensure_active(subject: Subject) -> None:
     """仅要求账号可用；用于「登录即可、无特定能力」的写用例。"""
-    if subject.status not in _USABLE_STATUSES:
+    if subject.status not in ON_DUTY_STATUSES:
         raise PermissionDeniedError("账号未激活或已注销")
 
 

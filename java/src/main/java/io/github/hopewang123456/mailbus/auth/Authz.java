@@ -27,6 +27,9 @@ public final class Authz {
     private static final Set<String> ENDPOINT_GATED = Set.of(
             MESSAGE_SEND, TASK_DISPATCH, RESULT_SUBMIT);
 
+    /** 在勤即可用状态：offline 只是心跳超时（离席），可被心跳恢复，不等于停权。 */
+    private static final Set<String> ON_DUTY = Set.of("active", "offline");
+
     private Authz() {
     }
 
@@ -50,13 +53,13 @@ public final class Authz {
 
     /** 仅要求账号可用；用于「登录即可、无特定能力」的写用例。 */
     public static void ensureActive(Actor actor) {
-        if (!"active".equals(actor.status())) {
+        if (!ON_DUTY.contains(actor.status())) {
             throw ApiException.forbidden("账号未激活或已注销");
         }
     }
 
     public static void ensureAllowed(Actor actor, String capability, Resource resource) {
-        if (!"active".equals(actor.status())) {
+        if (!ON_DUTY.contains(actor.status())) {
             throw ApiException.forbidden("账号未激活或已注销");
         }
         if (!actor.has(capability)) {
@@ -80,7 +83,7 @@ public final class Authz {
     /** 多能力「或」语义：任一允许即通过，否则统一 403。 */
     public static void ensureAnyAllowed(Actor actor, Set<String> capabilities,
                                         Resource resource) {
-        if (!"active".equals(actor.status())) {
+        if (!ON_DUTY.contains(actor.status())) {
             throw ApiException.forbidden("账号未激活或已注销");
         }
         boolean allowed = capabilities.stream().anyMatch(capability ->

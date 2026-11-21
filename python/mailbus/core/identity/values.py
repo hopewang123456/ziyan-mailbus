@@ -30,6 +30,13 @@ class EmployeeStatus(str, Enum):
     DEREGISTERED = "deregistered"
 
 
+# 在勤即可用状态：offline 只是心跳超时（离席），可被心跳恢复，不等于停权。
+# 权限判定、员工列表筛选、出站投递统一以此为口径（守卫 G7：状态口径只在 core 定义）。
+ON_DUTY_STATUSES: frozenset[EmployeeStatus] = frozenset(
+    {EmployeeStatus.ACTIVE, EmployeeStatus.OFFLINE}
+)
+
+
 class BootstrapStep(str, Enum):
     """首次部署三步向导。"""
 

@@ -399,8 +399,13 @@ public class IdentityService {
             if (!"active".equals(employee.status())) {
                 continue;
             }
-            if (employee.lastHeartbeat() != null
-                    && employee.lastHeartbeat().getEpochSecond() >= cutoffEpochSeconds) {
+            // 从未报告在勤（外部导入等）与持全量权限的运维入口不参与巡检，
+            // 避免被误标离线污染总览与审计。
+            if (employee.lastHeartbeat() == null
+                    || employee.capabilities().contains("*")) {
+                continue;
+            }
+            if (employee.lastHeartbeat().getEpochSecond() >= cutoffEpochSeconds) {
                 continue;
             }
             Employee updated = copy(employee, "offline", employee.seatId(), employee.agentId(),

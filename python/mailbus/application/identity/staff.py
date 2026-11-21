@@ -28,14 +28,12 @@ from mailbus.core.identity.errors import InviteInvalidError
 from mailbus.core.identity.models import Employee, Invite, Registration
 from mailbus.core.identity.policy import Resource, can_grant_capabilities, ensure_allowed
 from mailbus.core.identity.ports import IdentityUnitOfWork
-from mailbus.core.identity.values import EmployeeStatus
+from mailbus.core.identity.values import ON_DUTY_STATUSES, EmployeeStatus
 from mailbus.core.org.ports import LayoutSeedPort
 from mailbus.core.shared.errors import InvalidStateError, NotFoundError, PermissionDeniedError
 from mailbus.core.shared.events import DomainEvent
 from mailbus.core.shared.ports import Clock, IdGenerator
 from mailbus.core.shared.values import Capability
-
-_ON_DUTY_STATUSES = frozenset({EmployeeStatus.ACTIVE, EmployeeStatus.OFFLINE})
 
 
 class StaffService:
@@ -258,7 +256,7 @@ class StaffService:
             employees = [
                 employee
                 for employee in employees
-                if employee.status in _ON_DUTY_STATUSES
+                if employee.status in ON_DUTY_STATUSES
             ]
         summaries = self._agent_summaries(employees)
         return tuple(
