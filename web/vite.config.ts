@@ -23,4 +23,9 @@ export default defineConfig({
     port: 5173,
     proxy: { "/api": process.env.MAILBUS_API_TARGET || "http://127.0.0.1:9814" },
   },
+  // preview 也走同一代理，便于独立部署时先本地验证产物
+  preview: {
+    port: 4173,
+    proxy: { "/api": process.env.MAILBUS_API_TARGET || "http://127.0.0.1:9814" },
+  },
 });

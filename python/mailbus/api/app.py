@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from mailbus import __version__
 from mailbus.api.errors import register_error_handlers
@@ -29,7 +32,7 @@ from mailbus.api.routers import (
 )
 
 
-def build_app(lifespan: Any = None) -> FastAPI:
+def build_app(lifespan: Any = None, web_dist: Path | None = None) -> FastAPI:
     app = FastAPI(
         title="mailbus",
         version=__version__,
@@ -55,4 +58,31 @@ def build_app(lifespan: Any = None) -> FastAPI:
     app.include_router(observability.router)
     app.include_router(collab.router)
     app.include_router(collab.public_router)
+    if web_dist is not None:
+        _mount_web(app, Path(web_dist))
     return app
+
+
+def _mount_web(app: FastAPI, dist: Path) -> None:
+    """同源托管 web 构建产物（默认 <仓库根>/web/dist，存在才挂载）。
+
+    /api 前缀仍走 API 路由；其余路径优先命中静态文件，否则回退 index.html
+    以支持前端路由。路径越界一律拒绝。
+    """
+    index = dist / "index.html"
+    if not index.is_file():
+        raise RuntimeError(f"MAILBUS_WEB_DIST 缺少 index.html：{dist}")
+    assets = dist / "assets"
+    if assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets), name="web-assets")
+    root = dist.resolve()
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def web_spa(full_path: str) -> FileResponse:
+        if full_path == "api" or full_path.startswith("api/"):
+            raise HTTPException(status_code=404)
+        if full_path:
+            candidate = (root / full_path).resolve()
+            if root in candidate.parents and candidate.is_file():
+                return FileResponse(candidate)
+        return FileResponse(index)

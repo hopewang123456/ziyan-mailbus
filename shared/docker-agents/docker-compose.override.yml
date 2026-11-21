@@ -37,6 +37,8 @@ services:
     volumes:
       - ${MAILBUS_HOST_ROOT}:/mailbus
       - ${MAILBUS_HOST_ROOT}/data:/mailbus/store
+      # 本地覆盖：数据根直接落宿主目录，便于 Windows 侧查看/备份
+      - ${MAILBUS_HOST_ROOT}/data:/mailbus/data
       - ${MAILBUS_HOST_ROOT}/run:/mailbus/run
       - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
       - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro

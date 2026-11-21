@@ -43,7 +43,9 @@ services:
       - ${HERMES_DATA:-./workspaces/hermes-data}/shared-memory:/hermes/shared-memory
       # HERMES_DATA 从宿主挂载到容器，供 doctor 等诊断工具访问
       - ${HERMES_DATA:-./workspaces/hermes-data}:/hermes-data/.hermes:ro
-      - /var/run/docker.sock:/var/run/docker.sock
+      # 数据根（SQLite/file_bus/mcp/settings.json）：默认 named volume；
+      # 本地开发由 override.yml 覆盖为宿主 data/ 目录
+      - mailbus-data:/mailbus/data
     environment:
       - MAILBUS_DATA_DIR=/mailbus/data
       - TZ=Asia/Shanghai
@@ -59,7 +61,6 @@ services:
       - MAILBUS_INTERNAL_LLM_PROVIDER_PRIORITY=${MAILBUS_INTERNAL_LLM_PROVIDER_PRIORITY:-local,remote}
       - IMAGE_GENERATE_WEBHOOK_URL=${IMAGE_GENERATE_WEBHOOK_URL:-}
       - MAILBUS_API_PORT=${MAILBUS_API_PORT:-9814}
-      - MAILBUS_LAUNCH_QUEUE=/mailbus/shared/run/launch-queue
       # Container name prefix for self_heal / doctor / resolver (compose project)
       - MAILBUS_CONTAINER_PREFIX=${MAILBUS_CONTAINER_PREFIX:-docker-agents}
       # File audit trail (orchestration); set 0 to disable
@@ -72,6 +73,21 @@ services:
       - MAILBUS_DOCS_ROOT=/mailbus/shared/docs
       - MAILBUS_PLANS_ROOT=/mailbus/shared/plans
       - TEAM_PACK_ROOT=/mailbus/team-pack
+    restart: unless-stopped
+
+  # 可选：web 独立部署（nginx 托管 dist + /api 反代）。
+  # 默认不启动；需要时 docker compose --profile web up -d
+  web:
+    profiles: ["web"]
+    build:
+      context: ../../web
+      dockerfile: Dockerfile
+    ports:
+      - "${MAILBUS_WEB_PORT:-8080}:80"
+    networks:
+      - mailbus-net
+    depends_on:
+      - mailbus
     restart: unless-stopped
 
   iii-init:

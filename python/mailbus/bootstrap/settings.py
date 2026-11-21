@@ -6,7 +6,29 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_DEFAULT_DATA_DIR = Path(__file__).resolve().parents[3] / "data"
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_DEFAULT_DATA_DIR = _REPO_ROOT / "data"
+# 约定：前端构建产物与后端同仓分发（web/dist，已 gitignore）
+_DEFAULT_WEB_DIST = _REPO_ROOT / "web" / "dist"
+
+_OFF_VALUES = {"", "0", "off", "none", "false"}
+
+
+def _resolve_web_dist() -> Path | None:
+    """前端静态目录：默认取 <仓库根>/web/dist，存在才托管。
+
+    - MAILBUS_WEB_DIST 未设置：dist 存在则托管，否则不托管（纯 API 模式）
+    - MAILBUS_WEB_DIST=off/none/0：强制关闭
+    - 其他值：绝对路径或相对仓库根的路径
+    """
+    raw = os.environ.get("MAILBUS_WEB_DIST")
+    if raw is not None:
+        value = raw.strip()
+        if value.lower() in _OFF_VALUES:
+            return None
+        path = Path(value)
+        return path if path.is_absolute() else _REPO_ROOT / path
+    return _DEFAULT_WEB_DIST if _DEFAULT_WEB_DIST.is_dir() else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +47,8 @@ class Settings:
     retention_days: float = 7.0
     maintenance_interval_sec: float = 3600.0
     bootstrap_allow_remote: bool = False
+    # 同源静态托管（web/dist）；默认随安装目录的相对路径，存在才托管
+    web_dist: Path | None = field(default_factory=_resolve_web_dist)
 
     @property
     def db_path(self) -> Path:
