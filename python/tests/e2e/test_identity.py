@@ -181,11 +181,21 @@ def test_staff_lifecycle_end_to_end(tmp_path):
         assert denied.status_code == 403
         assert denied.json()["error_code"] == "permission_denied"
 
-        # 只能给自己上报心跳
+        # 普通员工只能给自己上报心跳
+        admin_id = client.get(
+            "/api/identity/me", headers=admin_headers
+        ).json()["employee_id"]
         other = client.post(
-            f"/api/identity/staff/{employee_id}/heartbeat", headers=admin_headers
+            f"/api/identity/staff/{admin_id}/heartbeat", headers=_headers(staff_token)
         )
         assert other.status_code == 403
+
+        # 超管可代任意员工续心跳（演示/运维保活）
+        proxy = client.post(
+            f"/api/identity/staff/{employee_id}/heartbeat", headers=admin_headers
+        )
+        assert proxy.status_code == 200, proxy.text
+        assert proxy.json()["status"] == "active"
 
         beat = client.post(
             f"/api/identity/staff/{employee_id}/heartbeat", headers=_headers(staff_token)
@@ -253,6 +263,61 @@ def test_manager_and_endpoint_toggles(tmp_path):
         )
         assert demoted.status_code == 200, demoted.text
         assert "console_admin" not in demoted.json()["capabilities"]
+
+
+def test_admin_backfills_agent_endpoint(tmp_path):
+    with _client(tmp_path) as client:
+        admin_headers = _headers(_bootstrap(client)["token"])
+        employee_id = client.post(
+            "/api/identity/staff",
+            json={"display_name": "补录对象", "account_type": "agent"},
+        ).json()["employee"]["employee_id"]
+        path = f"/api/identity/staff/{employee_id}/endpoint"
+
+        backfilled = client.patch(
+            path, json={"endpoint": "http://127.0.0.1:9100"}, headers=admin_headers
+        )
+        assert backfilled.status_code == 200, backfilled.text
+        assert backfilled.json()["endpoint"] == "http://127.0.0.1:9100"
+        assert backfilled.json()["endpoint_approved"] is True
+
+        unchanged = client.patch(path, json={"approved": False}, headers=admin_headers)
+        assert unchanged.status_code == 200, unchanged.text
+        assert unchanged.json()["endpoint"] == "http://127.0.0.1:9100"
+        assert unchanged.json()["endpoint_approved"] is False
+
+        assert (
+            client.patch(path, json={"endpoint": "   "}, headers=admin_headers).status_code
+            == 409
+        )
+        assert client.patch(path, json={}, headers=admin_headers).status_code == 409
+        assert (
+            client.patch(
+                "/api/identity/staff/emp_missing/endpoint",
+                json={"endpoint": "http://127.0.0.1:9101"},
+                headers=admin_headers,
+            ).status_code
+            == 404
+        )
+
+        staff_token = client.post(
+            "/api/identity/staff",
+            json={"display_name": "普通员工", "account_type": "human"},
+        ).json()["employee"]["employee_id"]
+        client.post(
+            f"/api/identity/staff/{staff_token}/review",
+            json={"approved": True},
+            headers=admin_headers,
+        )
+        worker_token = client.post(
+            f"/api/identity/staff/{staff_token}/activate", headers=admin_headers
+        ).json()["token"]
+        denied = client.patch(
+            path,
+            json={"endpoint": "http://127.0.0.1:9102"},
+            headers=_headers(worker_token),
+        )
+        assert denied.status_code == 403
 
 
 def test_staff_detail_self_and_permission(tmp_path):

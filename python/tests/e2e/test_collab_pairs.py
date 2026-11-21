@@ -82,13 +82,46 @@ def test_pair_lifecycle_and_collab_projection(tmp_path):
         assert listed.status_code == 200, listed.text
         assert [item["pair_id"] for item in listed.json()] == [pair_id]
 
+        captured: list[tuple[str, dict]] = []
+
+        class _SpyBus:
+            def publish(self, kind: str, payload: dict) -> None:
+                captured.append((kind, payload))
+
+        client.app.state.container.collab_messages._events = _SpyBus()
+
         sent = client.post(
             "/api/collab/messages",
-            json={"pair_id": pair_id, "body": "同步一下"},
+            json={
+                "pair_id": pair_id,
+                "body": "同步一下",
+                "recipient_id": partner_id,
+            },
             headers=admin,
         )
         assert sent.status_code == 201, sent.text
         assert sent.json()["pair_id"] == pair_id
+        assert sent.json()["sender_id"] == me
+        assert sent.json()["recipient_id"] == partner_id
+
+        # 公开大屏事件：message.created 只带脱敏字段，可用于实时气泡
+        created_events = [
+            payload for kind, payload in captured if kind == "message.created"
+        ]
+        assert len(created_events) == 1
+        event = created_events[0]
+        assert set(event) == {
+            "message_id",
+            "pair_id",
+            "kind",
+            "body",
+            "created_at",
+        }
+        assert event["message_id"] == sent.json()["message_id"]
+        assert event["pair_id"] == pair_id
+        assert event["body"] == "同步一下"
+        assert "sender_id" not in event
+        assert "recipient_id" not in event
 
         messages = client.get(
             "/api/collab/messages", params={"pair_id": pair_id}, headers=colleague
@@ -100,9 +133,19 @@ def test_pair_lifecycle_and_collab_projection(tmp_path):
         )
         assert public_messages.status_code == 200, public_messages.text
         assert len(public_messages.json()) == 1
-        assert (
-            client.get("/api/public/collab/messages").status_code == 422
-        )
+        public_message = public_messages.json()[0]
+        assert set(public_message) == {
+            "message_id",
+            "kind",
+            "body",
+            "created_at",
+            "delivery_status",
+            "pair_id",
+        }
+        assert public_message["message_id"] == sent.json()["message_id"]
+        assert public_message["body"] == "同步一下"
+        assert public_message["pair_id"] == pair_id
+        assert client.get("/api/public/collab/messages").status_code == 422
 
         assert client.get("/api/collab/tasks", headers=admin).json() == []
         public_tasks = client.get(
@@ -111,6 +154,33 @@ def test_pair_lifecycle_and_collab_projection(tmp_path):
         assert public_tasks.status_code == 200, public_tasks.text
         assert public_tasks.json() == []
         assert client.get("/api/public/collab/tasks").status_code == 422
+
+        created_task = client.post(
+            "/api/tasks",
+            json={"title": "公开任务", "owner_id": partner_id},
+            headers=admin,
+        )
+        assert created_task.status_code == 201, created_task.text
+        public_task_rows = client.get(
+            "/api/public/collab/tasks", params={"owner_id": partner_id}
+        )
+        assert public_task_rows.status_code == 200, public_task_rows.text
+        rows = public_task_rows.json()
+        assert len(rows) == 1
+        row = rows[0]
+        # 公开任务投影不得暴露 created_by / owner_id / 流程标识 / 内部节点 ID
+        assert set(row) == {
+            "task_id",
+            "title",
+            "state",
+            "created_at",
+            "updated_at",
+            "nodes",
+        }
+        assert row["task_id"] == created_task.json()["task_id"]
+        assert row["title"] == "公开任务"
+        for node in row["nodes"]:
+            assert set(node) == {"name", "order", "state"}
 
         ended = client.post(f"/api/collab/pairs/{pair_id}/end", headers=colleague)
         assert ended.status_code == 204
@@ -134,6 +204,79 @@ def test_pair_lifecycle_and_collab_projection(tmp_path):
             ).status_code
             == 404
         )
+
+
+def test_public_messages_require_active_pair(tmp_path):
+    """L6：公开消息只对进行中的结对开放，未知或已结束一律返回空数组。"""
+    with _client(tmp_path) as client:
+        admin = _headers(_bootstrap(client))
+        partner_id, _ = _hire(client, admin, "搭档")
+        pair_id = client.post(
+            "/api/collab/pairs", json={"partner_id": partner_id}, headers=admin
+        ).json()["pair_id"]
+        client.post(
+            "/api/collab/messages",
+            json={"pair_id": pair_id, "body": "进行中的消息"},
+            headers=admin,
+        )
+        active = client.get(
+            "/api/public/collab/messages", params={"pair_id": pair_id}
+        )
+        assert active.status_code == 200, active.text
+        assert [item["body"] for item in active.json()] == ["进行中的消息"]
+
+        client.post(f"/api/collab/pairs/{pair_id}/end", headers=admin)
+        closed = client.get(
+            "/api/public/collab/messages", params={"pair_id": pair_id}
+        )
+        assert closed.status_code == 200, closed.text
+        assert closed.json() == []
+
+        unknown = client.get(
+            "/api/public/collab/messages", params={"pair_id": "pair_missing"}
+        )
+        assert unknown.status_code == 200, unknown.text
+        assert unknown.json() == []
+
+
+def test_public_layout_carries_active_pair(tmp_path):
+    with _client(tmp_path) as client:
+        admin = _headers(_bootstrap(client))
+        me = client.get("/api/identity/me", headers=admin).json()["employee_id"]
+        partner_id, _ = _hire(client, admin, "搭档")
+        pair = client.post(
+            "/api/collab/pairs", json={"partner_id": partner_id}, headers=admin
+        ).json()
+
+        seats = [
+            seat
+            for floor in client.get("/api/public/layout").json()["floors"]
+            for room in floor["rooms"]
+            for seat in room["seats"]
+        ]
+        free = [seat["seat_id"] for seat in seats if seat["agent"] is None]
+        assert len(free) >= 2
+        for employee_id, seat_id in ((me, free[0]), (partner_id, free[1])):
+            seated = client.patch(
+                f"/api/identity/staff/{employee_id}/seat",
+                json={"seat_id": seat_id},
+                headers=admin,
+            )
+            assert seated.status_code == 200, seated.text
+
+        agents = [
+            seat["agent"]
+            for floor in client.get("/api/public/layout").json()["floors"]
+            for room in floor["rooms"]
+            for seat in room["seats"]
+            if seat["agent"] is not None
+        ]
+        assert len(agents) == 2
+        # 公开布局直接带结对信息，大屏无需管理员名册即可连线
+        assert {agent["pair_id"] for agent in agents} == {pair["pair_id"]}
+        partners = {agent["display_name"]: agent["partner_name"] for agent in agents}
+        assert partners["超级管理员"] == "搭档"
+        assert partners["搭档"] == "超级管理员"
 
 
 def test_pair_and_messages_reject_outsiders(tmp_path):
@@ -172,3 +315,81 @@ def test_pair_and_messages_reject_outsiders(tmp_path):
             == 403
         )
         assert client.get("/api/collab/pairs", headers=outsider).json() == []
+
+
+def test_public_collab_tasks_hide_creator(tmp_path):
+    with _client(tmp_path) as client:
+        admin = _headers(_bootstrap(client))
+        owner_id = client.get("/api/identity/me", headers=admin).json()["employee_id"]
+        created = client.post(
+            "/api/tasks",
+            json={"title": "公开任务", "owner_id": owner_id},
+            headers=admin,
+        )
+        assert created.status_code == 201, created.text
+        assert created.json()["created_by"] == owner_id
+
+        response = client.get(
+            "/api/public/collab/tasks", params={"owner_id": owner_id}
+        )
+        assert response.status_code == 200, response.text
+        assert len(response.json()) == 1
+        public_task = response.json()[0]
+        assert set(public_task) == {
+            "task_id",
+            "title",
+            "state",
+            "created_at",
+            "updated_at",
+            "nodes",
+        }
+        assert public_task["task_id"] == created.json()["task_id"]
+        assert "created_by" not in public_task
+        assert "owner_id" not in public_task
+        assert "workflow_id" not in public_task
+        for node in public_task["nodes"]:
+            assert set(node) == {"name", "order", "state"}
+
+
+def test_public_seat_tasks_resolve_occupant(tmp_path):
+    """Twin 抽屉按工位取任务：服务端解析员工，不暴露员工标识。"""
+    with _client(tmp_path) as client:
+        admin = _headers(_bootstrap(client))
+        employee_id, _ = _hire(client, admin, "工位任务员工")
+        seats = [
+            seat
+            for floor in client.get("/api/public/layout").json()["floors"]
+            for room in floor["rooms"]
+            for seat in room["seats"]
+        ]
+        occupied_seat = seats[0]["seat_id"]
+        empty_seat = seats[1]["seat_id"]
+        seated = client.patch(
+            f"/api/identity/staff/{employee_id}/seat",
+            json={"seat_id": occupied_seat},
+            headers=admin,
+        )
+        assert seated.status_code == 200, seated.text
+        created = client.post(
+            "/api/tasks",
+            json={"title": "工位任务", "owner_id": employee_id},
+            headers=admin,
+        )
+        assert created.status_code == 201, created.text
+
+        rows = client.get(f"/api/public/collab/seats/{occupied_seat}/tasks")
+        assert rows.status_code == 200, rows.text
+        assert [row["task_id"] for row in rows.json()] == [created.json()["task_id"]]
+        assert set(rows.json()[0]) == {
+            "task_id",
+            "title",
+            "state",
+            "created_at",
+            "updated_at",
+            "nodes",
+        }
+
+        empty = client.get(f"/api/public/collab/seats/{empty_seat}/tasks")
+        assert empty.status_code == 200, empty.text
+        assert empty.json() == []
+        assert client.get("/api/public/collab/seats/seat_missing/tasks").status_code == 404

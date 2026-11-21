@@ -106,7 +106,10 @@ class AgentBindIn(BaseModel):
 
 
 class EndpointReviewIn(BaseModel):
-    approved: bool
+    """端点补录与审核：可只写地址、只改审核状态，或同时提交。"""
+
+    approved: bool | None = None
+    endpoint: str | None = None
 
 
 class ManagerIn(BaseModel):

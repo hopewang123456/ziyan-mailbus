@@ -53,3 +53,15 @@ def compose(
         },
     )
     return message, (event,)
+
+
+def deletion(message: Message, *, actor_id: str, now: datetime) -> DomainEvent:
+    """消息删除事件：仅超管删除，保留审计轨迹。"""
+    return DomainEvent(
+        kind="message.deleted",
+        payload={
+            "message_id": message.message_id,
+            "actor_id": actor_id,
+            "at": now.isoformat(),
+        },
+    )

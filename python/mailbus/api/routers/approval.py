@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 
 from mailbus.api.deps import declares, get_actor
 from mailbus.api.mappers import approval as mapper
@@ -22,8 +22,8 @@ def list_approvals(
     status: str | None = None,
     task_id: str | None = None,
 ) -> list[ApprovalOut]:
-    get_actor(request)
-    views = _service(request).list_approvals(status, task_id)
+    actor = get_actor(request)
+    views = _service(request).list_approvals(actor, status, task_id)
     return [mapper.to_approval_out(view) for view in views]
 
 
@@ -36,8 +36,8 @@ def request_approval(payload: ApprovalIn, request: Request) -> ApprovalOut:
 
 @router.get("/{approval_id}", response_model=ApprovalOut, summary="审批详情")
 def get_approval(approval_id: str, request: Request) -> ApprovalOut:
-    get_actor(request)
-    return mapper.to_approval_out(_service(request).get(approval_id))
+    actor = get_actor(request)
+    return mapper.to_approval_out(_service(request).get(actor, approval_id))
 
 
 @router.post(
@@ -51,3 +51,10 @@ def resolve_approval(
         get_actor(request), approval_id, mapper.resolve_command(payload)
     )
     return mapper.to_approval_out(view)
+
+
+@router.delete("/{approval_id}", status_code=204, summary="撤回审批")
+@declares(Capability.HITL_REQUEST)
+def withdraw_approval(approval_id: str, request: Request) -> Response:
+    _service(request).withdraw(get_actor(request), approval_id)
+    return Response(status_code=204)

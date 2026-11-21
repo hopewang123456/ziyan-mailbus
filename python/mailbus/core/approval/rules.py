@@ -121,3 +121,28 @@ def expire(item: ApprovalItem, now: datetime) -> tuple[ApprovalItem, tuple[Domai
         },
     )
     return expired, (event,)
+
+
+def withdraw(
+    item: ApprovalItem, *, actor_id: str, now: datetime
+) -> tuple[ApprovalItem, tuple[DomainEvent, ...]]:
+    """撤回：仅待裁决的审批可撤回；阻塞档的任务由用例层恢复。"""
+    if not item.pending:
+        raise InvalidTransitionError("只有待裁决审批可以撤回")
+    withdrawn = replace(
+        item,
+        status=ApprovalStatus.WITHDRAWN,
+        resolved_by=actor_id,
+        resolved_at=now,
+    )
+    event = DomainEvent(
+        kind="approval.withdrawn",
+        payload={
+            "approval_id": item.approval_id,
+            "task_id": item.task_id,
+            "tier": item.tier.value,
+            "actor_id": actor_id,
+            "at": now.isoformat(),
+        },
+    )
+    return withdrawn, (event,)

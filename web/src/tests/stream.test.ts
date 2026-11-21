@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSseFeed, parseStreamPayload } from "../twin/stream";
+import { createEventFeed, createSseFeed, parseStreamPayload } from "../twin/stream";
 
 describe("SSE 分帧解析", () => {
   it("按空行切帧，忽略心跳注释", () => {
@@ -40,5 +40,32 @@ describe("SSE 分帧解析", () => {
       overview: { tasks_total: 1 },
       log: [],
     });
+  });
+});
+
+describe("协同 SSE 事件解析", () => {
+  it("保留 event 名称并忽略 ping", () => {
+    const events: Array<{ event: string; data: string }> = [];
+    const feed = createEventFeed((event) => events.push(event));
+    feed(": ping\n\nevent: pair.started\ndata: {\"pair_id\":\"p1\"}\n\n");
+    expect(events).toEqual([{ event: "pair.started", data: '{"pair_id":"p1"}' }]);
+  });
+
+  it("处理跨 chunk、多事件与无 event 默认 message", () => {
+    const events: Array<{ event: string; data: string }> = [];
+    const feed = createEventFeed((event) => events.push(event));
+    feed("event: screen.focus\ndata: {\"screen_id\":");
+    feed('"s1"}\n\ndata: {"ok":true}\n\n');
+    expect(events).toEqual([
+      { event: "screen.focus", data: '{"screen_id":"s1"}' },
+      { event: "message", data: '{"ok":true}' },
+    ]);
+  });
+
+  it("只有 event 没有 data 时不触发回调", () => {
+    const onEvent = vi.fn();
+    const feed = createEventFeed(onEvent);
+    feed("event: pair.ended\n\n");
+    expect(onEvent).not.toHaveBeenCalled();
   });
 });

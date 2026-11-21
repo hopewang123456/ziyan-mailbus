@@ -14,8 +14,10 @@ class MessageRepository(Protocol):
 
     def get(self, message_id: str) -> Message | None: ...
 
-    def inbox(self, recipient_id: str) -> list[Message]:
-        """接收人可见的消息投影：指名消息 + 广播。"""
+    def inbox(
+        self, recipient_id: str, limit: int | None = None, offset: int = 0
+    ) -> list[Message]:
+        """接收人可见的消息投影：指名消息 + 广播，按时间倒序分页。"""
 
     def list_all(self, limit: int = 200) -> list[Message]: ...
 
@@ -33,6 +35,9 @@ class MessageRepository(Protocol):
         """按条件检索，返回 (消息, 最近投递状态)；viewer_id=None 表示不限可见范围。"""
 
     def count(self) -> int: ...
+
+    def delete(self, message_id: str) -> None:
+        """删除消息及其投递尝试；由用例层先校验存在与权限。"""
 
     def add_attempt(
         self,

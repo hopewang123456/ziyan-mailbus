@@ -22,6 +22,8 @@ class SeatAgentOut(BaseModel):
     node_state: str = ""
     progress_done: int = 0
     progress_total: int = 0
+    pair_id: str = ""
+    partner_name: str = ""
 
 
 class LayoutSeatOut(BaseModel):
@@ -72,6 +74,8 @@ class PublicSeatAgentOut(BaseModel):
     node_state: str = ""
     progress_done: int = 0
     progress_total: int = 0
+    pair_id: str = ""
+    partner_name: str = ""
 
 
 class PublicLayoutSeatOut(BaseModel):

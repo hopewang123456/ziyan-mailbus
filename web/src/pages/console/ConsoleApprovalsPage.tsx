@@ -39,6 +39,7 @@ const STATUS_TONE: Record<string, "ok" | "warn" | "danger" | "default"> = {
   acknowledged: "ok",
   rejected: "danger",
   expired: "danger",
+  withdrawn: "default",
 };
 
 function timeText(value?: string | null) {
@@ -56,6 +57,7 @@ export function ConsoleApprovalsPage({ can }: { can: (capability: string) => boo
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [meId, setMeId] = useState("");
   const [form, setForm] = useState({
     task_id: "",
     title: "",
@@ -91,6 +93,9 @@ export function ConsoleApprovalsPage({ can }: { can: (capability: string) => boo
         if (result.ok && Array.isArray(result.data)) setTasks(result.data);
       },
     );
+    void api<{ employee_id: string }>("/api/identity/me").then((result) => {
+      if (result.ok) setMeId(result.data.employee_id);
+    });
   }, []);
 
   async function createApproval() {
@@ -139,6 +144,21 @@ export function ConsoleApprovalsPage({ can }: { can: (capability: string) => boo
     }
     setMsg(`${approved ? "已通过" : "已拒绝"}「${row.title}」`);
     setNote("");
+    await load(tab);
+  }
+
+  async function withdraw(row: Approval) {
+    setErr("");
+    setMsg("");
+    const result = await api(
+      `/api/approvals/${encodeURIComponent(row.approval_id)}`,
+      { method: "DELETE" },
+    );
+    if (!result.ok) {
+      setErr(result.error);
+      return;
+    }
+    setMsg(`已撤回「${row.title}」`);
     await load(tab);
   }
 
@@ -338,6 +358,15 @@ export function ConsoleApprovalsPage({ can }: { can: (capability: string) => boo
                     >
                       拒绝
                     </button>
+                    {(row.requester_id === meId || can("system_config")) && (
+                      <button
+                        type="button"
+                        className="rounded border border-rail px-2 py-0.5 text-[11px] text-mute hover:text-frost"
+                        onClick={() => void withdraw(row)}
+                      >
+                        撤回
+                      </button>
+                    )}
                   </span>
                 ) : (
                   <span className="text-[11px] text-mute">

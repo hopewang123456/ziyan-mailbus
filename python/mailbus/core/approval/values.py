@@ -25,3 +25,4 @@ class ApprovalStatus(str, Enum):
     REJECTED = "rejected"
     EXPIRED = "expired"
     ACKNOWLEDGED = "acknowledged"
+    WITHDRAWN = "withdrawn"

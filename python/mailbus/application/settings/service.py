@@ -137,7 +137,7 @@ class IntegrationService:
 
     def reload(self, actor: Actor) -> dict:
         self._require(actor)
-        return {"reloaded": True, "plugins": _plugins(self._store.read())}
+        return {"reloaded": False, "plugins": _plugins(self._store.read())}
 
     @staticmethod
     def _require(actor: Actor) -> None:

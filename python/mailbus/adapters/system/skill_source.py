@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import urllib.request
 from pathlib import Path
+from urllib.parse import urlparse
 
 from mailbus.core.skills.models import SkillProbe
 from mailbus.core.skills.values import SkillSourceType
@@ -13,6 +14,7 @@ _MAX_VERSION_LINES = 40
 _TIMEOUT_SEC = 5.0
 
 _VERSION_KEYS = frozenset({"version", "skill_version"})
+_ALLOWED_HTTP_SCHEMES = frozenset({"http", "https"})
 
 
 class SkillSource:
@@ -31,10 +33,14 @@ class SkillSource:
 
     @staticmethod
     def _local(source_uri: str, entry: str) -> SkillProbe:
-        path = Path(source_uri).expanduser()
-        if not path.exists():
+        base = Path(source_uri).expanduser().resolve()
+        if not base.exists():
             return SkillProbe(False, error="来源路径不存在")
-        target = path / entry if path.is_dir() else path
+        root = base if base.is_dir() else base.parent
+        # L7：入口不得逃逸来源目录（阻断 ../ 与绝对路径穿越）。
+        target = (root / entry).resolve()
+        if not target.is_relative_to(root):
+            return SkillProbe(False, error="入口路径超出来源目录")
         if not target.is_file():
             return SkillProbe(False, error=f"入口文件不存在：{entry}")
         text = target.read_text(encoding="utf-8", errors="replace")[:_MAX_BYTES]
@@ -42,6 +48,9 @@ class SkillSource:
 
     @staticmethod
     def _http(source_uri: str) -> SkillProbe:
+        # L7：仅允许 http/https，避免 file:// 等 scheme 读取本地或内网资源。
+        if urlparse(source_uri).scheme.lower() not in _ALLOWED_HTTP_SCHEMES:
+            return SkillProbe(False, error="技能来源仅支持 http/https")
         request = urllib.request.Request(
             source_uri, headers={"User-Agent": "mailbus-skill-probe"}
         )

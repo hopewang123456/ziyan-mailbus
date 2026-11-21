@@ -30,3 +30,4 @@ class Screen:
     online: bool
     last_seen_at: datetime | None
     created_at: datetime
+    secret: str | None = None

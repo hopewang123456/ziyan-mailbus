@@ -109,3 +109,15 @@ def update_agent(
         at=now.isoformat(),
     )
     return updated, (event,)
+
+
+def delete_agent(agent: Agent, now: datetime) -> tuple[DomainEvent, ...]:
+    """删除台账记录；是否被员工绑定由用例层先行校验。"""
+    return (
+        _event(
+            "agents.agent_deleted",
+            agent_id=agent.agent_id,
+            name=agent.name,
+            at=now.isoformat(),
+        ),
+    )

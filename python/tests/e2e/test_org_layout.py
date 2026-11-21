@@ -130,6 +130,8 @@ def test_org_teams_positions_and_seat_assignment(tmp_path):
             "node_state",
             "progress_done",
             "progress_total",
+            "pair_id",
+            "partner_name",
         }
 
         # 工位调换：只能由 org_manage 角色操作，并按新工位岗位补齐能力
@@ -178,6 +180,8 @@ def test_org_teams_positions_and_seat_assignment(tmp_path):
             "node_state",
             "progress_done",
             "progress_total",
+            "pair_id",
+            "partner_name",
         }
 
         # 离职自动释放工位：座位回到空闲，且可被新员工重新分配
@@ -217,3 +221,162 @@ def test_org_teams_positions_and_seat_assignment(tmp_path):
         )
         assert reseated.status_code == 200, reseated.text
         assert reseated.json()["seat_id"] == target_seat
+
+
+def test_team_and_position_delete_guards_seat_references(tmp_path):
+    with _client(tmp_path) as client:
+        token = _bootstrap(client)
+        headers = _headers(token)
+
+        team = client.post(
+            "/api/org/teams", json={"name": "临时团队"}, headers=headers
+        ).json()
+        position = client.post(
+            "/api/org/positions", json={"name": "临时岗位"}, headers=headers
+        ).json()
+        seat_id = client.get("/api/org/seats", headers=headers).json()[0]["seat_id"]
+        client.patch(
+            f"/api/org/seats/{seat_id}",
+            json={"team_id": team["team_id"], "position_id": position["position_id"]},
+            headers=headers,
+        )
+
+        assert (
+            client.delete(
+                f"/api/org/teams/{team['team_id']}", headers=headers
+            ).status_code
+            == 409
+        )
+        assert (
+            client.delete(
+                f"/api/org/positions/{position['position_id']}", headers=headers
+            ).status_code
+            == 409
+        )
+
+        # 显式 null 清除工位归属，随后才能删除
+        cleared = client.patch(
+            f"/api/org/seats/{seat_id}",
+            json={"team_id": None, "position_id": None},
+            headers=headers,
+        )
+        assert cleared.status_code == 200, cleared.text
+        assert cleared.json()["team_id"] is None
+        assert cleared.json()["position_id"] is None
+
+        deleted_team = client.delete(
+            f"/api/org/teams/{team['team_id']}", headers=headers
+        )
+        assert deleted_team.status_code == 204
+        deleted_position = client.delete(
+            f"/api/org/positions/{position['position_id']}", headers=headers
+        )
+        assert deleted_position.status_code == 204
+        assert (
+            client.delete(
+                f"/api/org/teams/{team['team_id']}", headers=headers
+            ).status_code
+            == 404
+        )
+
+        missing = client.post(
+            "/api/identity/staff", json={"display_name": "普通员工", "account_type": "human"}
+        ).json()["employee"]["employee_id"]
+        client.post(
+            f"/api/identity/staff/{missing}/review",
+            json={"approved": True},
+            headers=headers,
+        )
+        staff_token = client.post(
+            f"/api/identity/staff/{missing}/activate", headers=headers
+        ).json()["token"]
+        extra = client.post(
+            "/api/org/teams", json={"name": "越权团队"}, headers=headers
+        ).json()
+        denied = client.delete(
+            f"/api/org/teams/{extra['team_id']}", headers=_headers(staff_token)
+        )
+        assert denied.status_code == 403
+
+
+def _staff_token(client: TestClient, headers: dict[str, str], name: str) -> str:
+    """创建并激活一名普通员工（无 org_manage），返回 token。"""
+    applied = client.post(
+        "/api/identity/staff", json={"display_name": name, "account_type": "human"}
+    )
+    assert applied.status_code == 201, applied.text
+    employee_id = applied.json()["employee"]["employee_id"]
+    client.post(
+        f"/api/identity/staff/{employee_id}/review",
+        json={"approved": True},
+        headers=headers,
+    )
+    return client.post(
+        f"/api/identity/staff/{employee_id}/activate", headers=headers
+    ).json()["token"]
+
+
+def test_org_teams_list_is_auth_only_read_endpoint(tmp_path):
+    with _client(tmp_path) as client:
+        headers = _headers(_bootstrap(client))
+
+        assert client.get("/api/org/teams").status_code == 401
+
+        empty = client.get("/api/org/teams", headers=headers)
+        assert empty.status_code == 200, empty.text
+        assert empty.json() == []
+
+        created = [
+            client.post(
+                "/api/org/teams", json={"name": n}, headers=headers
+            ).json()
+            for n in ("平台研发部", "产品部")
+        ]
+
+        listed = client.get("/api/org/teams", headers=headers)
+        assert listed.status_code == 200, listed.text
+        rows = listed.json()
+        assert {row["team_id"] for row in rows} == {c["team_id"] for c in created}
+        for row in rows:
+            assert set(row) == {"team_id", "name"}
+
+        # 读端点只需登录，无 org_manage 的员工也可读
+        staff_headers = _headers(_staff_token(client, headers, "只读员工"))
+        assert client.get("/api/org/teams", headers=staff_headers).status_code == 200
+
+
+def test_org_positions_list_is_auth_only_read_endpoint(tmp_path):
+    with _client(tmp_path) as client:
+        headers = _headers(_bootstrap(client))
+
+        assert client.get("/api/org/positions").status_code == 401
+
+        empty = client.get("/api/org/positions", headers=headers)
+        assert empty.status_code == 200, empty.text
+        assert empty.json() == []
+
+        with_caps = client.post(
+            "/api/org/positions",
+            json={"name": "后端工程师", "capabilities": ["message_send"]},
+            headers=headers,
+        )
+        assert with_caps.status_code == 201, with_caps.text
+        no_caps = client.post(
+            "/api/org/positions", json={"name": "实习生"}, headers=headers
+        )
+        assert no_caps.status_code == 201, no_caps.text
+
+        listed = client.get("/api/org/positions", headers=headers)
+        assert listed.status_code == 200, listed.text
+        rows = {row["position_id"]: row for row in listed.json()}
+        assert set(rows) == {with_caps.json()["position_id"], no_caps.json()["position_id"]}
+        for row in rows.values():
+            assert set(row) == {"position_id", "name", "capabilities"}
+            assert isinstance(row["capabilities"], list)
+        assert rows[with_caps.json()["position_id"]]["capabilities"] == ["message_send"]
+        assert rows[no_caps.json()["position_id"]]["capabilities"] == []
+
+        staff_headers = _headers(_staff_token(client, headers, "只读员工"))
+        assert (
+            client.get("/api/org/positions", headers=staff_headers).status_code == 200
+        )

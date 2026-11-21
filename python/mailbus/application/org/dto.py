@@ -66,6 +66,9 @@ class SeatCommand:
     x: float | None = None
     y: float | None = None
     rotation: float | None = None
+    # 显式提交 null 表示清除归属；未提交则保留原值
+    clear_team: bool = False
+    clear_position: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +94,9 @@ class SeatAgentView:
     node_state: str = ""
     progress_done: int = 0
     progress_total: int = 0
+    # 进行中的结对：公开投影只给 pair_id 与对方姓名，便于大屏直接连线
+    pair_id: str = ""
+    partner_name: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,9 +185,18 @@ def make_seat_command(
     x: float | None = None,
     y: float | None = None,
     rotation: float | None = None,
+    *,
+    clear_team: bool = False,
+    clear_position: bool = False,
 ) -> SeatCommand:
     return SeatCommand(
-        team_id=team_id, position_id=position_id, x=x, y=y, rotation=rotation
+        team_id=team_id,
+        position_id=position_id,
+        x=x,
+        y=y,
+        rotation=rotation,
+        clear_team=clear_team,
+        clear_position=clear_position,
     )
 
 

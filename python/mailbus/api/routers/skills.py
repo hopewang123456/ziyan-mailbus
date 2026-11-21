@@ -15,6 +15,12 @@ from mailbus.api.schemas.skills import (
     SkillPackageOut,
     SkillPackageUpdateIn,
 )
+from mailbus.application.identity.dto import Actor
+from mailbus.application.identity.scoping import (
+    can_query_any_skills,
+    can_read_sensitive,
+)
+from mailbus.core.shared.errors import PermissionDeniedError
 from mailbus.core.shared.values import Capability
 
 router = APIRouter(prefix="/api/skills", tags=["skill"])
@@ -26,8 +32,11 @@ def _service(request: Request):
 
 @router.get("", response_model=list[SkillPackageOut], summary="技能包列表")
 def list_skills(request: Request) -> list[SkillPackageOut]:
-    get_actor(request)
-    return [mapper.to_package_out(view) for view in _service(request).list_all()]
+    include_sensitive = can_read_sensitive(get_actor(request))
+    return [
+        mapper.to_package_out(view, include_sensitive=include_sensitive)
+        for view in _service(request).list_all()
+    ]
 
 
 @router.get(
@@ -38,9 +47,28 @@ def effective_skills(
     target_type: Literal["agent", "employee"],
     target_id: str,
 ) -> list[EffectiveSkillOut]:
-    get_actor(request)
+    actor = get_actor(request)
+    include_sensitive = can_read_sensitive(actor)
+    if not can_query_any_skills(actor):
+        _ensure_own_target(request, actor, target_type, target_id)
     views = request.app.state.container.skill_effective.get(target_type, target_id)
-    return [mapper.to_effective_out(view) for view in views]
+    return [
+        mapper.to_effective_out(view, include_sensitive=include_sensitive)
+        for view in views
+    ]
+
+
+def _ensure_own_target(
+    request: Request, actor: Actor, target_type: str, target_id: str
+) -> None:
+    """M12：非特权账号只能查询自己的有效技能，避免枚举他人技能元数据。"""
+    if target_type == "employee":
+        if target_id != actor.employee_id:
+            raise PermissionDeniedError("无权查看他人技能")
+        return
+    me = request.app.state.container.identity.staff.me(actor)
+    if not me.agent_id or target_id != me.agent_id:
+        raise PermissionDeniedError("无权查看其他 Agent 的技能")
 
 
 @router.post("", response_model=SkillPackageOut, status_code=201, summary="登记技能包")

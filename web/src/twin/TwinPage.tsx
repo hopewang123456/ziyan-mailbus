@@ -1,14 +1,52 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, getToken } from "../lib/api";
+import { useStaffHeartbeat } from "../lib/console-access";
 import { BuildingShell } from "./BuildingShell";
 import { FLOOR_GAP, FloorSlab, FloorDetailView } from "./FloorSlab";
 import { SiteScene } from "./SiteScene";
-import { floorSeats, seatStats } from "./types";
+import {
+  floorSeats,
+  seatStats,
+  type OfficeSite,
+  type PairBubble,
+  type PairLink,
+  type PublicMessage,
+  type PublicTask,
+  type PublicTaskNode,
+  type Room,
+  type Seat,
+  type SeatAgent,
+} from "./types";
 import { useWalkers } from "./WalkerManager";
 import { useScreenSync } from "./collab";
-import { useStreamSignal, type StreamState } from "./stream";
-import type { OfficeSite, Room, Seat } from "./types";
+import { useCollabEvents, useStreamSignal, type StreamState } from "./stream";
 import "./twin.css";
+
+interface CollabPair {
+  pair_id: string;
+  initiator_id: string;
+  partner_id: string;
+  state: string;
+}
+
+interface StaffLite {
+  employee_id: string;
+  display_name: string;
+}
+
+/** 每块大屏一个稳定标识：同标签页刷新保持一致，关闭后离开。 */
+function getScreenId() {
+  const key = "mailbus_twin_screen_id";
+  try {
+    const existing = sessionStorage.getItem(key);
+    if (existing) return existing;
+    const id = `twin_${Math.random().toString(36).slice(2, 10)}`;
+    sessionStorage.setItem(key, id);
+    return id;
+  } catch {
+    return `twin_${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
 
 /** 按本地时区判定昼夜：19 点后与 6 点前视为夜晚。 */
 function isNightNow(date = new Date()) {
@@ -28,6 +66,15 @@ interface Selection {
   floorId: string;
   room: Room;
   seat: Seat;
+}
+
+/** 花名册条目：坐在某个工位上的员工。 */
+interface RosterPerson {
+  floorId: string;
+  level: number;
+  room: Room;
+  seat: Seat;
+  agent: SeatAgent;
 }
 
 /** 依据视口大小缩放等距场景，保证整楼完整可见。 */
@@ -89,11 +136,353 @@ export function TwinPage() {
   const [night, setNight] = useState(() => isNightNow());
   const [peek, setPeek] = useState(false);
   const [hasToken, setHasToken] = useState(() => Boolean(getToken()));
+  // 大屏常驻时保活当前登录员工，避免超管 180 秒无心跳被置为 offline
+  useStaffHeartbeat(undefined, hasToken);
   const [loadedAt, setLoadedAt] = useState("");
   const stageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const floors = useMemo(() => site?.floors ?? [], [site]);
   const shellHeight = Math.max(190, (floors.length - 1) * FLOOR_GAP + 190);
+  const [pairs, setPairs] = useState<CollabPair[]>([]);
+  const [staffNames, setStaffNames] = useState<Record<string, string>>({});
+  const [sideTab, setSideTab] = useState<"pairs" | "roster">("pairs");
+  const [rosterQuery, setRosterQuery] = useState("");
+  const [rosterStatus, setRosterStatus] = useState<"all" | "online" | "busy" | "offline">("all");
+  const screenIdRef = useRef(getScreenId());
+  const floorsRef = useRef(floors);
+  floorsRef.current = floors;
+  const activeFloorRef = useRef(activeFloorId);
+  activeFloorRef.current = activeFloorId;
+  const seatRef = useRef(selection?.seat.seat_id ?? null);
+  seatRef.current = selection?.seat.seat_id ?? null;
+
+  /** 布局刷新后同步已打开抽屉的工位对象，让任务进度实时更新。 */
+  useEffect(() => {
+    if (!selection) return;
+    const floor = floors.find((item) => item.floor_id === selection.floorId);
+    for (const room of floor?.rooms ?? []) {
+      const seat = room.seats.find((item) => item.seat_id === selection.seat.seat_id);
+      if (!seat) continue;
+      if (seat !== selection.seat) {
+        setSelection({ floorId: selection.floorId, room, seat });
+      }
+      return;
+    }
+  }, [floors]); // 仅在布局刷新时对齐，避免抽屉自身更新触发循环
+
+  /**
+   * 真实结对 → 工位坐标。
+   * 优先用公开布局自带的 pair_id / partner_name（无需登录）；
+   * 旧数据没有这两个字段时，回退到结对接口 + 员工名册按姓名匹配。
+   */
+  const pairLinks = useMemo<PairLink[]>(() => {
+    const seatById = new Map<
+      string,
+      { seat: Seat; room: Room; floorId: string }
+    >();
+    const seatByName = new Map<
+      string,
+      { seat: Seat; room: Room; floorId: string }
+    >();
+    for (const floor of floors) {
+      for (const room of floor.rooms) {
+        for (const seat of room.seats) {
+          const entry = { seat, room, floorId: floor.floor_id };
+          seatById.set(seat.seat_id, entry);
+          const name = seat.agent?.display_name;
+          if (name && !seatByName.has(name)) {
+            seatByName.set(name, entry);
+          }
+        }
+      }
+    }
+
+    const fromLayout: PairLink[] = [];
+    const seen = new Set<string>();
+    for (const entry of seatById.values()) {
+      const agent = entry.seat.agent;
+      if (!agent?.pair_id || !agent.partner_name || seen.has(agent.pair_id)) continue;
+      const other = seatByName.get(agent.partner_name);
+      if (!other) continue;
+      seen.add(agent.pair_id);
+      fromLayout.push({
+        pair_id: agent.pair_id,
+        floor_id: entry.floorId,
+        same_floor: entry.floorId === other.floorId,
+        a_seat_id: entry.seat.seat_id,
+        b_seat_id: other.seat.seat_id,
+        a_name: agent.display_name,
+        b_name: agent.partner_name,
+        ax: entry.seat.x,
+        ay: entry.seat.y,
+        bx: other.seat.x,
+        by: other.seat.y,
+      });
+    }
+    if (fromLayout.length > 0) return fromLayout;
+
+    const links: PairLink[] = [];
+    for (const pair of pairs) {
+      const aName = staffNames[pair.initiator_id];
+      const bName = staffNames[pair.partner_id];
+      if (!aName || !bName) continue;
+      const a = seatByName.get(aName);
+      const b = seatByName.get(bName);
+      if (!a || !b) continue;
+      links.push({
+        pair_id: pair.pair_id,
+        floor_id: a.floorId,
+        same_floor: a.floorId === b.floorId,
+        a_seat_id: a.seat.seat_id,
+        b_seat_id: b.seat.seat_id,
+        a_name: aName,
+        b_name: bName,
+        ax: a.seat.x,
+        ay: a.seat.y,
+        bx: b.seat.x,
+        by: b.seat.y,
+      });
+    }
+    return links;
+  }, [floors, pairs, staffNames]);
+
+  /** 侧栏结对行：同样优先公开布局，回退到接口 + 名册。 */
+  const pairRows = useMemo(() => {
+    const fromLayout: { pair_id: string; a_name: string; b_name: string }[] = [];
+    const seen = new Set<string>();
+    for (const floor of floors) {
+      for (const room of floor.rooms) {
+        for (const seat of room.seats) {
+          const agent = seat.agent;
+          if (!agent?.pair_id || !agent.partner_name || seen.has(agent.pair_id)) {
+            continue;
+          }
+          seen.add(agent.pair_id);
+          fromLayout.push({
+            pair_id: agent.pair_id,
+            a_name: agent.display_name,
+            b_name: agent.partner_name,
+          });
+        }
+      }
+    }
+    if (fromLayout.length > 0) return fromLayout;
+    return pairs.map((pair) => ({
+      pair_id: pair.pair_id,
+      a_name: staffNames[pair.initiator_id] ?? pair.initiator_id,
+      b_name: staffNames[pair.partner_id] ?? pair.partner_id,
+    }));
+  }, [floors, pairs, staffNames]);
+
+  /** 同层真实结对：交给 WalkerManager，让两人结伴走向会议室/休息区。 */
+  const realPairs = useMemo(
+    () =>
+      pairLinks
+        .filter((link) => link.same_floor)
+        .map((link) => ({
+          pairId: link.pair_id,
+          aSeatId: link.a_seat_id,
+          bSeatId: link.b_seat_id,
+        })),
+    [pairLinks],
+  );
+
+  const pairLinkById = useMemo(() => {
+    const map = new Map<string, PairLink>();
+    for (const link of pairLinks) map.set(link.pair_id, link);
+    return map;
+  }, [pairLinks]);
+
+  /** 每个结对最近 3 条公开消息（已脱敏）。 */
+  const [pairMessages, setPairMessages] = useState<Record<string, PublicMessage[]>>({});
+
+  /** 首次进入或结对集合变化时拉一次快照；后续增量由 message.created 事件驱动。 */
+  const refreshMessages = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) {
+      setPairMessages({});
+      return;
+    }
+    const entries = await Promise.all(
+      ids.map(async (id) => {
+        const result = await api<PublicMessage[]>(
+          `/api/public/collab/messages?pair_id=${encodeURIComponent(id)}&limit=3`,
+        );
+        return [id, result.ok && Array.isArray(result.data) ? result.data : []] as const;
+      }),
+    );
+    setPairMessages((prev) => {
+      const next: Record<string, PublicMessage[]> = {};
+      for (const [id, list] of entries) {
+        // 事件可能先于快照到达，保留快照里没有的更新消息，避免被覆盖。
+        const seen = new Set(list.map((message) => message.message_id));
+        const fresh = (prev[id] ?? []).filter((message) => !seen.has(message.message_id));
+        next[id] = [...fresh, ...list].slice(0, 3);
+      }
+      return next;
+    });
+  }, []);
+
+  const pairIdsKey = pairRows.map((row) => row.pair_id).join(",");
+  useEffect(() => {
+    if (!pairIdsKey) {
+      setPairMessages({});
+      return;
+    }
+    void refreshMessages(pairIdsKey.split(","));
+  }, [pairIdsKey, refreshMessages]);
+
+  /** 实时消息事件：把新消息插入对应结对，最多保留 3 条。 */
+  const applyMessageEvent = useCallback((raw: string) => {
+    try {
+      const payload = JSON.parse(raw) as {
+        message_id?: string;
+        pair_id?: string | null;
+        kind?: string;
+        body?: string;
+        created_at?: string | null;
+      };
+      if (!payload.message_id || !payload.pair_id || typeof payload.body !== "string") return;
+      const pairId = payload.pair_id;
+      const incoming: PublicMessage = {
+        message_id: payload.message_id,
+        kind: payload.kind ?? "note",
+        body: payload.body,
+        created_at: payload.created_at ?? null,
+        delivery_status: null,
+        pair_id: pairId,
+      };
+      setPairMessages((prev) => {
+        const list = prev[pairId] ?? [];
+        if (list.some((message) => message.message_id === incoming.message_id)) return prev;
+        return { ...prev, [pairId]: [incoming, ...list].slice(0, 3) };
+      });
+    } catch {
+      // 坏帧忽略，不影响后续事件
+    }
+  }, []);
+
+  /** 任务变化时让对应工位脉冲提示，2.6 秒后自动消失。 */
+  const [pulseSeatId, setPulseSeatId] = useState<string | null>(null);
+  const pulseTimerRef = useRef<number | undefined>(undefined);
+
+  const pulseSeat = useCallback((seatId: string) => {
+    if (!seatId) return;
+    setPulseSeatId(seatId);
+    window.clearTimeout(pulseTimerRef.current);
+    pulseTimerRef.current = window.setTimeout(() => setPulseSeatId(null), 2_600);
+  }, []);
+
+  useEffect(() => () => window.clearTimeout(pulseTimerRef.current), []);
+
+  /** 公开任务详情：抽屉打开时按 task_id 拉取节点时间线。 */
+  const [taskNodes, setTaskNodes] = useState<Record<string, PublicTaskNode[]>>({});
+
+  const refreshTaskDetail = useCallback(async (taskId: string) => {
+    const result = await api<PublicTask>(
+      `/api/public/collab/tasks/${encodeURIComponent(taskId)}`,
+    );
+    if (result.ok && result.data && Array.isArray(result.data.nodes)) {
+      const nodes = result.data.nodes;
+      setTaskNodes((prev) => ({ ...prev, [taskId]: nodes }));
+    }
+  }, []);
+
+  /** 抽屉内的员工任务列表：按 seat_id 由后端解析员工，公开投影不含身份字段。 */
+  const [seatTasks, setSeatTasks] = useState<PublicTask[]>([]);
+  const [seatTasksLoading, setSeatTasksLoading] = useState(false);
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+
+  const refreshSeatTasks = useCallback(async (seatId: string) => {
+    setSeatTasksLoading(true);
+    const result = await api<PublicTask[]>(
+      `/api/public/collab/seats/${encodeURIComponent(seatId)}/tasks`,
+    );
+    setSeatTasksLoading(false);
+    setSeatTasks(result.ok && Array.isArray(result.data) ? result.data : []);
+  }, []);
+
+  const selectedSeatId = selection?.seat.seat_id ?? null;
+  const selectionRef = useRef(selection);
+  useEffect(() => {
+    selectionRef.current = selection;
+  }, [selection]);
+
+  // 公开 SSE 的 task.updated 已脱敏（不含 task_id），抽屉节点时间线改用本地已知的打开任务刷新
+  const openTaskIdRef = useRef(openTaskId);
+  useEffect(() => {
+    openTaskIdRef.current = openTaskId;
+  }, [openTaskId]);
+
+  useEffect(() => {
+    setOpenTaskId(null);
+    setSeatTasks([]);
+    if (selectedSeatId) void refreshSeatTasks(selectedSeatId);
+  }, [selectedSeatId, refreshSeatTasks]);
+
+  const activeTaskId = openTaskId ?? selection?.seat.agent?.task_id ?? null;
+  useEffect(() => {
+    if (activeTaskId) void refreshTaskDetail(activeTaskId);
+  }, [activeTaskId, refreshTaskDetail]);
+
+  const drawerTaskNodes = taskNodes[activeTaskId ?? ""] ?? [];
+
+  /** 消息气泡：每个同层结对取最新一条，锚定在连线中点。 */
+  const pairBubbles = useMemo<PairBubble[]>(() => {
+    const bubbles: PairBubble[] = [];
+    for (const link of pairLinks) {
+      if (!link.same_floor) continue;
+      const latest = pairMessages[link.pair_id]?.[0];
+      if (!latest) continue;
+      bubbles.push({
+        pair_id: link.pair_id,
+        floor_id: link.floor_id,
+        message_id: latest.message_id,
+        body: latest.body,
+        created_at: latest.created_at,
+        x: (link.ax + link.bx) / 2,
+        y: (link.ay + link.by) / 2,
+      });
+    }
+    return bubbles;
+  }, [pairLinks, pairMessages]);
+
+  /** 全量花名册：按姓名排序（公开布局已含座席上的员工）。 */
+  const rosterAll = useMemo<RosterPerson[]>(() => {
+    const list: RosterPerson[] = [];
+    for (const floor of floors) {
+      for (const room of floor.rooms) {
+        for (const seat of room.seats) {
+          if (!seat.agent) continue;
+          list.push({
+            floorId: floor.floor_id,
+            level: floor.level,
+            room,
+            seat,
+            agent: seat.agent,
+          });
+        }
+      }
+    }
+    return list.sort((a, b) =>
+      a.agent.display_name.localeCompare(b.agent.display_name, "zh-Hans-CN"),
+    );
+  }, [floors]);
+
+  /** 花名册过滤：姓名 / Agent / 团队 / 职位 / 工位号 + 状态。 */
+  const rosterFiltered = useMemo(() => {
+    const keyword = rosterQuery.trim().toLowerCase();
+    return rosterAll.filter((person) => {
+      if (rosterStatus !== "all" && person.agent.status !== rosterStatus) return false;
+      if (!keyword) return true;
+      return [
+        person.agent.display_name,
+        person.agent.agent_name ?? "",
+        person.agent.team,
+        person.agent.position,
+        person.seat.seat_id,
+      ].some((value) => value.toLowerCase().includes(keyword));
+    });
+  }, [rosterAll, rosterQuery, rosterStatus]);
 
   const activeFloor = activeFloorId
     ? floors.find((f) => f.floor_id === activeFloorId) ?? null
@@ -103,9 +492,10 @@ export function TwinPage() {
 
   /** Walker 活动：仅在 focused 模式下启用，避免 overview 渲染/走路太多 DOM。 */
   const { routes: walkerRoutes, removeRoute } = useWalkers(walkerFloors, {
-    maxConcurrent: 8,
-    tickMs: 1300,
+    maxConcurrent: 3,
+    tickMs: 2400,
     enabled: !!activeFloorId,
+    realPairs,
   });
 
   /** 布局读取：进行中的请求合并，多次快照只保留一次在途刷新。 */
@@ -133,6 +523,41 @@ export function TwinPage() {
     inFlightRef.current = false;
   }, []);
 
+  /** 结对与员工名册：事件到达时刷新，不用轮询。 */
+  const refreshPairs = useCallback(async () => {
+    const [pairRes, staffRes] = await Promise.all([
+      api<CollabPair[]>("/api/collab/pairs?state=active"),
+      api<StaffLite[]>("/api/identity/staff?status=all"),
+    ]);
+    if (pairRes.ok && Array.isArray(pairRes.data)) setPairs(pairRes.data);
+    if (staffRes.ok && Array.isArray(staffRes.data)) {
+      const map: Record<string, string> = {};
+      for (const person of staffRes.data) map[person.employee_id] = person.display_name;
+      setStaffNames(map);
+    }
+  }, []);
+
+  /** 遥控聚焦：只接受本大屏 screen_id 的 screen.focus。 */
+  const applyRemoteFocus = useCallback((floorId: string, seatId?: string | null) => {
+    setActiveFloorId(floorId);
+    setPeek(false);
+    setView({ zoom: 1, panX: 0, panY: 0 });
+    if (!seatId) {
+      setSelection(null);
+      return;
+    }
+    for (const floor of floorsRef.current) {
+      for (const room of floor.rooms) {
+        const seat = room.seats.find((item) => item.seat_id === seatId);
+        if (seat) {
+          setSelection({ floorId: floor.floor_id, room, seat });
+          return;
+        }
+      }
+    }
+    setSelection(null);
+  }, []);
+
   /** 登录态变化：管理中心登录/退出后同步大屏门槛。 */
   useEffect(() => {
     const sync = () => setHasToken(Boolean(getToken()));
@@ -154,6 +579,105 @@ export function TwinPage() {
     enabled: hasToken,
     onSnapshot: () => void refreshLayout(),
   });
+
+  /** 协同增量事件：pair.* 刷新结对，message.created 实时插入气泡，screen.focus 驱动本屏聚焦。 */
+  const collabStream = useCollabEvents({
+    enabled: true,
+    url: "/api/public/collab/stream",
+    onEvent: (event) => {
+      if (event.event === "message.created") {
+        applyMessageEvent(event.data);
+        return;
+      }
+      if (event.event === "task.updated") {
+        try {
+          const payload = JSON.parse(event.data) as { seat_id?: string };
+          if (payload.seat_id) {
+            pulseSeat(payload.seat_id);
+            if (payload.seat_id === selectionRef.current?.seat.seat_id) {
+              void refreshSeatTasks(payload.seat_id);
+              if (openTaskIdRef.current) {
+                void refreshTaskDetail(openTaskIdRef.current);
+              }
+            }
+          }
+        } catch {
+          // 坏帧只影响脉冲提示，仍然刷新布局
+        }
+        void refreshLayout();
+        return;
+      }
+      if (event.event.startsWith("pair.")) {
+        void refreshPairs();
+        void refreshLayout();
+      }
+      if (event.event !== "screen.focus") return;
+      try {
+        const payload = JSON.parse(event.data) as {
+          screen_id?: string;
+          floor_id?: string | null;
+          seat_id?: string | null;
+        };
+        if (payload.screen_id !== screenIdRef.current || !payload.floor_id) return;
+        applyRemoteFocus(payload.floor_id, payload.seat_id ?? null);
+      } catch {
+        // 坏帧忽略，不影响后续事件
+      }
+    },
+  });
+
+  /** 断线重连后补拉一次快照，避免错过断线期间的消息（事件流无重放）。 */
+  useEffect(() => {
+    if (collabStream !== "live" || !pairIdsKey) return;
+    void refreshMessages(pairIdsKey.split(","));
+  }, [collabStream, pairIdsKey, refreshMessages]);
+
+  /** 大屏登记 + 心跳 + 离开；心跳携带当前楼层与工位。 */
+  useEffect(() => {
+    if (!hasToken) return;
+    const screenId = screenIdRef.current;
+    void api("/api/public/collab/screens", {
+      method: "POST",
+      body: JSON.stringify({
+        screen_id: screenId,
+        name: "孪生大屏",
+        floor_id: activeFloorRef.current,
+        seat_id: seatRef.current,
+      }),
+    });
+    const timer = window.setInterval(() => {
+      void api(`/api/public/collab/screens/${encodeURIComponent(screenId)}/heartbeat`, {
+        method: "POST",
+        body: JSON.stringify({
+          floor_id: activeFloorRef.current,
+          seat_id: seatRef.current,
+        }),
+      });
+    }, 30_000);
+    const leave = () => {
+      void fetch(`/api/public/collab/screens/${encodeURIComponent(screenId)}/leave`, {
+        method: "POST",
+        keepalive: true,
+      });
+    };
+    window.addEventListener("pagehide", leave);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("pagehide", leave);
+      leave();
+    };
+  }, [hasToken]);
+
+  /** 结对名册：进入页面、恢复可见时刷新；后续由 collab 事件驱动。 */
+  useEffect(() => {
+    if (!hasToken) return;
+    void refreshPairs();
+    const onVisibility = () => {
+      if (!document.hidden) void refreshPairs();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [hasToken, refreshPairs]);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -270,6 +794,27 @@ export function TwinPage() {
     setActiveFloorId(selection.floorId);
   };
 
+  /** 定位到某个工位：进入所在楼层、居中复位并打开详情抽屉。 */
+  const focusSeat = (floorId: string, room: Room, seat: Seat) => {
+    setActiveFloorId(floorId);
+    setPeek(false);
+    setView({ zoom: 1, panX: 0, panY: 0 });
+    setSelection({ floorId, room, seat });
+  };
+
+  /** 点击侧栏结对：定位到发起人所在楼层并打开其详情抽屉。 */
+  const focusPair = (link: PairLink) => {
+    for (const floor of floors) {
+      for (const room of floor.rooms) {
+        const seat = room.seats.find((s) => s.seat_id === link.a_seat_id);
+        if (seat) {
+          focusSeat(floor.floor_id, room, seat);
+          return;
+        }
+      }
+    }
+  };
+
   const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     const next = Math.min(2.6, Math.max(0.65, view.zoom * Math.exp(-e.deltaY * 0.0012)));
@@ -380,6 +925,7 @@ export function TwinPage() {
             <span className="metric"><i className="dot dot-online" />在线 {totals.online}</span>
             <span className="metric"><i className="dot dot-busy" />忙碌 {totals.busy}</span>
             <span className="metric"><i className="dot dot-offline" />离线 {totals.offline}</span>
+            <span className="metric"><i className="dot dot-busy" />结对 {pairs.length}</span>
             <span className="metric"><i className="dot dot-online" />协同 {peers + 1} 屏</span>
             <span className={`metric metric-stream status-${stream.state}`}>
               {STREAM_LABEL[stream.state]}
@@ -395,6 +941,130 @@ export function TwinPage() {
       </header>
 
       <div className="twin-body">
+        <aside className="collab-pairs">
+          <div className="side-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sideTab === "pairs"}
+              className={sideTab === "pairs" ? "is-active" : undefined}
+              onClick={() => setSideTab("pairs")}
+            >
+              协同结对 <span>{pairs.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={sideTab === "roster"}
+              className={sideTab === "roster" ? "is-active" : undefined}
+              onClick={() => setSideTab("roster")}
+            >
+              员工 <span>{rosterAll.length}</span>
+            </button>
+          </div>
+          {sideTab === "pairs" ? (
+            <>
+              {pairRows.length === 0 ? (
+                <p className="collab-pairs-empty">暂无进行中的结对</p>
+              ) : (
+                <ul>
+                  {pairRows.map((row) => {
+                    const link = pairLinkById.get(row.pair_id);
+                    return (
+                      <li
+                        key={row.pair_id}
+                        className={link ? "is-clickable" : undefined}
+                        onClick={link ? () => focusPair(link) : undefined}
+                        onKeyDown={
+                          link
+                            ? (e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  focusPair(link);
+                                }
+                              }
+                            : undefined
+                        }
+                        role={link ? "button" : undefined}
+                        tabIndex={link ? 0 : undefined}
+                        title={link ? "点击定位到该结对" : undefined}
+                      >
+                        <span>{row.a_name}</span>
+                        <i>⇄</i>
+                        <span>{row.b_name}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </>
+          ) : (
+            <div className="roster">
+              <input
+                className="roster-search"
+                type="search"
+                value={rosterQuery}
+                onChange={(e) => setRosterQuery(e.target.value)}
+                placeholder="搜索姓名 / Agent / 团队"
+                aria-label="搜索员工"
+              />
+              <div className="roster-filters" role="group" aria-label="按状态筛选">
+                {(
+                  [
+                    ["all", "全部"],
+                    ["online", "在线"],
+                    ["busy", "忙碌"],
+                    ["offline", "离线"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={rosterStatus === key ? "is-active" : undefined}
+                    onClick={() => setRosterStatus(key)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {rosterFiltered.length === 0 ? (
+                <p className="collab-pairs-empty">没有匹配的员工</p>
+              ) : (
+                <ul className="roster-list">
+                  {rosterFiltered.map((person) => (
+                    <li
+                      key={person.seat.seat_id}
+                      className="roster-row is-clickable"
+                      onClick={() => focusSeat(person.floorId, person.room, person.seat)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          focusSeat(person.floorId, person.room, person.seat);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      title={`点击定位到 ${person.agent.display_name}`}
+                    >
+                      <i className={`dot dot-${person.agent.status}`} />
+                      <span className="roster-name">{person.agent.display_name}</span>
+                      <span className="roster-where">
+                        {person.level}F · {person.room.name}
+                      </span>
+                      <span className={`roster-state status-text status-${person.agent.status}`}>
+                        {STATUS_LABEL[person.agent.status]}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+          <p className="collab-pairs-hint">
+            协同流：{STREAM_LABEL[collabStream]} · 本屏 {screenIdRef.current}
+          </p>
+        </aside>
+
         {!site ? (
           <div
             className="twin-stage"
@@ -417,6 +1087,9 @@ export function TwinPage() {
             floor={activeFloor}
             selection={selection}
             walkerRoutes={walkerRoutes}
+            pairLinks={pairLinks.filter((link) => link.floor_id === activeFloor.floor_id)}
+            pairBubbles={pairBubbles.filter((bubble) => bubble.floor_id === activeFloor.floor_id)}
+            pulseSeatId={pulseSeatId}
             onWalkerArrive={removeRoute}
             onSelectSeat={(seat, room) => {
               if (!seat.agent) return;
@@ -491,6 +1164,9 @@ export function TwinPage() {
                           dimmed={false}
                           selectedSeatId={selection?.seat.seat_id ?? null}
                           walkerRoutes={floorWalkers}
+                          pairLinks={pairLinks.filter((link) => link.floor_id === floor.floor_id)}
+                          pairBubbles={pairBubbles.filter((bubble) => bubble.floor_id === floor.floor_id)}
+                          pulseSeatId={pulseSeatId}
                           onWalkerArrive={removeRoute}
                           onSelectFloor={enterFloor}
                           onSelectSeat={(seat, room) => {
@@ -624,6 +1300,54 @@ export function TwinPage() {
                 </div>
               ) : null}
               <div>
+                <dt>任务列表</dt>
+                <dd>
+                  {seatTasksLoading ? (
+                    <span className="drawer-task-empty">加载中…</span>
+                  ) : seatTasks.length === 0 ? (
+                    <span className="drawer-task-empty">暂无任务</span>
+                  ) : (
+                    <ul className="drawer-task-list">
+                      {seatTasks.map((task) => (
+                        <li key={task.task_id}>
+                          <button
+                            type="button"
+                            className={`drawer-task-item${
+                              activeTaskId === task.task_id ? " is-active" : ""
+                            }`}
+                            onClick={() => {
+                              setOpenTaskId(task.task_id);
+                              void refreshTaskDetail(task.task_id);
+                            }}
+                          >
+                            <span>{task.title}</span>
+                            <em>{TASK_STATE_LABEL[task.state] ?? task.state}</em>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </dd>
+              </div>
+              {drawerTaskNodes.length > 0 ? (
+                <div>
+                  <dt>节点时间线</dt>
+                  <dd>
+                    <ol className="drawer-nodes">
+                      {drawerTaskNodes.map((node, index) => (
+                        <li
+                          key={`${node.order}-${index}`}
+                          className={`drawer-node is-${node.state}`}
+                        >
+                          <i />
+                          <span>{node.name}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </dd>
+                </div>
+              ) : null}
+              <div>
                 <dt>所在位置</dt>
                 <dd>
                   {floors.find((f) => f.floor_id === selection.floorId)?.level}F ·{" "}
@@ -646,7 +1370,8 @@ export function TwinPage() {
       <footer className="twin-footer">
         <span>悬停大楼展开楼层 · 点击楼层聚焦 · 点击员工查看详情 · 滚轮缩放 / 拖拽平移 · 双击复位</span>
         <span className="mono">
-          实时信号 /api/stream · 布局 /api/public/layout{loadFailed ? " · 上次数据可能过期" : ""}
+          实时信号 /api/stream · 协同 /api/public/collab/stream · 布局 /api/public/layout
+          {loadFailed ? " · 上次数据可能过期" : ""}
         </span>
       </footer>
     </div>

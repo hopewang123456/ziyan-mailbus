@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 
 from mailbus.api.deps import declares, get_actor
 from mailbus.api.mappers import org as mapper
@@ -45,6 +45,20 @@ def list_positions(request: Request) -> list[PositionOut]:
     _require_login(request)
     views = _org(request).list_positions()
     return [mapper.to_position_out(view) for view in views]
+
+
+@router.delete("/teams/{team_id}", status_code=204, summary="删除团队")
+@declares(Capability.ORG_MANAGE)
+def delete_team(team_id: str, request: Request) -> Response:
+    _org(request).delete_team(get_actor(request), team_id)
+    return Response(status_code=204)
+
+
+@router.delete("/positions/{position_id}", status_code=204, summary="删除岗位")
+@declares(Capability.ORG_MANAGE)
+def delete_position(position_id: str, request: Request) -> Response:
+    _org(request).delete_position(get_actor(request), position_id)
+    return Response(status_code=204)
 
 
 @router.post("/positions", response_model=PositionOut, status_code=201, summary="创建岗位")

@@ -15,15 +15,35 @@ from mailbus.application.workflow.dto import (
     TaskCommand,
     TaskView,
 )
+from mailbus.core.collab.ports import CollabEventBus
 from mailbus.core.identity.policy import Resource, ensure_allowed
-from mailbus.core.shared.errors import InvalidStateError, NotFoundError
+from mailbus.core.shared.errors import (
+    InvalidStateError,
+    NotFoundError,
+    PermissionDeniedError,
+)
 from mailbus.core.shared.ports import Clock, IdGenerator
 from mailbus.core.shared.values import Capability
 from mailbus.core.workflow import rules
 from mailbus.core.workflow.errors import VersionNotPublishedError
 from mailbus.core.workflow.models import Task, WorkflowVersion
 from mailbus.core.workflow.ports import WorkflowUnitOfWork
-from mailbus.core.workflow.values import TaskState
+from mailbus.core.workflow.values import BUSY_TASK_STATES, TaskState
+
+_DONE_NODE_STATES = frozenset({"done", "skipped"})
+_ACTIVE_NODE_STATES = ("running", "dispatched", "blocked")
+
+
+def _current_node(view: TaskView):
+    """与公开布局投影保持一致：优先活跃节点，其次待执行，最后末节点。"""
+    for state in _ACTIVE_NODE_STATES:
+        for node in view.nodes:
+            if node.state == state:
+                return node
+    for node in view.nodes:
+        if node.state == "pending":
+            return node
+    return view.nodes[-1] if view.nodes else None
 
 
 class TaskService:
@@ -32,10 +52,14 @@ class TaskService:
         uow_factory: Callable[[], WorkflowUnitOfWork],
         clock: Clock,
         ids: IdGenerator,
+        events: CollabEventBus,
+        seat_of: Callable[[str], str] | None = None,
     ) -> None:
         self._uow = uow_factory
         self._clock = clock
         self._ids = ids
+        self._events = events
+        self._seat_of = seat_of
 
     def create(self, actor: Actor, cmd: TaskCommand) -> TaskView:
         owner_id = cmd.owner_id or actor.employee_id
@@ -58,7 +82,9 @@ class TaskService:
             uow.tasks.add(task, nodes)
             enqueue_events(uow.outbox, events, self._ids, now)
             uow.commit()
-        return TaskView.of(task, nodes)
+        view = TaskView.of(task, nodes)
+        self._publish(view)
+        return view
 
     def dispatch(self, actor: Actor, task_id: str) -> TaskView:
         now = self._clock.now()
@@ -71,7 +97,9 @@ class TaskService:
             uow.tasks.save(updated, nodes)
             enqueue_events(uow.outbox, events, self._ids, now)
             uow.commit()
-        return TaskView.of(updated, nodes)
+        view = TaskView.of(updated, nodes)
+        self._publish(view)
+        return view
 
     def advance(self, actor: Actor, task_id: str, cmd: AdvanceCommand) -> TaskView:
         now = self._clock.now()
@@ -88,7 +116,9 @@ class TaskService:
             uow.tasks.save(updated, nodes)
             enqueue_events(uow.outbox, events, self._ids, now)
             uow.commit()
-        return TaskView.of(updated, nodes)
+        view = TaskView.of(updated, nodes)
+        self._publish(view)
+        return view
 
     def cancel(self, actor: Actor, task_id: str) -> TaskView:
         now = self._clock.now()
@@ -101,21 +131,53 @@ class TaskService:
             uow.tasks.save(updated, nodes)
             enqueue_events(uow.outbox, events, self._ids, now)
             uow.commit()
-        return TaskView.of(updated, nodes)
+        view = TaskView.of(updated, nodes)
+        self._publish(view)
+        return view
 
     def list_tasks(
-        self, state: str | None = None, owner_id: str | None = None
+        self,
+        state: str | None = None,
+        owner_id: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+        viewer_id: str | None = None,
     ) -> tuple[TaskView, ...]:
         parsed = self._parse_state(state)
         with self._uow() as uow:
-            tasks = uow.tasks.list_all(parsed, owner_id)
+            tasks = uow.tasks.list_all(parsed, owner_id, limit, offset, viewer_id)
             views = tuple(TaskView.of(task, uow.tasks.nodes(task.task_id)) for task in tasks)
         return views
 
-    def get(self, task_id: str) -> TaskView:
+    def busy_by_owner(self) -> dict[str, TaskView]:
+        """布局投影用：每个归属人最早创建的一条进行中任务。
+
+        只给进行中的任务加载节点，避免历史任务被逐条查询节点（N+1）。
+        """
+        busy: dict[str, TaskView] = {}
+        with self._uow() as uow:
+            for task in uow.tasks.list_all():
+                owner = task.owner_id
+                if owner is None or task.state not in BUSY_TASK_STATES:
+                    continue
+                if owner in busy:
+                    continue
+                busy[owner] = TaskView.of(task, uow.tasks.nodes(task.task_id))
+        return busy
+
+    def get(
+        self,
+        task_id: str,
+        viewer_id: str | None = None,
+        owner_id: str | None = None,
+    ) -> TaskView:
         with self._uow() as uow:
             task = self._load(uow, task_id)
             nodes = uow.tasks.nodes(task_id)
+        if owner_id is not None and task.owner_id != owner_id:
+            raise NotFoundError("任务不存在")
+        if viewer_id is not None and viewer_id != task.owner_id and viewer_id != task.created_by:
+            raise PermissionDeniedError("无权查看该任务")
         return TaskView.of(task, nodes)
 
     @staticmethod
@@ -132,6 +194,28 @@ class TaskService:
         if task is None:
             raise NotFoundError("任务不存在")
         return task
+
+    def _publish(self, view: TaskView) -> None:
+        """公开大屏事件：只带脱敏进度字段，不含负责人、创建者与流程标识。"""
+        current = _current_node(view)
+        done = sum(1 for node in view.nodes if node.state in _DONE_NODE_STATES)
+        seat_id = ""
+        if self._seat_of is not None and view.owner_id:
+            seat_id = self._seat_of(view.owner_id)
+        self._events.publish(
+            "task.updated",
+            {
+                "task_id": view.task_id,
+                "seat_id": seat_id,
+                "title": view.title,
+                "state": view.state,
+                "current_node": current.name if current else "",
+                "node_state": current.state if current else "",
+                "progress_done": done,
+                "progress_total": len(view.nodes),
+                "updated_at": view.updated_at.isoformat() if view.updated_at else None,
+            },
+        )
 
     @staticmethod
     def _parse_state(state: str | None) -> TaskState | None:

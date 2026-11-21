@@ -11,7 +11,7 @@ from mailbus.application.identity.dto import Actor
 from mailbus.application.messaging.dto import MessageView, SendMessageCommand
 from mailbus.application.messaging.service import MessagingService
 from mailbus.core.collab.models import Pair
-from mailbus.core.collab.ports import CollabUnitOfWork
+from mailbus.core.collab.ports import CollabEventBus, CollabUnitOfWork
 from mailbus.core.shared.errors import (
     InvalidStateError,
     NotFoundError,
@@ -25,9 +25,11 @@ class CollabMessageService:
         self,
         messaging: MessagingService,
         uow_factory: Callable[[], CollabUnitOfWork],
+        events: CollabEventBus,
     ) -> None:
         self._messaging = messaging
         self._uow = uow_factory
+        self._events = events
 
     def send(
         self,
@@ -42,7 +44,7 @@ class CollabMessageService:
         pair = self._load(actor, pair_id)
         if pair.state != "active":
             raise InvalidStateError("结对已结束，不能继续发送协同消息")
-        return self._messaging.send(
+        view = self._messaging.send(
             actor,
             SendMessageCommand(
                 body=body,
@@ -52,6 +54,18 @@ class CollabMessageService:
                 pair_id=pair_id,
             ),
         )
+        # 公开大屏事件：只带脱敏字段，不暴露发送者/接收者身份。
+        self._events.publish(
+            "message.created",
+            {
+                "message_id": view.message_id,
+                "pair_id": view.pair_id,
+                "kind": view.kind,
+                "body": view.body,
+                "created_at": view.created_at.isoformat() if view.created_at else None,
+            },
+        )
+        return view
 
     def list_messages(
         self,
@@ -65,6 +79,18 @@ class CollabMessageService:
         return self._messaging.list_messages(
             actor, pair_id=pair_id, collab_only=True, limit=limit
         )
+
+    def list_public(self, pair_id: str, limit: int = 50) -> tuple[MessageView, ...]:
+        """公开大屏投影：仅进行中的结对可读。
+
+        未知或已结束的结对一律返回空数组，避免公开端成为历史消息的爬取入口，
+        也不暴露「结对是否存在」的差异。
+        """
+        with self._uow() as uow:
+            pair = uow.pairs.get(pair_id)
+        if pair is None or pair.state != "active":
+            return ()
+        return self._messaging.list_collab(pair_id, limit)
 
     def _load(self, actor: Actor, pair_id: str) -> Pair:
         with self._uow() as uow:

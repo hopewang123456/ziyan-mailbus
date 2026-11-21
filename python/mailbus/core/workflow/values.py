@@ -82,6 +82,11 @@ TERMINAL_TASK_STATES: frozenset[TaskState] = frozenset(
     {TaskState.DONE, TaskState.FAILED, TaskState.CANCELLED}
 )
 
+# 「手上有业务」：已派发、执行中、阻塞都算忙，布局与概览共用同一口径。
+BUSY_TASK_STATES: frozenset[TaskState] = frozenset(
+    {TaskState.QUEUED, TaskState.RUNNING, TaskState.BLOCKED}
+)
+
 TERMINAL_NODE_STATES: frozenset[NodeState] = frozenset(
     {NodeState.DONE, NodeState.FAILED, NodeState.SKIPPED}
 )

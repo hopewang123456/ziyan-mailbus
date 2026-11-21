@@ -17,6 +17,9 @@ function parseFrame(frame: string): { event: string; data: string } | null {
   return data.length ? { event, data: data.join("\n") } : null;
 }
 
+/** 公开流断线或被限流（503）后的退避重连间隔，最后一项为上限。 */
+const PUBLIC_STREAM_RETRY_MS = [2000, 4000, 8000, 15000];
+
 /**
  * 管理端协同 SSE：fetch + Bearer 读 /api/collab/stream。
  * 接口不存在时静默失败，页面继续用轮询。
@@ -135,10 +138,81 @@ export function useScreenSync(
     let disposed = false;
     let sse: AbortController | null = null;
     let heartbeat = 0;
+    let retryTimer = 0;
+    let attempt = 0;
     const screenId = idRef.current;
     const base = "/api/public/collab";
 
+    const consumeFocus = (frame: string) => {
+      const parsed = parseFrame(frame);
+      if (parsed?.event !== "screen.focus") return;
+      try {
+        const data = JSON.parse(parsed.data) as {
+          screen_id?: string;
+          floor_id?: string | null;
+          seat_id?: string | null;
+        };
+        // 多屏时只接受发给自己的遥控；无 screen_id 的旧事件保持兼容
+        if (!data.screen_id || data.screen_id === screenId) {
+          onRemoteRef.current({
+            floorId: data.floor_id ?? null,
+            seatId: data.seat_id ?? null,
+          });
+        }
+      } catch {
+        // 忽略坏帧
+      }
+    };
+
+    const scheduleReconnect = () => {
+      if (disposed) return;
+      const delay = PUBLIC_STREAM_RETRY_MS[Math.min(attempt, PUBLIC_STREAM_RETRY_MS.length - 1)];
+      attempt += 1;
+      window.clearTimeout(retryTimer);
+      retryTimer = window.setTimeout(() => void connectStream(), delay);
+    };
+
+    const connectStream = async () => {
+      if (disposed) return;
+      window.clearTimeout(retryTimer);
+      sse?.abort();
+      const controller = new AbortController();
+      sse = controller;
+      try {
+        const res = await fetch(
+          `${base}/stream?screen_id=${encodeURIComponent(screenId)}`,
+          { headers: { Accept: "text/event-stream" }, signal: controller.signal },
+        );
+        if (disposed) return;
+        if (!res.ok || !res.body) {
+          // 503 表示连接数已满，交由退避重试；其它错误同样重试
+          scheduleReconnect();
+          return;
+        }
+        attempt = 0;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for (;;) {
+          const chunk = await reader.read();
+          if (disposed || chunk.done) break;
+          buffer += decoder.decode(chunk.value, { stream: true });
+          let cut = buffer.search(/\r?\n\r?\n/);
+          while (cut >= 0) {
+            consumeFocus(buffer.slice(0, cut));
+            buffer = buffer.slice(cut + (buffer.startsWith("\r\n\r\n", cut) ? 4 : 2));
+            cut = buffer.search(/\r?\n\r?\n/);
+          }
+        }
+      } catch {
+        // 主动断开（卸载/重连前 abort）不再重试
+        if (disposed || controller.signal.aborted) return;
+      }
+      scheduleReconnect();
+    };
+
     let registered = false;
+    let screenSecret: string | null = null;
     if (register) {
       const headers = { "Content-Type": "application/json" };
       void (async () => {
@@ -149,6 +223,9 @@ export function useScreenSync(
             body: JSON.stringify({ screen_id: screenId, name: `大屏 ${screenId.slice(-4)}` }),
           });
           if (disposed || !created.ok) return;
+          // M14：登记时获取一次性密钥，后续心跳/离线需携带
+          const createdBody = await created.json().catch(() => ({}));
+          screenSecret = createdBody.secret ?? null;
           registered = true;
 
           heartbeat = window.setInterval(() => {
@@ -156,49 +233,15 @@ export function useScreenSync(
             void fetch(`${base}/screens/${encodeURIComponent(screenId)}/heartbeat`, {
               method: "POST",
               headers,
-              body: JSON.stringify({ floor_id: viewRef.current.floorId, seat_id: viewRef.current.seatId }),
+              body: JSON.stringify({
+                floor_id: viewRef.current.floorId,
+                seat_id: viewRef.current.seatId,
+                ...(screenSecret ? { secret: screenSecret } : {}),
+              }),
             }).catch(() => undefined);
           }, 20_000);
 
-          sse = new AbortController();
-          const res = await fetch(
-            `${base}/stream?screen_id=${encodeURIComponent(screenId)}`,
-            { headers: { Accept: "text/event-stream" }, signal: sse.signal },
-          );
-          if (disposed || !res.ok || !res.body) return;
-          const reader = res.body.getReader();
-          const decoder = new TextDecoder();
-          let buffer = "";
-          for (;;) {
-            const chunk = await reader.read();
-            if (disposed || chunk.done) break;
-            buffer += decoder.decode(chunk.value, { stream: true });
-            let cut = buffer.search(/\r?\n\r?\n/);
-            while (cut >= 0) {
-              const frame = buffer.slice(0, cut);
-              buffer = buffer.slice(cut + (buffer.startsWith("\r\n\r\n", cut) ? 4 : 2));
-              const parsed = parseFrame(frame);
-              if (parsed?.event === "screen.focus") {
-                try {
-                  const data = JSON.parse(parsed.data) as {
-                    screen_id?: string;
-                    floor_id?: string | null;
-                    seat_id?: string | null;
-                  };
-                  // 多屏时只接受发给自己的遥控；无 screen_id 的旧事件保持兼容
-                  if (!data.screen_id || data.screen_id === screenId) {
-                    onRemoteRef.current({
-                      floorId: data.floor_id ?? null,
-                      seatId: data.seat_id ?? null,
-                    });
-                  }
-                } catch {
-                  // 忽略坏帧
-                }
-              }
-              cut = buffer.search(/\r?\n\r?\n/);
-            }
-          }
+          await connectStream();
         } catch {
           // 未接后端时静默，BroadcastChannel 仍可用
         }
@@ -209,6 +252,7 @@ export function useScreenSync(
       disposed = true;
       window.clearInterval(timer);
       window.clearInterval(heartbeat);
+      window.clearTimeout(retryTimer);
       sse?.abort();
       ch.close();
       channelRef.current = null;
@@ -216,6 +260,8 @@ export function useScreenSync(
         void fetch(`${base}/screens/${encodeURIComponent(screenId)}/leave`, {
           method: "POST",
           keepalive: true,
+          headers: screenSecret ? { "Content-Type": "application/json" } : undefined,
+          body: screenSecret ? JSON.stringify({ secret: screenSecret }) : undefined,
         }).catch(() => undefined);
       }
     };

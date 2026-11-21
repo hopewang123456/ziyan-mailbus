@@ -132,30 +132,22 @@ services:
     restart: unless-stopped
 
   hermes:
-    build:
-      context: ./hermes-base
-      args:
-        HERMES_VERSION: ""
-        # 国内镜像源（.env 可覆盖）：npmjs 直连被污染、apt 官方源 ~100kB/s
-        npm_config_registry: ${NPM_REGISTRY:-}
-        APT_MIRROR: ${APT_MIRROR:-}
+    # 官方镜像（Tier 1 安装方式）：数据统一挂 /opt/data，升级只需换镜像
+    image: nousresearch/hermes-agent:${HERMES_IMAGE_TAG:-latest}
+    # Override Hermes image entrypoint so we can mirror shared secrets into
+    # each profile's .env before s6 starts services (0.23+ per-profile scopes
+    # don't inherit DEEPSEEK_API_KEY etc. from the gateway process env).
+    entrypoint: ["/opt/data/bootstrap-profiles.sh"]
     ports:
-      - "9120:9120"
-      - "9121:9121"
-      - "9122:9122"
-      - "9123:9123"
-      - "9124:9124"
-      - "9125:9125"
-      - "9126:9126"
-      - "9127:9127"
+      - "9119:9119"
+      - "${A2A_PORT:-9900}:${A2A_PORT:-9900}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - mailbus-net
     volumes:
-      - ${HERMES_DATA:-./workspaces/hermes-data}:/home/hermes/.hermes
-      # profiles/*/memories symlink 指向 Vault 记忆树；hermes 0.19 ensure_hermes_home
-      # 会 mkdir memories，dangling symlink 直接 FileExistsError——挂真源让链路生效
+      - ${HERMES_DATA:-./workspaces/hermes-data}:/opt/data
+      # profiles/*/memories 是指向 Vault 记忆树的 symlink，必须挂真源否则初始化失败
       - /mnt/e/Obsidian/Vaults/Agent/02-members/022-category/0221-hermes/02214-memory:/mnt/e/Obsidian/Vaults/Agent/02-members/022-category/0221-hermes/02214-memory
       - ../data:/mailbus/store
       - ../skills:/mailbus/shared/skills:ro
@@ -163,17 +155,21 @@ services:
       - ../access:/mailbus/shared/access:ro
       - ../access/external-tools:/mailbus/shared/external-tools:ro
       - ../access/hermes/.sync:/mailbus/access/hermes/.sync
-      # Runtime skills SoT = Vault via profiles/*/skills under HERMES_DATA;
-      # .sync is optional framework-skill mirror only (not Hermes load path).
       - ../data/inbox:/home/hermes/inbox:ro
     environment:
-      - HERMES_HOME=/home/hermes/.hermes
-      - DATA_DIR=/mailbus/data
-      - PYTHONPATH=/mailbus
-      - AGENTMEMORY_URL=http://iii-engine:3111
+      - HERMES_HOME=/opt/data
       - TZ=Asia/Shanghai
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - AGENT_BROWSER_EXECUTABLE_PATH=/dev/null
+      - AGENTMEMORY_URL=http://iii-engine:3111
+      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_HOST=0.0.0.0
+      - HERMES_DASHBOARD_PORT=9119
+      - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=${HERMES_DASHBOARD_USER:-admin}
+      - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${HERMES_DASHBOARD_PASSWORD:-mailbus-admin}
+      - A2A_HOST=${A2A_HOST:-0.0.0.0}
+      - A2A_PORT=${A2A_PORT:-9900}
+      - A2A_BEARER_TOKEN=${A2A_BEARER_TOKEN:-}
+      - A2A_ALLOW_ALL_USERS=${A2A_ALLOW_ALL_USERS:-true}
       - HTTP_PROXY=${CONTAINER_HTTP_PROXY:-}
       - HTTPS_PROXY=${CONTAINER_HTTPS_PROXY:-}
       - NO_PROXY=localhost,127.0.0.1,::1,iii-engine,agentmemory,mailbus,172.28.0.0/16,host.docker.internal
@@ -181,7 +177,7 @@ services:
     depends_on:
       - mailbus
       - iii-engine
-    command: ["tail", "-f", "/dev/null"]
+    command: ["gateway", "run"]
 
   openclaw:
     build:

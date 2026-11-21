@@ -5,10 +5,16 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from mailbus.application.identity.dto import Actor
+from mailbus.application.identity.scoping import (
+    filter_approvals_by_scope,
+    filter_tasks_by_scope,
+)
 from mailbus.application.metrics.dto import AlertView
 from mailbus.application.metrics.service import MetricsService
 from mailbus.application.queries.ports import ReadUnitOfWork
 from mailbus.core.approval.values import ApprovalStatus
+from mailbus.core.shared.values import DataScope
 
 _AUDITED = frozenset(
     {
@@ -49,10 +55,19 @@ class AuditQuery:
         self._uow = uow_factory
         self._metrics = metrics
 
-    def stats(self) -> AuditStatsView:
+    def stats(self, actor: Actor) -> AuditStatsView:
         with self._uow() as uow:
             tasks = uow.tasks.list_all()
             approvals = uow.approvals.list_all()
+            # 全局账号无需按队过滤，省去员工全表加载。
+            employees = (
+                []
+                if actor.data_scope is DataScope.GLOBAL
+                else uow.employees.list_all()
+            )
+        # M11：非全局账号只统计可见范围内的任务与审批，避免泄露他队审核人。
+        tasks = filter_tasks_by_scope(actor, tasks, employees)
+        approvals = filter_approvals_by_scope(actor, approvals, tasks, employees)
         audited = [item for item in approvals if item.status in _AUDITED]
         pending = [item for item in approvals if item.status is ApprovalStatus.PENDING]
         return AuditStatsView(

@@ -100,7 +100,7 @@ def test_integrations_plugins_env_and_reload(tmp_path):
 
         reloaded = client.post("/api/dev/reload", headers=headers)
         assert reloaded.status_code == 200, reloaded.text
-        assert reloaded.json()["reloaded"] is True
+        assert reloaded.json()["reloaded"] is False
 
         invoked = client.post(
             "/api/settings/integrations/comfyui/invoke",

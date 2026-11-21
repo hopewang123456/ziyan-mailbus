@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from contextlib import closing
+from datetime import timedelta
 
 from mailbus.adapters.persistence.sqlite.connection import connect
+from mailbus.adapters.persistence.sqlite.maintenance import (
+    SqliteMaintenance,
+    cutoff_from,
+)
 from mailbus.adapters.persistence.sqlite.migrations import apply_migrations
 from mailbus.adapters.persistence.sqlite.uow import SqliteUnitOfWork
 from mailbus.adapters.system.clock import SystemClock
@@ -71,10 +76,64 @@ def test_overview_log_and_sse_snapshot_are_read_projections(tmp_path):
     assert overview.tasks_total == 0
     assert overview.approvals_pending == 0
 
-    entries = container.log.recent(10)
+    entries = container.log.recent(_actor(), 10)
     assert entries and entries[0].kind == "message.sent"
     assert entries[0].created_at is not None
 
-    payload = sse._encode(sse.snapshot(container))
+    payload = sse._encode(sse.snapshot(container, _actor()))
     assert '"overview"' in payload
     assert '"message.sent"' in payload
+
+
+def test_maintenance_prunes_old_support_rows(tmp_path):
+    """M6：过期支撑数据被清理，未派发事件与有效会话保留。"""
+    db_path = _migrated(tmp_path)
+    clock = SystemClock()
+    now = clock.now()
+    old = (now - timedelta(days=30)).timestamp()
+    with closing(connect(db_path)) as conn:
+        conn.execute(
+            "INSERT INTO identity_employees (employee_id, display_name, account_type,"
+            " status, created_at, updated_at) VALUES ('emp1', '甲', 'human', 'active', ?, ?)",
+            (old, old),
+        )
+        conn.execute(
+            "INSERT INTO ops_outbox (event_id, kind, payload, attempts, due_at,"
+            " created_at, dispatched_at) VALUES ('done', 'message.sent', '{}', 0, ?, ?, ?)",
+            (old, old, old),
+        )
+        conn.execute(
+            "INSERT INTO ops_outbox (event_id, kind, payload, attempts, due_at, created_at)"
+            " VALUES ('pending', 'message.sent', '{}', 0, ?, ?)",
+            (old, old),
+        )
+        conn.execute(
+            "INSERT INTO ops_audit_log (action, created_at) VALUES ('a', ?)", (old,)
+        )
+        conn.execute(
+            "INSERT INTO ops_idempotency_keys (scope, key, payload_hash, response,"
+            " created_at) VALUES ('s', 'k', 'h', '{}', ?)",
+            (old,),
+        )
+        conn.execute(
+            "INSERT INTO identity_sessions (token_hash, employee_id, issued_at, expires_at)"
+            " VALUES ('h1', 'emp1', ?, ?)",
+            (old, old),
+        )
+        conn.execute(
+            "INSERT INTO identity_sessions (token_hash, employee_id, issued_at, expires_at)"
+            " VALUES ('h2', 'emp1', ?, NULL)",
+            (old,),
+        )
+
+        removed = SqliteMaintenance(conn).prune(cutoff_from(now, 7))
+
+        assert removed == 4
+        assert conn.execute("SELECT COUNT(*) FROM ops_outbox").fetchone()[0] == 1
+        assert conn.execute("SELECT COUNT(*) FROM ops_audit_log").fetchone()[0] == 0
+        assert (
+            conn.execute("SELECT COUNT(*) FROM ops_idempotency_keys").fetchone()[0] == 0
+        )
+        assert (
+            conn.execute("SELECT COUNT(*) FROM identity_sessions").fetchone()[0] == 1
+        )

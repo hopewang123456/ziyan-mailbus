@@ -36,14 +36,15 @@ class SqliteScreenRepository:
         self._conn.execute(
             """
             INSERT INTO collab_screens
-                (screen_id, name, floor_id, seat_id, online, last_seen_at, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (screen_id, name, floor_id, seat_id, online, last_seen_at, created_at, secret)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (screen_id) DO UPDATE SET
                 name = excluded.name,
                 floor_id = excluded.floor_id,
                 seat_id = excluded.seat_id,
                 online = excluded.online,
-                last_seen_at = excluded.last_seen_at
+                last_seen_at = excluded.last_seen_at,
+                secret = excluded.secret
             """,
             (
                 screen.screen_id,
@@ -53,6 +54,7 @@ class SqliteScreenRepository:
                 int(screen.online),
                 _epoch(screen.last_seen_at),
                 _epoch(screen.created_at),
+                screen.secret,
             ),
         )
 
@@ -66,6 +68,7 @@ class SqliteScreenRepository:
             online=bool(row["online"]),
             last_seen_at=_dt(row["last_seen_at"]),
             created_at=_dt(row["created_at"]) or datetime.now(timezone.utc),
+            secret=row["secret"],
         )
 
 

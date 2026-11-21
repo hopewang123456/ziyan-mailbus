@@ -38,6 +38,9 @@ class SqliteTeamRepository:
         )
         return [Team(team_id=row["team_id"], name=row["name"]) for row in rows]
 
+    def delete(self, team_id: str) -> None:
+        self._conn.execute("DELETE FROM org_teams WHERE team_id = ?", (team_id,))
+
 
 class SqlitePositionRepository:
     def __init__(self, conn: sqlite3.Connection, clock) -> None:
@@ -69,6 +72,11 @@ class SqlitePositionRepository:
             " ORDER BY created_at, position_id"
         )
         return [_position_from_row(row) for row in rows]
+
+    def delete(self, position_id: str) -> None:
+        self._conn.execute(
+            "DELETE FROM org_positions WHERE position_id = ?", (position_id,)
+        )
 
 
 def _position_from_row(row: sqlite3.Row) -> Position:

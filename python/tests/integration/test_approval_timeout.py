@@ -9,6 +9,7 @@ from mailbus.adapters.persistence.sqlite.connection import connect
 from mailbus.adapters.persistence.sqlite.migrations import apply_migrations
 from mailbus.adapters.persistence.sqlite.uow import SqliteUnitOfWork
 from mailbus.adapters.system.ids import UuidGenerator
+from mailbus.adapters.transport.collab_bus import InProcessEventBus
 from mailbus.application.approval.dto import make_approval_command
 from mailbus.application.approval.service import ApprovalService
 from mailbus.application.dispatch.dispatcher import Dispatcher
@@ -54,7 +55,7 @@ def test_blocking_approval_times_out_and_keeps_task_blocked(tmp_path):
     clock = _FakeClock(datetime(2026, 1, 1, tzinfo=timezone.utc))
     ids = UuidGenerator()
     uow = lambda: SqliteUnitOfWork(lambda: connect(db_path), clock)
-    tasks = TaskService(uow, clock, ids)
+    tasks = TaskService(uow, clock, ids, InProcessEventBus())
     approvals = ApprovalService(uow, clock, ids)
     actor = _actor()
 
@@ -77,7 +78,7 @@ def test_blocking_approval_times_out_and_keeps_task_blocked(tmp_path):
     )
     dispatcher.tick()
 
-    expired = approvals.get(approval.approval_id)
+    expired = approvals.get(actor, approval.approval_id)
     assert expired.status == "expired"
     assert tasks.get(task.task_id).state == "blocked"
     assert approvals.sweep_expired() == 0

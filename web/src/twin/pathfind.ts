@@ -170,8 +170,9 @@ function buildGrid(floor: Floor): Grid {
 
     // 工位桌面作为障碍（视觉桌面 92x52，椅子不挡路），膨胀 CHAR_R
     for (const seat of room.seats) {
-      const sx = x + seat.x;
-      const sy = y + seat.y;
+      // 工位坐标是楼层绝对坐标，直接使用，不再叠加房间原点。
+      const sx = seat.x;
+      const sy = seat.y;
       fillRect(g, sx - 46 - CHAR_R, sy - 26 - CHAR_R, sx + 46 + CHAR_R, sy + 26 + CHAR_R, 1);
     }
 

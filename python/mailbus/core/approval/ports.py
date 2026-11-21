@@ -7,6 +7,7 @@ from typing import Protocol, Self
 
 from mailbus.core.approval.models import ApprovalItem
 from mailbus.core.approval.values import ApprovalStatus
+from mailbus.core.identity.ports import EmployeeRepository
 from mailbus.core.shared.ports import OutboxPort
 from mailbus.core.workflow.ports import TaskRepository
 
@@ -32,6 +33,7 @@ class ApprovalUnitOfWork(Protocol):
     outbox: OutboxPort
     approvals: ApprovalRepository
     tasks: TaskRepository
+    employees: EmployeeRepository
 
     def __enter__(self) -> Self: ...
 

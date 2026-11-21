@@ -70,3 +70,6 @@ class SqliteAgentRepository:
             "SELECT * FROM agents ORDER BY created_at, agent_id"
         ).fetchall()
         return [_agent_from_row(row) for row in rows]
+
+    def delete(self, agent_id: str) -> None:
+        self._conn.execute("DELETE FROM agents WHERE agent_id = ?", (agent_id,))

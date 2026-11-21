@@ -12,13 +12,13 @@ from mailbus.application.agents.dto import (
 )
 
 
-def to_agent_out(view: AgentView) -> AgentOut:
+def to_agent_out(view: AgentView, *, include_sensitive: bool = True) -> AgentOut:
     return AgentOut(
         agent_id=view.agent_id,
         name=view.name,
         framework=view.framework,
         model=view.model,
-        endpoint=view.endpoint,
+        endpoint=view.endpoint if include_sensitive else None,
         enabled=view.enabled,
         created_at=view.created_at,
         updated_at=view.updated_at,

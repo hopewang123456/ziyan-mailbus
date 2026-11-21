@@ -69,6 +69,8 @@ export interface WalkerRoute {
 interface WalkerProps {
   route: WalkerRoute;
   onArrive?: (routeId: string) => void;
+  /** 点击 walker 时选中对应工位：让走动中的员工也能打开详情抽屉。 */
+  onSelect?: () => void;
   /** 本楼层所有门洞的位置（绝对坐标），用于触发开门动画。 */
   doors?: Array<{ roomId: string; x: number; y: number }>;
   /** walker 进入某扇门的触发半径时调用。 */
@@ -82,7 +84,7 @@ const doorGate = new Map<string, number>();
 const DOOR_GATE_MS = 700;
 
 /** 走路 + 多动作状态机。 */
-export function Walker({ route, onArrive, doors, onDoorEnter, onDoorExit }: WalkerProps) {
+export function Walker({ route, onArrive, onSelect, doors, onDoorEnter, onDoorExit }: WalkerProps) {
   const nodeRef = useRef<HTMLDivElement>(null);
   const phaseRef = useRef<"walk" | "act" | "done">("walk");
 
@@ -254,10 +256,14 @@ export function Walker({ route, onArrive, doors, onDoorEnter, onDoorExit }: Walk
   return (
     <div
       ref={nodeRef}
-      className={`walker is-walking${route.action ? "" : " walk-home"}`}
+      className={`walker is-walking${route.action ? "" : " walk-home"}${onSelect ? " is-clickable" : ""}`}
       data-seat={route.seatId}
       data-pair={route.pairId ?? undefined}
       style={{ "--tag": tag.tag, "--tag-text": tag.text } as React.CSSProperties}
+      onClick={onSelect ? (e) => { e.stopPropagation(); onSelect(); } : undefined}
+      role={onSelect ? "button" : undefined}
+      tabIndex={onSelect ? 0 : undefined}
+      title={onSelect ? `点击查看 ${agent.display_name} 详情` : undefined}
     >
       <span
         className="walker-figure"
@@ -325,9 +331,10 @@ function actionFor(target: Room): { action: WalkerAction; actionDuration: number
 }
 
 /** 工位前的可站立点（椅子前方 / 侧后方）。 */
-function standSpots(room: Room, seat: Seat): Point[] {
-  const sx = room.x + seat.x;
-  const sy = room.y + seat.y;
+function standSpots(seat: Seat): Point[] {
+  // 工位坐标是楼层绝对坐标，不能再叠加房间原点。
+  const sx = seat.x;
+  const sy = seat.y;
   return [
     { x: sx, y: sy + 50 },
     { x: sx, y: sy + 56 },
@@ -376,7 +383,7 @@ export function planRoute(
     : opts.from || opts.to
       ? null
       : actionFor(target);
-  const starts = opts.from ? [opts.from] : standSpots(homeRoom, seat);
+  const starts = opts.from ? [opts.from] : standSpots(seat);
   // 接水/开会/喝咖啡/瘫着都要站到对应设施旁，其余动作在房间里找个空位。
   const cxRoom = target.x + target.w / 2;
   const cyRoom = target.y + target.h / 2;
@@ -385,7 +392,7 @@ export function planRoute(
     // 指定终点（例如电梯口）
     dests = [opts.to];
   } else if (opts.from) {
-    dests = standSpots(homeRoom, seat);
+    dests = standSpots(seat);
   } else if (act?.action === "fetch") {
     // 茶水间的饮水机在 (w-64, 30)，站到它正下方接水。
     const cx = target.x + target.w - 64;

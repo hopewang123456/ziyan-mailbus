@@ -118,25 +118,47 @@ class SqliteEmployeeRepository:
         )
 
     def list_by_status(self, status: EmployeeStatus) -> list[Employee]:
-        ids = [
-            row["employee_id"]
-            for row in self._conn.execute(
-                "SELECT employee_id FROM identity_employees WHERE status = ? ORDER BY created_at",
-                (status.value,),
-            )
-        ]
-        employees = [self.get(employee_id) for employee_id in ids]
-        return [employee for employee in employees if employee is not None]
+        rows = self._conn.execute(
+            "SELECT * FROM identity_employees WHERE status = ? ORDER BY created_at",
+            (status.value,),
+        ).fetchall()
+        return self._build_many(rows)
 
     def list_all(self) -> list[Employee]:
-        ids = [
-            row["employee_id"]
-            for row in self._conn.execute(
-                "SELECT employee_id FROM identity_employees ORDER BY created_at"
-            )
+        rows = self._conn.execute(
+            "SELECT * FROM identity_employees ORDER BY created_at"
+        ).fetchall()
+        return self._build_many(rows)
+
+    def list_stale_active(self, cutoff: datetime) -> list[Employee]:
+        """心跳巡检候选：active、有过心跳且早于 cutoff 的员工（走覆盖索引）。
+
+        两类账号不参与巡检：last_heartbeat IS NULL 的（从未报告在勤，如外部导入数据），
+        以及持全量权限的运维入口（超管无在勤义务），避免被误标离线污染总览与审计。
+        """
+        rows = self._conn.execute(
+            "SELECT * FROM identity_employees"
+            " WHERE status = ? AND last_heartbeat IS NOT NULL AND last_heartbeat < ?"
+            " AND employee_id NOT IN ("
+            "SELECT employee_id FROM identity_capability_grants WHERE capability = ?)"
+            " ORDER BY created_at",
+            (EmployeeStatus.ACTIVE.value, _to_epoch(cutoff), Capability.ALL.value),
+        ).fetchall()
+        return self._build_many(rows)
+
+    def _build_many(self, rows: list[sqlite3.Row]) -> list[Employee]:
+        """批量装配：员工行一次取回，能力授权一次取回，避免逐员工 N+1。"""
+        if not rows:
+            return []
+        grants: dict[str, set[Capability]] = {}
+        for employee_id, value in self._conn.execute(
+            "SELECT employee_id, capability FROM identity_capability_grants"
+        ):
+            grants.setdefault(employee_id, set()).add(Capability(value))
+        return [
+            _employee_from_row(row, frozenset(grants.get(row["employee_id"], ())))
+            for row in rows
         ]
-        employees = [self.get(employee_id) for employee_id in ids]
-        return [employee for employee in employees if employee is not None]
 
 
 class SqliteInviteRepository:

@@ -22,6 +22,9 @@ export interface SeatAgent {
   node_state?: string;
   progress_done?: number;
   progress_total?: number;
+  /** 进行中的结对：公开布局直接下发 pair_id 与对方姓名。 */
+  pair_id?: string;
+  partner_name?: string;
   /** 公开布局不返回心跳时间，缺失时显示「—」。 */
   last_heartbeat?: string;
 }
@@ -51,6 +54,60 @@ export interface Floor {
   name: string;
   level: number;
   rooms: Room[];
+}
+
+/** 真实协同结对在大屏上的可视化锚点：两人工位的楼层绝对坐标。 */
+export interface PairLink {
+  pair_id: string;
+  floor_id: string;
+  /** 同一楼层才画连线、才能结伴走动；跨楼层仅在侧栏展示。 */
+  same_floor: boolean;
+  a_seat_id: string;
+  b_seat_id: string;
+  a_name: string;
+  b_name: string;
+  ax: number;
+  ay: number;
+  bx: number;
+  by: number;
+}
+
+/** 公开协同消息（已脱敏，不含发送者/接收者身份）。 */
+export interface PublicMessage {
+  message_id: string;
+  kind: string;
+  body: string;
+  created_at: string | null;
+  delivery_status: string | null;
+  pair_id: string | null;
+}
+
+/** 公开任务节点：只有名称、顺序与状态。 */
+export interface PublicTaskNode {
+  name: string;
+  order: number;
+  state: string;
+}
+
+/** 公开任务详情（已脱敏，无负责人/创建者/流程标识）。 */
+export interface PublicTask {
+  task_id: string;
+  title: string;
+  state: string;
+  created_at: string | null;
+  updated_at: string | null;
+  nodes: PublicTaskNode[];
+}
+
+/** 大屏消息气泡：挂在某条结对连线的中点。 */
+export interface PairBubble {
+  pair_id: string;
+  floor_id: string;
+  message_id: string;
+  body: string;
+  created_at: string | null;
+  x: number;
+  y: number;
 }
 
 export interface OfficeSite {

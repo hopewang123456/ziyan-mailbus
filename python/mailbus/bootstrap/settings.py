@@ -19,6 +19,11 @@ class Settings:
     dispatch_max_attempts: int = 3
     heartbeat_timeout_sec: float = 180.0
     heartbeat_sweep_interval_sec: float = 30.0
+    sse_max_streams: int = 256
+    public_screen_limit: int = 64
+    max_body_bytes: int = 1_048_576
+    retention_days: float = 7.0
+    maintenance_interval_sec: float = 3600.0
 
     @property
     def db_path(self) -> Path:
@@ -66,5 +71,14 @@ class Settings:
             ),
             heartbeat_sweep_interval_sec=float(
                 os.environ.get("MAILBUS_HEARTBEAT_SWEEP_SEC", "30")
+            ),
+            sse_max_streams=int(os.environ.get("MAILBUS_SSE_MAX_STREAMS", "256")),
+            public_screen_limit=int(os.environ.get("MAILBUS_PUBLIC_SCREEN_LIMIT", "64")),
+            max_body_bytes=int(
+                os.environ.get("MAILBUS_MAX_BODY_BYTES", str(1_048_576))
+            ),
+            retention_days=float(os.environ.get("MAILBUS_RETENTION_DAYS", "7")),
+            maintenance_interval_sec=float(
+                os.environ.get("MAILBUS_MAINTENANCE_INTERVAL_SEC", "3600")
             ),
         )

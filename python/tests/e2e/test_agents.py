@@ -223,3 +223,48 @@ def test_employee_binding_and_layout_execution(tmp_path):
             },
         )
         assert missing.status_code == 404
+
+
+def test_agent_delete_requires_unbound_employee(tmp_path):
+    with _client(tmp_path) as client:
+        admin_headers = _headers(_bootstrap(client))
+        agent = _create_agent(client, admin_headers)
+        seat_id = _seat(client, admin_headers)
+        employee_id = _active_staff(
+            client, admin_headers, seat_id, agent["agent_id"]
+        )
+
+        blocked = client.delete(f"/api/agents/{agent['agent_id']}", headers=admin_headers)
+        assert blocked.status_code == 409, blocked.text
+
+        unbound = client.patch(
+            f"/api/identity/staff/{employee_id}/agent",
+            json={"agent_id": None},
+            headers=admin_headers,
+        )
+        assert unbound.status_code == 200, unbound.text
+
+        deleted = client.delete(f"/api/agents/{agent['agent_id']}", headers=admin_headers)
+        assert deleted.status_code == 204
+        assert client.get("/api/agents", headers=admin_headers).json() == []
+        assert (
+            client.delete(f"/api/agents/{agent['agent_id']}", headers=admin_headers).status_code
+            == 404
+        )
+
+        spare = _create_agent(client, admin_headers)
+        staff = client.post(
+            "/api/identity/staff", json={"display_name": "越权者", "account_type": "human"}
+        ).json()["employee"]["employee_id"]
+        client.post(
+            f"/api/identity/staff/{staff}/review",
+            json={"approved": True},
+            headers=admin_headers,
+        )
+        staff_token = client.post(
+            f"/api/identity/staff/{staff}/activate", headers=admin_headers
+        ).json()["token"]
+        denied = client.delete(
+            f"/api/agents/{spare['agent_id']}", headers=_headers(staff_token)
+        )
+        assert denied.status_code == 403

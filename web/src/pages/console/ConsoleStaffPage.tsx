@@ -184,6 +184,7 @@ export function ConsoleStaffPage({
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [seatDrafts, setSeatDrafts] = useState<Record<string, string>>({});
   const [agentDrafts, setAgentDrafts] = useState<Record<string, string>>({});
+  const [endpointDrafts, setEndpointDrafts] = useState<Record<string, string>>({});
   const [reasonDrafts, setReasonDrafts] = useState<Record<string, string>>({});
   const [teams, setTeams] = useState<TeamOption[]>([]);
   const [positions, setPositions] = useState<PositionOption[]>([]);
@@ -210,6 +211,7 @@ export function ConsoleStaffPage({
       setRows(result.data);
       setSeatDrafts({});
       setAgentDrafts({});
+      setEndpointDrafts({});
       setReasonDrafts({});
       setErr("");
     } else {
@@ -311,6 +313,21 @@ export function ConsoleStaffPage({
       agentId
         ? `已将「${row.display_name}」绑定到 ${agentId}`
         : `已解除「${row.display_name}」的 Agent 绑定`,
+    );
+  };
+
+  /** 端点补录：管理员直接写入地址，服务端按已审核落库。 */
+  const saveEndpoint = (row: StaffRow) => {
+    const value = (endpointDrafts[row.employee_id] ?? row.endpoint ?? "").trim();
+    if (!value) {
+      setErr("端点地址不能为空");
+      return;
+    }
+    void mutate(
+      row,
+      "endpoint",
+      { endpoint: value },
+      `已更新「${row.display_name}」的端点地址`,
     );
   };
 
@@ -703,29 +720,54 @@ export function ConsoleStaffPage({
               ? [
                   {
                     key: "endpoint",
-                    header: "端点审核",
+                    header: "端点",
                     render: (row: StaffRow) =>
-                      row.account_type !== "agent" || !row.endpoint ? (
-                        <span className="text-[11px] text-mute">—</span>
+                      row.status === "deregistered" ? (
+                        <span className="font-mono text-[11px]">{row.endpoint || "—"}</span>
                       ) : (
-                        <button
-                          type="button"
-                          className="rounded border border-rail px-1.5 py-0.5 text-[11px]"
-                          onClick={() =>
-                            void mutate(
-                              row,
-                              "endpoint",
-                              { approved: !row.endpoint_approved },
-                              row.endpoint_approved
-                                ? `已撤销「${row.display_name}」的端点审核`
-                                : `已通过「${row.display_name}」的端点审核`,
-                            )
-                          }
-                        >
-                          <ConsoleTag tone={row.endpoint_approved ? "ok" : "warn"}>
-                            {row.endpoint_approved ? "已通过" : "待审核"}
-                          </ConsoleTag>
-                        </button>
+                        <span className="flex flex-wrap items-center gap-1">
+                          <input
+                            className="w-44 rounded border border-rail bg-hull px-1.5 py-0.5 font-mono text-[11px] text-frost"
+                            placeholder="http://127.0.0.1:9001"
+                            value={endpointDrafts[row.employee_id] ?? row.endpoint ?? ""}
+                            onChange={(e) =>
+                              setEndpointDrafts((prev) => ({
+                                ...prev,
+                                [row.employee_id]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveEndpoint(row);
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="rounded border border-rail px-1.5 py-0.5 text-[11px] text-mute hover:text-frost"
+                            onClick={() => saveEndpoint(row)}
+                          >
+                            保存
+                          </button>
+                          {row.endpoint && (
+                            <button
+                              type="button"
+                              className="rounded border border-rail px-1.5 py-0.5 text-[11px]"
+                              onClick={() =>
+                                void mutate(
+                                  row,
+                                  "endpoint",
+                                  { approved: !row.endpoint_approved },
+                                  row.endpoint_approved
+                                    ? `已撤销「${row.display_name}」的端点审核`
+                                    : `已通过「${row.display_name}」的端点审核`,
+                                )
+                              }
+                            >
+                              <ConsoleTag tone={row.endpoint_approved ? "ok" : "warn"}>
+                                {row.endpoint_approved ? "已通过" : "待审核"}
+                              </ConsoleTag>
+                            </button>
+                          )}
+                        </span>
                       ),
                   },
                   {

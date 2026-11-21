@@ -26,4 +26,5 @@ def to_screen(view: ScreenView) -> ScreenOut:
         seat_id=view.seat_id,
         online=view.online,
         last_seen=view.last_seen,
+        secret=view.secret,
     )

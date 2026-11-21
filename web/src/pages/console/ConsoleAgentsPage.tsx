@@ -24,6 +24,13 @@ export function ConsoleAgentsPage({ can }: { can: (capability: string) => boolea
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [name, setName] = useState("");
+  const [framework, setFramework] = useState("");
+  const [model, setModel] = useState("");
+  const [endpoint, setEndpoint] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const systemConfig = can("system_config");
 
   const load = async () => {
     setLoading(true);
@@ -44,6 +51,59 @@ export function ConsoleAgentsPage({ can }: { can: (capability: string) => boolea
     void load();
   }, []);
 
+  function resetForm() {
+    setEditingId(null);
+    setName("");
+    setFramework("");
+    setModel("");
+    setEndpoint("");
+  }
+
+  async function saveAgent() {
+    setErr("");
+    setMsg("");
+    if (!name.trim()) {
+      setErr("Agent 名称不能为空");
+      return;
+    }
+    setCreating(true);
+    const body = JSON.stringify({
+      name: name.trim(),
+      framework: framework.trim(),
+      model: model.trim() || null,
+      endpoint: endpoint.trim() || null,
+    });
+    const result = await api<AgentRow>(
+      editingId ? `/api/agents/${encodeURIComponent(editingId)}` : "/api/agents",
+      { method: editingId ? "PATCH" : "POST", body },
+    );
+    setCreating(false);
+    if (!result.ok) {
+      setErr(result.error);
+      return;
+    }
+    if (editingId) {
+      setAgents((rows) =>
+        rows.map((row) => (row.agent_id === editingId ? result.data : row)),
+      );
+      setMsg(`已更新 Agent「${result.data.name}」`);
+    } else {
+      setAgents((rows) => [result.data, ...rows]);
+      setMsg(`已登记 Agent「${result.data.name}」`);
+    }
+    resetForm();
+  }
+
+  function startEdit(agent: AgentRow) {
+    setEditingId(agent.agent_id);
+    setName(agent.name);
+    setFramework(agent.framework);
+    setModel(agent.model ?? "");
+    setEndpoint(agent.endpoint ?? "");
+    setErr("");
+    setMsg("");
+  }
+
   async function toggleAgent(agent: AgentRow) {
     setErr("");
     setMsg("");
@@ -59,6 +119,21 @@ export function ConsoleAgentsPage({ can }: { can: (capability: string) => boolea
     setMsg(`已${result.data.enabled ? "启用" : "停用"}「${result.data.name}」`);
   }
 
+  async function removeAgent(agent: AgentRow) {
+    setErr("");
+    setMsg("");
+    const result = await api(`/api/agents/${encodeURIComponent(agent.agent_id)}`, {
+      method: "DELETE",
+    });
+    if (!result.ok) {
+      setErr(result.error);
+      return;
+    }
+    if (editingId === agent.agent_id) resetForm();
+    setAgents((rows) => rows.filter((row) => row.agent_id !== agent.agent_id));
+    setMsg(`已删除 Agent「${agent.name}」`);
+  }
+
   return (
     <>
       <ConsolePageHeader
@@ -67,6 +142,66 @@ export function ConsoleAgentsPage({ can }: { can: (capability: string) => boolea
       />
       {err && <p className="mb-3 text-xs text-flare">{err}</p>}
       {msg && <p className="mb-3 text-xs text-mint">{msg}</p>}
+
+      {systemConfig && (
+        <ConsoleSection title={editingId ? `编辑 Agent（${editingId}）` : "登记 Agent"}>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-[11px] text-mute">
+              名称
+              <input
+                className="mt-1 block w-40 rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+                placeholder="必填"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </label>
+            <label className="text-[11px] text-mute">
+              框架
+              <input
+                className="mt-1 block w-32 rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+                placeholder="claude / openai"
+                value={framework}
+                onChange={(e) => setFramework(e.target.value)}
+              />
+            </label>
+            <label className="text-[11px] text-mute">
+              模型
+              <input
+                className="mt-1 block w-40 rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+                placeholder="可选"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+              />
+            </label>
+            <label className="flex-1 text-[11px] text-mute">
+              端点
+              <input
+                className="mt-1 block w-full rounded border border-rail bg-hull px-2 py-1 font-mono text-xs text-frost"
+                placeholder="http://127.0.0.1:8000/agent"
+                value={endpoint}
+                onChange={(e) => setEndpoint(e.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              className="hud-btn text-xs disabled:opacity-40"
+              disabled={creating}
+              onClick={() => void saveAgent()}
+            >
+              {creating ? "保存中…" : editingId ? "保存修改" : "登记"}
+            </button>
+            {editingId && (
+              <button
+                type="button"
+                className="rounded border border-rail px-2 py-1 text-xs text-mute hover:text-frost"
+                onClick={resetForm}
+              >
+                取消
+              </button>
+            )}
+          </div>
+        </ConsoleSection>
+      )}
 
       <ConsoleSection title={`岗位（${positions.length}）`}>
         <ConsoleTable
@@ -113,14 +248,32 @@ export function ConsoleAgentsPage({ can }: { can: (capability: string) => boolea
               key: "action",
               header: "操作",
               render: (row) => (
-                <button
-                  type="button"
-                  className="rounded border border-rail px-2 py-0.5 text-[11px] text-mute hover:text-frost disabled:opacity-40"
-                  disabled={!can("system_config")}
-                  onClick={() => void toggleAgent(row)}
-                >
-                  {row.enabled ? "停用" : "启用"}
-                </button>
+                <span className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="rounded border border-rail px-2 py-0.5 text-[11px] text-mute hover:text-frost disabled:opacity-40"
+                    disabled={!can("system_config")}
+                    onClick={() => startEdit(row)}
+                  >
+                    编辑
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-rail px-2 py-0.5 text-[11px] text-mute hover:text-frost disabled:opacity-40"
+                    disabled={!can("system_config")}
+                    onClick={() => void toggleAgent(row)}
+                  >
+                    {row.enabled ? "停用" : "启用"}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-flare/50 px-2 py-0.5 text-[11px] text-flare hover:bg-flare/10 disabled:opacity-40"
+                    disabled={!can("system_config")}
+                    onClick={() => void removeAgent(row)}
+                  >
+                    删除
+                  </button>
+                </span>
               ),
             },
           ]}

@@ -14,7 +14,10 @@ _SAFE = re.compile(r"[^0-9A-Za-z_.-]+")
 
 def recipient_of(event: OutboxEvent) -> str:
     value = str(event.payload.get("recipient_id") or "").strip()
-    return value or "broadcast"
+    if not value:
+        return "broadcast"
+    # 净化接收人标识，防止路径穿越写出收件目录之外。
+    return safe_name(value)
 
 
 def safe_name(value: str) -> str:

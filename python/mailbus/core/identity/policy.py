@@ -18,6 +18,40 @@ _ENDPOINT_GATED: frozenset[Capability] = frozenset(
     {Capability.MESSAGE_SEND, Capability.TASK_DISPATCH, Capability.RESULT_SUBMIT}
 )
 
+# 账号可用状态：offline 仅表示心跳超时（在勤离席），可被心跳恢复，不等于停权；
+# 只有 pending（未激活）与 deregistered（已注销）不可用。
+_USABLE_STATUSES: frozenset[EmployeeStatus] = frozenset(
+    {EmployeeStatus.ACTIVE, EmployeeStatus.OFFLINE}
+)
+
+# 数据范围层级：self < team < global，用于判定“授予范围不得高于发起者”。
+_SCOPE_RANK: dict[DataScope, int] = {
+    DataScope.SELF: 0,
+    DataScope.TEAM: 1,
+    DataScope.GLOBAL: 2,
+}
+
+
+def can_grant_capabilities(
+    actor_caps: frozenset[Capability], requested: frozenset[Capability]
+) -> bool:
+    """授予能力必须是发起者自身能力的子集；ALL 仅超管可授。"""
+    if Capability.ALL in actor_caps:
+        return True
+    if Capability.ALL in requested:
+        return False
+    return requested.issubset(actor_caps)
+
+
+def scope_is_within(actor_scope: DataScope, target_scope: DataScope) -> bool:
+    """目标数据可见范围不得高于发起者自身范围。"""
+    return _SCOPE_RANK[target_scope] <= _SCOPE_RANK[actor_scope]
+
+
+def can_read_sensitive(actor_caps: frozenset[Capability]) -> bool:
+    """是否可见技能来源路径 / Agent 端点等敏感元数据：仅系统配置或全局超管。"""
+    return Capability.ALL in actor_caps or Capability.SYSTEM_CONFIG in actor_caps
+
 
 @dataclass(frozen=True, slots=True)
 class Resource:
@@ -37,7 +71,7 @@ class Decision:
 
 def decide(subject: Subject, action: Capability, resource: Resource | None = None) -> Decision:
     target = resource or Resource(kind="identity")
-    if subject.status is not EmployeeStatus.ACTIVE:
+    if subject.status not in _USABLE_STATUSES:
         return Decision(False, "账号未激活或已注销")
     if Capability.ALL not in subject.capabilities and action not in subject.capabilities:
         return Decision(False, f"缺少能力 {action.value}")
@@ -56,7 +90,7 @@ def decide(subject: Subject, action: Capability, resource: Resource | None = Non
 
 def ensure_active(subject: Subject) -> None:
     """仅要求账号可用；用于「登录即可、无特定能力」的写用例。"""
-    if subject.status is not EmployeeStatus.ACTIVE:
+    if subject.status not in _USABLE_STATUSES:
         raise PermissionDeniedError("账号未激活或已注销")
 
 

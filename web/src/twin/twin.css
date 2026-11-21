@@ -846,6 +846,34 @@
   transform-style: preserve-3d;
 }
 
+/* 任务变化脉冲：工位外圈扩散两道光环 */
+.seat.is-pulsing::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 84px;
+  height: 84px;
+  margin: -42px 0 0 -42px;
+  border: 2px solid rgba(240, 176, 74, 0.9);
+  border-radius: 50%;
+  box-shadow: 0 0 16px rgba(240, 176, 74, 0.5);
+  pointer-events: none;
+  animation: seatPulse 1.2s ease-out 2;
+  z-index: 5;
+}
+
+@keyframes seatPulse {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.95;
+  }
+  100% {
+    transform: scale(1.55);
+    opacity: 0;
+  }
+}
+
 .desk-top {
   position: absolute;
   left: -46px;
@@ -1743,6 +1771,139 @@
   z-index: 1;
 }
 
+/* ── 真实协同结对连线（工位到工位） ───────────────────── */
+.pair-links {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  transform-style: preserve-3d;
+}
+
+.pair-link-svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.pair-link-line {
+  fill: none;
+  stroke: #5f9fdd;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 9 9;
+  animation: pairFlow 1.3s linear infinite;
+  filter: drop-shadow(0 0 4px rgba(95, 159, 221, 0.55));
+}
+
+@keyframes pairFlow {
+  to {
+    stroke-dashoffset: -36;
+  }
+}
+
+.pair-link-node {
+  fill: rgba(95, 159, 221, 0.16);
+  stroke: #5f9fdd;
+  stroke-width: 2;
+  animation: pairPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes pairPulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.pair-link-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 2px 10px;
+  max-width: 220px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(64, 116, 173, 0.94);
+  color: #ecf5ff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 15px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  box-shadow: 0 4px 12px rgba(35, 78, 128, 0.35);
+}
+
+.twin-root.is-night .pair-link-label {
+  background: rgba(96, 148, 205, 0.95);
+}
+
+/* 公开协同消息气泡：挂在结对连线中点上方 */
+.pair-bubble {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 200px;
+  padding: 6px 10px;
+  border-radius: 12px 12px 12px 3px;
+  background: #fffdf8;
+  border: 1px solid rgba(95, 159, 221, 0.45);
+  color: #3c2f24;
+  box-shadow: 0 8px 18px rgba(60, 47, 36, 0.18);
+  animation: pairBubbleIn 0.32s ease-out;
+  z-index: 2;
+}
+
+.pair-bubble::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  background: inherit;
+  border-right: 1px solid rgba(95, 159, 221, 0.45);
+  border-bottom: 1px solid rgba(95, 159, 221, 0.45);
+  transform: rotate(45deg);
+}
+
+.pair-bubble-body {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.pair-bubble-time {
+  font-size: 9px;
+  text-align: right;
+  opacity: 0.55;
+}
+
+@keyframes pairBubbleIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-100% + 6px)) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
+}
+
+.twin-root.is-night .pair-bubble {
+  background: #2b3a4a;
+  border-color: rgba(140, 190, 235, 0.45);
+  color: #e8f1fb;
+}
+
 .walker {
   position: absolute;
   left: 0;
@@ -1751,6 +1912,16 @@
   height: 50px;
   transform-origin: center;
   will-change: transform;
+}
+
+/* walkers-layer 整体 pointer-events:none 以不阻挡下层房间点击；可点击的 walker 单独恢复事件 */
+.walker.is-clickable {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.walker.is-clickable:focus-visible {
+  outline: 2px solid #4f86c6;
+  outline-offset: 2px;
 }
 
 .walker-figure {
@@ -4423,6 +4594,132 @@
   justify-content: flex-end;
   gap: 7px;
 }
+
+/* 抽屉内的任务列表 */
+.drawer-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.drawer-task-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid rgba(120, 90, 60, 0.18);
+  border-radius: 6px;
+  background: transparent;
+  font-size: 11.5px;
+  color: #6b5a47;
+  text-align: left;
+}
+
+.drawer-task-item.is-active {
+  border-color: rgba(120, 90, 60, 0.42);
+  background: rgba(120, 90, 60, 0.08);
+}
+
+.drawer-task-item em {
+  flex-shrink: 0;
+  font-style: normal;
+  font-size: 10.5px;
+  opacity: 0.75;
+}
+
+.drawer-task-empty {
+  font-size: 11.5px;
+  color: #8a7965;
+}
+
+/* 抽屉内的任务节点时间线 */
+.drawer-nodes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.drawer-node {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 15px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #6b5a47;
+}
+
+.drawer-node::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 13px;
+  bottom: -7px;
+  width: 1px;
+  background: rgba(120, 90, 60, 0.18);
+}
+
+.drawer-node:last-child::before {
+  display: none;
+}
+
+.drawer-node i {
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #cfc4b6;
+}
+
+.drawer-node.is-done i {
+  background: #3f9b6a;
+}
+
+.drawer-node.is-skipped i {
+  background: #b9b0a4;
+}
+
+.drawer-node.is-blocked i {
+  background: #c45a3d;
+}
+
+.drawer-node.is-dispatched i {
+  background: #4f86c6;
+}
+
+.drawer-node.is-running i {
+  background: #3d7fc4;
+  box-shadow: 0 0 0 3px rgba(61, 127, 196, 0.18);
+  animation: nodeDotPulse 1.6s ease-in-out infinite;
+}
+
+.drawer-node.is-running span {
+  font-weight: 600;
+  color: #2f6cab;
+}
+
+@keyframes nodeDotPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px rgba(61, 127, 196, 0.14);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(61, 127, 196, 0.06);
+  }
+}
 .drawer-progress {
   display: inline-block;
   width: 96px;
@@ -5334,3 +5631,232 @@
   .floor-detail.has-drawer .collab-dock { display: none; }
 }
 
+
+/* ── 协同结对浮层（真实 /api/collab 数据） ───────────────── */
+.collab-pairs {
+  position: absolute;
+  left: 22px;
+  bottom: 18px;
+  width: 236px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(226, 190, 160, 0.7);
+  background: rgba(255, 252, 246, 0.92);
+  box-shadow: 0 16px 36px rgba(150, 104, 66, 0.16);
+  backdrop-filter: blur(10px);
+  z-index: 4;
+  font-family: var(--font-mono, monospace);
+  color: #4b3a2c;
+}
+
+.collab-pairs ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.collab-pairs li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.collab-pairs li i {
+  font-style: normal;
+  opacity: 0.45;
+}
+
+.collab-pairs li.is-clickable {
+  cursor: pointer;
+  margin: 0 -6px;
+  padding: 3px 6px;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.collab-pairs li.is-clickable:hover,
+.collab-pairs li.is-clickable:focus-visible {
+  background: rgba(79, 134, 198, 0.14);
+  outline: none;
+}
+
+/* ── 侧栏标签页与员工花名册 ───────────────────────────── */
+.side-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.side-tabs button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: rgba(120, 90, 60, 0.07);
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.side-tabs button span {
+  font-weight: 700;
+  opacity: 0.7;
+}
+
+.side-tabs button:hover {
+  background: rgba(120, 90, 60, 0.14);
+}
+
+.side-tabs button.is-active {
+  background: #4b3a2c;
+  border-color: #4b3a2c;
+  color: #fff8ec;
+}
+
+.side-tabs button.is-active span {
+  opacity: 0.9;
+}
+
+.side-tabs button:focus-visible {
+  outline: 2px solid #4f86c6;
+  outline-offset: 1px;
+}
+
+.roster {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.roster-search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid rgba(200, 168, 138, 0.7);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.75);
+  color: inherit;
+  font: inherit;
+  font-size: 11px;
+}
+
+.roster-search:focus {
+  outline: 2px solid rgba(79, 134, 198, 0.55);
+  outline-offset: 0;
+  border-color: #4f86c6;
+}
+
+.roster-filters {
+  display: flex;
+  gap: 4px;
+}
+
+.roster-filters button {
+  flex: 1;
+  padding: 3px 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: rgba(120, 90, 60, 0.07);
+  color: inherit;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.roster-filters button:hover {
+  background: rgba(120, 90, 60, 0.14);
+}
+
+.roster-filters button.is-active {
+  background: rgba(79, 134, 198, 0.16);
+  border-color: rgba(79, 134, 198, 0.45);
+  color: #2f6cab;
+  font-weight: 700;
+}
+
+.roster-list {
+  max-height: 240px;
+}
+
+.roster-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.roster-where {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-size: 10px;
+  opacity: 0.55;
+  white-space: nowrap;
+}
+
+.roster-state {
+  flex: 0 0 auto;
+  font-size: 10px;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.roster-row i.dot {
+  opacity: 1;
+}
+
+.twin-root.is-night .side-tabs button {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.twin-root.is-night .side-tabs button.is-active {
+  background: #f0e4d2;
+  border-color: #f0e4d2;
+  color: #2c2318;
+}
+
+.twin-root.is-night .roster-search {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 214, 168, 0.3);
+  color: #f0e4d2;
+}
+
+.twin-root.is-night .roster-filters button {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.collab-pairs-empty {
+  margin: 0;
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.collab-pairs-hint {
+  margin: 8px 0 0;
+  font-size: 9px;
+  line-height: 1.4;
+  opacity: 0.5;
+  word-break: break-all;
+}
+
+.twin-root.is-night .collab-pairs {
+  background: rgba(28, 36, 56, 0.9);
+  border-color: rgba(255, 214, 168, 0.22);
+  color: #f0e4d2;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
+}

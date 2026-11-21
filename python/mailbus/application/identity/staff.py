@@ -19,14 +19,14 @@ from mailbus.application.identity.dto import (
     employee_view,
 )
 from mailbus.application.events import enqueue_events
-from mailbus.application.identity import inheritance
+from mailbus.application.identity import inheritance, scoping
 from mailbus.application.identity.sessions import issue_session
 from mailbus.core.agents.models import AgentSummary
 from mailbus.core.agents.ports import AgentDirectoryPort
 from mailbus.core.identity import rules
 from mailbus.core.identity.errors import InviteInvalidError
 from mailbus.core.identity.models import Employee, Invite, Registration
-from mailbus.core.identity.policy import Resource, ensure_allowed
+from mailbus.core.identity.policy import Resource, can_grant_capabilities, ensure_allowed
 from mailbus.core.identity.ports import IdentityUnitOfWork
 from mailbus.core.identity.values import EmployeeStatus
 from mailbus.core.org.ports import LayoutSeedPort
@@ -100,6 +100,8 @@ class StaffService:
                 Capability.EMPLOYEE_INVITE,
                 Resource(kind="employee", team_id=target.team_id),
             )
+            if not can_grant_capabilities(actor.capabilities, target.capabilities):
+                raise PermissionDeniedError("不能激活超出自身能力范围的账号")
             updated, events = rules.activate(target, now)
             uow.employees.save(updated)
             token = issue_session(uow, updated, self._ids, now)
@@ -108,7 +110,8 @@ class StaffService:
         return SessionResult(employee=self._view(updated), token=token)
 
     def heartbeat(self, actor: Actor, employee_id: str) -> EmployeeView:
-        if actor.employee_id != employee_id:
+        # 本人可自报；持全量权限的超管可代任意员工续心跳（演示/运维保活）。
+        if actor.employee_id != employee_id and Capability.ALL not in actor.capabilities:
             raise PermissionDeniedError("只能上报自己的心跳")
         now = self._clock.now()
         with self._uow() as uow:
@@ -117,6 +120,12 @@ class StaffService:
             enqueue_events(uow.outbox, events, self._ids, now)
             uow.commit()
         return self._view(updated)
+
+    def seat_of(self, employee_id: str) -> str:
+        """内部查询：员工当前工位；无工位或员工不存在返回空串，供公开事件定位。"""
+        with self._uow() as uow:
+            employee = uow.employees.get(employee_id)
+        return (employee.seat_id or "") if employee is not None else ""
 
     def deregister(self, actor: Actor, employee_id: str, reason: str) -> EmployeeView:
         now = self._clock.now()
@@ -147,6 +156,9 @@ class StaffService:
                 Resource(kind="employee", team_id=target.team_id),
             )
             if seat_id is not None:
+                granted = inheritance.seat_capabilities(uow, seat_id)
+                if not can_grant_capabilities(actor.capabilities, granted):
+                    raise PermissionDeniedError("不能授予超出自身范围的能力")
                 self._ensure_seat_available(uow, seat_id, employee_id)
             updated, events = rules.assign_seat(target, seat_id, now)
             updated, inherited = inheritance.inherit_from_seat(
@@ -176,21 +188,29 @@ class StaffService:
             uow.commit()
         return self._view(updated)
 
-    def review_endpoint(
-        self, actor: Actor, employee_id: str, approved: bool
+    def update_endpoint(
+        self, actor: Actor, employee_id: str, *,
+        endpoint: str | None = None, approved: bool | None = None,
     ) -> EmployeeView:
-        """Agent 端点审核：超管直接开关，不建审批流。"""
+        """端点补录与审核：写地址默认视为已审核；仅传 approved 保留旧语义。"""
         now = self._clock.now()
         with self._uow() as uow:
             target = self._load(uow, employee_id)
             ensure_allowed(
                 actor.to_subject(), Capability.SYSTEM_CONFIG, Resource(kind="employee")
             )
-            updated, events = rules.set_endpoint_approved(target, approved, now)
-            uow.employees.save(updated)
+            if endpoint is not None:
+                target, events = rules.set_endpoint(
+                    target, endpoint, True if approved is None else approved, now
+                )
+            elif approved is not None:
+                target, events = rules.set_endpoint_approved(target, approved, now)
+            else:
+                raise InvalidStateError("请提供端点地址或审核状态")
+            uow.employees.save(target)
             enqueue_events(uow.outbox, events, self._ids, now)
             uow.commit()
-        return self._view(updated)
+        return self._view(target)
 
     def set_manager(self, actor: Actor, employee_id: str, enabled: bool) -> EmployeeView:
         """指定管理者：仅超管可操作；停用只移除 CONSOLE_ADMIN。"""
@@ -211,11 +231,7 @@ class StaffService:
         now = self._clock.now()
         offline = 0
         with self._uow() as uow:
-            for employee in uow.employees.list_all():
-                if employee.status is not EmployeeStatus.ACTIVE:
-                    continue
-                if employee.last_heartbeat is not None and employee.last_heartbeat >= cutoff:
-                    continue
+            for employee in uow.employees.list_stale_active(cutoff):
                 updated, events = rules.mark_offline(employee, now)
                 uow.employees.save(updated)
                 enqueue_events(uow.outbox, events, self._ids, now)
@@ -231,6 +247,7 @@ class StaffService:
         )
         with self._uow() as uow:
             employees = uow.employees.list_all()
+        employees = scoping.filter_by_scope(actor, employees)
         if status == "pending":
             employees = [
                 employee

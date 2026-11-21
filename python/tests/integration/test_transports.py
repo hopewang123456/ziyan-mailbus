@@ -72,6 +72,25 @@ def test_local_channels_stage_and_drain(tmp_path):
     assert unknown.ok is False and unknown.error_code == "unknown_channel"
 
 
+def test_mcp_broadcast_is_drained_once_per_recipient(tmp_path):
+    mcp = McpPullTransport(tmp_path / "mcp")
+    broadcast = OutboxEvent(
+        event_id="evt-broadcast", kind="message.sent", payload={"body": "全体通知"}
+    )
+    assert mcp.send(broadcast).ok is True
+
+    assert [item["event_id"] for item in mcp.drain("emp-1")] == ["evt-broadcast"]
+    assert mcp.drain("emp-1") == []
+    assert [item["event_id"] for item in mcp.drain("emp-2")] == ["evt-broadcast"]
+
+    # 坏文件不拖垮整批拉取，也不被删除，留待排查
+    bad = tmp_path / "mcp" / "pull" / "emp-1" / "evt-bad.json"
+    bad.parent.mkdir(parents=True, exist_ok=True)
+    bad.write_text("{", encoding="utf-8")
+    assert mcp.drain("emp-1") == []
+    assert bad.exists()
+
+
 def test_a2a_without_endpoint_fails_fast():
     result = A2aTransport(lambda _: None).send(_event("a2a"))
     assert result.ok is False

@@ -27,6 +27,7 @@ from mailbus.api.schemas.identity import (
     SuperAdminIn,
 )
 from mailbus.api.schemas.org import TeamIn, TeamOut
+from mailbus.core.shared.errors import RateLimitedError
 from mailbus.core.shared.values import Capability
 
 router = APIRouter(prefix="/api/identity", tags=["identity"])
@@ -34,6 +35,13 @@ router = APIRouter(prefix="/api/identity", tags=["identity"])
 
 def _services(request: Request):
     return request.app.state.container.identity
+
+
+def _rate_limit(request: Request, limiter, key: str) -> None:
+    """匿名写接口按客户端 IP 限流，超限返回 429。"""
+    client = request.client.host if request.client else "unknown"
+    if not limiter.allow(f"{key}:{client}"):
+        raise RateLimitedError("请求过于频繁，请稍后重试")
 
 
 @router.get("/bootstrap", response_model=BootstrapStatusOut, summary="引导向导进度")
@@ -46,6 +54,11 @@ def get_bootstrap(request: Request) -> BootstrapStatusOut:
 )
 @declares(PUBLIC)
 def create_super_admin(payload: SuperAdminIn, request: Request) -> SessionOut:
+    _rate_limit(
+        request,
+        request.app.state.container.public_bootstrap_limiter,
+        "identity.bootstrap.super_admin",
+    )
     result = _services(request).bootstrap.create_super_admin(mapper.super_admin_command(payload))
     return mapper.to_session_out(result)
 
@@ -91,6 +104,11 @@ def list_staff(
 @router.post("/staff", response_model=ApplyOut, status_code=201, summary="提交入伙申请")
 @declares(PUBLIC)
 def apply_staff(payload: ApplyIn, request: Request) -> ApplyOut:
+    _rate_limit(
+        request,
+        request.app.state.container.public_apply_limiter,
+        "identity.apply",
+    )
     result = _services(request).staff.apply(mapper.apply_command(payload))
     return mapper.to_apply_out(result)
 
@@ -163,14 +181,17 @@ def bind_agent(
 
 
 @router.patch(
-    "/staff/{employee_id}/endpoint", response_model=EmployeeOut, summary="审核 Agent 端点"
+    "/staff/{employee_id}/endpoint", response_model=EmployeeOut, summary="补录或审核 Agent 端点"
 )
 @declares(Capability.SYSTEM_CONFIG)
 def review_endpoint(
     employee_id: str, payload: EndpointReviewIn, request: Request
 ) -> EmployeeOut:
-    view = _services(request).staff.review_endpoint(
-        get_actor(request), employee_id, payload.approved
+    view = _services(request).staff.update_endpoint(
+        get_actor(request),
+        employee_id,
+        endpoint=payload.endpoint,
+        approved=payload.approved,
     )
     return mapper.to_employee_out(view)
 

@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from mailbus.api.app import build_app
+from mailbus.api.body_limit import BodySizeLimitMiddleware
 from mailbus.bootstrap.container import Container
 from mailbus.bootstrap.settings import Settings
 
@@ -24,6 +25,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             await container.stop()
 
     app = build_app(lifespan=lifespan)
+    app.add_middleware(
+        BodySizeLimitMiddleware, max_bytes=container.settings.max_body_bytes
+    )
     app.state.container = container
     return app
 

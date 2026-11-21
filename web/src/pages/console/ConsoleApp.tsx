@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { ConsoleLayout, ConsoleNavItem } from "../../components/console/ConsoleLayout";
 import { api, setToken } from "../../lib/api";
-import { ConsoleAccess, useConsoleAccess } from "../../lib/console-access";
+import { ConsoleAccess, useConsoleAccess, useStaffHeartbeat } from "../../lib/console-access";
 import { ConsoleOverviewPage } from "./ConsoleOverviewPage";
 import { ConsoleCollabPage } from "./ConsoleCollabPage";
 import { ConsoleAgentsPage } from "./ConsoleAgentsPage";
@@ -116,17 +116,7 @@ export function ConsoleApp() {
   const employeeId = access.employeeId;
   const [loggingOut, setLoggingOut] = useState(false);
 
-  useEffect(() => {
-    if (access.state !== "allowed" || !employeeId) return;
-    const heartbeat = () => {
-      void api(`/api/identity/staff/${encodeURIComponent(employeeId)}/heartbeat`, {
-        method: "POST",
-      });
-    };
-    heartbeat();
-    const timer = window.setInterval(heartbeat, 60_000);
-    return () => window.clearInterval(timer);
-  }, [access.state, employeeId]);
+  useStaffHeartbeat(employeeId, access.state === "allowed");
 
   if (access.state !== "allowed") {
     return <ConsoleAccessGate access={access} />;

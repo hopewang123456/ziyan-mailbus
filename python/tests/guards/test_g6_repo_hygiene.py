@@ -28,7 +28,7 @@ ALLOWED_FILES = {
     "README.md",
     "README.zh.md",
 }
-_IGNORED_PARTS = {".git", "node_modules", "target", "data", "__pycache__", ".pytest_cache"}
+_IGNORED_PARTS = {".git", "node_modules", "target", "data", "__pycache__", ".pytest_cache", ".p0_data"}
 
 
 def test_root_entries_are_whitelisted() -> None:

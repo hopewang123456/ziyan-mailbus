@@ -61,10 +61,13 @@ def position_command(payload: PositionIn) -> PositionCommand:
 
 
 def seat_command(payload: SeatUpdateIn) -> SeatCommand:
+    provided = payload.model_fields_set
     return make_seat_command(
         team_id=payload.team_id,
         position_id=payload.position_id,
         x=payload.x,
         y=payload.y,
         rotation=payload.rotation,
+        clear_team="team_id" in provided and payload.team_id is None,
+        clear_position="position_id" in provided and payload.position_id is None,
     )

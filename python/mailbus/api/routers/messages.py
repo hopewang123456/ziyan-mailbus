@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Query, Request, Response
 
 from mailbus.api.deps import declares, get_actor
 from mailbus.api.mappers import message as mapper
@@ -20,9 +20,13 @@ def _service(request: Request):
 
 
 @router.get("/inbox", response_model=list[MessageOut], summary="收件箱投影")
-def list_inbox(request: Request) -> list[MessageOut]:
+def list_inbox(
+    request: Request,
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[MessageOut]:
     actor = get_actor(request)
-    views = _service(request).inbox(actor)
+    views = _service(request).inbox(actor, limit=limit, offset=offset)
     return [mapper.to_message_out(view) for view in views]
 
 
@@ -62,3 +66,10 @@ def list_attempts(message_id: str, request: Request) -> list[DeliveryAttemptOut]
     actor = get_actor(request)
     views = _service(request).attempts(actor, message_id)
     return [mapper.to_attempt_out(view) for view in views]
+
+
+@router.delete("/messages/{message_id}", status_code=204, summary="删除消息")
+@declares(Capability.SYSTEM_CONFIG)
+def delete_message(message_id: str, request: Request) -> Response:
+    _service(request).delete(get_actor(request), message_id)
+    return Response(status_code=204)

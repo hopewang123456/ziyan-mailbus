@@ -85,7 +85,7 @@ export function ConsoleMetricsPage({ can }: { can: (capability: string) => boole
   const val = (id: string) => {
     const p = points.find((x) => x.metric === id);
     if (!p) return "—";
-    if (p.error) return "查询失败";
+    if (p.error) return p.error;
     return p.value !== undefined ? p.value : "—";
   };
 

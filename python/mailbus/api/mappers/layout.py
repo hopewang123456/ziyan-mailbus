@@ -82,6 +82,8 @@ def _agent(view: SeatAgentView) -> SeatAgentOut:
         node_state=view.node_state,
         progress_done=view.progress_done,
         progress_total=view.progress_total,
+        pair_id=view.pair_id,
+        partner_name=view.partner_name,
     )
 
 
@@ -138,5 +140,7 @@ def _public_seat(view: LayoutSeatView) -> PublicLayoutSeatOut:
             node_state=agent.node_state,
             progress_done=agent.progress_done,
             progress_total=agent.progress_total,
+            pair_id=agent.pair_id,
+            partner_name=agent.partner_name,
         ),
     )

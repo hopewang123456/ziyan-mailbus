@@ -175,6 +175,32 @@ def set_endpoint_approved(
     return updated, (event,)
 
 
+_MAX_ENDPOINT = 512
+
+
+def set_endpoint(
+    employee: Employee, endpoint: str, approved: bool, now: datetime
+) -> tuple[Employee, tuple[DomainEvent, ...]]:
+    """补录端点：管理员直接写入，并同时给出审核状态。"""
+    if employee.status is EmployeeStatus.DEREGISTERED:
+        raise InvalidStateError("已注销员工不能修改端点")
+    text = endpoint.strip()
+    if not text:
+        raise InvalidStateError("端点地址不能为空")
+    if len(text) > _MAX_ENDPOINT:
+        raise InvalidStateError(f"端点地址不能超过 {_MAX_ENDPOINT} 个字符")
+    if employee.endpoint == text and employee.endpoint_approved == approved:
+        return employee, ()
+    updated = replace(employee, endpoint=text, endpoint_approved=approved)
+    event = _event(
+        "identity.endpoint_updated",
+        employee_id=employee.employee_id,
+        approved=approved,
+        at=now.isoformat(),
+    )
+    return updated, (event,)
+
+
 def set_manager(
     employee: Employee, enabled: bool, now: datetime
 ) -> tuple[Employee, tuple[DomainEvent, ...]]:

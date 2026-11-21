@@ -90,3 +90,31 @@ export function useConsoleAccess(): ConsoleAccess {
 
   return { ...access, retry: () => setRevision((value) => value + 1) };
 }
+
+/** 保持当前登录员工在线：每 60 秒上报心跳；大屏常驻时同样需要。 */
+export function useStaffHeartbeat(employeeId?: string, enabled = true): void {
+  useEffect(() => {
+    if (!enabled || !getToken()) return;
+    let disposed = false;
+    let resolved = employeeId;
+
+    const beat = async () => {
+      if (!resolved) {
+        const me = await api<{ employee_id?: string }>("/api/identity/me");
+        if (disposed || !me.ok) return;
+        resolved = me.data.employee_id;
+        if (!resolved) return;
+      }
+      void api(`/api/identity/staff/${encodeURIComponent(resolved)}/heartbeat`, {
+        method: "POST",
+      });
+    };
+
+    void beat();
+    const timer = window.setInterval(() => void beat(), 60_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [employeeId, enabled]);
+}

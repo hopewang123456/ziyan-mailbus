@@ -16,6 +16,8 @@ class AgentRepository(Protocol):
 
     def list_all(self) -> list[Agent]: ...
 
+    def delete(self, agent_id: str) -> None: ...
+
 
 class AgentDirectoryPort(Protocol):
     """只读摘要查询：员工视图与布局投影使用。"""

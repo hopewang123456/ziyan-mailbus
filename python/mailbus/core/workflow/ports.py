@@ -52,8 +52,14 @@ class TaskRepository(Protocol):
     def nodes(self, task_id: str) -> list[TaskNode]: ...
 
     def list_all(
-        self, state: TaskState | None = None, owner_id: str | None = None
-    ) -> list[Task]: ...
+        self,
+        state: TaskState | None = None,
+        owner_id: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+        viewer_id: str | None = None,
+    ) -> list[Task]:
+        """按创建顺序分页；limit 为空表示不分页，viewer_id 限定为本人相关任务。"""
 
 
 class WorkflowUnitOfWork(Protocol):

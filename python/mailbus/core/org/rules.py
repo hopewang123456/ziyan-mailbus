@@ -46,6 +46,24 @@ def create_position(
     return position, (event,)
 
 
+def delete_team(team: Team, now: datetime) -> tuple[DomainEvent, ...]:
+    return (
+        DomainEvent(
+            kind="org.team_deleted",
+            payload={"team_id": team.team_id, "at": now.isoformat()},
+        ),
+    )
+
+
+def delete_position(position: Position, now: datetime) -> tuple[DomainEvent, ...]:
+    return (
+        DomainEvent(
+            kind="org.position_deleted",
+            payload={"position_id": position.position_id, "at": now.isoformat()},
+        ),
+    )
+
+
 def merge_seat(
     seat_id: str,
     *,

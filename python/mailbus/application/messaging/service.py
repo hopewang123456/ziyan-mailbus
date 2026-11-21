@@ -60,9 +60,11 @@ class MessagingService:
             uow.commit()
         return MessageView.of(message)
 
-    def inbox(self, actor: Actor) -> tuple[MessageView, ...]:
+    def inbox(
+        self, actor: Actor, limit: int = 200, offset: int = 0
+    ) -> tuple[MessageView, ...]:
         with self._uow() as uow:
-            messages = uow.messages.inbox(actor.employee_id)
+            messages = uow.messages.inbox(actor.employee_id, limit, offset)
         return tuple(MessageView.of(message) for message in messages)
 
     def list_messages(
@@ -120,6 +122,21 @@ class MessagingService:
             attempts = uow.messages.attempts(message_id)
         self._ensure_can_read(actor, message)
         return tuple(DeliveryAttemptView.of(attempt) for attempt in attempts)
+
+    def delete(self, actor: Actor, message_id: str) -> None:
+        """删除消息：仅系统配置者可操作；投递尝试一并清理。"""
+        ensure_allowed(
+            actor.to_subject(), Capability.SYSTEM_CONFIG, Resource(kind="message")
+        )
+        now = self._clock.now()
+        with self._uow() as uow:
+            message = uow.messages.get(message_id)
+            if message is None:
+                raise NotFoundError("消息不存在")
+            uow.messages.delete(message_id)
+            event = rules.deletion(message, actor_id=actor.employee_id, now=now)
+            enqueue_events(uow.outbox, (event,), self._ids, now)
+            uow.commit()
 
     @staticmethod
     def _ensure_can_read(actor: Actor, message: Message) -> None:

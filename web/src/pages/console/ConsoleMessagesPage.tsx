@@ -45,6 +45,7 @@ function timeText(value?: string | null) {
 }
 
 export function ConsoleMessagesPage({ can }: { can: (capability: string) => boolean }) {
+  const [scope, setScope] = useState<"all" | "inbox">("all");
   const [agent, setAgent] = useState("");
   const [status, setStatus] = useState<StatusFilter>("");
   const [since, setSince] = useState("");
@@ -68,7 +69,9 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
     if (since) params.set("since", new Date(since).toISOString());
     params.set("limit", String(limit));
     const [m, l] = await Promise.all([
-      api<Message[]>(`/api/messages?${params.toString()}`),
+      scope === "inbox"
+        ? api<Message[]>("/api/inbox")
+        : api<Message[]>(`/api/messages?${params.toString()}`),
       api<LogEntry[]>("/api/log?limit=50"),
     ]);
     setLoading(false);
@@ -82,7 +85,7 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [scope]);
 
   async function openMessage(row: Message) {
     setSelected(row);
@@ -121,11 +124,30 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
     await load();
   }
 
+  async function remove(row: Message) {
+    setErr("");
+    setMsg("");
+    const result = await api(
+      `/api/messages/${encodeURIComponent(row.message_id)}`,
+      { method: "DELETE" },
+    );
+    if (!result.ok) {
+      setErr(result.error);
+      return;
+    }
+    if (selected?.message_id === row.message_id) {
+      setSelected(null);
+      setAttempts([]);
+    }
+    setMsg(`已删除消息 ${row.message_id}`);
+    await load();
+  }
+
   return (
     <>
       <ConsolePageHeader
         title="消息与日志追迹"
-        description="按参与人/状态/时间检索消息；点击行查看投递尝试。普通员工只能看到自己收发的消息"
+        description="全部消息按参与人/状态/时间检索；我的收件箱只显示发给我的消息；点击行查看投递尝试"
       />
 
       <ConsoleSection title="发送消息">
@@ -172,10 +194,22 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
 
       <div className="mb-4 flex flex-wrap items-end gap-2">
         <label className="text-[11px] text-mute">
+          范围
+          <select
+            className="mt-1 block rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+            value={scope}
+            onChange={(e) => setScope(e.target.value as "all" | "inbox")}
+          >
+            <option value="all">全部消息</option>
+            <option value="inbox">我的收件箱</option>
+          </select>
+        </label>
+        <label className="text-[11px] text-mute">
           参与人
           <input
             className="mt-1 block w-40 rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
             placeholder="employee_id"
+            disabled={scope === "inbox"}
             value={agent}
             onChange={(e) => setAgent(e.target.value)}
           />
@@ -184,6 +218,7 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
           投递状态
           <select
             className="mt-1 block rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+            disabled={scope === "inbox"}
             value={status}
             onChange={(e) => setStatus(e.target.value as StatusFilter)}
           >
@@ -198,6 +233,7 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
           <input
             type="datetime-local"
             className="mt-1 block rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+            disabled={scope === "inbox"}
             value={since}
             onChange={(e) => setSince(e.target.value)}
           />
@@ -209,6 +245,7 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
             min={1}
             max={500}
             className="mt-1 block w-20 rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+            disabled={scope === "inbox"}
             value={limit}
             onChange={(e) =>
               setLimit(Math.max(1, Math.min(500, Number(e.target.value) || 100)))
@@ -223,7 +260,7 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
       {err && <p className="mb-3 text-xs text-flare">{err}</p>}
       {msg && <p className="mb-3 text-xs text-mint">{msg}</p>}
 
-      <ConsoleSection title={`消息（${messages.length}）`}>
+      <ConsoleSection title={`${scope === "inbox" ? "收件箱" : "消息"}（${messages.length}）`}>
         <ConsoleTable
           rows={messages}
           rowKey={(row) => row.message_id}
@@ -270,6 +307,23 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
                   value === "delivered" ? "ok" : value === "failed" ? "danger" : "warn";
                 return <ConsoleTag tone={tone}>{value}</ConsoleTag>;
               },
+            },
+            {
+              key: "act",
+              header: "操作",
+              render: (row) => (
+                <button
+                  type="button"
+                  className="rounded border border-flare/50 px-2 py-0.5 text-[11px] text-flare hover:bg-flare/10 disabled:opacity-40"
+                  disabled={!can("system_config")}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void remove(row);
+                  }}
+                >
+                  删除
+                </button>
+              ),
             },
           ]}
         />

@@ -28,15 +28,27 @@ type Overview = {
   skills_enabled: number;
 };
 
-/** 管理中心概览：所有数值均来自 GET /api/overview。 */
+type Health = {
+  status: string;
+  service: string;
+  version: string;
+  schema_version: number;
+};
+
+/** 管理中心概览：所有数值均来自 GET /api/overview，版本信息来自 GET /api/health。 */
 export function ConsoleOverviewPage() {
   const [overview, setOverview] = useState<Overview | null>(null);
+  const [health, setHealth] = useState<Health | null>(null);
+  const [healthErr, setHealthErr] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     let alive = true;
-    void api<Overview>("/api/overview").then((result) => {
+    void Promise.all([
+      api<Overview>("/api/overview"),
+      api<Health>("/api/health"),
+    ]).then(([result, healthResult]) => {
       if (!alive) return;
       setLoading(false);
       if (result.ok) {
@@ -44,6 +56,12 @@ export function ConsoleOverviewPage() {
         setErr("");
       } else {
         setErr(result.error);
+      }
+      if (healthResult.ok) {
+        setHealth(healthResult.data);
+        setHealthErr("");
+      } else {
+        setHealthErr(healthResult.error);
       }
     });
     return () => {
@@ -60,6 +78,15 @@ export function ConsoleOverviewPage() {
         description="员工、Agent、任务、审批、消息与工作流的真实运营快照"
       />
       {err && <p className="mb-4 text-xs text-flare">{err}</p>}
+      {health && (
+        <p className="mb-4 text-[11px] text-mute">
+          服务 {health.service} · v{health.version} · schema {health.schema_version} ·{" "}
+          <span className="text-mint">{health.status}</span>
+        </p>
+      )}
+      {healthErr && (
+        <p className="mb-4 text-[11px] text-flare">健康检查不可用：{healthErr}</p>
+      )}
       {loading && <p className="mb-4 text-xs text-mute">正在加载运营总览…</p>}
 
       <ConsoleSection title="当前工作负载">

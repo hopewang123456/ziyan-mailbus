@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from mailbus.api import sse
 from mailbus.api.deps import get_actor
 from mailbus.api.schemas.observability import LogEntryOut, OverviewOut
+from mailbus.core.shared.errors import CapacityError
 
 router = APIRouter(prefix="/api", tags=["observability"])
 
@@ -24,8 +25,8 @@ def get_overview(request: Request) -> OverviewOut:
 def list_log(
     request: Request, limit: int = Query(default=50, ge=1, le=500)
 ) -> list[LogEntryOut]:
-    get_actor(request)
-    entries = request.app.state.container.log.recent(limit)
+    actor = get_actor(request)
+    entries = request.app.state.container.log.recent(actor, limit)
     return [
         LogEntryOut(
             event_id=entry.event_id,
@@ -40,10 +41,12 @@ def list_log(
 
 @router.get("/stream", summary="运营事件流（SSE）")
 def stream(request: Request) -> StreamingResponse:
-    get_actor(request)
+    actor = get_actor(request)
     container = request.app.state.container
+    if container.stream_gate.full:
+        raise CapacityError("事件流连接数已达上限，请稍后重试")
     return StreamingResponse(
-        sse.event_stream(container),
+        sse.event_stream(container, actor),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

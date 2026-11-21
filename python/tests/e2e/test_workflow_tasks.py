@@ -151,6 +151,102 @@ def test_free_task_uses_same_shape_and_advances_without_nodes(tmp_path):
         assert set(done) == set(task)
 
 
+def test_task_updated_event_is_public_safe(tmp_path):
+    with _client(tmp_path) as client:
+        headers = _headers(_bootstrap(client))
+        captured: list[tuple[str, dict]] = []
+
+        class _SpyBus:
+            def publish(self, kind: str, payload: dict) -> None:
+                captured.append((kind, payload))
+
+        client.app.state.container.tasks._events = _SpyBus()
+
+        workflow_id = _workflow(client, headers)
+        _version(client, headers, workflow_id, ["调研", "撰写"])
+        _publish(client, headers, workflow_id, 1)
+
+        task = _create_task(
+            client, headers, title="季度报告", workflow_id=workflow_id
+        )
+        task_id = task["task_id"]
+
+        dispatched = client.post(
+            f"/api/tasks/{task_id}/dispatch", headers=headers
+        ).json()
+        node_one = dispatched["nodes"][0]["node_id"]
+        _advance(client, headers, task_id, "running", node_one)
+        _advance(client, headers, task_id, "done", node_one)
+
+        events = [payload for kind, payload in captured if kind == "task.updated"]
+        assert len(events) == 4
+        assert {event["task_id"] for event in events} == {task_id}
+        # 公开大屏只拿展示字段，不暴露负责人/创建者/流程标识
+        assert set(events[0]) == {
+            "task_id",
+            "seat_id",
+            "title",
+            "state",
+            "current_node",
+            "node_state",
+            "progress_done",
+            "progress_total",
+            "updated_at",
+        }
+        assert "owner_id" not in events[0]
+        assert events[0]["title"] == "季度报告"
+        assert events[1]["state"] == "queued"
+        assert events[1]["node_state"] == "dispatched"
+        assert events[2]["state"] == "running"
+        assert events[2]["node_state"] == "running"
+        assert events[3]["progress_done"] == 1
+        assert events[3]["progress_total"] == 2
+        assert events[3]["current_node"] == "撰写"
+
+
+def test_public_task_detail_exposes_nodes_without_internals(tmp_path):
+    with _client(tmp_path) as client:
+        session = client.post(
+            "/api/identity/bootstrap/super-admin", json={"display_name": "超级管理员"}
+        )
+        assert session.status_code == 201, session.text
+        headers = _headers(session.json()["token"])
+        workflow_id = _workflow(client, headers)
+        _version(client, headers, workflow_id, ["调研", "撰写"])
+        _publish(client, headers, workflow_id, 1)
+        task = _create_task(
+            client, headers, title="公开节点", workflow_id=workflow_id
+        )
+        task_id = task["task_id"]
+
+        # 契约：公开任务详情无需 owner_id，task_id 不可猜测时即安全
+        detail = client.get(f"/api/public/collab/tasks/{task_id}")
+        assert detail.status_code == 200, detail.text
+        body = detail.json()
+        assert set(body) == {
+            "task_id",
+            "title",
+            "state",
+            "created_at",
+            "updated_at",
+            "nodes",
+        }
+        assert [node["name"] for node in body["nodes"]] == ["调研", "撰写"]
+        for node in body["nodes"]:
+            assert set(node) == {"name", "order", "state"}
+        assert "created_by" not in body
+        assert "owner_id" not in body
+
+        # 传了 owner_id 但不匹配 → 404（不泄露任务存在性）
+        wrong = client.get(
+            f"/api/public/collab/tasks/{task_id}", params={"owner_id": "emp_bogus"}
+        )
+        assert wrong.status_code == 404
+
+        missing = client.get("/api/public/collab/tasks/task_missing")
+        assert missing.status_code == 404
+
+
 def test_workflow_rename_delete_and_version_detail(tmp_path):
     with _client(tmp_path) as client:
         headers = _headers(_bootstrap(client))
@@ -226,3 +322,79 @@ def test_task_writes_require_capability(tmp_path):
         )
         assert denied.status_code == 403
         assert client.get("/api/tasks", headers=_headers(token)).status_code == 200
+
+
+def _scoped_staff(
+    client: TestClient, headers: dict[str, str], capabilities: list[str]
+) -> dict[str, str]:
+    """用邀请码创建指定能力、self 范围的已激活员工。"""
+    invite = client.post(
+        "/api/identity/invites",
+        json={
+            "account_type": "human",
+            "capabilities": capabilities,
+            "data_scope": "self",
+        },
+        headers=headers,
+    )
+    assert invite.status_code == 201, invite.text
+    applied = client.post(
+        "/api/identity/staff",
+        json={
+            "display_name": "范围员工",
+            "account_type": "human",
+            "invite_code": invite.json()["invite_code"],
+        },
+    )
+    assert applied.status_code == 201, applied.text
+    return _headers(applied.json()["token"])
+
+
+def test_task_cancel_is_idempotent_and_scoped(tmp_path):
+    with _client(tmp_path) as client:
+        headers = _headers(_bootstrap(client))
+        workflow_id = _workflow(client, headers)
+        _version(client, headers, workflow_id, ["收集", "执行"])
+        _publish(client, headers, workflow_id, 1)
+        task_id = _create_task(
+            client, headers, title="待取消", workflow_id=workflow_id
+        )["task_id"]
+        client.post(f"/api/tasks/{task_id}/dispatch", headers=headers)
+        _advance(client, headers, task_id, "running")
+
+        assert client.post(f"/api/tasks/{task_id}/cancel").status_code == 401
+        assert (
+            client.post("/api/tasks/task_missing/cancel", headers=headers).status_code
+            == 404
+        )
+        assert (
+            client.post(
+                f"/api/tasks/{task_id}/cancel",
+                headers=_scoped_staff(client, headers, []),
+            ).status_code
+            == 403
+        )
+        assert (
+            client.post(
+                f"/api/tasks/{task_id}/cancel",
+                headers=_scoped_staff(client, headers, ["task_dispatch"]),
+            ).status_code
+            == 403
+        )
+
+        cancelled = client.post(f"/api/tasks/{task_id}/cancel", headers=headers)
+        assert cancelled.status_code == 200, cancelled.text
+        assert cancelled.json()["state"] == "cancelled"
+        assert {node["state"] for node in cancelled.json()["nodes"]} == {"skipped"}
+
+        again = client.post(f"/api/tasks/{task_id}/cancel", headers=headers)
+        assert again.status_code == 200
+        assert again.json()["state"] == "cancelled"
+
+        done_id = _create_task(client, headers, title="已完成")["task_id"]
+        client.post(f"/api/tasks/{done_id}/dispatch", headers=headers)
+        _advance(client, headers, done_id, "running")
+        _advance(client, headers, done_id, "done")
+        settled = client.post(f"/api/tasks/{done_id}/cancel", headers=headers)
+        assert settled.status_code == 200
+        assert settled.json()["state"] == "done"

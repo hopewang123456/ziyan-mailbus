@@ -44,8 +44,8 @@ class SkillPackageOut(BaseModel):
     package_id: str
     name: str
     source_type: str
-    source_uri: str
-    entry: str
+    source_uri: str | None = None
+    entry: str | None = None
     version: str
     enabled: bool
     note: str
@@ -60,8 +60,8 @@ class EffectiveSkillOut(BaseModel):
     package_id: str
     name: str
     source_type: str
-    source_uri: str
-    entry: str
+    source_uri: str | None = None
+    entry: str | None = None
     version: str
     enabled: bool
     note: str

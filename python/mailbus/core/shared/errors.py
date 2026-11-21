@@ -40,3 +40,15 @@ class InvalidStateError(DomainError):
 
 class IdempotencyConflictError(DomainError):
     code = "idempotency_conflict"
+
+
+class CapacityError(DomainError):
+    """服务容量已满（如长连接数超限），调用方稍后重试。"""
+
+    code = "capacity_exceeded"
+
+
+class RateLimitedError(DomainError):
+    """调用过于频繁，需退避后重试。"""
+
+    code = "rate_limited"

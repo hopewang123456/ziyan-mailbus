@@ -5,6 +5,7 @@ import { ConsoleApp } from "../pages/console/ConsoleApp";
 import { ConsoleAgentsPage } from "../pages/console/ConsoleAgentsPage";
 import { ConsoleOverviewPage } from "../pages/console/ConsoleOverviewPage";
 import { ConsoleWorkflowsPage } from "../pages/console/ConsoleWorkflowsPage";
+import { ConsoleCollabPage } from "../pages/console/ConsoleCollabPage";
 import { ConsoleStaffApplyPage } from "../pages/console/ConsoleStaffPage";
 import { isServiceUnavailable } from "../lib/console-access";
 
@@ -146,5 +147,14 @@ describe("新契约页面", () => {
     expect(html).not.toContain("llm_policy");
     expect(html).not.toContain("phases");
     expect(html).not.toContain("gates");
+  });
+
+  it("协同页提供结对、协同消息与大屏遥控，不出现模拟数据", () => {
+    const html = renderToStaticMarkup(<ConsoleCollabPage can={() => true} />);
+    expect(html).toContain("结对协同");
+    expect(html).toContain("大屏遥控");
+    expect(html).toContain("协同管理");
+    expect(html).not.toContain("OFFICE");
+    expect(html).not.toContain("/api/collab/pairs/seed");
   });
 });

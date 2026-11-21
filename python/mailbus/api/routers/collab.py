@@ -20,12 +20,14 @@ from mailbus.api.schemas.collab import (
     ScreenFocusIn,
     ScreenHeartbeatIn,
     ScreenIn,
+    ScreenLeaveIn,
     ScreenOut,
 )
-from mailbus.api.schemas.message import MessageOut
-from mailbus.api.schemas.tasks import TaskOut
+from mailbus.api.schemas.message import MessageOut, PublicMessageOut
+from mailbus.api.schemas.tasks import PublicTaskOut, TaskOut, TaskStateFilter
 from mailbus.api.sse import collab_event_stream
 from mailbus.application.collab.screens import RegisterScreenCommand
+from mailbus.core.shared.errors import CapacityError, NotFoundError, RateLimitedError
 from mailbus.core.shared.values import Capability
 
 router = APIRouter(prefix="/api/collab", tags=["collab"])
@@ -46,6 +48,20 @@ def _messages(request: Request):
 
 def _bus(request: Request):
     return request.app.state.container.collab_events
+
+
+def _ensure_stream_capacity(request: Request) -> None:
+    """SSE 长连接上限：与管理端事件流共享同一闸门，超限返回 503。"""
+    if request.app.state.container.stream_gate.full:
+        raise CapacityError("大屏连接数已达上限，请稍后重试")
+
+
+def _rate_limit(request: Request, endpoint: str) -> None:
+    """公开端点 IP 限速：按 endpoint + client IP 分桶，超限返回 429。"""
+    limiter = request.app.state.container.public_register_limiter
+    client = request.client.host if request.client else "unknown"
+    if not limiter.allow(f"{endpoint}:{client}"):
+        raise RateLimitedError("请求过于频繁，请稍后重试")
 
 
 @router.get("/screens", response_model=list[ScreenOut], summary="大屏列表")
@@ -84,6 +100,7 @@ def heartbeat(
         screen_id,
         None if payload is None else payload.floor_id,
         None if payload is None else payload.seat_id,
+        None if payload is None else payload.secret,
     )
     return OkOut()
 
@@ -104,8 +121,10 @@ def focus(screen_id: str, payload: ScreenFocusIn, request: Request) -> Response:
 @router.get("/stream", summary="管理端大屏 SSE")
 def stream(request: Request) -> StreamingResponse:
     get_actor(request)
+    bus = _bus(request)
+    _ensure_stream_capacity(request)
     return StreamingResponse(
-        collab_event_stream(_bus(request)),
+        collab_event_stream(bus),
         media_type="text/event-stream",
     )
 
@@ -169,11 +188,16 @@ def send_collab_message(payload: CollabMessageIn, request: Request) -> MessageOu
 @router.get("/tasks", response_model=list[TaskOut], summary="协同任务列表")
 def list_collab_tasks(
     request: Request,
-    state: str | None = None,
+    state: TaskStateFilter | None = None,
     owner_id: str | None = None,
+    limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
 ) -> list[TaskOut]:
-    get_actor(request)
-    views = request.app.state.container.tasks.list_tasks(state, owner_id)
+    actor = get_actor(request)
+    viewer = None if Capability.ALL in actor.capabilities else actor.employee_id
+    views = request.app.state.container.tasks.list_tasks(
+        state, owner_id, limit=limit, offset=offset, viewer_id=viewer
+    )
     return [task_mapper.to_task_out(view) for view in views]
 
 
@@ -182,6 +206,10 @@ def list_collab_tasks(
 )
 @declares(PUBLIC)
 def public_register_screen(payload: PublicScreenIn, request: Request) -> ScreenOut:
+    limiter = request.app.state.container.public_register_limiter
+    client = request.client.host if request.client else "unknown"
+    if not limiter.allow(client):
+        raise RateLimitedError("大屏登记过于频繁，请稍后重试")
     view = _service(request).register(
         None,
         RegisterScreenCommand(
@@ -203,10 +231,12 @@ def public_heartbeat(
     request: Request,
     payload: ScreenHeartbeatIn | None = None,
 ) -> OkOut:
+    _rate_limit(request, "screen.heartbeat")
     _service(request).heartbeat(
         screen_id,
         None if payload is None else payload.floor_id,
         None if payload is None else payload.seat_id,
+        None if payload is None else payload.secret,
     )
     return OkOut()
 
@@ -217,35 +247,83 @@ def public_heartbeat(
     summary="大屏离线",
 )
 @declares(PUBLIC)
-def public_leave(screen_id: str, request: Request) -> Response:
-    _service(request).leave(screen_id)
+def public_leave(
+    screen_id: str,
+    request: Request,
+    payload: ScreenLeaveIn | None = None,
+) -> Response:
+    _rate_limit(request, "screen.leave")
+    _service(request).leave(screen_id, None if payload is None else payload.secret)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @public_router.get("/stream", summary="公开大屏 SSE")
 def public_stream(request: Request, screen_id: str | None = None) -> StreamingResponse:
+    bus = _bus(request)
+    _ensure_stream_capacity(request)
     return StreamingResponse(
-        collab_event_stream(_bus(request), screen_id=screen_id),
+        collab_event_stream(bus, screen_id=screen_id, public=True),
         media_type="text/event-stream",
     )
 
 
-@public_router.get("/messages", response_model=list[MessageOut], summary="公开协同消息")
+@public_router.get(
+    "/messages", response_model=list[PublicMessageOut], summary="公开协同消息（脱敏）"
+)
 def public_collab_messages(
     request: Request,
     pair_id: str = Query(min_length=1),
     limit: int = Query(default=50, ge=1, le=200),
-) -> list[MessageOut]:
-    views = request.app.state.container.messages.list_collab(pair_id, limit)
-    return [message_mapper.to_message_out(view) for view in views]
+) -> list[PublicMessageOut]:
+    views = _messages(request).list_public(pair_id, limit)
+    return [message_mapper.to_public_message_out(view) for view in views]
 
 
-@public_router.get("/tasks", response_model=list[TaskOut], summary="公开协同任务")
+@public_router.get(
+    "/tasks", response_model=list[PublicTaskOut], summary="公开协同任务"
+)
 def public_collab_tasks(
     request: Request,
     owner_id: str = Query(min_length=1),
-    state: str | None = None,
+    state: TaskStateFilter | None = None,
     limit: int = Query(default=50, ge=1, le=200),
-) -> list[TaskOut]:
-    views = request.app.state.container.tasks.list_tasks(state, owner_id)[:limit]
-    return [task_mapper.to_task_out(view) for view in views]
+    offset: int = Query(default=0, ge=0),
+) -> list[PublicTaskOut]:
+    views = request.app.state.container.tasks.list_tasks(
+        state, owner_id, limit=limit, offset=offset
+    )
+    return [task_mapper.to_public_task_out(view) for view in views]
+
+
+@public_router.get(
+    "/seats/{seat_id}/tasks",
+    response_model=list[PublicTaskOut],
+    summary="公开工位任务（按工位解析员工，不暴露员工标识）",
+)
+def public_seat_tasks(request: Request, seat_id: str) -> list[PublicTaskOut]:
+    site = request.app.state.container.layout.get()
+    for floor in site.floors:
+        for room in floor.rooms:
+            for seat in room.seats:
+                if seat.seat_id != seat_id:
+                    continue
+                owner_id = seat.agent.agent_id if seat.agent else None
+                if owner_id is None:
+                    return []
+                views = request.app.state.container.tasks.list_tasks(None, owner_id)
+                return [task_mapper.to_public_task_out(view) for view in views]
+    raise NotFoundError("工位不存在")
+
+
+@public_router.get(
+    "/tasks/{task_id}",
+    response_model=PublicTaskOut,
+    summary="公开任务详情（脱敏）；可选 owner_id 绑定，未知返回 404",
+)
+def public_collab_task(
+    request: Request,
+    task_id: str,
+    owner_id: str | None = Query(default=None),
+) -> PublicTaskOut:
+    view = request.app.state.container.tasks.get(task_id, owner_id=owner_id)
+    return task_mapper.to_public_task_out(view)

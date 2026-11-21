@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { seatStats, type Floor, type Room, type Seat } from "./types";
+import { seatStats, type Floor, type PairBubble, type PairLink, type Room, type Seat } from "./types";
 import { Walker, type WalkerRoute } from "./Walker";
 import { chooseDoorWall, elevatorSpot, getDoorCenter } from "./pathfind";
 
@@ -29,12 +29,85 @@ function seedNum(seed: string): number {
   return n;
 }
 
+/** 根据 seatId 在楼层中反查工位与所属房间（用于 walker 点击选中，让走动中的员工也能查看详情）。 */
+function locateSeat(floor: Floor, seatId: string): { seat: Seat; room: Room } | null {
+  for (const room of floor.rooms) {
+    const seat = room.seats.find((s) => s.seat_id === seatId);
+    if (seat) return { seat, room };
+  }
+  return null;
+}
+
+/** 消息时间：当天显示 HH:mm，跨天显示 MM-DD HH:mm（无需定时刷新）。 */
+function formatMessageTime(iso: string | null): string {
+  if (!iso) return "";
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return "";
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const clock = `${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  return at.toDateString() === new Date().toDateString()
+    ? clock
+    : `${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${clock}`;
+}
+
+/**
+ * 真实协同结对连线：在同一楼层两名结对员工工位之间画一条流动虚线，
+ * 中点标注「A ⇄ B」，并在其上方显示该结对最新的公开消息气泡。
+ * 跨楼层结对不画线，只在侧栏展示。
+ */
+function PairLinks({ links, bubbles }: { links?: PairLink[]; bubbles?: PairBubble[] }) {
+  const list = (links ?? []).filter((link) => link.same_floor);
+  if (list.length === 0) return null;
+  return (
+    <div className="pair-links" aria-hidden>
+      {list.map((link) => (
+        <svg key={link.pair_id} className="pair-link-svg" width="100%" height="100%">
+          <line
+            className="pair-link-line"
+            x1={link.ax}
+            y1={link.ay}
+            x2={link.bx}
+            y2={link.by}
+          />
+          <circle className="pair-link-node" cx={link.ax} cy={link.ay} r={10} />
+          <circle className="pair-link-node" cx={link.bx} cy={link.by} r={10} />
+        </svg>
+      ))}
+      {list.map((link) => (
+        <span
+          key={`${link.pair_id}-label`}
+          className="pair-link-label"
+          style={{
+            left: (link.ax + link.bx) / 2,
+            top: (link.ay + link.by) / 2,
+          }}
+        >
+          {link.a_name} ⇄ {link.b_name}
+        </span>
+      ))}
+      {(bubbles ?? []).map((bubble) => (
+        <div
+          key={bubble.message_id}
+          className="pair-bubble"
+          style={{ left: bubble.x, top: bubble.y - 34 }}
+          title={bubble.body}
+        >
+          <span className="pair-bubble-body">{bubble.body}</span>
+          <span className="pair-bubble-time">{formatMessageTime(bubble.created_at)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface SeatViewProps {
   seat: Seat;
   room: Room;
   selected: boolean;
   /** 该员工此刻正在走动，工位上不再渲染坐姿小人 */
   walking?: boolean;
+  /** 任务刚发生变化，工位外圈脉冲提示 */
+  pulsing?: boolean;
   onSelect: (seat: Seat, room: Room) => void;
 }
 
@@ -51,7 +124,14 @@ function pickIdle(): IdleAction {
 }
 
 /** 俯视人物：头发 + 头 + 肩膀，坐在椅子上；姓名牌竖在工位后方。 */
-function SeatView({ seat, room, selected, walking = false, onSelect }: SeatViewProps) {
+function SeatView({
+  seat,
+  room,
+  selected,
+  walking = false,
+  pulsing = false,
+  onSelect,
+}: SeatViewProps) {
   const agent = seat.agent;
   const tag = agent ? pick(TAGS, agent.display_name) : null;
   const [idle, setIdle] = useState<IdleAction>("type");
@@ -75,7 +155,10 @@ function SeatView({ seat, room, selected, walking = false, onSelect }: SeatViewP
   const hasLamp = sn % 3 === 0;
   const hasBox = sn % 4 === 1;
   return (
-    <div className="seat" style={{ left: seat.x, top: seat.y }}>
+    <div
+      className={`seat${pulsing ? " is-pulsing" : ""}`}
+      style={{ left: seat.x - room.x, top: seat.y - room.y }}
+    >
       <div className="desk-top" />
       <div className="desk-monitor" />
       <div className="desk-monitor-stand" />
@@ -307,6 +390,7 @@ function RoomView({
   selectedSeatId,
   walkingSeatIds,
   doorOpen,
+  pulseSeatId,
   onSelectSeat,
 }: {
   room: Room;
@@ -314,6 +398,7 @@ function RoomView({
   selectedSeatId: string | null;
   walkingSeatIds: Set<string>;
   doorOpen?: boolean;
+  pulseSeatId?: string | null;
   onSelectSeat: (seat: Seat, room: Room) => void;
 }) {
   const wall = doorWall;
@@ -356,6 +441,7 @@ function RoomView({
           room={room}
           walking={!!seat.agent && walkingSeatIds.has(seat.seat_id)}
           selected={selectedSeatId === seat.seat_id}
+          pulsing={pulseSeatId === seat.seat_id}
           onSelect={onSelectSeat}
         />
       ))}
@@ -370,6 +456,9 @@ interface FloorSlabProps {
   dimmed: boolean;
   selectedSeatId: string | null;
   walkerRoutes?: WalkerRoute[];
+  pairLinks?: PairLink[];
+  pairBubbles?: PairBubble[];
+  pulseSeatId?: string | null;
   onWalkerArrive?: (routeId: string) => void;
   onSelectFloor: (floorId: string) => void;
   onSelectSeat: (seat: Seat, room: Room) => void;
@@ -443,6 +532,9 @@ export function FloorSlab({
   dimmed,
   selectedSeatId,
   walkerRoutes = [],
+  pairLinks,
+  pairBubbles,
+  pulseSeatId,
   onWalkerArrive,
   onSelectFloor,
   onSelectSeat,
@@ -491,10 +583,13 @@ export function FloorSlab({
               doorOpen={openDoors.has(room.room_id)}
               selectedSeatId={selectedSeatId}
               walkingSeatIds={walkingSeatIds}
+              pulseSeatId={pulseSeatId}
               onSelectSeat={onSelectSeat}
             />
           ))}
           <Elevator floor={floor} open={elevOpen} />
+          {/* 真实结对连线：画在房间之上、走动人物之下 */}
+          <PairLinks links={pairLinks} bubbles={pairBubbles} />
           {/* Walker 层：放在 rooms 之后，保证在房间地板之上、墙之下 */}
           <div className="walkers-layer">
             {walkerRoutes.map((route) => (
@@ -505,6 +600,10 @@ export function FloorSlab({
                 onDoorEnter={enter}
                 onDoorExit={exit}
                 onArrive={onWalkerArrive}
+                onSelect={() => {
+                  const hit = locateSeat(floor, route.seatId);
+                  if (hit) onSelectSeat(hit.seat, hit.room);
+                }}
               />
             ))}
           </div>
@@ -520,6 +619,9 @@ interface FloorDetailViewProps {
   floor: Floor;
   selection: { seat: Seat; room: Room } | null;
   walkerRoutes?: WalkerRoute[];
+  pairLinks?: PairLink[];
+  pairBubbles?: PairBubble[];
+  pulseSeatId?: string | null;
   onWalkerArrive?: (routeId: string) => void;
   onSelectSeat: (seat: Seat, room: Room) => void;
 }
@@ -535,6 +637,9 @@ export function FloorDetailView({
   floor,
   selection,
   walkerRoutes = [],
+  pairLinks,
+  pairBubbles,
+  pulseSeatId,
   onWalkerArrive,
   onSelectSeat,
 }: FloorDetailViewProps) {
@@ -608,11 +713,13 @@ export function FloorDetailView({
                 doorWall={chooseDoorWall(room, floor.rooms)}
                 selectedSeatId={selection?.seat.seat_id ?? null}
                 walkingSeatIds={walkingSeatIds}
+                pulseSeatId={pulseSeatId}
                 doorOpen={openDoors.has(room.room_id)}
                 onSelectSeat={onSelectSeat}
               />
             ))}
             <Elevator floor={floor} open={elevOpen} />
+            <PairLinks links={pairLinks} bubbles={pairBubbles} />
             <div className="walkers-layer">
               {floorWalkers.map((route) => (
                 <Walker
@@ -622,6 +729,10 @@ export function FloorDetailView({
                   doors={doors}
                   onDoorEnter={enter}
                   onDoorExit={exit}
+                  onSelect={() => {
+                    const hit = locateSeat(floor, route.seatId);
+                    if (hit) onSelectSeat(hit.seat, hit.room);
+                  }}
                 />
               ))}
             </div>

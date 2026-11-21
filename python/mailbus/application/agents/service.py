@@ -19,7 +19,8 @@ from mailbus.core.agents import rules
 from mailbus.core.agents.models import Agent
 from mailbus.core.agents.ports import AgentsUnitOfWork
 from mailbus.core.identity.policy import Resource, ensure_allowed
-from mailbus.core.shared.errors import NotFoundError
+from mailbus.core.identity.values import EmployeeStatus
+from mailbus.core.shared.errors import InvalidStateError, NotFoundError
 from mailbus.core.shared.ports import Clock, IdGenerator
 from mailbus.core.shared.values import Capability
 
@@ -68,6 +69,23 @@ class AgentService:
         with self._uow() as uow:
             agents = uow.agents.list_all()
         return tuple(agent_view(agent) for agent in agents)
+
+    def delete(self, actor: Actor, agent_id: str) -> None:
+        """删除台账：仍被未注销员工绑定时拒绝，先解绑再删。"""
+        self._require(actor)
+        now = self._clock.now()
+        with self._uow() as uow:
+            agent = self._load(uow, agent_id)
+            bound = any(
+                employee.agent_id == agent_id
+                and employee.status is not EmployeeStatus.DEREGISTERED
+                for employee in uow.employees.list_all()
+            )
+            if bound:
+                raise InvalidStateError("Agent 仍被员工绑定，请先解除绑定")
+            uow.agents.delete(agent_id)
+            enqueue_events(uow.outbox, rules.delete_agent(agent, now), self._ids, now)
+            uow.commit()
 
     @staticmethod
     def _require(actor: Actor) -> None:

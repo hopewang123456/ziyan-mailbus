@@ -84,6 +84,12 @@ def test_inbox_is_projection_and_overview_log_reflect_messages(tmp_path):
         assert log.status_code == 200, log.text
         assert any(entry["kind"] == "message.sent" for entry in log.json())
 
+        # M10：操作日志含全局事件负载，普通员工没有 log_read 时不得读取
+        assert (
+            client.get("/api/log?limit=20", headers=_headers(token_a)).status_code
+            == 403
+        )
+
         # 重复激活/无关路径保持 404，避免把观测路由误写成写入口
         assert client.get("/api/messages/missing", headers=admin_headers).status_code == 404
 
@@ -138,3 +144,37 @@ def test_message_search_scope_and_filters(tmp_path):
             client.get("/api/messages?status=bogus", headers=admin_headers).status_code
             == 422
         )
+
+
+def test_only_super_admin_deletes_message(tmp_path):
+    with _client(tmp_path) as client:
+        admin_headers = _headers(_bootstrap(client))
+        employee_id, staff_token = _staff(client, admin_headers, "员工甲")
+
+        sent = client.post(
+            "/api/messages",
+            json={"body": "待删除", "recipient_id": employee_id},
+            headers=admin_headers,
+        )
+        assert sent.status_code == 201, sent.text
+        message_id = sent.json()["message_id"]
+
+        denied = client.delete(
+            f"/api/messages/{message_id}", headers=_headers(staff_token)
+        )
+        assert denied.status_code == 403
+        assert client.get(f"/api/messages/{message_id}", headers=admin_headers).status_code == 200
+
+        deleted = client.delete(f"/api/messages/{message_id}", headers=admin_headers)
+        assert deleted.status_code == 204
+        assert client.get(f"/api/messages/{message_id}", headers=admin_headers).status_code == 404
+        assert (
+            client.get(
+                f"/api/messages/{message_id}/attempts", headers=admin_headers
+            ).status_code
+            == 404
+        )
+        assert client.delete(
+            f"/api/messages/{message_id}", headers=admin_headers
+        ).status_code == 404
+        assert client.get("/api/messages", headers=admin_headers).json() == []

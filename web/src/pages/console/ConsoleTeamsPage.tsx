@@ -86,7 +86,10 @@ export function ConsoleTeamsPage({ can }: { can: (capability: string) => boolean
     await load();
   }
 
-  async function assignSeat(seat: Seat, patch: { team_id?: string; position_id?: string }) {
+  async function assignSeat(
+    seat: Seat,
+    patch: { team_id?: string | null; position_id?: string | null },
+  ) {
     setErr("");
     setMsg("");
     const result = await api<Seat>(
@@ -101,6 +104,35 @@ export function ConsoleTeamsPage({ can }: { can: (capability: string) => boolean
       rows.map((row) => (row.seat_id === seat.seat_id ? result.data : row)),
     );
     setMsg(`工位 ${seat.seat_id} 已更新`);
+  }
+
+  async function removeTeam(team: Team) {
+    setErr("");
+    setMsg("");
+    const result = await api(`/api/org/teams/${encodeURIComponent(team.team_id)}`, {
+      method: "DELETE",
+    });
+    if (!result.ok) {
+      setErr(result.error);
+      return;
+    }
+    setMsg(`已删除团队「${team.name}」`);
+    await load();
+  }
+
+  async function removePosition(position: Position) {
+    setErr("");
+    setMsg("");
+    const result = await api(
+      `/api/org/positions/${encodeURIComponent(position.position_id)}`,
+      { method: "DELETE" },
+    );
+    if (!result.ok) {
+      setErr(result.error);
+      return;
+    }
+    setMsg(`已删除岗位「${position.name}」`);
+    await load();
   }
 
   return (
@@ -146,6 +178,20 @@ export function ConsoleTeamsPage({ can }: { can: (capability: string) => boolean
               render: (row) => <span className="font-mono text-[11px]">{row.team_id}</span>,
             },
             { key: "name", header: "名称", render: (row) => row.name },
+            {
+              key: "act",
+              header: "操作",
+              render: (row) => (
+                <button
+                  type="button"
+                  className="rounded border border-flare/50 px-2 py-0.5 text-[11px] text-flare hover:bg-flare/10 disabled:opacity-40"
+                  disabled={!can("org_manage")}
+                  onClick={() => void removeTeam(row)}
+                >
+                  删除
+                </button>
+              ),
+            },
           ]}
         />
       </ConsoleSection>
@@ -196,6 +242,20 @@ export function ConsoleTeamsPage({ can }: { can: (capability: string) => boolean
                 </span>
               ),
             },
+            {
+              key: "act",
+              header: "操作",
+              render: (row) => (
+                <button
+                  type="button"
+                  className="rounded border border-flare/50 px-2 py-0.5 text-[11px] text-flare hover:bg-flare/10 disabled:opacity-40"
+                  disabled={!can("org_manage")}
+                  onClick={() => void removePosition(row)}
+                >
+                  删除
+                </button>
+              ),
+            },
           ]}
         />
       </ConsoleSection>
@@ -229,7 +289,7 @@ export function ConsoleTeamsPage({ can }: { can: (capability: string) => boolean
                   value={row.team_id || ""}
                   disabled={!can("org_manage")}
                   onChange={(e) => {
-                    if (e.target.value) void assignSeat(row, { team_id: e.target.value });
+                    void assignSeat(row, { team_id: e.target.value || null });
                   }}
                 >
                   <option value="">未分配</option>
@@ -250,9 +310,7 @@ export function ConsoleTeamsPage({ can }: { can: (capability: string) => boolean
                   value={row.position_id || ""}
                   disabled={!can("org_manage")}
                   onChange={(e) => {
-                    if (e.target.value) {
-                      void assignSeat(row, { position_id: e.target.value });
-                    }
+                    void assignSeat(row, { position_id: e.target.value || null });
                   }}
                 >
                   <option value="">未分配</option>

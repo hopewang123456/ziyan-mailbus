@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime
 
+from mailbus.application.collab.pairs import PairService
 from mailbus.application.identity.dto import OccupantView
 from mailbus.application.identity.staff import StaffService
 from mailbus.application.org.dto import (
@@ -21,17 +22,11 @@ from mailbus.core.agents.ports import AgentDirectoryPort
 from mailbus.core.identity.values import EmployeeStatus
 from mailbus.core.org.models import LayoutDef, SeatAssignment
 from mailbus.core.org.ports import LayoutSeedPort, OrgUnitOfWork
-from mailbus.core.workflow.values import TaskState
 
 _STATUS_BY_EMPLOYEE = {
     EmployeeStatus.ACTIVE: "online",
     EmployeeStatus.OFFLINE: "offline",
 }
-
-# 「手上有业务」：已派发（queued）/执行中/阻塞 的任务都算忙。
-_BUSY_TASK_STATES = frozenset(
-    {TaskState.QUEUED.value, TaskState.RUNNING.value, TaskState.BLOCKED.value}
-)
 
 _DONE_NODE_STATES = frozenset({"done", "skipped"})
 _ACTIVE_NODE_STATES = ("running", "dispatched", "blocked")
@@ -45,12 +40,14 @@ class LayoutQuery:
         staff: StaffService,
         tasks: TaskService,
         agents: AgentDirectoryPort,
+        pairs: PairService,
     ) -> None:
         self._uow = uow_factory
         self._seed = seed
         self._staff = staff
         self._tasks = tasks
         self._agents = agents
+        self._pairs = pairs
 
     def get(self) -> OfficeSiteView:
         seed = self._seed.load()
@@ -68,7 +65,19 @@ class LayoutQuery:
         summaries = self._agents.summaries(
             tuple(occupant.agent_id for occupant in occupants.values() if occupant.agent_id)
         )
-        busy = self._busy_tasks()
+        busy = self._tasks.busy_by_owner()
+        names = {
+            occupant.employee_id: occupant.display_name
+            for occupant in occupants.values()
+        }
+        partners: dict[str, tuple[str, str]] = {}
+        for pair in self._pairs.active_pairs():
+            partners.setdefault(
+                pair.initiator_id, (pair.pair_id, names.get(pair.partner_id, ""))
+            )
+            partners.setdefault(
+                pair.partner_id, (pair.pair_id, names.get(pair.initiator_id, ""))
+            )
         floors = tuple(
             _floor_view(
                 floor,
@@ -78,6 +87,7 @@ class LayoutQuery:
                 position_names,
                 busy,
                 summaries,
+                partners,
             )
             for floor in seed.floors
         )
@@ -88,13 +98,6 @@ class LayoutQuery:
             floors=floors,
         )
 
-    def _busy_tasks(self) -> dict[str, TaskView]:
-        busy: dict[str, TaskView] = {}
-        for task in self._tasks.list_tasks():
-            if task.owner_id and task.state in _BUSY_TASK_STATES:
-                busy.setdefault(task.owner_id, task)
-        return busy
-
 
 def _floor_view(
     floor,
@@ -104,6 +107,7 @@ def _floor_view(
     position_names: dict[str, str],
     busy: dict[str, TaskView],
     summaries: dict[str, AgentSummary],
+    partners: dict[str, tuple[str, str]],
 ) -> LayoutFloorView:
     return LayoutFloorView(
         floor_id=floor.floor_id,
@@ -119,6 +123,7 @@ def _floor_view(
                 position_names,
                 busy,
                 summaries,
+                partners,
             )
             for room in floor.rooms
         ),
@@ -134,11 +139,24 @@ def _room_view(
     position_names: dict[str, str],
     busy: dict[str, TaskView],
     summaries: dict[str, AgentSummary],
+    partners: dict[str, tuple[str, str]],
 ) -> LayoutRoomView:
     seats = []
     for seat in room.seats:
         assignment = overrides.get(seat.seat_id)
         occupant = occupants.get(seat.seat_id)
+        agent = None
+        if occupant is not None:
+            agent = _agent_view(
+                occupant,
+                team_names,
+                position_names,
+                busy.get(occupant.employee_id),
+                summaries.get(occupant.agent_id or ""),
+                assignment.team_id if assignment else None,
+                assignment.position_id if assignment else None,
+                partners.get(occupant.employee_id, ("", "")),
+            )
         seats.append(
             LayoutSeatView(
                 seat_id=seat.seat_id,
@@ -149,19 +167,7 @@ def _room_view(
                     if assignment and assignment.rotation is not None
                     else seat.rotation
                 ),
-                agent=(
-                    _agent_view(
-                        occupant,
-                        team_names,
-                        position_names,
-                        busy.get(occupant.employee_id),
-                        summaries.get(occupant.agent_id or ""),
-                        assignment.team_id if assignment else None,
-                        assignment.position_id if assignment else None,
-                    )
-                    if occupant is not None
-                    else None
-                ),
+                agent=agent,
             )
         )
     return LayoutRoomView(
@@ -184,6 +190,7 @@ def _agent_view(
     summary: AgentSummary | None,
     seat_team_id: str | None,
     seat_position_id: str | None,
+    partner: tuple[str, str],
 ) -> SeatAgentView:
     status = _status_of(occupant.status)
     if status != "offline" and task is not None:
@@ -208,6 +215,8 @@ def _agent_view(
         node_state=node_state,
         progress_done=done,
         progress_total=total,
+        pair_id=partner[0],
+        partner_name=partner[1],
     )
 
 

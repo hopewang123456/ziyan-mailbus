@@ -70,27 +70,36 @@ services:
     restart: unless-stopped
 
   hermes:
-    build:
-      context: ./hermes-base
-      args:
-        HERMES_VERSION: ""
+    # Official image (Tier 1 install). Data lives under /opt/data.
+    image: nousresearch/hermes-agent:${HERMES_IMAGE_TAG:-latest}
+    ports:
+      - "${HERMES_DASHBOARD_PORT:-9119}:9119"
     networks:
       - mailbus-public
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - hermes-data:/home/hermes/.hermes
+      - hermes-data:/opt/data
       - mailbus-store:/mailbus/store
     environment:
-      - HERMES_HOME=/home/hermes/.hermes
+      - HERMES_HOME=/opt/data
       - AGENTMEMORY_URL=http://iii-engine:3111
       - TZ=UTC
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_HOST=0.0.0.0
+      - HERMES_DASHBOARD_PORT=9119
+      - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=${HERMES_DASHBOARD_USER:-admin}
+      - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${HERMES_DASHBOARD_PASSWORD:-mailbus-admin}
+      # A2A inbound stays loopback-only unless a token is supplied.
+      - A2A_HOST=${A2A_HOST:-127.0.0.1}
+      - A2A_PORT=${A2A_PORT:-9900}
+      - A2A_BEARER_TOKEN=${A2A_BEARER_TOKEN:-}
     depends_on:
       - mailbus
       - iii-engine
     restart: unless-stopped
-    command: ["tail", "-f", "/dev/null"]
+    command: ["gateway", "run"]
 
   openclaw:
     build:

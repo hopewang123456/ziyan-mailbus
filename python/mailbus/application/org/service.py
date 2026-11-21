@@ -20,11 +20,11 @@ from mailbus.application.org.dto import (
     seat_view,
     team_view,
 )
-from mailbus.core.identity.policy import Resource, ensure_allowed
+from mailbus.core.identity.policy import Resource, can_grant_capabilities, ensure_allowed
 from mailbus.core.org import rules
 from mailbus.core.org.models import LayoutDef, SeatAssignment
 from mailbus.core.org.ports import LayoutSeedPort, OrgUnitOfWork
-from mailbus.core.shared.errors import NotFoundError
+from mailbus.core.shared.errors import InvalidStateError, NotFoundError, PermissionDeniedError
 from mailbus.core.shared.ports import Clock, IdGenerator
 from mailbus.core.shared.values import Capability
 
@@ -80,6 +80,8 @@ class OrgService:
         ensure_allowed(
             actor.to_subject(), Capability.ORG_MANAGE, Resource(kind="position")
         )
+        if not can_grant_capabilities(actor.capabilities, frozenset(cmd.capabilities)):
+            raise PermissionDeniedError("不能授予超出自身范围的能力")
         now = self._clock.now()
         position_id = cmd.position_id or self._ids.new("pos")
         with self._uow() as uow:
@@ -93,6 +95,40 @@ class OrgService:
             enqueue_events(uow.outbox, events, self._ids, now)
             uow.commit()
         return position_view(position)
+
+    def delete_team(self, actor: Actor, team_id: str) -> None:
+        """删除团队：仍被工位引用时拒绝，避免布局出现悬空归属。"""
+        ensure_allowed(
+            actor.to_subject(), Capability.ORG_MANAGE, Resource(kind="team")
+        )
+        now = self._clock.now()
+        with self._uow() as uow:
+            team = uow.teams.get(team_id)
+            if team is None:
+                raise NotFoundError("团队不存在")
+            if any(seat.team_id == team_id for seat in uow.seats.list_all()):
+                raise InvalidStateError("团队仍被工位引用，请先解除工位归属")
+            uow.teams.delete(team_id)
+            enqueue_events(uow.outbox, rules.delete_team(team, now), self._ids, now)
+            uow.commit()
+
+    def delete_position(self, actor: Actor, position_id: str) -> None:
+        """删除岗位：仍被工位引用时拒绝；已授予的能力保持只增不减。"""
+        ensure_allowed(
+            actor.to_subject(), Capability.ORG_MANAGE, Resource(kind="position")
+        )
+        now = self._clock.now()
+        with self._uow() as uow:
+            position = uow.positions.get(position_id)
+            if position is None:
+                raise NotFoundError("岗位不存在")
+            if any(seat.position_id == position_id for seat in uow.seats.list_all()):
+                raise InvalidStateError("岗位仍被工位引用，请先解除工位归属")
+            uow.positions.delete(position_id)
+            enqueue_events(
+                uow.outbox, rules.delete_position(position, now), self._ids, now
+            )
+            uow.commit()
 
     def list_seats(self) -> tuple[SeatView, ...]:
         seed = self._seed.load()
@@ -117,6 +153,12 @@ class OrgService:
             raise NotFoundError("工位不存在")
         with self._uow() as uow:
             existing = uow.seats.get(seat_id)
+            if cmd.position_id is not None and not cmd.clear_position:
+                position = uow.positions.get(cmd.position_id)
+                if position is not None and not can_grant_capabilities(
+                    actor.capabilities, position.capabilities
+                ):
+                    raise PermissionDeniedError("不能授予超出自身范围的能力")
             assignment = self._merge(seat_id, existing, cmd)
             uow.seats.upsert(assignment)
             uow.commit()
@@ -130,9 +172,17 @@ class OrgService:
     ) -> SeatAssignment:
         return rules.merge_seat(
             seat_id,
-            team_id=cmd.team_id if cmd.team_id is not None else _field(existing, "team_id"),
+            team_id=(
+                None
+                if cmd.clear_team
+                else cmd.team_id
+                if cmd.team_id is not None
+                else _field(existing, "team_id")
+            ),
             position_id=(
-                cmd.position_id
+                None
+                if cmd.clear_position
+                else cmd.position_id
                 if cmd.position_id is not None
                 else _field(existing, "position_id")
             ),

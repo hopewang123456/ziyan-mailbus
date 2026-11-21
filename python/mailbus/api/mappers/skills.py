@@ -23,13 +23,15 @@ from mailbus.application.skills.dto import (
 )
 
 
-def to_package_out(view: SkillPackageView) -> SkillPackageOut:
+def to_package_out(
+    view: SkillPackageView, *, include_sensitive: bool = True
+) -> SkillPackageOut:
     return SkillPackageOut(
         package_id=view.package_id,
         name=view.name,
         source_type=view.source_type,
-        source_uri=view.source_uri,
-        entry=view.entry,
+        source_uri=view.source_uri if include_sensitive else None,
+        entry=view.entry if include_sensitive else None,
         version=view.version,
         enabled=view.enabled,
         note=view.note,
@@ -49,13 +51,15 @@ def _binding(view: SkillBindingView) -> SkillBindingOut:
     )
 
 
-def to_effective_out(view: EffectiveSkillView) -> EffectiveSkillOut:
+def to_effective_out(
+    view: EffectiveSkillView, *, include_sensitive: bool = True
+) -> EffectiveSkillOut:
     return EffectiveSkillOut(
         package_id=view.package_id,
         name=view.name,
         source_type=view.source_type,
-        source_uri=view.source_uri,
-        entry=view.entry,
+        source_uri=view.source_uri if include_sensitive else None,
+        entry=view.entry if include_sensitive else None,
         version=view.version,
         enabled=view.enabled,
         note=view.note,

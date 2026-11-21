@@ -3,6 +3,13 @@ import type { Floor, Seat, SeatAgent } from "./types";
 import { planRoute, type Point, type WalkerRoute } from "./Walker";
 import { elevatorSpot, pointBlocked, roomSpot } from "./pathfind";
 
+/** 真实协同结对：两个工位上的员工被派去同一间会议室/休息区面对面讨论。 */
+export interface RealPairLink {
+  pairId: string;
+  aSeatId: string;
+  bSeatId: string;
+}
+
 interface UseWalkersOptions {
   /** 最多同时在路上走多少个。 */
   maxConcurrent?: number;
@@ -10,7 +17,21 @@ interface UseWalkersOptions {
   tickMs?: number;
   /** 每个楼层是否启用（focused 才启用，避免 overview 渲染 walker）。 */
   enabled?: boolean;
+  /** 真实协同结对：优先派这两人结伴走动；存在时不再生成随机结对。 */
+  realPairs?: RealPairLink[];
 }
+
+/** 在楼层里按 seatId 找到工位。 */
+function findSeat(floor: Floor, seatId: string): Seat | null {
+  for (const room of floor.rooms) {
+    const seat = room.seats.find((s) => s.seat_id === seatId);
+    if (seat) return seat;
+  }
+  return null;
+}
+
+/** 每人离座后至少回座待这么久，保证员工大部分时间都在工位上。 */
+const LEAVE_COOLDOWN_MS = 45_000;
 
 /**
  * 管理一组 Walker 的活动。
@@ -18,7 +39,7 @@ interface UseWalkersOptions {
  */
 export function useWalkers(
   floors: Floor[],
-  { maxConcurrent = 8, tickMs = 1600, enabled = true }: UseWalkersOptions = {},
+  { maxConcurrent = 8, tickMs = 1600, enabled = true, realPairs = [] }: UseWalkersOptions = {},
 ) {
   const [routes, setRoutes] = useState<WalkerRoute[]>([]);
   const routesRef = useRef<WalkerRoute[]>([]);
@@ -39,7 +60,68 @@ export function useWalkers(
 
   const pairSeqRef = useRef(0);
 
-  /** 结对协同：两个人走到同一间会议室/休息区，面对面讨论。 */
+  /** 真实结对列表用 ref 保存，避免结对变化导致 tick 定时器重建。 */
+  const realPairsRef = useRef<RealPairLink[]>(realPairs);
+  realPairsRef.current = realPairs;
+  /** 每个真实结对上次结伴走动的时间，避免刚回座又立刻出发。 */
+  const pairCooldownRef = useRef<Map<string, number>>(new Map());
+  /** seat_id → 上次离座时间：空闲员工也要先在工位待够时间才会走动。 */
+  const leaveAtRef = useRef<Map<string, number>>(new Map());
+
+  /** 把两人一起派到同一间会议室/休息区，面对面讨论。 */
+  const sendPair = useCallback(
+    (floor: Floor, a: Seat, b: Seat, pairId: string): boolean => {
+      if (!a.agent || !b.agent) return false;
+      const targets = floor.rooms.filter(
+        (r) => r.kind === "meeting" || r.kind === "lounge",
+      );
+      if (!targets.length) return false;
+      // 优先会议室，其次休息区
+      const ordered = [...targets].sort(
+        (x, y) => (x.kind === "meeting" ? -1 : 1) - (y.kind === "meeting" ? -1 : 1),
+      );
+      for (const room of ordered) {
+        const cx = room.x + room.w / 2;
+        const cy = room.y + room.h / 2;
+        const spots: Array<[Point, Point]> =
+          room.kind === "meeting"
+            ? [
+                [{ x: cx - 114, y: cy + 38 }, { x: cx + 114, y: cy + 38 }],
+                [{ x: cx - 114, y: cy - 24 }, { x: cx + 114, y: cy - 24 }],
+              ]
+            : [
+                [{ x: cx - 118, y: cy + 6 }, { x: cx + 118, y: cy + 6 }],
+                [{ x: cx - 60, y: cy + 78 }, { x: cx + 60, y: cy + 78 }],
+              ];
+        for (const [pa, pb] of spots) {
+          if (pointBlocked(floor, pa.x, pa.y) || pointBlocked(floor, pb.x, pb.y)) continue;
+          const routeA = planRoute(a.agent, a, floor, {
+            to: pa,
+            action: "pair",
+            actionDuration: 9500 + Math.random() * 3000,
+            pairId,
+            faceX: pb.x,
+          });
+          const routeB = planRoute(b.agent, b, floor, {
+            to: pb,
+            action: "pair",
+            actionDuration: 9500 + Math.random() * 3000,
+            pairId,
+            faceX: pa.x,
+          });
+          if (!routeA || !routeB) continue;
+          busyRef.current.set(a.seat_id, 1);
+          busyRef.current.set(b.seat_id, 1);
+          setRoutes((prev) => [...prev, routeA, routeB]);
+          return true;
+        }
+      }
+      return false;
+    },
+    [],
+  );
+
+  /** 随机结对：两人走到同一间会议室/休息区，面对面讨论（无真实结对时的氛围动画）。 */
   const startPair = useCallback(
     (onlyFloor?: Floor): boolean => {
       const pool = onlyFloor ? [onlyFloor] : floors;
@@ -53,95 +135,61 @@ export function useWalkers(
           }
         }
         if (free.length < 2) continue;
-        const targets = floor.rooms.filter(
-          (r) => r.kind === "meeting" || r.kind === "lounge",
-        );
-        if (!targets.length) continue;
+        if (!floor.rooms.some((r) => r.kind === "meeting" || r.kind === "lounge")) continue;
 
         for (let attempt = 0; attempt < 10; attempt += 1) {
           const a = free[Math.floor(Math.random() * free.length)];
           const b = free[Math.floor(Math.random() * free.length)];
           if (a.seat.seat_id === b.seat.seat_id) continue;
-          const room = targets[Math.floor(Math.random() * targets.length)];
-          const cx = room.x + room.w / 2;
-          const cy = room.y + room.h / 2;
-          const spots: Array<[Point, Point]> =
-            room.kind === "meeting"
-              ? [
-                  [{ x: cx - 114, y: cy + 38 }, { x: cx + 114, y: cy + 38 }],
-                  [{ x: cx - 114, y: cy - 24 }, { x: cx + 114, y: cy - 24 }],
-                ]
-              : [
-                  [{ x: cx - 118, y: cy + 6 }, { x: cx + 118, y: cy + 6 }],
-                  [{ x: cx - 60, y: cy + 78 }, { x: cx + 60, y: cy + 78 }],
-                ];
-          for (const [pa, pb] of spots) {
-            if (pointBlocked(floor, pa.x, pa.y) || pointBlocked(floor, pb.x, pb.y)) continue;
-            const pairId = `pair-${Date.now()}-${pairSeqRef.current}`;
-            pairSeqRef.current += 1;
-            const routeA = planRoute(a.seat.agent!, a.seat, floor, {
-              to: pa,
-              action: "pair",
-              actionDuration: 9500 + Math.random() * 3000,
-              pairId,
-              faceX: pb.x,
-            });
-            const routeB = planRoute(b.seat.agent!, b.seat, floor, {
-              to: pb,
-              action: "pair",
-              actionDuration: 9500 + Math.random() * 3000,
-              pairId,
-              faceX: pa.x,
-            });
-            if (!routeA || !routeB) continue;
-            busyRef.current.set(a.seat.seat_id, 1);
-            busyRef.current.set(b.seat.seat_id, 1);
-            setRoutes((prev) => [...prev, routeA, routeB]);
-            return true;
-          }
+          const pairId = `pair-${Date.now()}-${pairSeqRef.current}`;
+          pairSeqRef.current += 1;
+          if (sendPair(floor, a.seat, b.seat, pairId)) return true;
         }
       }
       return false;
     },
-    [floors],
-  );
-
-  /** 任务协同：把任务负责人派到会议室推进（带任务徽标）。 */
-  const startTask = useCallback(
-    (seatId: string, label: string): boolean => {
-      if (busyRef.current.has(seatId)) return false;
-      for (const floor of floors) {
-        for (const room of floor.rooms) {
-          const seat = room.seats.find((s) => s.seat_id === seatId);
-          if (!seat?.agent) continue;
-          const targets = floor.rooms.filter(
-            (r) => r.kind === "meeting" || r.kind === "lounge",
-          );
-          const target = targets[0] ?? room;
-          const route = planRoute(seat.agent, seat, floor, {
-            to: roomSpot(floor, target),
-            action: "meeting",
-            actionDuration: 9000,
-            taskLabel: label,
-          });
-          if (!route) continue;
-          busyRef.current.set(seatId, 1);
-          setRoutes((prev) => [...prev, route]);
-          return true;
-        }
-      }
-      return false;
-    },
-    [floors],
+    [floors, sendPair],
   );
 
   const tick = useCallback(() => {
     if (!enabled) return;
     if (routesRef.current.length >= maxConcurrent) return;
 
-    // 偶发结对：两个人走到同一间会议室/休息区面对面讨论
+    const hasPairRoute = routesRef.current.some((r) => r.pairId);
+    const now = Date.now();
+    const canLeave = (seatId: string) =>
+      now - (leaveAtRef.current.get(seatId) ?? 0) >= LEAVE_COOLDOWN_MS;
+
+    // 真实结对优先：把真实协同的两人一起派到会议室/休息区面对面讨论。
     if (
-      !routesRef.current.some((r) => r.pairId) &&
+      !hasPairRoute &&
+      routesRef.current.length <= maxConcurrent - 2 &&
+      realPairsRef.current.length > 0
+    ) {
+      for (const link of realPairsRef.current) {
+        if (now - (pairCooldownRef.current.get(link.pairId) ?? 0) < 45_000) continue;
+        for (const floor of floors) {
+          const a = findSeat(floor, link.aSeatId);
+          const b = findSeat(floor, link.bSeatId);
+          if (!a || !b || !a.agent || !b.agent) continue;
+          // 只有两人都空闲（online）才结伴离座；忙碌的人默认坐定在工位。
+          if (a.agent.status !== "online" || b.agent.status !== "online") continue;
+          if (busyRef.current.has(a.seat_id) || busyRef.current.has(b.seat_id)) continue;
+          if (!canLeave(a.seat_id) || !canLeave(b.seat_id)) continue;
+          if (sendPair(floor, a, b, link.pairId)) {
+            pairCooldownRef.current.set(link.pairId, now);
+            leaveAtRef.current.set(a.seat_id, now);
+            leaveAtRef.current.set(b.seat_id, now);
+            return;
+          }
+        }
+      }
+    }
+
+    // 偶发结对：有真实结对时不再生成随机结对，避免与真实数据冲突
+    if (
+      !hasPairRoute &&
+      realPairsRef.current.length === 0 &&
       routesRef.current.length <= maxConcurrent - 2 &&
       Math.random() < 0.05 &&
       startPair()
@@ -154,7 +202,11 @@ export function useWalkers(
     for (const floor of floors) {
       for (const room of floor.rooms) {
         for (const seat of room.seats) {
-          if (seat.agent?.status === "online" && !busyRef.current.has(seat.seat_id)) {
+          if (
+            seat.agent?.status === "online" &&
+            !busyRef.current.has(seat.seat_id) &&
+            canLeave(seat.seat_id)
+          ) {
             candidates.push({ agent: seat.agent, floor, seat });
           }
         }
@@ -172,6 +224,7 @@ export function useWalkers(
         const out = planRoute(pick.agent, pick.seat, pick.floor, { to: elev });
         if (out) {
           busyRef.current.set(pick.seat.seat_id, (busyRef.current.get(pick.seat.seat_id) ?? 0) + 1);
+          leaveAtRef.current.set(pick.seat.seat_id, now);
           setRoutes((prev) => [...prev, out]);
           const timer = window.setTimeout(() => {
             timersRef.current.delete(timer);
@@ -198,10 +251,11 @@ export function useWalkers(
       const route = planRoute(pick.agent, pick.seat, pick.floor);
       if (!route) continue;
       busyRef.current.set(pick.seat.seat_id, (busyRef.current.get(pick.seat.seat_id) ?? 0) + 1);
+      leaveAtRef.current.set(pick.seat.seat_id, now);
       setRoutes((prev) => [...prev, route]);
       return;
     }
-  }, [floors, maxConcurrent, enabled, startPair]);
+  }, [floors, maxConcurrent, enabled, startPair, sendPair]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -249,5 +303,5 @@ export function useWalkers(
     busyRef.current.clear();
   }, []);
 
-  return { routes, removeRoute, clearAll, startPair, startTask };
+  return { routes, removeRoute, clearAll, startPair };
 }

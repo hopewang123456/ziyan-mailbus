@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from mailbus.api.schemas.tasks import TaskAdvanceIn, TaskIn, TaskNodeOut, TaskOut
+from mailbus.api.schemas.tasks import (
+    PublicTaskNodeOut,
+    PublicTaskOut,
+    TaskAdvanceIn,
+    TaskIn,
+    TaskNodeOut,
+    TaskOut,
+)
 from mailbus.application.workflow.dto import (
     AdvanceCommand,
     TaskCommand,
@@ -30,6 +37,20 @@ def to_task_out(view: TaskView) -> TaskOut:
                 order=node.order,
                 state=node.state,
             )
+            for node in view.nodes
+        ],
+    )
+
+
+def to_public_task_out(view: TaskView) -> PublicTaskOut:
+    return PublicTaskOut(
+        task_id=view.task_id,
+        title=view.title,
+        state=view.state,
+        created_at=view.created_at,
+        updated_at=view.updated_at,
+        nodes=[
+            PublicTaskNodeOut(name=node.name, order=node.order, state=node.state)
             for node in view.nodes
         ],
     )

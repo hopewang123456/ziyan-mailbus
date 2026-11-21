@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from mailbus.api.schemas.message import DeliveryAttemptOut, MessageIn, MessageOut
+from mailbus.api.schemas.message import (
+    DeliveryAttemptOut,
+    MessageIn,
+    MessageOut,
+    PublicMessageOut,
+)
 from mailbus.application.messaging.dto import (
     DeliveryAttemptView,
     MessageView,
@@ -22,6 +27,17 @@ def to_message_out(view: MessageView) -> MessageOut:
         message_id=view.message_id,
         sender_id=view.sender_id,
         recipient_id=view.recipient_id,
+        kind=view.kind,
+        body=view.body,
+        created_at=view.created_at,
+        delivery_status=view.delivery_status,
+        pair_id=view.pair_id,
+    )
+
+
+def to_public_message_out(view: MessageView) -> PublicMessageOut:
+    return PublicMessageOut(
+        message_id=view.message_id,
         kind=view.kind,
         body=view.body,
         created_at=view.created_at,

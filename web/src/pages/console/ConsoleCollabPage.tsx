@@ -6,21 +6,21 @@ import {
   ConsoleTable,
   ConsoleTag,
 } from "../../components/console/ConsoleKit";
-import { useCollabStream, useScreenSync } from "../../twin/collab";
 import type { OfficeSite } from "../../twin/types";
 
 /**
- * 协同管理端：在线员工、A2A 消息、任务接力与大屏协同。
- * 只使用 staff / layout / messages / tasks 的真实数据，不再提供本地演示或虚构结对。
+ * 协同管理端：员工、结对、协同消息、任务接力与大屏遥控。
+ * 数据全部来自 staff / layout / messages / tasks / collab 真实接口。
  */
 
-type Tab = "staff" | "messages" | "tasks" | "screens";
+type Tab = "staff" | "pairs" | "messages" | "tasks" | "screens";
 
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: "staff", label: "在线员工" },
+  { key: "pairs", label: "结对协同" },
   { key: "messages", label: "A2A 消息" },
   { key: "tasks", label: "任务接力" },
-  { key: "screens", label: "大屏协同" },
+  { key: "screens", label: "大屏遥控" },
 ];
 
 type Staff = {
@@ -35,14 +35,35 @@ type Staff = {
   agent_framework?: string | null;
 };
 
-type Message = {
+type Pair = {
+  pair_id: string;
+  initiator_id: string;
+  partner_id: string;
+  state: string;
+  created_at?: string | null;
+  ended_at?: string | null;
+};
+
+type CollabMessage = {
   message_id: string;
   sender_id: string;
   recipient_id?: string | null;
+  pair_id?: string | null;
   kind: string;
   body: string;
   created_at?: string | null;
   delivery_status?: string | null;
+};
+
+type Message = CollabMessage;
+
+type Screen = {
+  screen_id: string;
+  name: string;
+  floor_id?: string | null;
+  seat_id?: string | null;
+  online: boolean;
+  last_seen?: string | null;
 };
 
 type Task = {
@@ -52,15 +73,6 @@ type Task = {
   owner_id?: string | null;
   updated_at?: string | null;
   nodes?: Array<{ node_id: string; name: string; state: string }>;
-};
-
-type Screen = {
-  screen_id: string;
-  name: string;
-  floor_id?: string | null;
-  seat_id?: string | null;
-  online: boolean;
-  last_seen?: string | null;
 };
 
 const TASK_STATE_LABEL: Record<string, string> = {
@@ -81,65 +93,91 @@ function timeText(value?: string | null) {
 
 export function ConsoleCollabPage({ can }: { can: (capability: string) => boolean }) {
   const [tab, setTab] = useState<Tab>("staff");
+  const [meId, setMeId] = useState("");
   const [staff, setStaff] = useState<Staff[]>([]);
   const [site, setSite] = useState<OfficeSite | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [pairs, setPairs] = useState<Pair[]>([]);
   const [screens, setScreens] = useState<Screen[]>([]);
-  const [focusDraft, setFocusDraft] = useState<Record<string, string>>({});
+  const [selectedPairId, setSelectedPairId] = useState("");
+  const [pairMessages, setPairMessages] = useState<CollabMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
+
+  const [partnerId, setPartnerId] = useState("");
+  const [pairBody, setPairBody] = useState("");
   const [toEmployee, setToEmployee] = useState("");
   const [body, setBody] = useState("");
+  const [screenName, setScreenName] = useState("");
+  const [focusFloor, setFocusFloor] = useState("");
 
-  // 管理端只作为遥控方，不登记成一块大屏
-  const { peers, sendView } = useScreenSync(() => {}, { register: false });
+  const canSend = can("message_send");
+  const canScreen = can("console_admin");
+
+  /** 本页固定代表一块大屏：重复登记只更新同一条记录，避免列表膨胀。 */
+  const screenIdRef = useRef(`console_${Math.random().toString(36).slice(2, 10)}`);
+  const screenFloorRef = useRef<string | null>(null);
+  const registeredRef = useRef(false);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!registeredRef.current) return;
+      void api(`/api/collab/screens/${encodeURIComponent(screenIdRef.current)}/heartbeat`, {
+        method: "POST",
+        body: JSON.stringify({ floor_id: screenFloorRef.current, seat_id: null }),
+      });
+    }, 25_000);
+    return () => {
+      window.clearInterval(timer);
+      if (!registeredRef.current) return;
+      registeredRef.current = false;
+      void fetch(
+        `/api/public/collab/screens/${encodeURIComponent(screenIdRef.current)}/leave`,
+        { method: "POST" },
+      );
+    };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [staffRes, layoutRes, messageRes, taskRes, screenRes] = await Promise.all([
-      api<Staff[]>("/api/identity/staff?status=active"),
-      api<OfficeSite>("/api/layout"),
-      api<Message[]>("/api/messages?limit=50"),
-      api<Task[]>("/api/tasks"),
-      api<Screen[]>("/api/collab/screens"),
-    ]);
+    const [meRes, staffRes, layoutRes, messageRes, taskRes, pairRes, screenRes] =
+      await Promise.all([
+        api<{ employee_id: string }>("/api/identity/me"),
+        api<Staff[]>("/api/identity/staff?status=active"),
+        api<OfficeSite>("/api/layout"),
+        api<Message[]>("/api/messages?limit=50"),
+        api<Task[]>("/api/tasks"),
+        api<Pair[]>("/api/collab/pairs"),
+        api<Screen[]>("/api/collab/screens"),
+      ]);
     setLoading(false);
 
     const errors: string[] = [];
-    if (staffRes.ok && Array.isArray(staffRes.data)) setStaff(staffRes.data);
-    else if (!staffRes.ok) errors.push(`员工：${staffRes.error}`);
-    if (layoutRes.ok) setSite(layoutRes.data);
-    else errors.push(`布局：${layoutRes.error}`);
-    if (messageRes.ok && Array.isArray(messageRes.data)) setMessages(messageRes.data);
-    else if (!messageRes.ok) errors.push(`消息：${messageRes.error}`);
-    if (taskRes.ok && Array.isArray(taskRes.data)) setTasks(taskRes.data);
-    else if (!taskRes.ok) errors.push(`任务：${taskRes.error}`);
-    if (screenRes.ok && Array.isArray(screenRes.data)) setScreens(screenRes.data);
+    if (meRes.ok) setMeId(meRes.data.employee_id);
+    else errors.push(`当前员工：${meRes.error}`);
+    if (!staffRes.ok) errors.push(`员工：${staffRes.error}`);
+    else if (Array.isArray(staffRes.data)) setStaff(staffRes.data);
+    if (layoutRes.ok) {
+      setSite(layoutRes.data);
+      setFocusFloor((prev) => prev || layoutRes.data.floors[0]?.floor_id || "");
+    } else errors.push(`布局：${layoutRes.error}`);
+    if (!messageRes.ok) errors.push(`消息：${messageRes.error}`);
+    else if (Array.isArray(messageRes.data)) setMessages(messageRes.data);
+    if (!taskRes.ok) errors.push(`任务：${taskRes.error}`);
+    else if (Array.isArray(taskRes.data)) setTasks(taskRes.data);
+    if (!pairRes.ok) errors.push(`结对：${pairRes.error}`);
+    else if (Array.isArray(pairRes.data)) setPairs(pairRes.data);
+    if (!screenRes.ok) errors.push(`大屏：${screenRes.error}`);
+    else if (Array.isArray(screenRes.data)) setScreens(screenRes.data);
     setErr(errors.join("；"));
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
-
-  // 协同事件推送：接口缺失时静默，保留手动刷新
-  const reloadTimer = useRef(0);
-  const streamLive = useCollabStream(true, (event) => {
-    if (!/^(message|task|pair|screen)\./.test(event)) return;
-    if (reloadTimer.current) return;
-    reloadTimer.current = window.setTimeout(() => {
-      reloadTimer.current = 0;
-      void load();
-    }, 400);
-  });
-  useEffect(
-    () => () => {
-      if (reloadTimer.current) window.clearTimeout(reloadTimer.current);
-    },
-    [],
-  );
 
   const nameOf = useMemo(() => {
     const map = new Map<string, string>();
@@ -152,39 +190,91 @@ export function ConsoleCollabPage({ can }: { can: (capability: string) => boolea
         for (const seat of room.seats) {
           if (!seat.agent) continue;
           map.set(seat.seat_id, seat.agent.display_name);
-          if (seat.agent.agent_id) {
-            map.set(seat.agent.agent_id, seat.agent.agent_name || seat.agent.display_name);
-          }
         }
       }
     }
     return map;
   }, [staff, site]);
 
-  const displayName = (id?: string | null) => (id ? nameOf.get(id) ?? id : "广播");
+  const displayName = (id?: string | null) => (id ? nameOf.get(id) ?? id : "—");
+  const activePairs = pairs.filter((pair) => pair.state === "active");
 
-  const online = staff.filter((person) => person.status === "active");
-  const running = tasks.filter((task) => !/done|failed|cancel/.test(task.state));
-  const onlineScreens = screens.filter((screen) => screen.online).length;
-  const canSend = can("message_send");
+  const openPair = async (pairId: string) => {
+    setSelectedPairId(pairId);
+    setErr("");
+    const result = await api<CollabMessage[]>(
+      `/api/collab/messages?pair_id=${encodeURIComponent(pairId)}&limit=100`,
+    );
+    if (result.ok && Array.isArray(result.data)) setPairMessages(result.data);
+    else {
+      setPairMessages([]);
+      if (!result.ok) setErr(`结对消息：${result.error}`);
+    }
+  };
 
-  async function focusScreen(screen: Screen) {
+  async function createPair() {
+    setBusy(true);
     setErr("");
     setMsg("");
-    const floorId = focusDraft[screen.screen_id] || site?.floors[0]?.floor_id || "";
-    if (!floorId) {
-      setErr("请选择要聚焦的楼层");
-      return;
-    }
-    const result = await api(
-      `/api/collab/screens/${encodeURIComponent(screen.screen_id)}/focus`,
-      { method: "POST", body: JSON.stringify({ floor_id: floorId, seat_id: null }) },
-    );
+    const result = await api<Pair>("/api/collab/pairs", {
+      method: "POST",
+      body: JSON.stringify({ partner_id: partnerId }),
+    });
+    setBusy(false);
     if (!result.ok) {
-      setErr(`大屏遥控：${result.error}`);
+      setErr(result.error);
       return;
     }
-    setMsg(`已向「${screen.name}」下发聚焦 ${floorId}`);
+    setMsg(`已发起与 ${displayName(partnerId)} 的结对`);
+    setPartnerId("");
+    await load();
+    await openPair(result.data.pair_id);
+  }
+
+  async function endPair(pairId: string) {
+    setBusy(true);
+    setErr("");
+    setMsg("");
+    const result = await api(`/api/collab/pairs/${encodeURIComponent(pairId)}/end`, {
+      method: "POST",
+    });
+    setBusy(false);
+    if (!result.ok) {
+      setErr(result.error);
+      return;
+    }
+    setMsg("结对已结束");
+    if (selectedPairId === pairId) setPairMessages([]);
+    await load();
+  }
+
+  async function sendPairMessage() {
+    setErr("");
+    setMsg("");
+    if (!selectedPairId) {
+      setErr("请先选择一个结对");
+      return;
+    }
+    if (!pairBody.trim()) {
+      setErr("消息内容不能为空");
+      return;
+    }
+    const result = await api<CollabMessage>("/api/collab/messages", {
+      method: "POST",
+      body: JSON.stringify({
+        pair_id: selectedPairId,
+        body: pairBody.trim(),
+        kind: "note",
+        channel: "file_bus",
+      }),
+    });
+    if (!result.ok) {
+      setErr(result.error);
+      return;
+    }
+    setPairBody("");
+    setMsg("协同消息已发送");
+    await openPair(selectedPairId);
     await load();
   }
 
@@ -213,11 +303,88 @@ export function ConsoleCollabPage({ can }: { can: (capability: string) => boolea
     await load();
   }
 
+  async function registerScreen() {
+    setBusy(true);
+    setErr("");
+    setMsg("");
+    if (!screenName.trim()) {
+      setBusy(false);
+      setErr("大屏名称不能为空");
+      return;
+    }
+    const floor = focusFloor || null;
+    const result = await api<Screen>("/api/collab/screens", {
+      method: "POST",
+      body: JSON.stringify({
+        screen_id: screenIdRef.current,
+        name: screenName.trim(),
+        floor_id: floor,
+      }),
+    });
+    setBusy(false);
+    if (!result.ok) {
+      setErr(result.error);
+      return;
+    }
+    screenFloorRef.current = floor;
+    registeredRef.current = true;
+    setScreenName("");
+    setMsg("大屏已登记，本页将持续发送心跳");
+    await load();
+  }
+
+  async function leaveScreen(screenId: string) {
+    setBusy(true);
+    setErr("");
+    setMsg("");
+    try {
+      const response = await fetch(
+        `/api/public/collab/screens/${encodeURIComponent(screenId)}/leave`,
+        { method: "POST" },
+      );
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (screenId === screenIdRef.current) registeredRef.current = false;
+      setMsg(`已将 ${screenId} 置为离线`);
+      await load();
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "大屏下线失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function focusScreen(screenId: string) {
+    if (!focusFloor) {
+      setErr("请先选择楼层");
+      return;
+    }
+    setBusy(true);
+    setErr("");
+    setMsg("");
+    const result = await api(
+      `/api/collab/screens/${encodeURIComponent(screenId)}/focus`,
+      {
+        method: "POST",
+        body: JSON.stringify({ floor_id: focusFloor, seat_id: null }),
+      },
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setErr(result.error);
+      return;
+    }
+    setMsg(`已遥控 ${screenId} 聚焦所选楼层`);
+    await load();
+  }
+
+  const online = staff.filter((person) => person.status === "active");
+  const running = tasks.filter((task) => !/done|failed|cancel/.test(task.state));
+
   return (
     <>
       <ConsolePageHeader
         title="协同管理"
-        description="在线员工、A2A 消息与任务接力的真实数据；大屏只同步聚焦位置，不伪造业务内容"
+        description="结对、协同消息、任务接力与大屏遥控；全部来自真实接口，不生成演示数据"
         actions={
           <>
             <button type="button" className="hud-btn text-xs" onClick={() => void load()}>
@@ -237,9 +404,9 @@ export function ConsoleCollabPage({ can }: { can: (capability: string) => boolea
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-4">
         {[
           { label: "在职员工", value: online.length },
+          { label: "活跃结对", value: activePairs.length },
+          { label: "在线大屏", value: screens.filter((screen) => screen.online).length },
           { label: "进行中任务", value: running.length },
-          { label: "最近消息", value: messages.length },
-          { label: "在线大屏", value: screens.length ? onlineScreens : peers + 1 },
         ].map((item) => (
           <div key={item.label} className="rounded-lg border border-rail bg-hull/60 px-4 py-3">
             <p className="text-[10px] uppercase tracking-widest text-mute">{item.label}</p>
@@ -283,18 +450,156 @@ export function ConsoleCollabPage({ can }: { can: (capability: string) => boolea
                 render: (row) => (
                   <span>
                     {row.agent_name || row.agent_id || "—"}
-                    {row.agent_framework ? (
-                      <ConsoleTag>{row.agent_framework}</ConsoleTag>
-                    ) : null}
+                    {row.agent_framework ? <ConsoleTag>{row.agent_framework}</ConsoleTag> : null}
                   </span>
                 ),
               },
               { key: "team", header: "团队", render: (row) => row.team_id || "—" },
               { key: "position", header: "岗位", render: (row) => row.position_id || "—" },
-              { key: "seat", header: "工位", render: (row) => <span className="font-mono">{row.seat_id || "—"}</span> },
+              {
+                key: "seat",
+                header: "工位",
+                render: (row) => <span className="font-mono">{row.seat_id || "—"}</span>,
+              },
             ]}
           />
         </ConsoleSection>
+      )}
+
+      {tab === "pairs" && (
+        <>
+          <ConsoleSection title="发起结对">
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-[11px] text-mute">
+                结对对象
+                <select
+                  className="mt-1 block min-w-48 rounded border border-rail bg-hull px-2 py-1.5 text-xs text-frost"
+                  value={partnerId}
+                  onChange={(event) => setPartnerId(event.target.value)}
+                >
+                  <option value="">选择员工</option>
+                  {staff
+                    .filter((person) => person.employee_id !== meId)
+                    .map((person) => (
+                      <option key={person.employee_id} value={person.employee_id}>
+                        {person.display_name} · {person.employee_id}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="hud-btn text-xs disabled:opacity-40"
+                disabled={busy || !partnerId}
+                onClick={() => void createPair()}
+              >
+                发起结对
+              </button>
+            </div>
+          </ConsoleSection>
+
+          <ConsoleSection title={`结对记录（${pairs.length}）`}>
+            <ConsoleTable
+              rows={pairs}
+              rowKey={(row) => row.pair_id}
+              loading={loading}
+              empty="暂无结对"
+              columns={[
+                {
+                  key: "members",
+                  header: "成员",
+                  render: (row) => (
+                    <span>
+                      {displayName(row.initiator_id)} ⇄ {displayName(row.partner_id)}
+                    </span>
+                  ),
+                },
+                {
+                  key: "state",
+                  header: "状态",
+                  render: (row) => (
+                    <ConsoleTag tone={row.state === "active" ? "ok" : "default"}>
+                      {row.state === "active" ? "进行中" : "已结束"}
+                    </ConsoleTag>
+                  ),
+                },
+                { key: "created", header: "开始", render: (row) => timeText(row.created_at) },
+                { key: "ended", header: "结束", render: (row) => timeText(row.ended_at) },
+                {
+                  key: "actions",
+                  header: "操作",
+                  render: (row) => (
+                    <span className="flex flex-wrap gap-1">
+                      <button
+                        type="button"
+                        className="rounded border border-rail px-2 py-0.5 text-[11px] text-mute hover:text-frost"
+                        onClick={() => void openPair(row.pair_id)}
+                      >
+                        查看消息
+                      </button>
+                      {row.state === "active" && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className="rounded border border-rail px-2 py-0.5 text-[11px] text-mute hover:text-flare disabled:opacity-40"
+                          onClick={() => void endPair(row.pair_id)}
+                        >
+                          结束
+                        </button>
+                      )}
+                    </span>
+                  ),
+                },
+              ]}
+            />
+          </ConsoleSection>
+
+          {selectedPairId && (
+            <ConsoleSection title={`结对会话 · ${selectedPairId}`}>
+              <div className="mb-3 space-y-1.5">
+                {pairMessages.length === 0 && (
+                  <p className="text-xs text-mute">暂无协同消息</p>
+                )}
+                {pairMessages.map((item) => (
+                  <div
+                    key={item.message_id}
+                    className="rounded border border-rail bg-hull/40 px-3 py-2 text-xs"
+                  >
+                    <p className="text-frost/85">{item.body}</p>
+                    <p className="mt-1 text-[10px] text-mute">
+                      {displayName(item.sender_id)} · {timeText(item.created_at)} ·{" "}
+                      {item.delivery_status || "—"}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex-1 text-[11px] text-mute">
+                  发送到该结对
+                  <input
+                    className="mt-1 block w-full rounded border border-rail bg-hull px-2 py-1.5 text-xs text-frost"
+                    value={pairBody}
+                    maxLength={500}
+                    disabled={!canSend}
+                    placeholder="消息内容"
+                    onChange={(event) => setPairBody(event.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="hud-btn text-xs disabled:opacity-40"
+                  disabled={!canSend || !pairBody.trim()}
+                  onClick={() => void sendPairMessage()}
+                >
+                  发送
+                </button>
+              </div>
+              {!canSend && (
+                <p className="mt-2 text-[11px] text-amber-signal">发送消息需要 message_send。</p>
+              )}
+            </ConsoleSection>
+          )}
+        </>
       )}
 
       {tab === "messages" && (
@@ -422,7 +727,9 @@ export function ConsoleCollabPage({ can }: { can: (capability: string) => boolea
                 header: "当前节点",
                 render: (row) => {
                   const active = row.nodes?.find((node) => node.state === "running") ?? row.nodes?.[0];
-                  return active ? `${active.name} · ${TASK_STATE_LABEL[active.state] ?? active.state}` : "—";
+                  return active
+                    ? `${active.name} · ${TASK_STATE_LABEL[active.state] ?? active.state}`
+                    : "—";
                 },
               },
               { key: "owner", header: "负责人", render: (row) => displayName(row.owner_id) },
@@ -434,114 +741,102 @@ export function ConsoleCollabPage({ can }: { can: (capability: string) => boolea
 
       {tab === "screens" && (
         <>
-          <ConsoleSection
-            title={`大屏登记（${screens.length}）`}
-            actions={
-              <ConsoleTag tone={streamLive ? "ok" : "warn"}>
-                {streamLive ? "SSE 实时" : "轮询"}
-              </ConsoleTag>
-            }
-          >
-            {screens.length ? (
-              <ConsoleTable
-                rows={screens}
-                rowKey={(row) => row.screen_id}
-                loading={loading}
-                empty="暂无登记大屏"
-                columns={[
-                  { key: "name", header: "大屏", render: (row) => row.name },
-                  {
-                    key: "floor",
-                    header: "当前楼层",
-                    render: (row) =>
-                      (site?.floors ?? []).find((floor) => floor.floor_id === row.floor_id)?.name ??
-                      row.floor_id ??
-                      "整楼",
-                  },
-                  {
-                    key: "online",
-                    header: "状态",
-                    render: (row) => (
-                      <ConsoleTag tone={row.online ? "ok" : "default"}>
-                        {row.online ? "在线" : "离线"}
-                      </ConsoleTag>
-                    ),
-                  },
-                  { key: "seen", header: "最近心跳", render: (row) => timeText(row.last_seen) },
-                  {
-                    key: "act",
-                    header: "遥控聚焦",
-                    render: (row) => (
-                      <span className="flex items-center gap-1">
-                        <select
-                          className="w-32 rounded border border-rail bg-hull px-1.5 py-0.5 text-[11px] text-frost"
-                          value={focusDraft[row.screen_id] ?? row.floor_id ?? site?.floors[0]?.floor_id ?? ""}
-                          onChange={(event) =>
-                            setFocusDraft((prev) => ({
-                              ...prev,
-                              [row.screen_id]: event.target.value,
-                            }))
-                          }
-                        >
-                          {(site?.floors ?? []).map((floor) => (
-                            <option key={floor.floor_id} value={floor.floor_id}>
-                              {floor.level}F · {floor.name.split(" · ")[1] ?? floor.name}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          className="rounded border border-rail px-2 py-0.5 text-[11px] text-mute hover:text-frost"
-                          onClick={() => void focusScreen(row)}
-                        >
-                          聚焦
-                        </button>
-                      </span>
-                    ),
-                  },
-                ]}
-              />
-            ) : (
-              <p className="text-xs leading-relaxed text-mute">
-                后端尚未提供大屏登记接口（GET /api/collab/screens）。大屏打开后会尝试登记并上报心跳；
-                接口上线前仍可用下方本机广播。
+          <ConsoleSection title="登记大屏">
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="text-[11px] text-mute">
+                大屏名称
+                <input
+                  className="mt-1 block w-48 rounded border border-rail bg-hull px-2 py-1.5 text-xs text-frost"
+                  value={screenName}
+                  disabled={!canScreen}
+                  placeholder="例如：一层前台大屏"
+                  onChange={(event) => setScreenName(event.target.value)}
+                />
+              </label>
+              <label className="text-[11px] text-mute">
+                初始楼层
+                <select
+                  className="mt-1 block rounded border border-rail bg-hull px-2 py-1.5 text-xs text-frost"
+                  value={focusFloor}
+                  onChange={(event) => setFocusFloor(event.target.value)}
+                >
+                  {(site?.floors ?? []).map((floor) => (
+                    <option key={floor.floor_id} value={floor.floor_id}>
+                      {floor.level}F · {floor.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="hud-btn text-xs disabled:opacity-40"
+                disabled={!canScreen || busy || !screenName.trim()}
+                onClick={() => void registerScreen()}
+              >
+                登记
+              </button>
+            </div>
+            {!canScreen && (
+              <p className="mt-2 text-[11px] text-amber-signal">
+                登记与遥控大屏需要 console_admin。
               </p>
             )}
           </ConsoleSection>
 
-          <ConsoleSection title={`本机大屏（×${peers + 1}）`}>
-            <p className="mb-3 text-xs leading-relaxed text-mute">
-              同一浏览器内打开的孪生大屏通过 BroadcastChannel 同步聚焦楼层与员工；
-              跨设备同步依赖上方的屏幕登记 + screen.focus 推送。
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {(site?.floors ?? []).map((floor) => (
-                <button
-                  key={floor.floor_id}
-                  type="button"
-                  className="rounded border border-rail px-3 py-1.5 text-xs text-mute hover:text-frost"
-                  onClick={() => {
-                    sendView({ floorId: floor.floor_id, seatId: null });
-                    setMsg(`已广播聚焦 ${floor.level}F · ${floor.name}`);
-                  }}
-                >
-                  聚焦 {floor.level}F · {floor.name.split(" · ")[1] ?? floor.name}
-                </button>
-              ))}
-              <button
-                type="button"
-                className="rounded border border-rail px-3 py-1.5 text-xs text-mute hover:text-frost"
-                onClick={() => {
-                  sendView({ floorId: null, seatId: null });
-                  setMsg("已广播返回整楼");
-                }}
-              >
-                返回整楼
-              </button>
-            </div>
-            {!site && !loading && (
-              <p className="mt-3 text-xs text-flare">布局接口不可用，无法列出楼层。</p>
-            )}
+          <ConsoleSection title={`大屏列表（${screens.length}）`}>
+            <ConsoleTable
+              rows={screens}
+              rowKey={(row) => row.screen_id}
+              loading={loading}
+              empty="暂无已登记大屏"
+              columns={[
+                {
+                  key: "name",
+                  header: "大屏",
+                  render: (row) => (
+                    <span>
+                      {row.name}
+                      <span className="ml-2 font-mono text-[10px] text-mute">{row.screen_id}</span>
+                    </span>
+                  ),
+                },
+                { key: "floor", header: "楼层", render: (row) => row.floor_id || "—" },
+                {
+                  key: "online",
+                  header: "状态",
+                  render: (row) => (
+                    <ConsoleTag tone={row.online ? "ok" : "default"}>
+                      {row.online ? "在线" : "离线"}
+                    </ConsoleTag>
+                  ),
+                },
+                { key: "seen", header: "最近心跳", render: (row) => timeText(row.last_seen) },
+                {
+                  key: "action",
+                  header: "遥控",
+                  render: (row) => (
+                    <span className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={!canScreen || busy}
+                        className="rounded border border-rail px-2 py-0.5 text-[11px] text-mute hover:text-frost disabled:opacity-40"
+                        onClick={() => void focusScreen(row.screen_id)}
+                      >
+                        聚焦 {focusFloor || "楼层"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!canScreen || busy || !row.online}
+                        className="rounded border border-rail px-2 py-0.5 text-[11px] text-mute hover:text-frost disabled:opacity-40"
+                        onClick={() => void leaveScreen(row.screen_id)}
+                      >
+                        下线
+                      </button>
+                    </span>
+                  ),
+                },
+              ]}
+            />
           </ConsoleSection>
         </>
       )}

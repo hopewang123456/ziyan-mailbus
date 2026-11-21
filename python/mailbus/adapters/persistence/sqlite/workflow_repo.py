@@ -230,7 +230,12 @@ class SqliteTaskRepository:
         return [_node_from_row(row) for row in rows]
 
     def list_all(
-        self, state: TaskState | None = None, owner_id: str | None = None
+        self,
+        state: TaskState | None = None,
+        owner_id: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+        viewer_id: str | None = None,
     ) -> list[Task]:
         clauses: list[str] = []
         params: list[object] = []
@@ -240,10 +245,15 @@ class SqliteTaskRepository:
         if owner_id is not None:
             clauses.append("owner_id = ?")
             params.append(owner_id)
+        if viewer_id is not None:
+            clauses.append("(owner_id = ? OR created_by = ?)")
+            params.extend((viewer_id, viewer_id))
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
-        rows = self._conn.execute(
-            f"SELECT * FROM task_tasks{where} ORDER BY created_at, task_id", params
-        )
+        sql = f"SELECT * FROM task_tasks{where} ORDER BY created_at, task_id"
+        if limit is not None:
+            sql += " LIMIT ? OFFSET ?"
+            params.extend((limit, offset))
+        rows = self._conn.execute(sql, params).fetchall()
         return [_task_from_row(row) for row in rows]
 
 

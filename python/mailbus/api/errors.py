@@ -8,12 +8,14 @@ from fastapi.responses import JSONResponse
 
 from mailbus.core.shared.errors import (
     AuthenticationError,
+    CapacityError,
     DomainError,
     IdempotencyConflictError,
     InvalidStateError,
     InvalidTransitionError,
     NotFoundError,
     PermissionDeniedError,
+    RateLimitedError,
 )
 
 _STATUS_BY_ERROR: dict[type[DomainError], int] = {
@@ -23,6 +25,8 @@ _STATUS_BY_ERROR: dict[type[DomainError], int] = {
     InvalidTransitionError: 409,
     InvalidStateError: 409,
     IdempotencyConflictError: 409,
+    CapacityError: 503,
+    RateLimitedError: 429,
 }
 
 # 领域错误码 → HTTP 状态：需要大写契约码的场景（api 不能 import 具体上下文）
@@ -35,12 +39,22 @@ _STATUS_BY_CODE: dict[str, int] = {
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def _domain_error(_: Request, exc: DomainError) -> JSONResponse:
-        status = _STATUS_BY_CODE.get(exc.code) or _STATUS_BY_ERROR.get(type(exc), 400)
-        return _envelope(exc.code, exc.message_zh, status)
+        return _envelope(exc.code, exc.message_zh, _status_of(exc))
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
         return _envelope("validation_error", "请求参数不合法", 422)
+
+
+def _status_of(exc: DomainError) -> int:
+    """先按契约码，再按异常继承链匹配；子类不会退化成 400。"""
+    if exc.code in _STATUS_BY_CODE:
+        return _STATUS_BY_CODE[exc.code]
+    for cls in type(exc).__mro__:
+        status = _STATUS_BY_ERROR.get(cls)
+        if status is not None:
+            return status
+    return 400
 
 
 def _envelope(code: str, message_zh: str, status: int) -> JSONResponse:

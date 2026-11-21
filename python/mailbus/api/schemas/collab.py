@@ -21,10 +21,13 @@ class PairOut(BaseModel):
     ended_at: datetime | None = None
 
 
+_RECIPIENT_ID = r"^[A-Za-z0-9_-]+$"
+
+
 class CollabMessageIn(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
     pair_id: str = Field(min_length=1, max_length=64)
-    recipient_id: str | None = None
+    recipient_id: str | None = Field(default=None, max_length=64, pattern=_RECIPIENT_ID)
     kind: str = Field(default="note", max_length=32)
     channel: Literal["file_bus", "a2a", "mcp"] = "file_bus"
 
@@ -43,9 +46,17 @@ class PublicScreenIn(BaseModel):
     seat_id: str | None = None
 
 
+_SECRET_ID = r"^[A-Za-z0-9_-]+$"
+
+
 class ScreenHeartbeatIn(BaseModel):
     floor_id: str | None = None
     seat_id: str | None = None
+    secret: str | None = Field(default=None, max_length=64, pattern=_SECRET_ID)
+
+
+class ScreenLeaveIn(BaseModel):
+    secret: str | None = Field(default=None, max_length=64, pattern=_SECRET_ID)
 
 
 class ScreenFocusIn(BaseModel):
@@ -60,6 +71,7 @@ class ScreenOut(BaseModel):
     seat_id: str | None
     online: bool
     last_seen: datetime | None
+    secret: str | None = None
 
 
 class OkOut(BaseModel):

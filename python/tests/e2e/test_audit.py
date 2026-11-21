@@ -55,3 +55,52 @@ def test_audit_stats_and_alerts(tmp_path):
         assert len(alerts) == 1
         assert alerts[0]["type"] == "agents.online"
         assert alerts[0]["severity"] == "warn"
+
+
+def test_audit_stats_are_scoped_to_data_scope(tmp_path):
+    """M11：非全局账号的统计不含他队任务与审核人。"""
+    with _client(tmp_path) as client:
+        admin = _headers(_bootstrap(client))
+        created = client.post(
+            "/api/tasks", json={"title": "管理员任务"}, headers=admin
+        )
+        task_id = created.json()["task_id"]
+        client.post(f"/api/tasks/{task_id}/dispatch", headers=admin)
+        client.post(
+            f"/api/tasks/{task_id}/advance",
+            json={"outcome": "running"},
+            headers=admin,
+        )
+        approval = client.post(
+            "/api/approvals",
+            json={"task_id": task_id, "title": "审核", "tier": "advisory"},
+            headers=admin,
+        ).json()
+        client.post(
+            f"/api/approvals/{approval['approval_id']}/resolve",
+            json={"approved": True},
+            headers=admin,
+        )
+
+        admin_stats = client.get("/api/tasks/audit/stats", headers=admin).json()
+        assert admin_stats["total_tasks"] == 1
+        assert admin_stats["by_reviewer"]
+
+        invite = client.post(
+            "/api/identity/invites",
+            json={"account_type": "human", "capabilities": []},
+            headers=admin,
+        ).json()
+        other = client.post(
+            "/api/identity/staff",
+            json={
+                "display_name": "路人",
+                "account_type": "human",
+                "invite_code": invite["invite_code"],
+            },
+        ).json()
+        other_stats = client.get(
+            "/api/tasks/audit/stats", headers=_headers(other["token"])
+        ).json()
+        assert other_stats["total_tasks"] == 0
+        assert other_stats["by_reviewer"] == {}

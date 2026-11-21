@@ -56,6 +56,12 @@ class PairService:
             )
         return tuple(_view(pair) for pair in pairs)
 
+    def active_pairs(self) -> tuple[PairView, ...]:
+        """布局投影用：全部进行中的结对，不做可见范围过滤。"""
+        with self._uow() as uow:
+            pairs = uow.pairs.list_pairs(state="active", limit=500)
+        return tuple(_view(pair) for pair in pairs)
+
     def create(self, actor: Actor, partner_id: str) -> PairView:
         ensure_active(actor.to_subject())
         partner = partner_id.strip()

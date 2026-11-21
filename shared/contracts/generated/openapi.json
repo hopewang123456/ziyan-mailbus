@@ -694,6 +694,8 @@
           "recipient_id": {
             "anyOf": [
               {
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9_-]+$",
                 "type": "string"
               },
               {
@@ -785,8 +787,15 @@
             "type": "boolean"
           },
           "entry": {
-            "title": "Entry",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry"
           },
           "name": {
             "title": "Name",
@@ -809,8 +818,15 @@
             "type": "string"
           },
           "source_uri": {
-            "title": "Source Uri",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Uri"
           },
           "version": {
             "title": "Version",
@@ -821,8 +837,6 @@
           "package_id",
           "name",
           "source_type",
-          "source_uri",
-          "entry",
           "version",
           "enabled",
           "note",
@@ -975,15 +989,31 @@
         "type": "object"
       },
       "EndpointReviewIn": {
+        "description": "端点补录与审核：可只写地址、只改审核状态，或同时提交。",
         "properties": {
           "approved": {
-            "title": "Approved",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved"
+          },
+          "endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint"
           }
         },
-        "required": [
-          "approved"
-        ],
         "title": "EndpointReviewIn",
         "type": "object"
       },
@@ -1508,6 +1538,8 @@
           "recipient_id": {
             "anyOf": [
               {
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9_-]+$",
                 "type": "string"
               },
               {
@@ -2320,6 +2352,64 @@
         "title": "PublicLayoutSeatOut",
         "type": "object"
       },
+      "PublicMessageOut": {
+        "description": "公开协同消息投影：不暴露发送者与接收者身份。",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "delivery_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery Status"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "pair_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pair Id"
+          }
+        },
+        "required": [
+          "message_id",
+          "kind",
+          "body"
+        ],
+        "title": "PublicMessageOut",
+        "type": "object"
+      },
       "PublicOfficeSiteOut": {
         "properties": {
           "floors": {
@@ -2422,6 +2512,16 @@
             "title": "Node State",
             "type": "string"
           },
+          "pair_id": {
+            "default": "",
+            "title": "Pair Id",
+            "type": "string"
+          },
+          "partner_name": {
+            "default": "",
+            "title": "Partner Name",
+            "type": "string"
+          },
           "position": {
             "title": "Position",
             "type": "string"
@@ -2462,6 +2562,86 @@
           "task"
         ],
         "title": "PublicSeatAgentOut",
+        "type": "object"
+      },
+      "PublicTaskNodeOut": {
+        "description": "公开任务节点投影：只暴露展示所需的名称、顺序与状态。",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "order": {
+            "title": "Order",
+            "type": "integer"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "order",
+          "state"
+        ],
+        "title": "PublicTaskNodeOut",
+        "type": "object"
+      },
+      "PublicTaskOut": {
+        "description": "公开协同任务投影：不暴露创建者、负责人、流程标识与内部节点 ID。",
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/PublicTaskNodeOut"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "task_id",
+          "title",
+          "state",
+          "nodes"
+        ],
+        "title": "PublicTaskOut",
         "type": "object"
       },
       "PullItem": {
@@ -2610,6 +2790,19 @@
               }
             ],
             "title": "Seat Id"
+          },
+          "secret": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret"
           }
         },
         "title": "ScreenHeartbeatIn",
@@ -2664,6 +2857,25 @@
         "title": "ScreenIn",
         "type": "object"
       },
+      "ScreenLeaveIn": {
+        "properties": {
+          "secret": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret"
+          }
+        },
+        "title": "ScreenLeaveIn",
+        "type": "object"
+      },
       "ScreenOut": {
         "properties": {
           "floor_id": {
@@ -2711,6 +2923,17 @@
               }
             ],
             "title": "Seat Id"
+          },
+          "secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret"
           }
         },
         "required": [
@@ -2761,6 +2984,16 @@
           "node_state": {
             "default": "",
             "title": "Node State",
+            "type": "string"
+          },
+          "pair_id": {
+            "default": "",
+            "title": "Pair Id",
+            "type": "string"
+          },
+          "partner_name": {
+            "default": "",
+            "title": "Partner Name",
             "type": "string"
           },
           "position": {
@@ -3029,8 +3262,15 @@
             "type": "boolean"
           },
           "entry": {
-            "title": "Entry",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry"
           },
           "last_checked_at": {
             "anyOf": [
@@ -3072,8 +3312,15 @@
             "type": "string"
           },
           "source_uri": {
-            "title": "Source Uri",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Uri"
           },
           "updated_at": {
             "anyOf": [
@@ -3096,8 +3343,6 @@
           "package_id",
           "name",
           "source_type",
-          "source_uri",
-          "entry",
           "version",
           "enabled",
           "note",
@@ -3870,6 +4115,39 @@
       }
     },
     "/api/agents/{agent_id}": {
+      "delete": {
+        "operationId": "delete_agent_api_agents__agent_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除 Agent",
+        "tags": [
+          "agent"
+        ]
+      },
       "patch": {
         "operationId": "update_agent_api_agents__agent_id__patch",
         "parameters": [
@@ -4051,6 +4329,39 @@
       }
     },
     "/api/approvals/{approval_id}": {
+      "delete": {
+        "operationId": "withdraw_approval_api_approvals__approval_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "title": "Approval Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "撤回审批",
+        "tags": [
+          "approval"
+        ]
+      },
       "get": {
         "operationId": "get_approval_api_approvals__approval_id__get",
         "parameters": [
@@ -4589,6 +4900,15 @@
             "schema": {
               "anyOf": [
                 {
+                  "enum": [
+                    "draft",
+                    "queued",
+                    "running",
+                    "blocked",
+                    "done",
+                    "failed",
+                    "cancelled"
+                  ],
                   "type": "string"
                 },
                 {
@@ -4612,6 +4932,29 @@
                 }
               ],
               "title": "Owner Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],
@@ -5276,7 +5619,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "审核 Agent 端点",
+        "summary": "补录或审核 Agent 端点",
         "tags": [
           "identity"
         ]
@@ -5483,6 +5826,31 @@
     "/api/inbox": {
       "get": {
         "operationId": "list_inbox_api_inbox_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -5497,6 +5865,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "收件箱投影",
@@ -5784,6 +6162,39 @@
       }
     },
     "/api/messages/{message_id}": {
+      "delete": {
+        "operationId": "delete_message_api_messages__message_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除消息",
+        "tags": [
+          "message"
+        ]
+      },
       "get": {
         "operationId": "get_message_api_messages__message_id__get",
         "parameters": [
@@ -6163,6 +6574,41 @@
         ]
       }
     },
+    "/api/org/positions/{position_id}": {
+      "delete": {
+        "operationId": "delete_position_api_org_positions__position_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "position_id",
+            "required": true,
+            "schema": {
+              "title": "Position Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除岗位",
+        "tags": [
+          "org"
+        ]
+      }
+    },
     "/api/org/seats": {
       "get": {
         "operationId": "list_seats_api_org_seats_get",
@@ -6304,6 +6750,41 @@
         ]
       }
     },
+    "/api/org/teams/{team_id}": {
+      "delete": {
+        "operationId": "delete_team_api_org_teams__team_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除团队",
+        "tags": [
+          "org"
+        ]
+      }
+    },
     "/api/overview": {
       "get": {
         "operationId": "get_overview_api_overview_get",
@@ -6358,7 +6839,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/MessageOut"
+                    "$ref": "#/components/schemas/PublicMessageOut"
                   },
                   "title": "Response Public Collab Messages Api Public Collab Messages Get",
                   "type": "array"
@@ -6378,7 +6859,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "公开协同消息",
+        "summary": "公开协同消息（脱敏）",
         "tags": [
           "collab"
         ]
@@ -6498,6 +6979,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ScreenLeaveIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
         "responses": {
           "204": {
             "description": "Successful Response"
@@ -6514,6 +7012,52 @@
           }
         },
         "summary": "大屏离线",
+        "tags": [
+          "collab"
+        ]
+      }
+    },
+    "/api/public/collab/seats/{seat_id}/tasks": {
+      "get": {
+        "operationId": "public_seat_tasks_api_public_collab_seats__seat_id__tasks_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "seat_id",
+            "required": true,
+            "schema": {
+              "title": "Seat Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PublicTaskOut"
+                  },
+                  "title": "Response Public Seat Tasks Api Public Collab Seats  Seat Id  Tasks Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "公开工位任务（按工位解析员工，不暴露员工标识）",
         "tags": [
           "collab"
         ]
@@ -6587,6 +7131,15 @@
             "schema": {
               "anyOf": [
                 {
+                  "enum": [
+                    "draft",
+                    "queued",
+                    "running",
+                    "blocked",
+                    "done",
+                    "failed",
+                    "cancelled"
+                  ],
                   "type": "string"
                 },
                 {
@@ -6607,6 +7160,17 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -6615,7 +7179,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/TaskOut"
+                    "$ref": "#/components/schemas/PublicTaskOut"
                   },
                   "title": "Response Public Collab Tasks Api Public Collab Tasks Get",
                   "type": "array"
@@ -6636,6 +7200,64 @@
           }
         },
         "summary": "公开协同任务",
+        "tags": [
+          "collab"
+        ]
+      }
+    },
+    "/api/public/collab/tasks/{task_id}": {
+      "get": {
+        "operationId": "public_collab_task_api_public_collab_tasks__task_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "owner_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Owner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "公开任务详情（脱敏）；可选 owner_id 绑定，未知返回 404",
         "tags": [
           "collab"
         ]
@@ -7171,6 +7793,15 @@
             "schema": {
               "anyOf": [
                 {
+                  "enum": [
+                    "draft",
+                    "queued",
+                    "running",
+                    "blocked",
+                    "done",
+                    "failed",
+                    "cancelled"
+                  ],
                   "type": "string"
                 },
                 {
@@ -7194,6 +7825,29 @@
                 }
               ],
               "title": "Owner Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
             }
           }
         ],
