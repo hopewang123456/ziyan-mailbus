@@ -1,10 +1,11 @@
 """运行支撑数据的保留期清理。
 
-四张表只增不减会拖慢检索并膨胀数据库：
+五张表只增不减会拖慢检索并膨胀数据库：
 - ``ops_outbox``：已派发的事件只作为操作日志来源保留一段时间；
 - ``ops_audit_log``：审计流水按保留期截断；
 - ``ops_idempotency_keys``：幂等键过期后不再需要；
-- ``identity_sessions``：已撤销或已过期的会话不再需要。
+- ``identity_sessions``：已撤销或已过期的会话不再需要；
+- ``collab_screens``：长期未心跳的大屏记录属于僵尸数据。
 """
 
 from __future__ import annotations
@@ -41,6 +42,12 @@ class SqliteMaintenance:
             " WHERE (revoked_at IS NOT NULL AND revoked_at < ?)"
             " OR (expires_at IS NOT NULL AND expires_at < ?)",
             (cutoff, cutoff),
+        )
+        # 保留期外无心跳的大屏：即使 online 标记残留为真也视为僵尸记录
+        removed += self._delete(
+            "DELETE FROM collab_screens"
+            " WHERE COALESCE(last_seen_at, created_at) < ?",
+            (cutoff,),
         )
         return removed
 

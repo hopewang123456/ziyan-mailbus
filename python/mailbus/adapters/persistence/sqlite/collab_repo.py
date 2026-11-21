@@ -20,10 +20,16 @@ class SqliteScreenRepository:
     def __init__(self, conn: Connection) -> None:
         self._conn = conn
 
-    def list_all(self) -> list[Screen]:
-        rows = self._conn.execute(
-            "SELECT * FROM collab_screens ORDER BY created_at, screen_id"
-        ).fetchall()
+    def list_all(self, limit: int | None = None) -> list[Screen]:
+        sql = (
+            "SELECT * FROM collab_screens"
+            " ORDER BY COALESCE(last_seen_at, created_at) DESC, screen_id"
+        )
+        params: tuple[int, ...] = ()
+        if limit is not None:
+            sql += " LIMIT ?"
+            params = (limit,)
+        rows = self._conn.execute(sql, params).fetchall()
         return [self._map(row) for row in rows]
 
     def get(self, screen_id: str) -> Screen | None:

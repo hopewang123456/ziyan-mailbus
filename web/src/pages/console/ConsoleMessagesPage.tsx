@@ -50,6 +50,7 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
   const [status, setStatus] = useState<StatusFilter>("");
   const [since, setSince] = useState("");
   const [limit, setLimit] = useState(100);
+  const [hasMore, setHasMore] = useState(false);
   const [recipient, setRecipient] = useState("");
   const [kind, setKind] = useState("note");
   const [body, setBody] = useState("");
@@ -61,13 +62,14 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
 
-  const load = async () => {
+  const load = async (nextOffset = 0) => {
     setLoading(true);
     const params = new URLSearchParams();
     if (agent.trim()) params.set("agent", agent.trim());
     if (status) params.set("status", status);
     if (since) params.set("since", new Date(since).toISOString());
     params.set("limit", String(limit));
+    params.set("offset", String(nextOffset));
     const [m, l] = await Promise.all([
       scope === "inbox"
         ? api<Message[]>("/api/inbox")
@@ -75,7 +77,10 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
       api<LogEntry[]>("/api/log?limit=50"),
     ]);
     setLoading(false);
-    if (m.ok) setMessages(m.data);
+    if (m.ok) {
+      setMessages((prev) => (nextOffset > 0 ? [...prev, ...m.data] : m.data));
+      setHasMore(m.data.length >= limit);
+    }
     if (l.ok) setLogs(l.data);
     const errors = [m, l]
       .filter((result) => !result.ok)
@@ -255,6 +260,15 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
         <button type="button" className="hud-btn text-xs" onClick={() => void load()}>
           查询
         </button>
+        {scope !== "inbox" && hasMore && (
+          <button
+            type="button"
+            className="hud-btn text-xs"
+            onClick={() => void load(messages.length)}
+          >
+            加载更多
+          </button>
+        )}
       </div>
 
       {err && <p className="mb-3 text-xs text-flare">{err}</p>}

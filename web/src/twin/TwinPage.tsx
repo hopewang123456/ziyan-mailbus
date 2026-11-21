@@ -34,18 +34,52 @@ interface StaffLite {
   display_name: string;
 }
 
+const SCREEN_ID_KEY = "mailbus_twin_screen_id";
+const SCREEN_SECRET_KEY = "mailbus_twin_screen_secret";
+
+function newScreenId() {
+  return `twin_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 /** 每块大屏一个稳定标识：同标签页刷新保持一致，关闭后离开。 */
 function getScreenId() {
-  const key = "mailbus_twin_screen_id";
   try {
-    const existing = sessionStorage.getItem(key);
+    const existing = sessionStorage.getItem(SCREEN_ID_KEY);
     if (existing) return existing;
-    const id = `twin_${Math.random().toString(36).slice(2, 10)}`;
-    sessionStorage.setItem(key, id);
+    const id = newScreenId();
+    sessionStorage.setItem(SCREEN_ID_KEY, id);
     return id;
   } catch {
-    return `twin_${Math.random().toString(36).slice(2, 10)}`;
+    return newScreenId();
   }
+}
+
+/** M14：心跳/离线所需的屏幕密钥，与 screen_id 同生命周期保存。 */
+function getScreenSecret(): string {
+  try {
+    return sessionStorage.getItem(SCREEN_SECRET_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function setScreenSecret(secret: string) {
+  try {
+    sessionStorage.setItem(SCREEN_SECRET_KEY, secret);
+  } catch {
+    // 存储不可用时仅本次会话有效
+  }
+}
+
+/** 旧记录无本地密钥时换新标识，确保能拿到一次性回显的密钥。 */
+function resetScreenId(): string {
+  const id = newScreenId();
+  try {
+    sessionStorage.setItem(SCREEN_ID_KEY, id);
+  } catch {
+    // 忽略
+  }
+  return id;
 }
 
 /** 按本地时区判定昼夜：19 点后与 6 点前视为夜晚。 */
@@ -632,37 +666,76 @@ export function TwinPage() {
     void refreshMessages(pairIdsKey.split(","));
   }, [collabStream, pairIdsKey, refreshMessages]);
 
-  /** 大屏登记 + 心跳 + 离开；心跳携带当前楼层与工位。 */
+  /** 大屏登记 + 心跳 + 离开；登记时取回密钥，心跳携带。 */
   useEffect(() => {
     if (!hasToken) return;
-    const screenId = screenIdRef.current;
-    void api("/api/public/collab/screens", {
-      method: "POST",
-      body: JSON.stringify({
-        screen_id: screenId,
-        name: "孪生大屏",
-        floor_id: activeFloorRef.current,
-        seat_id: seatRef.current,
-      }),
-    });
-    const timer = window.setInterval(() => {
-      void api(`/api/public/collab/screens/${encodeURIComponent(screenId)}/heartbeat`, {
+    let disposed = false;
+    let heartbeat = 0;
+    let secret = getScreenSecret();
+
+    const register = (screenId: string) =>
+      api<{ secret?: string | null }>("/api/public/collab/screens", {
         method: "POST",
         body: JSON.stringify({
+          screen_id: screenId,
+          name: "孪生大屏",
           floor_id: activeFloorRef.current,
           seat_id: seatRef.current,
         }),
       });
-    }, 30_000);
-    const leave = () => {
-      void fetch(`/api/public/collab/screens/${encodeURIComponent(screenId)}/leave`, {
-        method: "POST",
-        keepalive: true,
-      });
+
+    const beat = () => {
+      if (disposed) return;
+      void api(
+        `/api/public/collab/screens/${encodeURIComponent(screenIdRef.current)}/heartbeat`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            floor_id: activeFloorRef.current,
+            seat_id: seatRef.current,
+            ...(secret ? { secret } : {}),
+          }),
+        },
+      );
     };
+
+    const leave = () => {
+      void fetch(
+        `/api/public/collab/screens/${encodeURIComponent(screenIdRef.current)}/leave`,
+        {
+          method: "POST",
+          keepalive: true,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(secret ? { secret } : {}),
+        },
+      );
+    };
+
+    void (async () => {
+      let result = await register(screenIdRef.current);
+      if (disposed) return;
+      if (result.ok && result.data?.secret) {
+        secret = result.data.secret;
+        setScreenSecret(secret);
+      } else if (!secret) {
+        // 本机无密钥且重复登记不回显时，换新标识重新登记
+        screenIdRef.current = resetScreenId();
+        result = await register(screenIdRef.current);
+        if (disposed) return;
+        if (result.ok && result.data?.secret) {
+          secret = result.data.secret;
+          setScreenSecret(secret);
+        }
+      }
+      if (!secret) return; // 无密钥不心跳，避免持续 403
+      beat();
+      heartbeat = window.setInterval(beat, 30_000);
+    })();
+
     window.addEventListener("pagehide", leave);
     return () => {
-      window.clearInterval(timer);
+      disposed = true;
+      window.clearInterval(heartbeat);
       window.removeEventListener("pagehide", leave);
       leave();
     };
@@ -711,7 +784,7 @@ export function TwinPage() {
       }
     }
     setSelection(null);
-  });
+  }, { register: false });
 
   useEffect(() => {
     // 首次挂载不回播，避免新开一块大屏把已有大屏拉回整楼

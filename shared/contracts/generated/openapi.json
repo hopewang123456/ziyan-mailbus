@@ -4870,6 +4870,41 @@
         ]
       }
     },
+    "/api/collab/screens/{screen_id}/leave": {
+      "post": {
+        "operationId": "leave_api_collab_screens__screen_id__leave_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "screen_id",
+            "required": true,
+            "schema": {
+              "title": "Screen Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "大屏离线（管理端，免密钥）",
+        "tags": [
+          "collab"
+        ]
+      }
+    },
     "/api/collab/stream": {
       "get": {
         "operationId": "stream_api_collab_stream_get",
@@ -6086,6 +6121,17 @@
               "maximum": 500,
               "minimum": 1,
               "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
               "type": "integer"
             }
           }

@@ -31,6 +31,7 @@ class MessageRepository(Protocol):
         pair_id: str | None = None,
         collab_only: bool = False,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[tuple[Message, str]]:
         """按条件检索，返回 (消息, 最近投递状态)；viewer_id=None 表示不限可见范围。"""
 

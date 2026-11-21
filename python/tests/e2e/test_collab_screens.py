@@ -136,3 +136,78 @@ def test_admin_screen_register_and_validation(tmp_path):
             "/api/public/collab/screens/screen-unknown/heartbeat", json={}
         )
         assert missing.status_code == 404
+
+
+def test_admin_can_force_offline_without_secret(tmp_path):
+    """管理端可免密钥下线他人大屏；普通员工无权强制下线。"""
+    with _client(tmp_path) as client:
+        headers = _bootstrap(client)
+        created = client.post(
+            "/api/public/collab/screens",
+            json={"screen_id": "screen-force", "name": "强制离线"},
+        )
+        assert created.status_code == 201, created.text
+        assert created.json()["secret"]
+
+        left = client.post("/api/collab/screens/screen-force/leave", headers=headers)
+        assert left.status_code == 204, left.text
+        listed = client.get("/api/collab/screens", headers=headers).json()
+        assert listed[0]["online"] is False
+
+        invite = client.post(
+            "/api/identity/invites",
+            json={"account_type": "human", "capabilities": []},
+            headers=headers,
+        ).json()
+        applied = client.post(
+            "/api/identity/staff",
+            json={
+                "display_name": "普通员工",
+                "account_type": "human",
+                "invite_code": invite["invite_code"],
+            },
+        ).json()
+        plain = {"Authorization": f"Bearer {applied['token']}"}
+
+        denied = client.post(
+            "/api/collab/screens/screen-force/leave", headers=plain
+        )
+        assert denied.status_code == 403, denied.text
+
+
+def test_public_screen_limit_counts_only_online(tmp_path):
+    """公开大屏上限只统计在线记录，历史离线屏不占用名额。"""
+    import sqlite3
+    import time
+
+    with _client(tmp_path) as client:
+        now = time.time()
+        # 直接落库，避免触发公开登记限流
+        with sqlite3.connect(tmp_path / "mailbus.db") as conn:
+            conn.executemany(
+                "INSERT INTO collab_screens"
+                " (screen_id, name, floor_id, seat_id, online,"
+                " last_seen_at, created_at, secret)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (f"bulk-{index:03d}", "批量大屏", None, None, 1, now, now, "s")
+                    for index in range(64)
+                ],
+            )
+
+        blocked = client.post(
+            "/api/public/collab/screens",
+            json={"screen_id": "bulk-over", "name": "超限大屏"},
+        )
+        assert blocked.status_code == 503, blocked.text
+
+        with sqlite3.connect(tmp_path / "mailbus.db") as conn:
+            conn.execute(
+                "UPDATE collab_screens SET last_seen_at = ?", (now - 3600,)
+            )
+
+        allowed = client.post(
+            "/api/public/collab/screens",
+            json={"screen_id": "bulk-after", "name": "离线后登记"},
+        )
+        assert allowed.status_code == 201, allowed.text

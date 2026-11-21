@@ -64,6 +64,7 @@ type Screen = {
   seat_id?: string | null;
   online: boolean;
   last_seen?: string | null;
+  secret?: string | null;
 };
 
 type Task = {
@@ -89,6 +90,20 @@ function timeText(value?: string | null) {
   if (!value) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+/** 控制台大屏标识同标签页复用，避免每次刷新都新增一条记录。 */
+function getConsoleScreenId() {
+  const key = "mailbus_console_screen_id";
+  try {
+    const existing = sessionStorage.getItem(key);
+    if (existing) return existing;
+    const id = `console_${Math.random().toString(36).slice(2, 10)}`;
+    sessionStorage.setItem(key, id);
+    return id;
+  } catch {
+    return `console_${Math.random().toString(36).slice(2, 10)}`;
+  }
 }
 
 export function ConsoleCollabPage({ can }: { can: (capability: string) => boolean }) {
@@ -118,8 +133,9 @@ export function ConsoleCollabPage({ can }: { can: (capability: string) => boolea
   const canScreen = can("console_admin");
 
   /** 本页固定代表一块大屏：重复登记只更新同一条记录，避免列表膨胀。 */
-  const screenIdRef = useRef(`console_${Math.random().toString(36).slice(2, 10)}`);
+  const screenIdRef = useRef(getConsoleScreenId());
   const screenFloorRef = useRef<string | null>(null);
+  const screenSecretRef = useRef("");
   const registeredRef = useRef(false);
 
   useEffect(() => {
@@ -127,16 +143,25 @@ export function ConsoleCollabPage({ can }: { can: (capability: string) => boolea
       if (!registeredRef.current) return;
       void api(`/api/collab/screens/${encodeURIComponent(screenIdRef.current)}/heartbeat`, {
         method: "POST",
-        body: JSON.stringify({ floor_id: screenFloorRef.current, seat_id: null }),
+        body: JSON.stringify({
+          floor_id: screenFloorRef.current,
+          seat_id: null,
+          ...(screenSecretRef.current ? { secret: screenSecretRef.current } : {}),
+        }),
       });
     }, 25_000);
     return () => {
       window.clearInterval(timer);
       if (!registeredRef.current) return;
       registeredRef.current = false;
+      const secret = screenSecretRef.current;
       void fetch(
         `/api/public/collab/screens/${encodeURIComponent(screenIdRef.current)}/leave`,
-        { method: "POST" },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(secret ? { secret } : {}),
+        },
       );
     };
   }, []);
@@ -178,6 +203,32 @@ export function ConsoleCollabPage({ can }: { can: (capability: string) => boolea
   useEffect(() => {
     void load();
   }, [load]);
+
+  /** 静默刷新：大屏在线状态与协同消息不依赖事件推送，定时同步且不打断当前操作。 */
+  const refreshSilently = useCallback(async () => {
+    const [screenRes, pairRes, messageRes] = await Promise.all([
+      api<Screen[]>("/api/collab/screens"),
+      api<Pair[]>("/api/collab/pairs"),
+      api<Message[]>("/api/messages?limit=50"),
+    ]);
+    if (screenRes.ok && Array.isArray(screenRes.data)) setScreens(screenRes.data);
+    if (pairRes.ok && Array.isArray(pairRes.data)) setPairs(pairRes.data);
+    if (messageRes.ok && Array.isArray(messageRes.data)) setMessages(messageRes.data);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void refreshSilently();
+    }, 20_000);
+    const onVisibility = () => {
+      if (!document.hidden) void refreshSilently();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [refreshSilently]);
 
   const nameOf = useMemo(() => {
     const map = new Map<string, string>();
@@ -327,6 +378,8 @@ export function ConsoleCollabPage({ can }: { can: (capability: string) => boolea
       return;
     }
     screenFloorRef.current = floor;
+    // M14：管理员登记会一次性回显密钥，后续心跳/离线必须携带
+    screenSecretRef.current = result.data.secret ?? "";
     registeredRef.current = true;
     setScreenName("");
     setMsg("大屏已登记，本页将持续发送心跳");
@@ -337,20 +390,18 @@ export function ConsoleCollabPage({ can }: { can: (capability: string) => boolea
     setBusy(true);
     setErr("");
     setMsg("");
-    try {
-      const response = await fetch(
-        `/api/public/collab/screens/${encodeURIComponent(screenId)}/leave`,
-        { method: "POST" },
-      );
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      if (screenId === screenIdRef.current) registeredRef.current = false;
-      setMsg(`已将 ${screenId} 置为离线`);
-      await load();
-    } catch (error) {
-      setErr(error instanceof Error ? error.message : "大屏下线失败");
-    } finally {
-      setBusy(false);
+    const result = await api(
+      `/api/collab/screens/${encodeURIComponent(screenId)}/leave`,
+      { method: "POST" },
+    );
+    setBusy(false);
+    if (!result.ok) {
+      setErr(result.error);
+      return;
     }
+    if (screenId === screenIdRef.current) registeredRef.current = false;
+    setMsg(`已将 ${screenId} 置为离线`);
+    await load();
   }
 
   async function focusScreen(screenId: string) {

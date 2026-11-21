@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 from datetime import datetime, timezone
 
 from mailbus.core.approval.models import ApprovalItem
@@ -52,7 +53,11 @@ class SqliteApprovalRepository:
         return None if row is None else _from_row(row)
 
     def list_all(
-        self, status: ApprovalStatus | None = None, task_id: str | None = None
+        self,
+        status: ApprovalStatus | None = None,
+        task_id: str | None = None,
+        owner_ids: Sequence[str] | None = None,
+        requester_id: str | None = None,
     ) -> list[ApprovalItem]:
         clauses: list[str] = []
         params: list[object] = []
@@ -62,6 +67,18 @@ class SqliteApprovalRepository:
         if task_id is not None:
             clauses.append("task_id = ?")
             params.append(task_id)
+        if owner_ids:
+            placeholders = ",".join("?" for _ in owner_ids)
+            owners = f"task_id IN (SELECT task_id FROM task_tasks WHERE owner_id IN ({placeholders}))"
+            if requester_id:
+                clauses.append(f"(requester_id = ? OR {owners})")
+                params.append(requester_id)
+            else:
+                clauses.append(owners)
+            params.extend(owner_ids)
+        elif requester_id:
+            clauses.append("requester_id = ?")
+            params.append(requester_id)
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
         rows = self._conn.execute(
             f"SELECT * FROM approval_items{where} ORDER BY created_at, approval_id",

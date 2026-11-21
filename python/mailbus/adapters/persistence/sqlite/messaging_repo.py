@@ -89,6 +89,7 @@ class SqliteMessageRepository:
         pair_id: str | None = None,
         collab_only: bool = False,
         limit: int = 100,
+        offset: int = 0,
     ) -> list[tuple[Message, str]]:
         clauses = ["1 = 1"]
         params: list[object] = []
@@ -112,11 +113,12 @@ class SqliteMessageRepository:
             clauses.append(f"{_DELIVERY_STATUS} = ?")
             params.append(status)
         params.append(limit)
+        params.append(offset)
         rows = self._conn.execute(
             f"SELECT m.*, {_DELIVERY_STATUS} AS delivery_status"
             f" FROM msg_messages m{_LATEST_ATTEMPT_JOIN}"
             f" WHERE {' AND '.join(clauses)}"
-            " ORDER BY m.created_at DESC, m.message_id DESC LIMIT ?",
+            " ORDER BY m.created_at DESC, m.message_id DESC LIMIT ? OFFSET ?",
             params,
         )
         return [(_message_from_row(row), row["delivery_status"]) for row in rows]

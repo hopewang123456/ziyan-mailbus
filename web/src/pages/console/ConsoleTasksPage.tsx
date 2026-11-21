@@ -50,6 +50,7 @@ export function ConsoleTasksPage({ can }: { can: (capability: string) => boolean
   const [tasks, setTasks] = useState<Task[]>([]);
   const [stateFilter, setStateFilter] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("");
+  const [hasMore, setHasMore] = useState(false);
   const [selected, setSelected] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -61,16 +62,18 @@ export function ConsoleTasksPage({ can }: { can: (capability: string) => boolean
   const [nodeId, setNodeId] = useState("");
   const [outcome, setOutcome] = useState<string>("running");
 
-  const load = async () => {
+  const load = async (nextOffset = 0) => {
     setLoading(true);
     const params = new URLSearchParams();
     if (stateFilter) params.set("state", stateFilter);
     if (ownerFilter.trim()) params.set("owner_id", ownerFilter.trim());
-    const query = params.toString();
-    const result = await api<Task[]>(`/api/tasks${query ? `?${query}` : ""}`);
+    params.set("limit", "100");
+    params.set("offset", String(nextOffset));
+    const result = await api<Task[]>(`/api/tasks?${params.toString()}`);
     setLoading(false);
     if (result.ok) {
-      setTasks(result.data);
+      setTasks((prev) => (nextOffset > 0 ? [...prev, ...result.data] : result.data));
+      setHasMore(result.data.length >= 100);
       setErr("");
     } else {
       setTasks([]);
@@ -229,6 +232,15 @@ export function ConsoleTasksPage({ can }: { can: (capability: string) => boolean
         <button type="button" className="hud-btn text-xs" onClick={() => void load()}>
           查询
         </button>
+        {hasMore && (
+          <button
+            type="button"
+            className="hud-btn text-xs"
+            onClick={() => void load(tasks.length)}
+          >
+            加载更多
+          </button>
+        )}
       </div>
 
       {err && <p className="mb-3 text-xs text-flare">{err}</p>}

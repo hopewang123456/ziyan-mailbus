@@ -106,6 +106,17 @@ def heartbeat(
 
 
 @router.post(
+    "/screens/{screen_id}/leave",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="大屏离线（管理端，免密钥）",
+)
+@declares(Capability.CONSOLE_ADMIN)
+def leave(screen_id: str, request: Request) -> Response:
+    _service(request).force_leave(get_actor(request), screen_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
     "/screens/{screen_id}/focus",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="遥控聚焦",

@@ -37,9 +37,15 @@ def list_messages(
     status: Literal["pending", "delivered", "failed"] | None = None,
     since: datetime | None = None,
     limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
 ) -> list[MessageOut]:
     views = _service(request).list_messages(
-        get_actor(request), agent=agent, status=status, since=since, limit=limit
+        get_actor(request),
+        agent=agent,
+        status=status,
+        since=since,
+        limit=limit,
+        offset=offset,
     )
     return [mapper.to_message_out(view) for view in views]
 

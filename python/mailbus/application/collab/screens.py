@@ -57,10 +57,10 @@ class ScreenService:
         self._events = events
         self._max_public_screens = max_public_screens
 
-    def list_screens(self) -> tuple[ScreenView, ...]:
+    def list_screens(self, limit: int = 200) -> tuple[ScreenView, ...]:
         now = self._clock.now()
         with self._uow() as uow:
-            records = uow.screens.list_all()
+            records = uow.screens.list_all(limit)
         return tuple(_view(record, now) for record in records)
 
     def register(
@@ -76,7 +76,11 @@ class ScreenService:
                 # 公开登记不允许覆盖既有大屏，且不回显密钥，避免匿名窃取
                 return _view(existing, now)
             if existing is None and actor is None:
-                if len(uow.screens.list_all()) >= self._max_public_screens:
+                # 只统计在线大屏：历史离线记录不占用公开名额
+                online = sum(
+                    1 for record in uow.screens.list_all() if _is_online(record, now)
+                )
+                if online >= self._max_public_screens:
                     raise CapacityError("公开大屏数量已达上限，请联系管理员")
             secret = existing.secret if (existing and existing.secret) else _new_secret()
             screen = Screen(
@@ -129,13 +133,17 @@ class ScreenService:
             )
             uow.commit()
 
-    def leave(self, screen_id: str, secret: str | None = None) -> None:
+    def leave(
+        self, screen_id: str, secret: str | None = None, force: bool = False
+    ) -> None:
         now = self._clock.now()
         with self._uow() as uow:
             screen = uow.screens.get(screen_id)
             if screen is None:
                 return
-            _ensure_screen_secret(screen, secret)
+            # force 仅供管理端强制下线使用，公开离线仍须密钥
+            if not force:
+                _ensure_screen_secret(screen, secret)
             uow.screens.save(
                 Screen(
                     screen_id=screen.screen_id,
@@ -149,6 +157,11 @@ class ScreenService:
                 )
             )
             uow.commit()
+
+    def force_leave(self, actor: Actor, screen_id: str) -> None:
+        """管理端强制下线：不依赖大屏密钥，但要求管理能力。"""
+        self._ensure_admin(actor)
+        self.leave(screen_id, force=True)
 
     def focus(
         self, actor: Actor, screen_id: str, floor_id: str, seat_id: str | None
@@ -178,19 +191,23 @@ def _ensure_screen_secret(screen: Screen, secret: str | None) -> None:
         raise PermissionDeniedError("大屏密钥无效")
 
 
-def _view(
-    screen: Screen, now: datetime, expose_secret: bool = False
-) -> ScreenView:
+def _is_online(screen: Screen, now: datetime) -> bool:
     fresh = (
         screen.last_seen_at is not None
         and now - screen.last_seen_at <= _ONLINE_TTL
     )
+    return bool(screen.online and fresh)
+
+
+def _view(
+    screen: Screen, now: datetime, expose_secret: bool = False
+) -> ScreenView:
     return ScreenView(
         screen_id=screen.screen_id,
         name=screen.name,
         floor_id=screen.floor_id,
         seat_id=screen.seat_id,
-        online=bool(screen.online and fresh),
+        online=_is_online(screen, now),
         last_seen=screen.last_seen_at,
         secret=screen.secret if expose_secret else None,
     )

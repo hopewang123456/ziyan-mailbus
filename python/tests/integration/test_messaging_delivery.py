@@ -125,10 +125,20 @@ def test_maintenance_prunes_old_support_rows(tmp_path):
             " VALUES ('h2', 'emp1', ?, NULL)",
             (old,),
         )
+        conn.execute(
+            "INSERT INTO collab_screens (screen_id, name, online, last_seen_at, created_at)"
+            " VALUES ('old-screen', '旧屏', 1, ?, ?)",
+            (old, old),
+        )
+        conn.execute(
+            "INSERT INTO collab_screens (screen_id, name, online, last_seen_at, created_at)"
+            " VALUES ('fresh-screen', '新屏', 1, ?, ?)",
+            (now.timestamp(), now.timestamp()),
+        )
 
         removed = SqliteMaintenance(conn).prune(cutoff_from(now, 7))
 
-        assert removed == 4
+        assert removed == 5
         assert conn.execute("SELECT COUNT(*) FROM ops_outbox").fetchone()[0] == 1
         assert conn.execute("SELECT COUNT(*) FROM ops_audit_log").fetchone()[0] == 0
         assert (
@@ -137,3 +147,6 @@ def test_maintenance_prunes_old_support_rows(tmp_path):
         assert (
             conn.execute("SELECT COUNT(*) FROM identity_sessions").fetchone()[0] == 1
         )
+        assert [
+            row[0] for row in conn.execute("SELECT screen_id FROM collab_screens")
+        ] == ["fresh-screen"]

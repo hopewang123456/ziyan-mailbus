@@ -97,9 +97,15 @@ export function StateChip({ state }: { state: unknown }) {
   );
 }
 
-/** 时间列：截到分钟（created_at/updated_at 通常是 ISO）。 */
+/** 时间列：后端返回 UTC ISO，转为浏览器本地时区并截到分钟。 */
 export function shortTime(v: unknown): string {
   const s = String(v ?? "");
   if (!s) return "—";
-  return s.length > 16 ? s.slice(0, 16).replace("T", " ") : s;
+  const date = new Date(s);
+  if (Number.isNaN(date.getTime())) return s;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
 }

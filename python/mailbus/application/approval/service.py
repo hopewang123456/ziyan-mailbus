@@ -31,7 +31,7 @@ from mailbus.core.shared.errors import (
 )
 from mailbus.core.shared.events import DomainEvent
 from mailbus.core.shared.ports import Clock, IdGenerator
-from mailbus.core.shared.values import Capability
+from mailbus.core.shared.values import Capability, DataScope
 from mailbus.core.workflow import lifecycle as workflow_lifecycle
 from mailbus.core.workflow.models import Task
 from mailbus.core.workflow.values import TaskState, TERMINAL_TASK_STATES
@@ -158,10 +158,23 @@ class ApprovalService:
     ) -> tuple[ApprovalView, ...]:
         parsed = self._parse_status(status)
         with self._uow() as uow:
-            items = uow.approvals.list_all(parsed, task_id)
-            tasks = uow.tasks.list_all()
-            employees = uow.employees.list_all()
-        items = filter_approvals_by_scope(actor, items, tasks, employees)
+            if actor.data_scope is DataScope.GLOBAL:
+                items = uow.approvals.list_all(parsed, task_id)
+            else:
+                # 范围条件下推到 SQL：本队成员所属任务 + 本人发起
+                owner_ids: list[str] = [actor.employee_id]
+                if actor.data_scope is DataScope.TEAM:
+                    owner_ids.extend(
+                        e.employee_id
+                        for e in uow.employees.list_all()
+                        if e.team_id == actor.team_id
+                    )
+                items = uow.approvals.list_all(
+                    parsed,
+                    task_id,
+                    owner_ids=owner_ids,
+                    requester_id=actor.employee_id,
+                )
         return tuple(ApprovalView.of(item) for item in items)
 
     def get(self, actor: Actor, approval_id: str) -> ApprovalView:

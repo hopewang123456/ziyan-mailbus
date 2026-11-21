@@ -77,6 +77,7 @@ class MessagingService:
         pair_id: str | None = None,
         collab_only: bool = False,
         limit: int = 100,
+        offset: int = 0,
     ) -> tuple[MessageView, ...]:
         """全局消息检索：超管看全部，普通用户只看自己收发（含广播）。"""
         viewer_id = (
@@ -91,6 +92,7 @@ class MessagingService:
                 pair_id=pair_id,
                 collab_only=collab_only,
                 limit=limit,
+                offset=offset,
             )
         return tuple(
             MessageView.of(message, delivery_status) for message, delivery_status in rows
