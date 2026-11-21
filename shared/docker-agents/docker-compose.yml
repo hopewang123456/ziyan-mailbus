@@ -75,6 +75,23 @@ services:
       - TEAM_PACK_ROOT=/mailbus/team-pack
     restart: unless-stopped
 
+  # 员工心跳：每个员工用自己的 token 上报 SELF 心跳，避免 180s 超时转 offline
+  agent-heartbeat:
+    build:
+      context: ./heartbeat
+      dockerfile: Dockerfile
+    environment:
+      MAILBUS_API_URL: http://mailbus:9814
+      MAILBUS_TOKENS_FILE: /tokens/hermes-agent-tokens.json
+      HEARTBEAT_INTERVAL_SEC: ${HEARTBEAT_INTERVAL_SEC:-60}
+    volumes:
+      - ../../data/hermes-agent-tokens.json:/tokens/hermes-agent-tokens.json:ro
+    networks:
+      - mailbus-net
+    depends_on:
+      - mailbus
+    restart: unless-stopped
+
   # 可选：web 独立部署（nginx 托管 dist + /api 反代）。
   # 默认不启动；需要时 docker compose --profile web up -d
   web:
