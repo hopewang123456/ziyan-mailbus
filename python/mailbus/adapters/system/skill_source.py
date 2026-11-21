@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ipaddress
+import socket
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
@@ -15,6 +17,13 @@ _TIMEOUT_SEC = 5.0
 
 _VERSION_KEYS = frozenset({"version", "skill_version"})
 _ALLOWED_HTTP_SCHEMES = frozenset({"http", "https"})
+# L7：阻断本机 / 链路本地（含云元数据 169.254.169.254），允许企业私网来源。
+_BLOCKED_V4 = tuple(
+    ipaddress.ip_network(net) for net in ("0.0.0.0/8", "127.0.0.0/8", "169.254.0.0/16")
+)
+_BLOCKED_V6 = tuple(
+    ipaddress.ip_network(net) for net in ("::1/128", "fe80::/10")
+)
 
 
 class SkillSource:
@@ -49,8 +58,13 @@ class SkillSource:
     @staticmethod
     def _http(source_uri: str) -> SkillProbe:
         # L7：仅允许 http/https，避免 file:// 等 scheme 读取本地或内网资源。
-        if urlparse(source_uri).scheme.lower() not in _ALLOWED_HTTP_SCHEMES:
+        parsed = urlparse(source_uri)
+        if parsed.scheme.lower() not in _ALLOWED_HTTP_SCHEMES:
             return SkillProbe(False, error="技能来源仅支持 http/https")
+        if not parsed.hostname:
+            return SkillProbe(False, error="技能来源缺少主机名")
+        if _blocked_host(parsed.hostname):
+            return SkillProbe(False, error="技能来源地址不允许（本机或链路本地）")
         request = urllib.request.Request(
             source_uri, headers={"User-Agent": "mailbus-skill-probe"}
         )
@@ -60,6 +74,26 @@ class SkillSource:
                 return SkillProbe(False, error=f"HTTP {status}")
             text = response.read(_MAX_BYTES).decode("utf-8", errors="replace")
         return SkillProbe(True, version=_version_of(text))
+
+
+def _blocked_host(host: str) -> bool:
+    """解析主机名，命中本机/链路本地网段则拒绝。"""
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False  # 解析失败交给后续请求报错
+    for info in infos:
+        raw = str(info[4][0]).split("%", 1)[0]
+        try:
+            ip = ipaddress.ip_address(raw)
+        except ValueError:
+            continue
+        if ip.version == 6 and ip.ipv4_mapped:
+            ip = ip.ipv4_mapped
+        nets = _BLOCKED_V4 if ip.version == 4 else _BLOCKED_V6
+        if any(ip in net for net in nets):
+            return True
+    return False
 
 
 def _version_of(text: str) -> str:

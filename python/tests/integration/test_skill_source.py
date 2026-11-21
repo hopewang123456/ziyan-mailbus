@@ -43,3 +43,16 @@ def test_http_probe_rejects_non_http_schemes():
         result = src.probe(SkillSourceType.HTTP, uri, "SKILL.md")
         assert not result.reachable
         assert "http" in (result.error or "")
+
+
+def test_http_probe_blocks_loopback_and_link_local():
+    """L7：阻断本机与链路本地地址，避免 SSRF 探测云元数据或本地服务。"""
+    src = SkillSource()
+    for uri in [
+        "http://127.0.0.1:9/x",
+        "http://169.254.169.254/latest/meta-data/",
+        "http://[::1]:9/x",
+    ]:
+        result = src.probe(SkillSourceType.HTTP, uri, "SKILL.md")
+        assert not result.reachable, uri
+        assert "不允许" in (result.error or ""), uri

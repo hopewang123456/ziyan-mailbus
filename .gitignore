@@ -59,6 +59,7 @@ Thumbs.db
 !**/*.env.example
 store/secrets.json
 **/secrets.json
+**/screen-secrets.json
 **/*credentials*.json
 **/*credential*.json
 docker-agents/.env

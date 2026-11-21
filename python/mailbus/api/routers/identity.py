@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 from typing import Literal
 
 from fastapi import APIRouter, Request, Response
@@ -27,10 +28,47 @@ from mailbus.api.schemas.identity import (
     SuperAdminIn,
 )
 from mailbus.api.schemas.org import TeamIn, TeamOut
-from mailbus.core.shared.errors import RateLimitedError
+from mailbus.core.shared.errors import PermissionDeniedError, RateLimitedError
 from mailbus.core.shared.values import Capability
 
 router = APIRouter(prefix="/api/identity", tags=["identity"])
+
+# TestClient 的默认来源为 "testclient"，视为本机调用。
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
+# 容器/局域网部署的来源是私网地址，仍视为可信；公网来源拒绝。
+_TRUSTED_NETWORKS = tuple(
+    ipaddress.ip_network(net)
+    for net in (
+        "127.0.0.0/8",
+        "::1/128",
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "fc00::/7",
+    )
+)
+
+
+def _is_trusted_source(host: str) -> bool:
+    if host in _LOOPBACK_HOSTS:
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return any(ip in net for net in _TRUSTED_NETWORKS)
+
+
+def _guard_bootstrap_source(request: Request) -> None:
+    """M13：首启仅允许本机/私网来源，避免公网暴露时超管被抢注。
+
+    跨公网初始化场景可用 MAILBUS_BOOTSTRAP_ALLOW_REMOTE=1 放开。
+    """
+    if request.app.state.container.settings.bootstrap_allow_remote:
+        return
+    host = request.client.host if request.client else ""
+    if not _is_trusted_source(host):
+        raise PermissionDeniedError("首次初始化仅允许本机或内网访问")
 
 
 def _services(request: Request):
@@ -54,6 +92,7 @@ def get_bootstrap(request: Request) -> BootstrapStatusOut:
 )
 @declares(PUBLIC)
 def create_super_admin(payload: SuperAdminIn, request: Request) -> SessionOut:
+    _guard_bootstrap_source(request)
     _rate_limit(
         request,
         request.app.state.container.public_bootstrap_limiter,

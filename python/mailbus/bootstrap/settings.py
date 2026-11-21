@@ -24,6 +24,7 @@ class Settings:
     max_body_bytes: int = 1_048_576
     retention_days: float = 7.0
     maintenance_interval_sec: float = 3600.0
+    bootstrap_allow_remote: bool = False
 
     @property
     def db_path(self) -> Path:
@@ -81,4 +82,8 @@ class Settings:
             maintenance_interval_sec=float(
                 os.environ.get("MAILBUS_MAINTENANCE_INTERVAL_SEC", "3600")
             ),
+            bootstrap_allow_remote=os.environ.get(
+                "MAILBUS_BOOTSTRAP_ALLOW_REMOTE", "0"
+            )
+            == "1",
         )
