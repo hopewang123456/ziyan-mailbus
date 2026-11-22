@@ -81,9 +81,10 @@ services:
       context: ./heartbeat
       dockerfile: Dockerfile
     environment:
-      MAILBUS_API_URL: http://mailbus:9814
+      MAILBUS_API_URL: http://mailbus:${MAILBUS_API_PORT:-9814}
       MAILBUS_TOKENS_FILE: /tokens/hermes-agent-tokens.json
       HEARTBEAT_INTERVAL_SEC: ${HEARTBEAT_INTERVAL_SEC:-60}
+      TZ: Asia/Shanghai
     volumes:
       - ../../data/hermes-agent-tokens.json:/tokens/hermes-agent-tokens.json:ro
     networks:
