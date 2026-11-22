@@ -77,13 +77,6 @@ public class WorkflowController {
         return service.addVersion(actor, workflowId, input);
     }
 
-    @GetMapping("/{workflow_id}/versions/{version}")
-    public WorkflowDtos.VersionOut version(
-            @PathVariable("workflow_id") String workflowId,
-            @PathVariable int version) {
-        return service.version(workflowId, version);
-    }
-
     @PostMapping("/{workflow_id}/versions/{version}/publish")
     public WorkflowDtos.VersionOut publish(
             @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,

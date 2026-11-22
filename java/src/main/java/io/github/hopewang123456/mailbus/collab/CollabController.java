@@ -3,8 +3,6 @@ package io.github.hopewang123456.mailbus.collab;
 import io.github.hopewang123456.mailbus.auth.Actor;
 import io.github.hopewang123456.mailbus.auth.AuthFilter;
 import io.github.hopewang123456.mailbus.messaging.MessageDtos;
-import io.github.hopewang123456.mailbus.workflow.TaskDtos;
-import io.github.hopewang123456.mailbus.workflow.TaskService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -34,16 +32,14 @@ public class CollabController {
     private final ScreenService screens;
     private final PairService pairs;
     private final CollabMessageService messages;
-    private final TaskService tasks;
     private final CollabStreamService streamService;
 
     public CollabController(ScreenService screens, PairService pairs,
-                            CollabMessageService messages, TaskService tasks,
+                            CollabMessageService messages,
                             CollabStreamService streamService) {
         this.screens = screens;
         this.pairs = pairs;
         this.messages = messages;
-        this.tasks = tasks;
         this.streamService = streamService;
     }
 
@@ -162,13 +158,5 @@ public class CollabController {
             @RequestParam(name = "pair_id") String pairId,
             @RequestParam(defaultValue = "50") @Min(1) @Max(200) int limit) {
         return messages.publicList(pairId, limit);
-    }
-
-    @GetMapping("/public/collab/tasks")
-    public List<TaskDtos.TaskOut> publicCollabTasks(
-            @RequestParam(name = "owner_id") String ownerId,
-            @RequestParam(required = false) String state,
-            @RequestParam(defaultValue = "50") @Min(1) @Max(200) int limit) {
-        return tasks.list(state, ownerId).stream().limit(limit).toList();
     }
 }

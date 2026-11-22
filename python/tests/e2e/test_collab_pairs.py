@@ -148,12 +148,6 @@ def test_pair_lifecycle_and_collab_projection(tmp_path):
         assert client.get("/api/public/collab/messages").status_code == 422
 
         assert client.get("/api/tasks", headers=admin).json() == []
-        public_tasks = client.get(
-            "/api/public/collab/tasks", params={"owner_id": me}
-        )
-        assert public_tasks.status_code == 200, public_tasks.text
-        assert public_tasks.json() == []
-        assert client.get("/api/public/collab/tasks").status_code == 422
 
         created_task = client.post(
             "/api/tasks",
@@ -161,13 +155,10 @@ def test_pair_lifecycle_and_collab_projection(tmp_path):
             headers=admin,
         )
         assert created_task.status_code == 201, created_task.text
-        public_task_rows = client.get(
-            "/api/public/collab/tasks", params={"owner_id": partner_id}
-        )
-        assert public_task_rows.status_code == 200, public_task_rows.text
-        rows = public_task_rows.json()
-        assert len(rows) == 1
-        row = rows[0]
+        task_id = created_task.json()["task_id"]
+        public_task_row = client.get(f"/api/public/collab/tasks/{task_id}")
+        assert public_task_row.status_code == 200, public_task_row.text
+        row = public_task_row.json()
         # 公开任务投影不得暴露 created_by / owner_id / 流程标识 / 内部节点 ID
         assert set(row) == {
             "task_id",
@@ -177,7 +168,7 @@ def test_pair_lifecycle_and_collab_projection(tmp_path):
             "updated_at",
             "nodes",
         }
-        assert row["task_id"] == created_task.json()["task_id"]
+        assert row["task_id"] == task_id
         assert row["title"] == "公开任务"
         for node in row["nodes"]:
             assert set(node) == {"name", "order", "state"}
@@ -329,12 +320,9 @@ def test_public_collab_tasks_hide_creator(tmp_path):
         assert created.status_code == 201, created.text
         assert created.json()["created_by"] == owner_id
 
-        response = client.get(
-            "/api/public/collab/tasks", params={"owner_id": owner_id}
-        )
+        response = client.get(f"/api/public/collab/tasks/{created.json()['task_id']}")
         assert response.status_code == 200, response.text
-        assert len(response.json()) == 1
-        public_task = response.json()[0]
+        public_task = response.json()
         assert set(public_task) == {
             "task_id",
             "title",

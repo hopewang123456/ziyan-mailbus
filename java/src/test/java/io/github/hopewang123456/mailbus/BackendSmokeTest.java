@@ -542,11 +542,6 @@ class BackendSmokeTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
 
-        mvc.perform(get("/api/public/collab/tasks").param("owner_id", me))
-                .andExpect(status().isOk());
-        mvc.perform(get("/api/public/collab/tasks"))
-                .andExpect(status().isUnprocessableEntity());
-
         mvc.perform(post("/api/collab/pairs/" + pairId + "/end").with(auth()))
                 .andExpect(status().isNoContent());
 

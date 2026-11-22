@@ -66,16 +66,6 @@ def list_versions(workflow_id: str, request: Request) -> list[VersionOut]:
     ]
 
 
-@router.get(
-    "/{workflow_id}/versions/{version}",
-    response_model=VersionOut,
-    summary="版本详情",
-)
-def get_version(workflow_id: str, version: int, request: Request) -> VersionOut:
-    get_actor(request)
-    return mapper.to_version_out(_service(request).get_version(workflow_id, version))
-
-
 @router.post(
     "/{workflow_id}/versions",
     response_model=VersionOut,

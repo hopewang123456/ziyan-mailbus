@@ -247,19 +247,20 @@ def test_public_task_detail_exposes_nodes_without_internals(tmp_path):
         assert missing.status_code == 404
 
 
-def test_workflow_rename_delete_and_version_detail(tmp_path):
+def test_workflow_rename_delete_and_published_version(tmp_path):
     with _client(tmp_path) as client:
         headers = _headers(_bootstrap(client))
         workflow_id = _workflow(client, headers)
         _version(client, headers, workflow_id, ["调研", "撰写"])
         _publish(client, headers, workflow_id, 1)
 
-        detail = client.get(
-            f"/api/workflows/{workflow_id}/versions/1", headers=headers
+        versions = client.get(
+            f"/api/workflows/{workflow_id}/versions", headers=headers
         )
-        assert detail.status_code == 200, detail.text
-        assert detail.json()["state"] == "published"
-        assert [node["name"] for node in detail.json()["nodes"]] == ["调研", "撰写"]
+        assert versions.status_code == 200, versions.text
+        published = next(v for v in versions.json() if v["version"] == 1)
+        assert published["state"] == "published"
+        assert [node["name"] for node in published["nodes"]] == ["调研", "撰写"]
 
         renamed = client.patch(
             f"/api/workflows/{workflow_id}",
