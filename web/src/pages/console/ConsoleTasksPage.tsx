@@ -130,6 +130,14 @@ export function ConsoleTasksPage({ can }: { can: (capability: string) => boolean
     await load();
   }
 
+  async function openTask(row: Task) {
+    setSelected(row);
+    setNodeId("");
+    // 列表数据可能滞后；打开详情时拉一次最新快照。
+    const result = await api<Task>(`/api/tasks/${encodeURIComponent(row.task_id)}`);
+    if (result.ok) setSelected(result.data);
+  }
+
   async function advance(task: Task) {
     setErr("");
     setMsg("");
@@ -252,10 +260,7 @@ export function ConsoleTasksPage({ can }: { can: (capability: string) => boolean
           rowKey={(row) => row.task_id}
           loading={loading}
           empty="暂无任务"
-          onRowClick={(row) => {
-            setSelected(row);
-            setNodeId("");
-          }}
+          onRowClick={(row) => void openTask(row)}
           selectedKey={selected?.task_id}
           columns={[
             { key: "title", header: "标题", render: (row) => row.title },
@@ -321,7 +326,42 @@ export function ConsoleTasksPage({ can }: { can: (capability: string) => boolean
       </ConsoleSection>
 
       {selected && (
-        <ConsoleSection title={`推进 · ${selected.title}（${selected.state}）`}>
+        <ConsoleSection
+          title={`详情 · ${selected.title}（${selected.state}）`}
+          actions={
+            <button
+              type="button"
+              className="rounded border border-rail px-2 py-0.5 text-[11px] text-mute hover:text-frost"
+              onClick={() => setSelected(null)}
+            >
+              关闭
+            </button>
+          }
+        >
+          <dl className="mb-3 grid grid-cols-2 gap-x-6 gap-y-1 text-[11px] md:grid-cols-4">
+            <div>
+              <dt className="text-mute">负责人</dt>
+              <dd className="font-mono">{selected.owner_id || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-mute">创建人</dt>
+              <dd className="font-mono">{selected.created_by || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-mute">流程</dt>
+              <dd className="font-mono">
+                {selected.workflow_id
+                  ? `${selected.workflow_id} v${selected.workflow_version}`
+                  : "自由任务"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-mute">创建 / 更新</dt>
+              <dd>
+                {timeText(selected.created_at)} / {timeText(selected.updated_at)}
+              </dd>
+            </div>
+          </dl>
           <div className="mb-3 flex flex-wrap items-end gap-2">
             <label className="text-[11px] text-mute">
               节点

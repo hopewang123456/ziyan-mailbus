@@ -538,7 +538,7 @@ class BackendSmokeTest {
         mvc.perform(get("/api/public/collab/messages"))
                 .andExpect(status().isUnprocessableEntity());
 
-        mvc.perform(get("/api/collab/tasks").with(auth()))
+        mvc.perform(get("/api/tasks").with(auth()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
 

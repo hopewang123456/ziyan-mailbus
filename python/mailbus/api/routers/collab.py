@@ -24,7 +24,7 @@ from mailbus.api.schemas.collab import (
     ScreenOut,
 )
 from mailbus.api.schemas.message import MessageOut, PublicMessageOut
-from mailbus.api.schemas.tasks import PublicTaskOut, TaskOut, TaskStateFilter
+from mailbus.api.schemas.tasks import PublicTaskOut, TaskStateFilter
 from mailbus.api.sse import collab_event_stream
 from mailbus.application.collab.screens import RegisterScreenCommand
 from mailbus.core.shared.errors import CapacityError, NotFoundError, RateLimitedError
@@ -194,22 +194,6 @@ def send_collab_message(payload: CollabMessageIn, request: Request) -> MessageOu
         channel=payload.channel,
     )
     return message_mapper.to_message_out(view)
-
-
-@router.get("/tasks", response_model=list[TaskOut], summary="协同任务列表")
-def list_collab_tasks(
-    request: Request,
-    state: TaskStateFilter | None = None,
-    owner_id: str | None = None,
-    limit: int = Query(default=200, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-) -> list[TaskOut]:
-    actor = get_actor(request)
-    viewer = None if Capability.ALL in actor.capabilities else actor.employee_id
-    views = request.app.state.container.tasks.list_tasks(
-        state, owner_id, limit=limit, offset=offset, viewer_id=viewer
-    )
-    return [task_mapper.to_task_out(view) for view in views]
 
 
 @public_router.post(

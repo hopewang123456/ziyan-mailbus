@@ -121,14 +121,6 @@ public class CollabController {
         return messages.send(actor, input);
     }
 
-    @GetMapping("/collab/tasks")
-    public List<TaskDtos.TaskOut> listCollabTasks(
-            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
-            @RequestParam(required = false) String state,
-            @RequestParam(name = "owner_id", required = false) String ownerId) {
-        return tasks.list(state, ownerId);
-    }
-
     @GetMapping(value = "/collab/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(
             @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor) {

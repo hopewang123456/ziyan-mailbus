@@ -58,7 +58,6 @@ def test_task_list_is_scoped_for_regular_staff() -> None:
             assert titles(admin_headers) == {"给甲的", "指派甲"}
             assert titles(_auth(staff_token)) == {"指派甲"}
             assert titles(_auth(other_token)) == set()
-            assert titles(_auth(other_token), "/api/collab/tasks") == set()
 
             # 过滤参数白名单：非法状态是请求错误，不应落成领域 409
             bad = client.get("/api/tasks?state=bogus", headers=admin_headers)

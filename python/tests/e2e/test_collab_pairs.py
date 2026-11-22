@@ -147,7 +147,7 @@ def test_pair_lifecycle_and_collab_projection(tmp_path):
         assert public_message["pair_id"] == pair_id
         assert client.get("/api/public/collab/messages").status_code == 422
 
-        assert client.get("/api/collab/tasks", headers=admin).json() == []
+        assert client.get("/api/tasks", headers=admin).json() == []
         public_tasks = client.get(
             "/api/public/collab/tasks", params={"owner_id": me}
         )
