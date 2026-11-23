@@ -25,6 +25,10 @@ public class AgentRepository {
                 .stream().findFirst();
     }
 
+    public void delete(String agentId) {
+        jdbc.update("DELETE FROM agents WHERE agent_id = ?", agentId);
+    }
+
     public void save(Agent agent) {
         jdbc.update("""
                 INSERT INTO agents

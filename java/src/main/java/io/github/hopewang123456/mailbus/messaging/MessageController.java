@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -68,5 +69,13 @@ public class MessageController {
             @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
             @PathVariable("message_id") String messageId) {
         return service.attempts(actor, messageId);
+    }
+
+    @DeleteMapping("/messages/{message_id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(
+            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
+            @PathVariable("message_id") String messageId) {
+        service.delete(actor, messageId);
     }
 }

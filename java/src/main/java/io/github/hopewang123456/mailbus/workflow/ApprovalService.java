@@ -118,6 +118,29 @@ public class ApprovalService {
         return load(approvalId);
     }
 
+    /** 撤回审批：发起人或超管可撤回；仅待裁决可撤，阻塞档在任务仍阻塞时恢复执行。 */
+    @Transactional
+    public void withdraw(Actor actor, String approvalId) {
+        ApprovalDtos.ApprovalOut item = load(approvalId);
+        if (!actor.employeeId().equals(item.requesterId())) {
+            Authz.require(actor, Authz.SYSTEM_CONFIG);
+        }
+        if (!"pending".equals(item.status())) {
+            throw ApiException.conflict("invalid_transition", "只有待裁决审批可以撤回");
+        }
+        Instant now = Instant.now();
+        jdbc.update("""
+                UPDATE approval_items SET status = 'withdrawn', resolved_by = ?, resolved_at = ?
+                 WHERE approval_id = ?
+                """, actor.employeeId(), now.getEpochSecond(), approvalId);
+        if ("blocking".equals(item.tier()) && "blocked".equals(taskState(item.taskId()))) {
+            tasks.resume(item.taskId());
+        }
+        outbox.enqueue("approval.withdrawn", java.util.Map.of(
+                "approval_id", approvalId, "task_id", item.taskId(),
+                "tier", item.tier(), "actor_id", actor.employeeId()));
+    }
+
     @Transactional
     public int sweepExpired() {
         Instant now = Instant.now();
@@ -145,6 +168,12 @@ public class ApprovalService {
                 "SELECT * FROM approval_items WHERE approval_id = ?", this::map, approvalId);
         return rows.stream().findFirst()
                 .orElseThrow(() -> ApiException.notFound("审批不存在"));
+    }
+
+    private String taskState(String taskId) {
+        List<String> states = jdbc.query("SELECT state FROM task_tasks WHERE task_id = ?",
+                (row, index) -> row.getString("state"), taskId);
+        return states.stream().findFirst().orElse(null);
     }
 
     private TaskServiceRef taskRef(String taskId) {

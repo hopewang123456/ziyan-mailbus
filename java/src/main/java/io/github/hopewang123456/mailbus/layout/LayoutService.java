@@ -108,6 +108,30 @@ public class LayoutService {
                 site.orgName(), floors);
     }
 
+    /** 工位查询结果：exists=false 表示布局中无此工位；agentId 为空表示未绑定 Agent。 */
+    public record SeatLookup(boolean exists, String agentId) {
+    }
+
+    public SeatLookup lookupSeat(String seatId) {
+        for (LayoutSeed.Floor floor : seed.site().floors()) {
+            for (LayoutSeed.Room room : floor.rooms()) {
+                for (LayoutSeed.Seat seat : room.seats()) {
+                    if (!seat.seatId().equals(seatId)) {
+                        continue;
+                    }
+                    for (Employee employee : employees.listAll()) {
+                        if (seatId.equals(employee.seatId())
+                                && !"deregistered".equals(employee.status())) {
+                            return new SeatLookup(true, employee.agentId());
+                        }
+                    }
+                    return new SeatLookup(true, null);
+                }
+            }
+        }
+        return new SeatLookup(false, null);
+    }
+
     private LayoutDtos.SeatAgentOut agentView(Employee employee, Map<String, String> teamNames,
                                               Map<String, String> positionNames,
                                               TaskDtos.TaskOut task, Agent agent,

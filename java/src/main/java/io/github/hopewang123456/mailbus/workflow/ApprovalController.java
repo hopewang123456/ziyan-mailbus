@@ -4,6 +4,7 @@ import io.github.hopewang123456.mailbus.auth.Actor;
 import io.github.hopewang123456.mailbus.auth.AuthFilter;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,6 +45,14 @@ public class ApprovalController {
     @GetMapping("/{approval_id}")
     public ApprovalDtos.ApprovalOut get(@PathVariable("approval_id") String approvalId) {
         return service.get(approvalId);
+    }
+
+    @DeleteMapping("/{approval_id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void withdraw(
+            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
+            @PathVariable("approval_id") String approvalId) {
+        service.withdraw(actor, approvalId);
     }
 
     @PostMapping("/{approval_id}/resolve")

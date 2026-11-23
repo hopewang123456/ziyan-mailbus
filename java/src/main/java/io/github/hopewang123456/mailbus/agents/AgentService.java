@@ -5,6 +5,7 @@ import io.github.hopewang123456.mailbus.auth.Authz;
 import io.github.hopewang123456.mailbus.common.ApiException;
 import io.github.hopewang123456.mailbus.common.Ids;
 import io.github.hopewang123456.mailbus.events.Outbox;
+import io.github.hopewang123456.mailbus.identity.EmployeeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,11 +17,14 @@ import java.util.Map;
 public class AgentService {
 
     private final AgentRepository repository;
+    private final EmployeeRepository employees;
     private final Ids ids;
     private final Outbox outbox;
 
-    public AgentService(AgentRepository repository, Ids ids, Outbox outbox) {
+    public AgentService(AgentRepository repository, EmployeeRepository employees,
+                        Ids ids, Outbox outbox) {
         this.repository = repository;
+        this.employees = employees;
         this.ids = ids;
         this.outbox = outbox;
     }
@@ -88,6 +92,18 @@ public class AgentService {
         repository.save(updated);
         outbox.enqueue("agents.agent_updated", Map.of("agent_id", agentId));
         return AgentDtos.AgentOut.of(updated);
+    }
+
+    /** 删除台账：仍被未注销员工绑定时拒绝，需先解绑。 */
+    @Transactional
+    public void delete(Actor actor, String agentId) {
+        Authz.require(actor, Authz.SYSTEM_CONFIG);
+        repository.find(agentId).orElseThrow(() -> ApiException.notFound("Agent 不存在"));
+        if (employees.countActiveByAgent(agentId) > 0) {
+            throw ApiException.conflict("invalid_state", "Agent 仍被员工绑定，请先解除绑定");
+        }
+        repository.delete(agentId);
+        outbox.enqueue("agents.agent_deleted", Map.of("agent_id", agentId));
     }
 
     public String summaryName(String agentId) {

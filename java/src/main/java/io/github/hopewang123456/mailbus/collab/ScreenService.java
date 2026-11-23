@@ -64,6 +64,13 @@ public class ScreenService {
                         row.seatId(), false, Instant.now(), row.createdAt())));
     }
 
+    /** 管理端强制下线：不校验大屏密钥，仅要求控制台管理能力。 */
+    @Transactional
+    public void forceLeave(Actor actor, String screenId) {
+        Authz.require(actor, Authz.CONSOLE_ADMIN);
+        leave(screenId);
+    }
+
     public void focus(Actor actor, String screenId, String floorId, String seatId) {
         ensureAdmin(actor);
         if (repository.get(screenId).isEmpty()) {

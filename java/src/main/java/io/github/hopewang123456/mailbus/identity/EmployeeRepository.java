@@ -88,6 +88,15 @@ public class EmployeeRepository {
         }
     }
 
+    /** 统计仍绑定该 Agent 的未注销员工数（用于 Agent 删除前的引用检查）。 */
+    public int countActiveByAgent(String agentId) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM identity_employees"
+                        + " WHERE agent_id = ? AND status <> 'deregistered'",
+                Integer.class, agentId);
+        return count == null ? 0 : count;
+    }
+
     public void revokeSessions(String employeeId) {
         jdbc.update("""
                 UPDATE identity_sessions SET revoked_at = ?

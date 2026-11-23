@@ -4,6 +4,7 @@ import io.github.hopewang123456.mailbus.auth.Actor;
 import io.github.hopewang123456.mailbus.auth.AuthFilter;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,5 +47,13 @@ public class AgentController {
             @PathVariable("agent_id") String agentId,
             @RequestBody Map<String, Object> fields) {
         return service.update(actor, agentId, fields);
+    }
+
+    @DeleteMapping("/{agent_id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(
+            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
+            @PathVariable("agent_id") String agentId) {
+        service.delete(actor, agentId);
     }
 }

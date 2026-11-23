@@ -4,6 +4,7 @@ import io.github.hopewang123456.mailbus.auth.Actor;
 import io.github.hopewang123456.mailbus.auth.AuthFilter;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -42,6 +43,22 @@ public class OrgController {
     @GetMapping("/positions")
     public List<OrgDtos.PositionOut> positions() {
         return service.positions();
+    }
+
+    @DeleteMapping("/teams/{team_id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteTeam(
+            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
+            @PathVariable("team_id") String teamId) {
+        service.deleteTeam(actor, teamId);
+    }
+
+    @DeleteMapping("/positions/{position_id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deletePosition(
+            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
+            @PathVariable("position_id") String positionId) {
+        service.deletePosition(actor, positionId);
     }
 
     @PostMapping("/positions")

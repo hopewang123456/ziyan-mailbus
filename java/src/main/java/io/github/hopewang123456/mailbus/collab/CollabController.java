@@ -2,7 +2,11 @@ package io.github.hopewang123456.mailbus.collab;
 
 import io.github.hopewang123456.mailbus.auth.Actor;
 import io.github.hopewang123456.mailbus.auth.AuthFilter;
+import io.github.hopewang123456.mailbus.common.ApiException;
+import io.github.hopewang123456.mailbus.layout.LayoutService;
 import io.github.hopewang123456.mailbus.messaging.MessageDtos;
+import io.github.hopewang123456.mailbus.workflow.TaskDtos;
+import io.github.hopewang123456.mailbus.workflow.TaskService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -33,14 +37,19 @@ public class CollabController {
     private final PairService pairs;
     private final CollabMessageService messages;
     private final CollabStreamService streamService;
+    private final LayoutService layout;
+    private final TaskService tasks;
 
     public CollabController(ScreenService screens, PairService pairs,
                             CollabMessageService messages,
-                            CollabStreamService streamService) {
+                            CollabStreamService streamService,
+                            LayoutService layout, TaskService tasks) {
         this.screens = screens;
         this.pairs = pairs;
         this.messages = messages;
         this.streamService = streamService;
+        this.layout = layout;
+        this.tasks = tasks;
     }
 
     @GetMapping("/collab/screens")
@@ -75,6 +84,14 @@ public class CollabController {
             @PathVariable("screen_id") String screenId,
             @Valid @RequestBody ScreenDtos.ScreenFocusIn input) {
         screens.focus(actor, screenId, input.floorId(), input.seatId());
+    }
+
+    @PostMapping("/collab/screens/{screen_id}/leave")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void consoleLeave(
+            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
+            @PathVariable("screen_id") String screenId) {
+        screens.forceLeave(actor, screenId);
     }
 
     @GetMapping("/collab/pairs")
@@ -158,5 +175,31 @@ public class CollabController {
             @RequestParam(name = "pair_id") String pairId,
             @RequestParam(defaultValue = "50") @Min(1) @Max(200) int limit) {
         return messages.publicList(pairId, limit);
+    }
+
+    @GetMapping("/public/collab/seats/{seat_id}/tasks")
+    public List<TaskDtos.PublicTaskOut> publicSeatTasks(
+            @PathVariable("seat_id") String seatId) {
+        LayoutService.SeatLookup seat = layout.lookupSeat(seatId);
+        if (!seat.exists()) {
+            throw ApiException.notFound("工位不存在");
+        }
+        if (seat.agentId() == null) {
+            return List.of();
+        }
+        return tasks.list(null, seat.agentId()).stream()
+                .map(TaskDtos.PublicTaskOut::of)
+                .toList();
+    }
+
+    @GetMapping("/public/collab/tasks/{task_id}")
+    public TaskDtos.PublicTaskOut publicTask(
+            @PathVariable("task_id") String taskId,
+            @RequestParam(name = "owner_id", required = false) String ownerId) {
+        TaskDtos.TaskOut task = tasks.get(taskId);
+        if (ownerId != null && !ownerId.equals(task.ownerId())) {
+            throw ApiException.notFound("任务不存在");
+        }
+        return TaskDtos.PublicTaskOut.of(task);
     }
 }

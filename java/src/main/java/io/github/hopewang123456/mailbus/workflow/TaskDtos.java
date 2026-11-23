@@ -29,4 +29,22 @@ public final class TaskDtos {
                           Integer workflowVersion, String ownerId, String createdBy,
                           Instant createdAt, Instant updatedAt, List<TaskNodeOut> nodes) {
     }
+
+    public record PublicTaskNodeOut(String name, int order, String state) {
+    }
+
+    /** 公开协同任务投影：不暴露创建者、负责人、流程标识与内部节点 ID。 */
+    public record PublicTaskOut(String taskId, String title, String state,
+                                Instant createdAt, Instant updatedAt,
+                                List<PublicTaskNodeOut> nodes) {
+
+        public static PublicTaskOut of(TaskOut task) {
+            return new PublicTaskOut(task.taskId(), task.title(), task.state(),
+                    task.createdAt(), task.updatedAt(),
+                    task.nodes().stream()
+                            .map(node -> new PublicTaskNodeOut(
+                                    node.name(), node.order(), node.state()))
+                            .toList());
+        }
+    }
 }

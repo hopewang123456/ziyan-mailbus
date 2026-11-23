@@ -60,6 +60,64 @@ public class OrgService {
         return new OrgDtos.TeamOut(teamId, name);
     }
 
+    /** 删除团队：仍被工位或在册员工引用时拒绝，避免布局出现悬空归属。 */
+    @Transactional
+    public void deleteTeam(Actor actor, String teamId) {
+        Authz.require(actor, Authz.ORG_MANAGE);
+        requireExists("org_teams", "team_id", teamId, "团队不存在");
+        requireNoSeatReference("team_id", teamId, "团队仍被工位引用，请先解除工位归属");
+        requireNoEmployeeReference("team_id", teamId, "团队仍被员工引用，请先调整员工归属");
+        jdbc.update("""
+                UPDATE identity_employees SET team_id = NULL
+                 WHERE team_id = ? AND status = 'deregistered'
+                """, teamId);
+        jdbc.update("DELETE FROM org_teams WHERE team_id = ?", teamId);
+        outbox.enqueue("org.team_deleted", Map.of("team_id", teamId));
+    }
+
+    /** 删除岗位：仍被工位或在册员工引用时拒绝。 */
+    @Transactional
+    public void deletePosition(Actor actor, String positionId) {
+        Authz.require(actor, Authz.ORG_MANAGE);
+        requireExists("org_positions", "position_id", positionId, "岗位不存在");
+        requireNoSeatReference("position_id", positionId, "岗位仍被工位引用，请先解除工位归属");
+        requireNoEmployeeReference("position_id", positionId, "岗位仍被员工引用，请先调整员工归属");
+        jdbc.update("""
+                UPDATE identity_employees SET position_id = NULL
+                 WHERE position_id = ? AND status = 'deregistered'
+                """, positionId);
+        jdbc.update("DELETE FROM org_positions WHERE position_id = ?", positionId);
+        outbox.enqueue("org.position_deleted", Map.of("position_id", positionId));
+    }
+
+    private void requireExists(String table, String column, String id, String message) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM " + table + " WHERE " + column + " = ?",
+                Integer.class, id);
+        if (count == null || count == 0) {
+            throw ApiException.notFound(message);
+        }
+    }
+
+    private void requireNoSeatReference(String column, String id, String message) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM org_seats WHERE " + column + " = ?",
+                Integer.class, id);
+        if (count != null && count > 0) {
+            throw ApiException.conflict("invalid_state", message);
+        }
+    }
+
+    private void requireNoEmployeeReference(String column, String id, String message) {
+        Integer count = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM identity_employees WHERE " + column
+                        + " = ? AND status <> 'deregistered'",
+                Integer.class, id);
+        if (count != null && count > 0) {
+            throw ApiException.conflict("invalid_state", message);
+        }
+    }
+
     public List<OrgDtos.PositionOut> positions() {
         return jdbc.query("SELECT * FROM org_positions ORDER BY created_at",
                 (row, index) -> new OrgDtos.PositionOut(

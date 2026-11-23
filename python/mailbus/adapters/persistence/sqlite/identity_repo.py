@@ -130,6 +130,22 @@ class SqliteEmployeeRepository:
         ).fetchall()
         return self._build_many(rows)
 
+    def clear_team_reference(self, team_id: str) -> None:
+        """团队删除前解除已注销员工的归属，避免遗留悬空引用。"""
+        self._clear_reference("team_id", team_id)
+
+    def clear_position_reference(self, position_id: str) -> None:
+        """岗位删除前解除已注销员工的归属，避免遗留悬空引用。"""
+        self._clear_reference("position_id", position_id)
+
+    def _clear_reference(self, column: str, unit_id: str) -> None:
+        # column 仅由上面两个方法传入固定列名，不接受外部输入。
+        self._conn.execute(
+            f"UPDATE identity_employees SET {column} = NULL, updated_at = ?"
+            f" WHERE {column} = ? AND status = 'deregistered'",
+            (_to_epoch(self._clock.now()), unit_id),
+        )
+
     def list_stale_active(self, cutoff: datetime) -> list[Employee]:
         """心跳巡检候选：active、有过心跳且早于 cutoff 的员工（走覆盖索引）。
 

@@ -298,6 +298,67 @@ def test_team_and_position_delete_guards_seat_references(tmp_path):
         )
         assert denied.status_code == 403
 
+        # 员工引用同样阻止删除，注销后才能删除
+        locked_team = client.post(
+            "/api/org/teams", json={"name": "有人的团队"}, headers=headers
+        ).json()
+        locked_position = client.post(
+            "/api/org/positions", json={"name": "有人的岗位"}, headers=headers
+        ).json()
+        # 归属只能经邀请码带入：邀请决定团队/岗位
+        invite = client.post(
+            "/api/identity/invites",
+            json={
+                "account_type": "human",
+                "team_id": locked_team["team_id"],
+                "position_id": locked_position["position_id"],
+            },
+            headers=headers,
+        ).json()
+        member = client.post(
+            "/api/identity/staff",
+            json={
+                "display_name": "在册成员",
+                "account_type": "human",
+                "invite_code": invite["invite_code"],
+            },
+            headers=headers,
+        ).json()["employee"]["employee_id"]
+
+        assert (
+            client.delete(
+                f"/api/org/teams/{locked_team['team_id']}", headers=headers
+            ).status_code
+            == 409
+        )
+        assert (
+            client.delete(
+                f"/api/org/positions/{locked_position['position_id']}", headers=headers
+            ).status_code
+            == 409
+        )
+
+        assert (
+            client.post(
+                f"/api/identity/staff/{member}/deregister",
+                json={"reason": "调整归属"},
+                headers=headers,
+            ).status_code
+            == 200
+        )
+        assert (
+            client.delete(
+                f"/api/org/teams/{locked_team['team_id']}", headers=headers
+            ).status_code
+            == 204
+        )
+        assert (
+            client.delete(
+                f"/api/org/positions/{locked_position['position_id']}", headers=headers
+            ).status_code
+            == 204
+        )
+
 
 def _staff_token(client: TestClient, headers: dict[str, str], name: str) -> str:
     """创建并激活一名普通员工（无 org_manage），返回 token。"""

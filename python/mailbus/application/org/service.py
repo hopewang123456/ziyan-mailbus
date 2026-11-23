@@ -108,6 +108,12 @@ class OrgService:
                 raise NotFoundError("团队不存在")
             if any(seat.team_id == team_id for seat in uow.seats.list_all()):
                 raise InvalidStateError("团队仍被工位引用，请先解除工位归属")
+            if any(
+                employee.team_id == team_id and employee.status != "deregistered"
+                for employee in uow.employees.list_all()
+            ):
+                raise InvalidStateError("团队仍被员工引用，请先调整员工归属")
+            uow.employees.clear_team_reference(team_id)
             uow.teams.delete(team_id)
             enqueue_events(uow.outbox, rules.delete_team(team, now), self._ids, now)
             uow.commit()
@@ -124,6 +130,13 @@ class OrgService:
                 raise NotFoundError("岗位不存在")
             if any(seat.position_id == position_id for seat in uow.seats.list_all()):
                 raise InvalidStateError("岗位仍被工位引用，请先解除工位归属")
+            if any(
+                employee.position_id == position_id
+                and employee.status != "deregistered"
+                for employee in uow.employees.list_all()
+            ):
+                raise InvalidStateError("岗位仍被员工引用，请先调整员工归属")
+            uow.employees.clear_position_reference(position_id)
             uow.positions.delete(position_id)
             enqueue_events(
                 uow.outbox, rules.delete_position(position, now), self._ids, now

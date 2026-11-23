@@ -144,6 +144,18 @@ public class MessagingService {
         return message;
     }
 
+    /** 删除消息：仅系统配置者可操作；投递尝试一并清理并留审计事件。 */
+    @Transactional
+    public void delete(Actor actor, String messageId) {
+        Authz.require(actor, Authz.SYSTEM_CONFIG);
+        MessageDtos.MessageOut message = find(messageId);
+        jdbc.update("DELETE FROM msg_delivery_attempts WHERE message_id = ?", messageId);
+        jdbc.update("DELETE FROM msg_messages WHERE message_id = ?", messageId);
+        outbox.enqueue("message.deleted", Map.of(
+                "message_id", message.messageId(),
+                "actor_id", actor.employeeId()));
+    }
+
     public List<MessageDtos.DeliveryAttemptOut> attempts(Actor actor, String messageId) {
         MessageDtos.MessageOut message = find(messageId);
         ensureReadable(actor, message);
