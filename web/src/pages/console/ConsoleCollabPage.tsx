@@ -18,7 +18,7 @@ type Tab = "staff" | "pairs" | "messages" | "tasks" | "screens";
 const TABS: Array<{ key: Tab; label: string }> = [
   { key: "staff", label: "在线员工" },
   { key: "pairs", label: "结对协同" },
-  { key: "messages", label: "A2A 消息" },
+  { key: "messages", label: "结对消息" },
   { key: "tasks", label: "任务接力" },
   { key: "screens", label: "大屏遥控" },
 ];
@@ -655,7 +655,7 @@ export function ConsoleCollabPage({ can }: { can: (capability: string) => boolea
 
       {tab === "messages" && (
         <>
-          <ConsoleSection title="发送 A2A 消息">
+          <ConsoleSection title="发送结对消息">
             <div className="flex flex-wrap items-end gap-2">
               <label className="text-[11px] text-mute">
                 接收员工
