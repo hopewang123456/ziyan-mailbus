@@ -55,6 +55,11 @@ class BackendSmokeTest {
                 () -> Path.of("..", "config", "office-layout.json").toAbsolutePath().toString());
         registry.add("mailbus.metrics-manifest-path", () -> Path.of("..", "shared", "config",
                 "mailbus", "metrics-manifest.json").toAbsolutePath().toString());
+        // 测试禁用后台调度：全部拉到 1 小时以上，避免调度线程与 MockMvc 请求抢占同一 SQLite 连接。
+        // dispatch 场景由测试显式调 dispatcher.tick() 驱动。
+        registry.add("mailbus.dispatch-interval-seconds", () -> 3600);
+        registry.add("mailbus.heartbeat-sweep-seconds", () -> 3600);
+        registry.add("mailbus.stream-interval-ms", () -> 3600_000);
     }
 
     @Test
@@ -174,6 +179,76 @@ class BackendSmokeTest {
 
         mvc.perform(get("/api/org/positions").with(auth()))
                 .andExpect(status().isOk());
+
+        MvcResult team = mvc.perform(post("/api/org/teams").with(auth())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"临时组\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String teamId = json(team).path("team_id").asText();
+        mvc.perform(delete("/api/org/teams/" + teamId).with(auth()))
+                .andExpect(status().isNoContent());
+        mvc.perform(delete("/api/org/teams/" + teamId).with(auth()))
+                .andExpect(status().isNotFound());
+
+        MvcResult position = mvc.perform(post("/api/org/positions").with(auth())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"临时岗\",\"capabilities\":[]}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String positionId = json(position).path("position_id").asText();
+        mvc.perform(delete("/api/org/positions/" + positionId).with(auth()))
+                .andExpect(status().isNoContent());
+        mvc.perform(delete("/api/org/positions/" + positionId).with(auth()))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(delete("/api/agents/" + agentId).with(auth()))
+                .andExpect(status().isNoContent());
+        mvc.perform(delete("/api/agents/" + agentId).with(auth()))
+                .andExpect(status().isNotFound());
+
+        MvcResult lockedTeam = mvc.perform(post("/api/org/teams").with(auth())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"有人的团队\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String lockedTeamId = json(lockedTeam).path("team_id").asText();
+        MvcResult lockedPosition = mvc.perform(post("/api/org/positions").with(auth())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"有人的岗位\",\"capabilities\":[]}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String lockedPositionId = json(lockedPosition).path("position_id").asText();
+
+        // 归属只能经邀请码带入：邀请决定团队/岗位
+        MvcResult invite = mvc.perform(post("/api/identity/invites").with(auth())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"account_type\":\"human\","
+                                + "\"team_id\":\"" + lockedTeamId + "\","
+                                + "\"position_id\":\"" + lockedPositionId + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String inviteCode = json(invite).path("invite_code").asText();
+        MvcResult member = mvc.perform(post("/api/identity/staff").with(auth())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"display_name\":\"在册成员\",\"account_type\":\"human\","
+                                + "\"invite_code\":\"" + inviteCode + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String memberId = json(member).path("employee").path("employee_id").asText();
+
+        mvc.perform(delete("/api/org/teams/" + lockedTeamId).with(auth()))
+                .andExpect(status().isConflict());
+        mvc.perform(delete("/api/org/positions/" + lockedPositionId).with(auth()))
+                .andExpect(status().isConflict());
+
+        mvc.perform(post("/api/identity/staff/" + memberId + "/deregister").with(auth()))
+                .andExpect(status().isOk());
+
+        mvc.perform(delete("/api/org/teams/" + lockedTeamId).with(auth()))
+                .andExpect(status().isNoContent());
+        mvc.perform(delete("/api/org/positions/" + lockedPositionId).with(auth()))
+                .andExpect(status().isNoContent());
 
         mvc.perform(get("/api/org/seats").with(auth()))
                 .andExpect(status().isOk());
@@ -316,6 +391,21 @@ class BackendSmokeTest {
                 .andReturn();
         String taskId = json(task).path("task_id").asText();
 
+        MvcResult approval = mvc.perform(post("/api/approvals").with(auth())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"task_id\":\"" + taskId
+                                + "\",\"title\":\"放行\",\"tier\":\"advisory\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String approvalId = json(approval).path("approval_id").asText();
+        mvc.perform(delete("/api/approvals/" + approvalId).with(auth()))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/approvals/" + approvalId).with(auth()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("withdrawn"));
+        mvc.perform(delete("/api/approvals/" + approvalId).with(auth()))
+                .andExpect(status().isConflict());
+
         mvc.perform(post("/api/tasks/" + taskId + "/dispatch").with(auth()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("queued"))
@@ -335,6 +425,21 @@ class BackendSmokeTest {
         mvc.perform(get("/api/tasks").with(auth()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].task_id").value(taskId));
+
+        mvc.perform(get("/api/public/collab/tasks/" + taskId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.task_id").value(taskId))
+                .andExpect(jsonPath("$.title").value("本周周报"))
+                .andExpect(jsonPath("$.owner_id").doesNotExist())
+                .andExpect(jsonPath("$.created_by").doesNotExist())
+                .andExpect(jsonPath("$.workflow_id").doesNotExist())
+                .andExpect(jsonPath("$.nodes[0].node_id").doesNotExist());
+
+        mvc.perform(get("/api/public/collab/tasks/" + taskId + "?owner_id=other"))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(get("/api/public/collab/seats/missing-seat/tasks"))
+                .andExpect(status().isNotFound());
 
         mvc.perform(get("/api/tasks/audit/stats").with(auth()))
                 .andExpect(status().isOk())
@@ -365,6 +470,11 @@ class BackendSmokeTest {
 
         mvc.perform(get("/api/inbox").with(auth()))
                 .andExpect(status().isOk());
+
+        mvc.perform(delete("/api/messages/" + messageId).with(auth()))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/messages/" + messageId).with(auth()))
+                .andExpect(status().isNotFound());
     }
 
     @Test
@@ -471,6 +581,14 @@ class BackendSmokeTest {
         mvc.perform(get("/api/collab/screens").with(auth()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].screen_id").value("s-1"))
+                .andExpect(jsonPath("$[0].online").value(false));
+
+        mvc.perform(post("/api/public/collab/screens/s-1/heartbeat"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/collab/screens/s-1/leave").with(auth()))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/collab/screens").with(auth()))
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].online").value(false));
 
         mvc.perform(get("/api/collab/screens"))
