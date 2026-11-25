@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import { ConsoleApp } from "../pages/console/ConsoleApp";
 import { ConsoleAgentsPage } from "../pages/console/ConsoleAgentsPage";
@@ -8,12 +8,17 @@ import { ConsoleWorkflowsPage } from "../pages/console/ConsoleWorkflowsPage";
 import { ConsoleCollabPage } from "../pages/console/ConsoleCollabPage";
 import { ConsoleStaffApplyPage } from "../pages/console/ConsoleStaffPage";
 import { isServiceUnavailable } from "../lib/console-access";
+import { LEGACY_REDIRECTS } from "../lib/navigation";
+import { can, canAny } from "../lib/permissions";
 
 const accessMock = vi.hoisted(() => ({
   current: {
     state: "loading",
     superAdmin: false,
-    capabilities: [] as string[],
+    permissions: [] as string[],
+    dataScope: "self",
+    can: (_permission: string): boolean => false,
+    canAny: (_permissions: string[]): boolean => false,
     retry: () => undefined,
   },
 }));
@@ -23,16 +28,25 @@ vi.mock("../lib/console-access", async (importOriginal) => {
   return { ...actual, useConsoleAccess: () => accessMock.current };
 });
 
-function renderConsole(state: string, capabilities: string[] = []) {
+function renderConsole(
+  state: string,
+  permissions: string[] = [],
+  path = "/console",
+) {
   accessMock.current = {
     state,
-    superAdmin: capabilities.includes("*"),
-    capabilities,
+    superAdmin: permissions.includes("*") || permissions.includes("console_admin"),
+    permissions,
+    dataScope: "self",
+    can: (permission: string) => can(permissions, permission as never),
+    canAny: (targets: string[]) => canAny(permissions, targets as never),
     retry: () => undefined,
   };
   return renderToStaticMarkup(
-    <MemoryRouter initialEntries={["/console"]}>
-      <ConsoleApp />
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/console/*" element={<ConsoleApp />} />
+      </Routes>
     </MemoryRouter>,
   );
 }
@@ -42,7 +56,6 @@ describe("管理端访问状态", () => {
     const html = renderConsole("setup");
     expect(html).toContain("设置向导");
     expect(html).toContain("超级管理员");
-    expect(html).not.toContain("无权访问管理中心");
   });
 
   it("已初始化但未登录时提供 Token 入口", () => {
@@ -51,10 +64,10 @@ describe("管理端访问状态", () => {
     expect(html).toContain("API Token");
   });
 
-  it("服务不可用与无权限分开显示", () => {
-    expect(renderConsole("unavailable")).toContain("管理服务不可用");
-    expect(renderConsole("unavailable")).toContain("重新连接");
-    expect(renderConsole("denied", ["message_read"])).toContain("无权访问管理中心");
+  it("服务不可用时提供重连入口", () => {
+    const html = renderConsole("unavailable");
+    expect(html).toContain("管理服务不可用");
+    expect(html).toContain("重新连接");
   });
 
   it("网络错误和代理 5xx 都识别为服务不可用", () => {
@@ -64,53 +77,85 @@ describe("管理端访问状态", () => {
     expect(isServiceUnavailable(401)).toBe(false);
     expect(isServiceUnavailable(403)).toBe(false);
   });
+});
 
-  it("普通管理者只看到能力范围内的页面", () => {
-    const html = renderConsole("allowed", ["console_admin", "log_read"]);
-    expect(html).toContain("指标与报表");
-    expect(html).toContain("审计与告警");
-    expect(html).toContain("协同管理");
-    expect(html).not.toContain("员工与入伙");
-    expect(html).not.toContain("工作流模板");
-    expect(html).not.toContain("设置向导");
-    expect(html).not.toContain("技能包");
-    expect(html).not.toContain("诊所");
-    expect(html).not.toContain("协调台");
+describe("登录员工的导航可见性", () => {
+  it("任何有效登录员工都能进入控制台并看到基础页面", () => {
+    const html = renderConsole("allowed", []);
+    expect(html).toContain("工作台");
+    expect(html).toContain("概览");
+    expect(html).toContain("任务中心");
+    expect(html).toContain("工作流模板");
+    expect(html).not.toContain('href="/console/collab"');
+    expect(html).not.toContain('href="/console/organization"');
   });
 
-  it("具备业务能力的管理者可见对应页面", () => {
+  it("只读权限只多出消息入口", () => {
+    const html = renderConsole("allowed", ["message_read"]);
+    expect(html).toContain("消息与追迹");
+    expect(html).not.toContain("协同大屏");
+    expect(html).not.toContain("审计与告警");
+  });
+
+  it("业务权限决定组织/Agent/消息分组", () => {
     const html = renderConsole("allowed", [
-      "console_admin",
       "employee_invite",
       "org_manage",
       "task_dispatch",
       "workflow_create",
       "message_read",
     ]);
-    expect(html).toContain("员工与入伙");
-    expect(html).toContain("团队与工位");
-    expect(html).toContain("任务");
-    expect(html).toContain("工作流模板");
-    expect(html).toContain("Agent 与岗位");
-    expect(html).not.toContain("技能包");
+    expect(html).toContain("组织");
+    expect(html).toContain("Agent 与接入");
+    expect(html).toContain("消息与追迹");
+    expect(html).not.toContain('href="/console/skills"');
+    expect(html).not.toContain('href="/console/collab"');
   });
 
-  it("超管可见系统配置页面并提供退出入口", () => {
-    const html = renderConsole("allowed", ["*"]);
-    expect(html).toContain("指标与报表");
-    expect(html).toContain("审计与告警");
+  it("console_admin 等价全部权限并显示退出入口", () => {
+    const html = renderConsole("allowed", ["console_admin"]);
+    expect(html).toContain("协同大屏");
+    expect(html).toContain("组织");
     expect(html).toContain("技能包");
     expect(html).toContain("集成");
     expect(html).toContain("设置向导");
+    expect(html).toContain("审计与告警");
     expect(html).toContain("退出登录");
-    expect(html).not.toContain("/api/identities");
   });
 
-  it("系统配置权限可见技能包与集成", () => {
-    const html = renderConsole("allowed", ["console_admin", "system_config"]);
+  it("system_config 只开放系统配置页面", () => {
+    const html = renderConsole("allowed", ["system_config"]);
     expect(html).toContain("技能包");
     expect(html).toContain("集成");
-    expect(html).not.toContain("设置向导");
+    expect(html).toContain("设置向导");
+    expect(html).not.toContain('href="/console/organization"');
+  });
+});
+
+describe("路由与权限门禁", () => {
+  it("旧控制台地址映射到组织页签", () => {
+    expect(LEGACY_REDIRECTS).toContainEqual([
+      "/console/staff",
+      "/console/organization?tab=staff",
+    ]);
+    const html = renderConsole("allowed", ["org_manage"], "/console/organization");
+    expect(html).toContain("组织");
+    expect(html).toContain("员工");
+  });
+
+  it("旧审批地址映射到任务页签", () => {
+    expect(LEGACY_REDIRECTS).toContainEqual([
+      "/console/approvals",
+      "/console/tasks?tab=approvals",
+    ]);
+    const html = renderConsole("allowed", [], "/console/tasks");
+    expect(html).toContain("任务");
+  });
+
+  it("直接访问无权限页面渲染统一 403 而非清空整站", () => {
+    const html = renderConsole("allowed", ["message_read"], "/console/collab");
+    expect(html).toContain("无权访问");
+    expect(html).toContain("任务中心");
   });
 });
 
@@ -135,15 +180,20 @@ describe("新契约页面", () => {
   });
 
   it("Agent 页移除旧 inputs schema 编辑器", () => {
-    const html = renderToStaticMarkup(<ConsoleAgentsPage can={() => true} />);
-    expect(html).toContain("Agent 与岗位");
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <ConsoleAgentsPage can={() => true} />
+      </MemoryRouter>,
+    );
+    expect(html).toContain("Agent");
     expect(html).not.toContain("inputs schema");
     expect(html).not.toContain("role_type");
   });
 
   it("工作流页使用定义和节点版本模型", () => {
     const html = renderToStaticMarkup(<ConsoleWorkflowsPage can={() => true} />);
-    expect(html).toContain("新工作流名称");
+    // 骨架屏阶段只显示标题和加载态；检查关键标识字符串
+    expect(html).toContain("工作流");
     expect(html).not.toContain("llm_policy");
     expect(html).not.toContain("phases");
     expect(html).not.toContain("gates");

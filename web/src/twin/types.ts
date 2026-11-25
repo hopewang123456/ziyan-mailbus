@@ -12,7 +12,8 @@ export interface SeatAgent {
   agent_framework?: string;
   display_name: string;
   position: string;
-  team: string;
+  /** 公开投影白名单不含团队名，后端可能不下发。 */
+  team?: string;
   status: AgentStatus;
   task: string;
   /** 任务执行态投影（当前节点 / 节点状态 / 进度）。 */

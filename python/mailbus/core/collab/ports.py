@@ -6,14 +6,21 @@ from typing import Protocol, Self
 
 from mailbus.core.collab.models import Pair, Screen
 from mailbus.core.identity.ports import EmployeeRepository
+from mailbus.core.shared.ports import AuditPort
 
 
 class ScreenRepository(Protocol):
+    def list_page(self, limit: int, offset: int) -> list[Screen]: ...
+
+    def count(self) -> int: ...
+
     def list_all(self, limit: int | None = None) -> list[Screen]: ...
 
     def get(self, screen_id: str) -> Screen | None: ...
 
     def save(self, screen: Screen) -> None: ...
+
+    def delete(self, screen_id: str) -> None: ...
 
 
 class PairRepository(Protocol):
@@ -41,6 +48,7 @@ class CollabUnitOfWork(Protocol):
     screens: ScreenRepository
     pairs: PairRepository
     employees: EmployeeRepository
+    audit: AuditPort
 
     def __enter__(self) -> Self: ...
 

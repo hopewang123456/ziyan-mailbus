@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from mailbus.core.agents.models import Agent
 from mailbus.core.agents.values import (
@@ -120,4 +120,99 @@ def delete_agent(agent: Agent, now: datetime) -> tuple[DomainEvent, ...]:
             name=agent.name,
             at=now.isoformat(),
         ),
+    )
+
+
+ROTATION_GRACE = timedelta(hours=24)
+HEARTBEAT_TIMEOUT = timedelta(seconds=180)
+
+
+def is_online(agent: Agent, now: datetime) -> bool:
+    """运行态在线判定只依赖心跳；注册记录本身永不因离线删除。"""
+    if agent.deleted_at is not None or not agent.enabled:
+        return False
+    if agent.last_seen_at is None:
+        return False
+    return now - agent.last_seen_at <= HEARTBEAT_TIMEOUT
+
+
+def dispatchable(agent: Agent, now: datetime) -> bool:
+    """待审批、被拒绝、离线、停用均不得派单。"""
+    return (
+        agent.endpoint_review_status == "approved"
+        and bool(agent.endpoint)
+        and is_online(agent, now)
+    )
+
+
+def rotate_token(
+    agent: Agent,
+    *,
+    ciphertext: str,
+    lookup_hash: str,
+    now: datetime,
+) -> tuple[Agent, tuple[DomainEvent, ...]]:
+    """轮转 token：旧 token 保留 24h 宽限，随后应被吊销清理。"""
+    updated = replace(
+        agent,
+        endpoint_token_prev=agent.endpoint_token,
+        endpoint_token_prev_lookup_hash=agent.endpoint_token_lookup_hash,
+        endpoint_token_prev_expires_at=now + ROTATION_GRACE if agent.endpoint_token else None,
+        endpoint_token=ciphertext,
+        endpoint_token_lookup_hash=lookup_hash,
+        updated_at=now,
+    )
+    return updated, (_event("agents.token_rotated", agent_id=agent.agent_id,
+                            at=now.isoformat()),)
+
+
+def revoke_token(agent: Agent, now: datetime) -> tuple[Agent, tuple[DomainEvent, ...]]:
+    """吊销后当前与宽限 token 同时失效，入站立即 401。"""
+    updated = replace(
+        agent,
+        endpoint_token=None,
+        endpoint_token_lookup_hash=None,
+        endpoint_token_prev=None,
+        endpoint_token_prev_lookup_hash=None,
+        endpoint_token_prev_expires_at=None,
+        last_seen_at=None,
+        updated_at=now,
+    )
+    return updated, (_event("agents.token_revoked", agent_id=agent.agent_id,
+                            at=now.isoformat()),)
+
+
+def heartbeat(agent: Agent, endpoint: str | None, now: datetime) -> Agent:
+    """心跳只更新在线态；新上报地址一律进入待审批，不覆盖已批准终点。"""
+    changes: dict[str, object] = {"last_seen_at": now, "updated_at": now}
+    if endpoint and endpoint != agent.endpoint and endpoint != agent.pending_endpoint:
+        changes["pending_endpoint"] = endpoint
+        changes["endpoint_review_status"] = "pending"
+    return replace(agent, **changes)
+
+
+def approve_endpoint(agent: Agent, reviewer: str, now: datetime) -> Agent:
+    if not agent.pending_endpoint:
+        raise InvalidStateError("没有待审批的 endpoint")
+    return replace(
+        agent,
+        endpoint=agent.pending_endpoint,
+        pending_endpoint=None,
+        endpoint_review_status="approved",
+        endpoint_approved_by=reviewer,
+        endpoint_approved_at=now,
+        updated_at=now,
+    )
+
+
+def reject_endpoint(agent: Agent, reviewer: str, now: datetime) -> Agent:
+    if not agent.pending_endpoint:
+        raise InvalidStateError("没有待审批的 endpoint")
+    return replace(
+        agent,
+        pending_endpoint=None,
+        endpoint_review_status="rejected",
+        endpoint_approved_by=reviewer,
+        endpoint_approved_at=now,
+        updated_at=now,
     )

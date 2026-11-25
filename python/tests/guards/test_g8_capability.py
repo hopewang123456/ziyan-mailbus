@@ -11,10 +11,14 @@ from mailbus.core.shared.values import Capability
 
 PUBLIC_WRITE_ROUTES = {
     "/api/identity/bootstrap/super-admin",
-    "/api/identity/staff",
+    "/api/invites/accept",
+    "/api/agents/register",
     "/api/public/collab/screens",
     "/api/public/collab/screens/{screen_id}/heartbeat",
     "/api/public/collab/screens/{screen_id}/leave",
+}
+AGENT_TOKEN_WRITE_ROUTES = {
+    "/api/a2a/messages",
 }
 SELF_WRITE_ROUTES = {
     "/api/identity/staff/{employee_id}/heartbeat",
@@ -22,6 +26,10 @@ SELF_WRITE_ROUTES = {
     "/api/collab/screens/{screen_id}/heartbeat",
     "/api/collab/pairs",
     "/api/collab/pairs/{pair_id}/end",
+    "/api/tasks/{task_id}/cancel",
+    "/api/tasks/{task_id}/nodes/{node_id}/claim",
+    "/api/tasks/{task_id}/nodes/{node_id}/rerun-join",
+    "/api/workflows/{workflow_id}/versions/{version}/validate",
 }
 
 
@@ -56,7 +64,7 @@ def test_every_write_route_declares_capability() -> None:
         declared = getattr(endpoint, "__mailbus_capability__", None)
         if declared in valid:
             continue
-        if declared == PUBLIC and path in PUBLIC_WRITE_ROUTES:
+        if declared == PUBLIC and path in PUBLIC_WRITE_ROUTES | AGENT_TOKEN_WRITE_ROUTES:
             continue
         if declared == SELF and path in SELF_WRITE_ROUTES:
             continue

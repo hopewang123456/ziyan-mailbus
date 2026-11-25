@@ -30,7 +30,7 @@ public final class LayoutDtos {
                                 List<LayoutFloorOut> floors) {
     }
 
-    public record PublicSeatAgentOut(String displayName, String position, String team,
+    public record PublicSeatAgentOut(String displayName, String position,
                                      String status, String task, String agentName,
                                      String agentFramework, String taskState,
                                      String currentNode, String nodeState,

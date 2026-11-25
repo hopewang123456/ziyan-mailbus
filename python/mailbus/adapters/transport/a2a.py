@@ -30,8 +30,10 @@ class A2aTransport:
         self,
         resolve_endpoint: Callable[[str], str | None],
         bearer_token: str | None = None,
+        resolve_token: Callable[[str], str | None] | None = None,
     ) -> None:
         self._resolve = resolve_endpoint
+        self._resolve_token = resolve_token
         self._token = bearer_token or os.getenv("A2A_BEARER_TOKEN") or None
 
     def send(self, event: OutboxEvent) -> DeliveryResult:
@@ -43,8 +45,10 @@ class A2aTransport:
             return DeliveryResult(ok=False, error_code="a2a_invalid_endpoint")
         body = json.dumps(event_document(event), ensure_ascii=False).encode("utf-8")
         headers = {"Content-Type": "application/json"}
-        if self._token:
-            headers["Authorization"] = f"Bearer {self._token}"
+        token = self._resolve_token(recipient) if self._resolve_token else None
+        token = token or self._token
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
         request = urllib.request.Request(
             endpoint,
             data=body,

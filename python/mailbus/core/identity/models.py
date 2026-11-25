@@ -23,7 +23,9 @@ class Employee:
     team_id: str | None = None
     position_id: str | None = None
     seat_id: str | None = None
+    # capabilities 承载登录权限（契约字段 permissions）；skills 才是业务技能标签。
     capabilities: frozenset[Capability] = frozenset()
+    skills: frozenset[str] = frozenset()
     data_scope: DataScope = DataScope.SELF
     file_scope: FileScope = FileScope()
     endpoint: str | None = None
@@ -31,6 +33,8 @@ class Employee:
     approved_at: datetime | None = None
     last_heartbeat: datetime | None = None
     agent_id: str | None = None
+    deleted_at: datetime | None = None
+    deleted_by: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +48,7 @@ class Registration:
     position_id: str | None = None
     seat_id: str | None = None
     capabilities: frozenset[Capability] = frozenset()
+    skills: frozenset[str] = frozenset()
     data_scope: DataScope = DataScope.SELF
     file_scope: FileScope = FileScope()
     endpoint: str | None = None
@@ -80,20 +85,26 @@ def subject_of(employee: Employee) -> Subject:
 
 @dataclass(frozen=True, slots=True)
 class Invite:
-    """一次性邀请码：携带预授予的能力与范围。"""
+    """一次性邀请码：携带预授予的权限与范围快照。"""
 
     invite_code: str
     account_type: AccountType
     team_id: str | None = None
     position_id: str | None = None
     data_scope: DataScope = DataScope.SELF
-    capabilities: frozenset[Capability] = frozenset()
+    permissions: frozenset[Capability] = frozenset()
     created_by: str | None = None
     created_at: datetime | None = None
     expires_at: datetime | None = None
     consumed_by: str | None = None
     consumed_at: datetime | None = None
+    revoked_at: datetime | None = None
+    revoked_by: str | None = None
 
     @property
     def consumed(self) -> bool:
         return self.consumed_at is not None
+
+    @property
+    def revoked(self) -> bool:
+        return self.revoked_at is not None

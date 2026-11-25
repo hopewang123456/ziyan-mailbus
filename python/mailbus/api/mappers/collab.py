@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from mailbus.api.schemas.collab import PairOut, ScreenOut
+from mailbus.api.schemas.collab import PairOut
+from mailbus.api.schemas.contract.screen import ScreenConfigIn, ScreenConfigOut, ScreenOut
 from mailbus.application.collab.pairs import PairView
-from mailbus.application.collab.screens import ScreenView
+from mailbus.application.collab.screens import ScreenConfigView, ScreenView
 
 
 def to_pair(view: PairView) -> PairOut:
@@ -18,13 +19,27 @@ def to_pair(view: PairView) -> PairOut:
     )
 
 
-def to_screen(view: ScreenView) -> ScreenOut:
+def to_screen_view(view: ScreenView) -> ScreenOut:
     return ScreenOut(
         screen_id=view.screen_id,
         name=view.name,
-        floor_id=view.floor_id,
-        seat_id=view.seat_id,
+        source=view.source,
         online=view.online,
-        last_seen=view.last_seen,
-        secret=view.secret,
+        last_seen_at=view.last_seen_at,
+        config_version=view.config_version,
+        published_config_version=view.published_config_version,
+        team_bound=view.team_bound,
+        play_state=view.play_state,
+    )
+
+
+def to_screen_config(view: ScreenConfigView) -> ScreenConfigOut:
+    config = ScreenConfigIn(**view.config) if view.config else None
+    return ScreenConfigOut(
+        screen_id=view.screen_id,
+        config_version=view.config_version,
+        published_config_version=view.published_config_version,
+        updated_at=view.updated_at,
+        play_state=view.play_state,
+        config=config,
     )

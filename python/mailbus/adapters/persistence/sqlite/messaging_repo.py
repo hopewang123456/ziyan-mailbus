@@ -79,18 +79,19 @@ class SqliteMessageRepository:
         )
         return [_message_from_row(row) for row in rows]
 
-    def search(
+    def _filters(
         self,
         *,
         viewer_id: str | None = None,
         agent: str | None = None,
+        employee_id: str | None = None,
+        channel: str | None = None,
+        kind: str | None = None,
         status: str | None = None,
         since: datetime | None = None,
         pair_id: str | None = None,
         collab_only: bool = False,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> list[tuple[Message, str]]:
+    ) -> tuple[list[str], list[object]]:
         clauses = ["1 = 1"]
         params: list[object] = []
         if collab_only:
@@ -106,12 +107,49 @@ class SqliteMessageRepository:
         if agent:
             clauses.append("(m.sender_id = ? OR m.recipient_id = ?)")
             params.extend([agent, agent])
+        if employee_id:
+            clauses.append("(m.sender_id = ? OR m.recipient_id = ?)")
+            params.extend([employee_id, employee_id])
+        if channel:
+            clauses.append("m.channel = ?")
+            params.append(channel)
+        if kind:
+            clauses.append("m.kind = ?")
+            params.append(kind)
         if since is not None:
             clauses.append("m.created_at >= ?")
             params.append(_to_epoch(since))
         if status:
             clauses.append(f"{_DELIVERY_STATUS} = ?")
             params.append(status)
+        return clauses, params
+
+    def search(
+        self,
+        *,
+        viewer_id: str | None = None,
+        agent: str | None = None,
+        employee_id: str | None = None,
+        channel: str | None = None,
+        kind: str | None = None,
+        status: str | None = None,
+        since: datetime | None = None,
+        pair_id: str | None = None,
+        collab_only: bool = False,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[tuple[Message, str]]:
+        clauses, params = self._filters(
+            viewer_id=viewer_id,
+            agent=agent,
+            employee_id=employee_id,
+            channel=channel,
+            kind=kind,
+            status=status,
+            since=since,
+            pair_id=pair_id,
+            collab_only=collab_only,
+        )
         params.append(limit)
         params.append(offset)
         rows = self._conn.execute(
@@ -122,6 +160,37 @@ class SqliteMessageRepository:
             params,
         )
         return [(_message_from_row(row), row["delivery_status"]) for row in rows]
+
+    def count_search(
+        self,
+        *,
+        viewer_id: str | None = None,
+        agent: str | None = None,
+        employee_id: str | None = None,
+        channel: str | None = None,
+        kind: str | None = None,
+        status: str | None = None,
+        since: datetime | None = None,
+        pair_id: str | None = None,
+        collab_only: bool = False,
+    ) -> int:
+        clauses, params = self._filters(
+            viewer_id=viewer_id,
+            agent=agent,
+            employee_id=employee_id,
+            channel=channel,
+            kind=kind,
+            status=status,
+            since=since,
+            pair_id=pair_id,
+            collab_only=collab_only,
+        )
+        row = self._conn.execute(
+            f"SELECT COUNT(*) AS total FROM msg_messages m{_LATEST_ATTEMPT_JOIN}"
+            f" WHERE {' AND '.join(clauses)}",
+            params,
+        ).fetchone()
+        return int(row["total"])
 
     def count(self) -> int:
         return self._conn.execute("SELECT COUNT(*) AS total FROM msg_messages").fetchone()[

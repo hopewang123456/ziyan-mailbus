@@ -23,19 +23,19 @@ def _bootstrap(client: TestClient) -> str:
 
 
 def _staff(client: TestClient, admin_headers: dict[str, str]) -> tuple[str, str]:
-    applied = client.post(
-        "/api/identity/staff", json={"display_name": "员工丁", "account_type": "human"}
-    )
-    employee_id = applied.json()["employee"]["employee_id"]
-    client.post(
-        f"/api/identity/staff/{employee_id}/review",
-        json={"approved": True},
+    invite = client.post(
+        "/api/employees/invite",
+        json={"display_name": "员工丁"},
         headers=admin_headers,
     )
-    activated = client.post(
-        f"/api/identity/staff/{employee_id}/activate", headers=admin_headers
+    assert invite.status_code in (200, 201), invite.text
+    accepted = client.post(
+        "/api/invites/accept",
+        json={"invite_code": invite.json()["invite_code"]},
     )
-    return employee_id, activated.json()["token"]
+    assert accepted.status_code == 201, accepted.text
+    body = accepted.json()
+    return body["employee"]["employee_id"], body["token"]
 
 
 def test_file_bus_ingest_accepts_and_rejects_like_http(tmp_path):

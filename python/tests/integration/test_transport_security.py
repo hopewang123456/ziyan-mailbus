@@ -9,11 +9,13 @@ from mailbus.adapters.persistence.sqlite.migrations import apply_migrations
 from mailbus.adapters.transport.a2a import A2aTransport
 from mailbus.adapters.transport.file_bus import FileBusTransport
 from mailbus.adapters.transport.mcp_pull import McpPullTransport
-from mailbus.application.identity.dto import (
-    Actor,
-    make_apply_command,
-    make_invite_command,
+from mailbus.application.agents.dto import (
+    AgentInviteCommand,
+    AgentRegisterCommand,
+    AgentUpdateCommand,
 )
+from mailbus.application.identity.dto import Actor
+from mailbus.application.org.dto import PositionCommand
 from mailbus.bootstrap.container import Container
 from mailbus.bootstrap.settings import Settings
 from mailbus.core.identity.values import AccountType, EmployeeStatus
@@ -82,21 +84,33 @@ def test_container_endpoint_gated_on_approval(tmp_path):
         apply_migrations(conn)
 
     actor = _all_actor()
-    invite = container.identity.invites.issue(actor, make_invite_command("agent"))
-    employee = container.identity.staff.apply(
-        make_apply_command("机器人", "agent", invite_code=invite.invite_code)
+    position_command = PositionCommand(name="执行岗")
+    position = container.org_admin.structure.create_position(
+        actor, position_command.name, list(position_command.capabilities)
     )
-    emp_id = employee.employee.employee_id
+    invite = container.agent_registration.create_invite(
+        actor,
+        AgentInviteCommand(employee_name="机器人", position_id=position.position_id),
+    )
+    registration = container.agent_registration.register(
+        AgentRegisterCommand(
+            invite_code=invite.invite_code,
+            name="机器人",
+            endpoint="https://agent.example/hook",
+        )
+    )
+    emp_id = registration.employee_id
+    agent_id = registration.agent_id
 
-    # 未审核端点：不解析
+    # 注册后端点待审批：不解析
     assert container._endpoint_of(emp_id) is None
 
     # 审核通过后才解析
-    container.identity.staff.update_endpoint(
-        actor, emp_id, endpoint="https://agent.example/hook", approved=True
-    )
+    container.agents.approve_endpoint(actor, agent_id)
     assert container._endpoint_of(emp_id) == "https://agent.example/hook"
 
-    # 撤销审核：立即失效
-    container.identity.staff.update_endpoint(actor, emp_id, approved=False)
+    # 禁用 Agent：立即失效
+    container.agents.update(
+        actor, agent_id, AgentUpdateCommand(changes={"enabled": False})
+    )
     assert container._endpoint_of(emp_id) is None

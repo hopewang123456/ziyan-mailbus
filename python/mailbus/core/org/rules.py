@@ -7,7 +7,6 @@ from datetime import datetime
 from mailbus.core.org.models import Position, SeatAssignment, Team
 from mailbus.core.shared.errors import InvalidStateError
 from mailbus.core.shared.events import DomainEvent
-from mailbus.core.shared.values import Capability
 
 
 def validate_name(value: str, label: str) -> str:
@@ -19,8 +18,18 @@ def validate_name(value: str, label: str) -> str:
     return name
 
 
-def create_team(team_id: str, name: str, now: datetime) -> tuple[Team, tuple[DomainEvent, ...]]:
-    team = Team(team_id=team_id, name=validate_name(name, "团队名称"))
+def create_team(
+    team_id: str,
+    name: str,
+    now: datetime,
+    leader_employee_id: str | None = None,
+) -> tuple[Team, tuple[DomainEvent, ...]]:
+    team = Team(
+        team_id=team_id,
+        name=validate_name(name, "团队名称"),
+        leader_employee_id=leader_employee_id,
+        created_at=now,
+    )
     event = DomainEvent(
         kind="org.team_created",
         payload={"team_id": team.team_id, "name": team.name, "at": now.isoformat()},
@@ -31,13 +40,14 @@ def create_team(team_id: str, name: str, now: datetime) -> tuple[Team, tuple[Dom
 def create_position(
     position_id: str,
     name: str,
-    capabilities: frozenset[Capability],
+    capabilities: frozenset[str],
     now: datetime,
 ) -> tuple[Position, tuple[DomainEvent, ...]]:
     position = Position(
         position_id=position_id,
         name=validate_name(name, "岗位名称"),
         capabilities=capabilities,
+        created_at=now,
     )
     event = DomainEvent(
         kind="org.position_created",

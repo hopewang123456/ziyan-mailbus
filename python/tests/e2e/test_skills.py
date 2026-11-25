@@ -24,31 +24,30 @@ def _bootstrap(client: TestClient) -> str:
     return response.json()["token"]
 
 
-def _agent(client: TestClient, headers: dict[str, str]) -> str:
-    response = client.post(
-        "/api/agents",
-        json={"name": "研究员", "framework": "claude"},
+def _agent(client: TestClient, headers: dict[str, str]) -> dict:
+    position = client.post(
+        "/api/positions", json={"name": "研究岗"}, headers=headers
+    )
+    assert position.status_code == 201, position.text
+    invite = client.post(
+        "/api/agent-invites",
+        json={
+            "employee_name": "执行者",
+            "position_id": position.json()["position_id"],
+        },
         headers=headers,
     )
-    assert response.status_code == 201, response.text
-    return response.json()["agent_id"]
-
-
-def _employee(
-    client: TestClient, headers: dict[str, str], agent_id: str
-) -> str:
-    applied = client.post(
-        "/api/identity/staff",
-        json={"display_name": "执行者", "account_type": "human", "agent_id": agent_id},
+    assert invite.status_code == 201, invite.text
+    registered = client.post(
+        "/api/agents/register",
+        json={
+            "invite_code": invite.json()["invite_code"],
+            "name": "研究员",
+            "framework": "claude",
+        },
     )
-    employee_id = applied.json()["employee"]["employee_id"]
-    client.post(
-        f"/api/identity/staff/{employee_id}/review",
-        json={"approved": True},
-        headers=headers,
-    )
-    client.post(f"/api/identity/staff/{employee_id}/activate", headers=headers)
-    return employee_id
+    assert registered.status_code == 201, registered.text
+    return registered.json()
 
 
 def _skill_dir(tmp_path, version: str = "1.2.3"):
@@ -63,8 +62,9 @@ def _skill_dir(tmp_path, version: str = "1.2.3"):
 def test_skill_package_refresh_and_bindings(tmp_path):
     with _client(tmp_path) as client:
         admin_headers = _headers(_bootstrap(client))
-        agent_id = _agent(client, admin_headers)
-        employee_id = _employee(client, admin_headers, agent_id)
+        agent = _agent(client, admin_headers)
+        agent_id = agent["agent_id"]
+        employee_id = agent["employee_id"]
         skill_dir = _skill_dir(tmp_path)
 
         created = client.post(
@@ -169,17 +169,15 @@ def test_skill_package_refresh_and_bindings(tmp_path):
 def test_skill_write_requires_system_config(tmp_path):
     with _client(tmp_path) as client:
         admin_headers = _headers(_bootstrap(client))
-        applied = client.post(
-            "/api/identity/staff", json={"display_name": "小王", "account_type": "human"}
-        )
-        employee_id = applied.json()["employee"]["employee_id"]
-        client.post(
-            f"/api/identity/staff/{employee_id}/review",
-            json={"approved": True},
+        invite = client.post(
+            "/api/employees/invite",
+            json={"display_name": "小王"},
             headers=admin_headers,
         )
+        assert invite.status_code in (200, 201), invite.text
         token = client.post(
-            f"/api/identity/staff/{employee_id}/activate", headers=admin_headers
+            "/api/invites/accept",
+            json={"invite_code": invite.json()["invite_code"]},
         ).json()["token"]
         denied = client.post(
             "/api/skills",

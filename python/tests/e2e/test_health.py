@@ -18,7 +18,7 @@ def test_health_reports_ok_and_schema_version(tmp_path):
     body = response.json()
     assert body["status"] == "ok"
     assert body["service"] == "mailbus"
-    assert body["schema_version"] == 14
+    assert body["schema_version"] == 36
     assert (tmp_path / "mailbus.db").exists()
 
 

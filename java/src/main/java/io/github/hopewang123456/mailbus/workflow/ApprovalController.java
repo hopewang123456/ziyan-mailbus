@@ -28,10 +28,12 @@ public class ApprovalController {
     }
 
     @GetMapping
-    public List<ApprovalDtos.ApprovalOut> list(
-            @RequestParam(required = false) String status,
-            @RequestParam(name = "task_id", required = false) String taskId) {
-        return service.list(status, taskId);
+    public ApprovalDtos.ApprovalListOut list(
+            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
+            @RequestParam(required = false) String state,
+            @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        return service.list(actor, state, Math.max(1, Math.min(limit, 500)), Math.max(0, offset));
     }
 
     @PostMapping

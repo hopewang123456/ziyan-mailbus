@@ -13,6 +13,7 @@ from mailbus import __version__
 from mailbus.api.errors import register_error_handlers
 from mailbus.api.routers import (
     a2a,
+    agent_invites,
     agents,
     approval,
     audit,
@@ -24,7 +25,10 @@ from mailbus.api.routers import (
     messages,
     metrics,
     observability,
-    org,
+    org_employees,
+    org_invites,
+    org_positions,
+    org_roles,
     skills,
     system,
     tasks,
@@ -43,10 +47,15 @@ def build_app(lifespan: Any = None, web_dist: Path | None = None) -> FastAPI:
     app.include_router(system.router)
     app.include_router(identity.router)
     app.include_router(agents.router)
-    app.include_router(org.router)
+    app.include_router(agent_invites.router)
+    app.include_router(org_employees.router)
+    app.include_router(org_invites.router)
+    app.include_router(org_positions.router)
+    app.include_router(org_roles.router)
     app.include_router(layout.router)
     app.include_router(workflow.router)
     app.include_router(tasks.router)
+    app.include_router(tasks.artifact_router)
     app.include_router(approval.router)
     app.include_router(messages.router)
     app.include_router(skills.router)

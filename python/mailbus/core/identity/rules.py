@@ -31,6 +31,7 @@ def submit(reg: Registration, now: datetime) -> tuple[Employee, tuple[DomainEven
         position_id=reg.position_id,
         seat_id=reg.seat_id,
         capabilities=reg.capabilities,
+        skills=reg.skills,
         data_scope=reg.data_scope,
         file_scope=reg.file_scope,
         endpoint=reg.endpoint,

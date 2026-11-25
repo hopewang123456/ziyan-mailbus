@@ -20,12 +20,6 @@ class TaskIn(BaseModel):
     workflow_version: int | None = None
 
 
-class TaskAdvanceIn(BaseModel):
-    node_id: str | None = None
-    outcome: Literal["running", "done", "failed", "blocked", "skipped"] = "running"
-    note: str | None = None
-
-
 class TaskNodeOut(BaseModel):
     node_id: str
     name: str

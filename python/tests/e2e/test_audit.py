@@ -44,17 +44,19 @@ def test_audit_stats_and_alerts(tmp_path):
 
         empty = client.get("/api/alerts", headers=headers)
         assert empty.status_code == 200, empty.text
-        assert empty.json()["alerts"] == []
+        assert empty.json()["items"] == []
 
         client.patch(
             "/api/metrics/rules/agents_offline",
             json={"fields": {"enabled": True}},
             headers=headers,
         )
-        alerts = client.get("/api/alerts", headers=headers).json()["alerts"]
-        assert len(alerts) == 1
-        assert alerts[0]["type"] == "agents.online"
-        assert alerts[0]["severity"] == "warn"
+        # 旧指标规则视图仍驱动 alerts.active；/api/alerts 只承载 ops_alerts
+        point = client.get(
+            "/api/metrics/query", params={"metric": "alerts.active"}, headers=headers
+        ).json()["points"][0]
+        assert point["value"] == 1
+        assert client.get("/api/alerts", headers=headers).json()["items"] == []
 
 
 def test_audit_stats_are_scoped_to_data_scope(tmp_path):
@@ -65,12 +67,6 @@ def test_audit_stats_are_scoped_to_data_scope(tmp_path):
             "/api/tasks", json={"title": "管理员任务"}, headers=admin
         )
         task_id = created.json()["task_id"]
-        client.post(f"/api/tasks/{task_id}/dispatch", headers=admin)
-        client.post(
-            f"/api/tasks/{task_id}/advance",
-            json={"outcome": "running"},
-            headers=admin,
-        )
         approval = client.post(
             "/api/approvals",
             json={"task_id": task_id, "title": "审核", "tier": "advisory"},
@@ -78,7 +74,7 @@ def test_audit_stats_are_scoped_to_data_scope(tmp_path):
         ).json()
         client.post(
             f"/api/approvals/{approval['approval_id']}/resolve",
-            json={"approved": True},
+            json={"decision": "approved"},
             headers=admin,
         )
 
@@ -87,17 +83,13 @@ def test_audit_stats_are_scoped_to_data_scope(tmp_path):
         assert admin_stats["by_reviewer"]
 
         invite = client.post(
-            "/api/identity/invites",
-            json={"account_type": "human", "capabilities": []},
+            "/api/employees/invite",
+            json={"display_name": "路人", "permissions": []},
             headers=admin,
         ).json()
         other = client.post(
-            "/api/identity/staff",
-            json={
-                "display_name": "路人",
-                "account_type": "human",
-                "invite_code": invite["invite_code"],
-            },
+            "/api/invites/accept",
+            json={"invite_code": invite["invite_code"], "display_name": "路人"},
         ).json()
         other_stats = client.get(
             "/api/tasks/audit/stats", headers=_headers(other["token"])

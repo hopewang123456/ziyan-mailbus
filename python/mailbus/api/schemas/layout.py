@@ -60,11 +60,10 @@ class OfficeSiteOut(BaseModel):
 
 
 class PublicSeatAgentOut(BaseModel):
-    """公开大屏的脱敏投影：不含 agent 台账 id、端点与心跳。"""
+    """公开大屏的脱敏投影：不含 agent 台账 id、端点、心跳与团队名。"""
 
     display_name: str
     position: str
-    team: str
     status: str
     task: str
     agent_name: str = ""

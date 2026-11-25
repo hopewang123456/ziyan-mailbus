@@ -5,18 +5,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from mailbus.core.org.models import Position, SeatAssignment, SeatDef, Team
-from mailbus.core.shared.values import Capability
+from mailbus.core.org.models import Position, Role, SeatAssignment, SeatDef, Team
 
 
 @dataclass(frozen=True, slots=True)
 class TeamView:
     team_id: str
     name: str
+    leader_employee_id: str | None = None
+    created_at: datetime | None = None
 
     @classmethod
     def of(cls, team: Team) -> "TeamView":
-        return cls(team_id=team.team_id, name=team.name)
+        return cls(
+            team_id=team.team_id,
+            name=team.name,
+            leader_employee_id=team.leader_employee_id,
+            created_at=team.created_at,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,14 +30,66 @@ class PositionView:
     position_id: str
     name: str
     capabilities: tuple[str, ...]
+    role_ids: tuple[str, ...] = ()
+    created_at: datetime | None = None
 
     @classmethod
-    def of(cls, position: Position) -> "PositionView":
+    def of(
+        cls, position: Position, role_ids: tuple[str, ...] = ()
+    ) -> "PositionView":
         return cls(
             position_id=position.position_id,
             name=position.name,
-            capabilities=tuple(sorted(cap.value for cap in position.capabilities)),
+            capabilities=tuple(sorted(position.capabilities)),
+            role_ids=role_ids,
+            created_at=position.created_at,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class RoleView:
+    role_id: str
+    name: str
+    capabilities: tuple[str, ...]
+    description: str | None = None
+    enabled: bool = True
+    icon: str | None = None
+    color: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    @classmethod
+    def of(cls, role: Role) -> "RoleView":
+        return cls(
+            role_id=role.role_id,
+            name=role.name,
+            capabilities=tuple(sorted(role.capabilities)),
+            description=role.description,
+            enabled=role.enabled,
+            icon=role.icon,
+            color=role.color,
+            created_at=role.created_at,
+            updated_at=role.updated_at,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class OptionView:
+    option_id: str
+    label: str
+    enabled: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class ContractSeatView:
+    seat_id: str
+    team_id: str | None = None
+    position_id: str | None = None
+    employee_id: str | None = None
+    agent_id: str | None = None
+    x: float | None = None
+    y: float | None = None
+    rotation: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,7 +113,7 @@ class TeamCommand:
 @dataclass(frozen=True, slots=True)
 class PositionCommand:
     name: str
-    capabilities: tuple[Capability, ...] = ()
+    capabilities: tuple[str, ...] = ()
     position_id: str | None = None
 
 
@@ -140,8 +198,14 @@ def team_view(team: Team) -> TeamView:
     return TeamView.of(team)
 
 
-def position_view(position: Position) -> PositionView:
-    return PositionView.of(position)
+def position_view(
+    position: Position, role_ids: tuple[str, ...] = ()
+) -> PositionView:
+    return PositionView.of(position, role_ids)
+
+
+def role_view(role: Role) -> RoleView:
+    return RoleView.of(role)
 
 
 def seat_view(
@@ -173,7 +237,7 @@ def make_team_command(name: str, team_id: str | None = None) -> TeamCommand:
 
 def make_position_command(
     name: str,
-    capabilities: tuple[Capability, ...] = (),
+    capabilities: tuple[str, ...] = (),
     position_id: str | None = None,
 ) -> PositionCommand:
     return PositionCommand(name=name, capabilities=capabilities, position_id=position_id)

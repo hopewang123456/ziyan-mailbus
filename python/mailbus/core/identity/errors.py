@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from mailbus.core.shared.errors import DomainError
+from mailbus.core.shared.errors import DomainError, ResourceGoneError
+
+
+class InviteGoneError(ResourceGoneError):
+    """真人邀请链接已撤销、已过期或已使用（HTTP 410）。"""
+
+    code = "invite_gone"
 
 
 class InviteInvalidError(DomainError):

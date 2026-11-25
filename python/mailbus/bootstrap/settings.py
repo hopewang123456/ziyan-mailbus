@@ -44,6 +44,7 @@ class Settings:
     sse_max_streams: int = 256
     public_screen_limit: int = 64
     max_body_bytes: int = 1_048_576
+    max_upload_bytes: int = 100 * 1024 * 1024
     retention_days: float = 7.0
     maintenance_interval_sec: float = 3600.0
     bootstrap_allow_remote: bool = False
@@ -57,6 +58,12 @@ class Settings:
     @property
     def file_bus_dir(self) -> Path:
         return self.data_dir / "file_bus"
+
+    @property
+    def artifacts_dir(self) -> Path:
+        path = self.data_dir / "artifacts"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
     @property
     def mcp_dir(self) -> Path:
@@ -101,6 +108,9 @@ class Settings:
             public_screen_limit=int(os.environ.get("MAILBUS_PUBLIC_SCREEN_LIMIT", "64")),
             max_body_bytes=int(
                 os.environ.get("MAILBUS_MAX_BODY_BYTES", str(1_048_576))
+            ),
+            max_upload_bytes=int(
+                os.environ.get("MAILBUS_MAX_UPLOAD_BYTES", str(100 * 1024 * 1024))
             ),
             retention_days=float(os.environ.get("MAILBUS_RETENTION_DAYS", "7")),
             maintenance_interval_sec=float(

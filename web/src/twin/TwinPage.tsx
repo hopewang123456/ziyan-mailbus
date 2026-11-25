@@ -20,6 +20,8 @@ import {
 import { useWalkers } from "./WalkerManager";
 import { useScreenSync } from "./collab";
 import { useCollabEvents, useStreamSignal, type StreamState } from "./stream";
+import { useScreenSession } from "../lib/screen-identity";
+import { usePublicConfig } from "../lib/collab/hooks";
 import "./twin.css";
 
 interface CollabPair {
@@ -34,53 +36,8 @@ interface StaffLite {
   display_name: string;
 }
 
-const SCREEN_ID_KEY = "mailbus_twin_screen_id";
-const SCREEN_SECRET_KEY = "mailbus_twin_screen_secret";
-
-function newScreenId() {
-  return `twin_${Math.random().toString(36).slice(2, 10)}`;
-}
-
-/** 每块大屏一个稳定标识：同标签页刷新保持一致，关闭后离开。 */
-function getScreenId() {
-  try {
-    const existing = sessionStorage.getItem(SCREEN_ID_KEY);
-    if (existing) return existing;
-    const id = newScreenId();
-    sessionStorage.setItem(SCREEN_ID_KEY, id);
-    return id;
-  } catch {
-    return newScreenId();
-  }
-}
-
-/** M14：心跳/离线所需的屏幕密钥，与 screen_id 同生命周期保存。 */
-function getScreenSecret(): string {
-  try {
-    return sessionStorage.getItem(SCREEN_SECRET_KEY) || "";
-  } catch {
-    return "";
-  }
-}
-
-function setScreenSecret(secret: string) {
-  try {
-    sessionStorage.setItem(SCREEN_SECRET_KEY, secret);
-  } catch {
-    // 存储不可用时仅本次会话有效
-  }
-}
-
-/** 旧记录无本地密钥时换新标识，确保能拿到一次性回显的密钥。 */
-function resetScreenId(): string {
-  const id = newScreenId();
-  try {
-    sessionStorage.setItem(SCREEN_ID_KEY, id);
-  } catch {
-    // 忽略
-  }
-  return id;
-}
+const PREVIEW_QUERY_KEY = "preview";
+const KIOSK_IDLE_MS = 5 * 60 * 1000; // 5 分钟无操作退回 kiosk
 
 /** 按本地时区判定昼夜：19 点后与 6 点前视为夜晚。 */
 function isNightNow(date = new Date()) {
@@ -100,15 +57,6 @@ interface Selection {
   floorId: string;
   room: Room;
   seat: Seat;
-}
-
-/** 花名册条目：坐在某个工位上的员工。 */
-interface RosterPerson {
-  floorId: string;
-  level: number;
-  room: Room;
-  seat: Seat;
-  agent: SeatAgent;
 }
 
 /** 依据视口大小缩放等距场景，保证整楼完整可见。 */
@@ -160,6 +108,19 @@ function timeText(value: string) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString();
 }
 
+/** 检测浏览器是否请求「弱化动画」偏好。 */
+function detectReducedMotion(): boolean {
+  try {
+    return (
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function TwinPage() {
   const scale = useStageScale();
   const [site, setSite] = useState<OfficeSite | null>(null);
@@ -170,8 +131,68 @@ export function TwinPage() {
   const [night, setNight] = useState(() => isNightNow());
   const [peek, setPeek] = useState(false);
   const [hasToken, setHasToken] = useState(() => Boolean(getToken()));
+
+  // === 公开投影 + 权限 / kiosk ===
+  const previewMode = useMemo(() => {
+    try {
+      if (typeof window === "undefined") return false;
+      return new URLSearchParams(window.location.search).get(PREVIEW_QUERY_KEY) === "1";
+    } catch {
+      return false;
+    }
+  }, []);
+
+  // ?kiosk=1 强制只读；未登录一律按匿名 kiosk 展示大楼。
+  const [forcedKiosk] = useState<boolean>(() => {
+    try {
+      return (
+        typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).get("kiosk") === "1"
+      );
+    } catch {
+      return false;
+    }
+  });
+  // 交互模式闲置超时后进入的 kiosk，只存在于内存，不写 localStorage。
+  const [idleKiosk, setIdleKiosk] = useState(false);
+  const isKiosk = forcedKiosk || idleKiosk || !hasToken;
+
+  const reducedMotion = useState<boolean>(() => detectReducedMotion())[0];
+
+  // === 5 分钟无操作退回 kiosk ===
+  const kioskTimerRef = useRef<number | undefined>(undefined);
+  const resetKioskTimer = useCallback(() => {
+    window.clearTimeout(kioskTimerRef.current);
+    kioskTimerRef.current = window.setTimeout(() => {
+      setIdleKiosk(true);
+      setSelection(null);
+    }, KIOSK_IDLE_MS);
+  }, []);
+
+  useEffect(() => {
+    if (forcedKiosk || !hasToken) return;
+    const handler = () => resetKioskTimer();
+    window.addEventListener("pointermove", handler);
+    window.addEventListener("keydown", handler);
+    window.addEventListener("wheel", handler);
+    resetKioskTimer();
+    return () => {
+      window.clearTimeout(kioskTimerRef.current);
+      window.removeEventListener("pointermove", handler);
+      window.removeEventListener("keydown", handler);
+      window.removeEventListener("wheel", handler);
+    };
+  }, [forcedKiosk, hasToken, resetKioskTimer]);
+
+  // 公开投影 / kiosk 相关的「是否开启屏幕登记」判断：
+  // - previewMode：不登记，避免产生脏数据
+  // - isKiosk：匿名只读，不登记
+  // - 无 token：走 public 投影，也不登记（服务端需要 Bearer 才能登记）
+  const shouldRegister = !previewMode && !isKiosk && hasToken;
+
   // 大屏常驻时保活当前登录员工，避免超管 180 秒无心跳被置为 offline
   useStaffHeartbeat(undefined, hasToken);
+
   const [loadedAt, setLoadedAt] = useState("");
   const stageRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
@@ -182,13 +203,27 @@ export function TwinPage() {
   const [sideTab, setSideTab] = useState<"pairs" | "roster">("pairs");
   const [rosterQuery, setRosterQuery] = useState("");
   const [rosterStatus, setRosterStatus] = useState<"all" | "online" | "busy" | "offline">("all");
-  const screenIdRef = useRef(getScreenId());
   const floorsRef = useRef(floors);
   floorsRef.current = floors;
   const activeFloorRef = useRef(activeFloorId);
   activeFloorRef.current = activeFloorId;
   const seatRef = useRef(selection?.seat.seat_id ?? null);
   seatRef.current = selection?.seat.seat_id ?? null;
+
+  /** 屏幕身份：登记 + 心跳 + 离线；preview/kiosk/无 token 时不登记。 */
+  const { screenId } = useScreenSession({
+    enabled: shouldRegister,
+    name: "孪生大屏",
+    getPayload: () => ({
+      floor_id: activeFloorRef.current,
+      seat_id: seatRef.current,
+    }),
+  });
+  const screenIdRef = useRef(screenId);
+  screenIdRef.current = screenId;
+
+  /** 公开投影：config 里的 theme / resolution / layout_type / play_state / published 等白名单字段。 */
+  const { data: screenConfig } = usePublicConfig(shouldRegister ? screenId : null);
 
   /** 布局刷新后同步已打开抽屉的工位对象，让任务进度实时更新。 */
   useEffect(() => {
@@ -202,7 +237,7 @@ export function TwinPage() {
       }
       return;
     }
-  }, [floors]); // 仅在布局刷新时对齐，避免抽屉自身更新触发循环
+  }, [floors]);
 
   /**
    * 真实结对 → 工位坐标。
@@ -481,8 +516,14 @@ export function TwinPage() {
   }, [pairLinks, pairMessages]);
 
   /** 全量花名册：按姓名排序（公开布局已含座席上的员工）。 */
-  const rosterAll = useMemo<RosterPerson[]>(() => {
-    const list: RosterPerson[] = [];
+  const rosterAll = useMemo(() => {
+    const list: Array<{
+      floorId: string;
+      level: number;
+      room: Room;
+      seat: Seat;
+      agent: SeatAgent;
+    }> = [];
     for (const floor of floors) {
       for (const room of floor.rooms) {
         for (const seat of room.seats) {
@@ -511,7 +552,7 @@ export function TwinPage() {
       return [
         person.agent.display_name,
         person.agent.agent_name ?? "",
-        person.agent.team,
+        person.agent.team ?? "",
         person.agent.position,
         person.seat.seat_id,
       ].some((value) => value.toLowerCase().includes(keyword));
@@ -528,7 +569,7 @@ export function TwinPage() {
   const { routes: walkerRoutes, removeRoute } = useWalkers(walkerFloors, {
     maxConcurrent: 3,
     tickMs: 2400,
-    enabled: !!activeFloorId,
+    enabled: !!activeFloorId && !reducedMotion,
     realPairs,
   });
 
@@ -618,6 +659,7 @@ export function TwinPage() {
   const collabStream = useCollabEvents({
     enabled: true,
     url: "/api/public/collab/stream",
+    screenId: screenId,
     onEvent: (event) => {
       if (event.event === "message.created") {
         applyMessageEvent(event.data);
@@ -666,81 +708,6 @@ export function TwinPage() {
     void refreshMessages(pairIdsKey.split(","));
   }, [collabStream, pairIdsKey, refreshMessages]);
 
-  /** 大屏登记 + 心跳 + 离开；登记时取回密钥，心跳携带。 */
-  useEffect(() => {
-    if (!hasToken) return;
-    let disposed = false;
-    let heartbeat = 0;
-    let secret = getScreenSecret();
-
-    const register = (screenId: string) =>
-      api<{ secret?: string | null }>("/api/public/collab/screens", {
-        method: "POST",
-        body: JSON.stringify({
-          screen_id: screenId,
-          name: "孪生大屏",
-          floor_id: activeFloorRef.current,
-          seat_id: seatRef.current,
-        }),
-      });
-
-    const beat = () => {
-      if (disposed) return;
-      void api(
-        `/api/public/collab/screens/${encodeURIComponent(screenIdRef.current)}/heartbeat`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            floor_id: activeFloorRef.current,
-            seat_id: seatRef.current,
-            ...(secret ? { secret } : {}),
-          }),
-        },
-      );
-    };
-
-    const leave = () => {
-      void fetch(
-        `/api/public/collab/screens/${encodeURIComponent(screenIdRef.current)}/leave`,
-        {
-          method: "POST",
-          keepalive: true,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(secret ? { secret } : {}),
-        },
-      );
-    };
-
-    void (async () => {
-      let result = await register(screenIdRef.current);
-      if (disposed) return;
-      if (result.ok && result.data?.secret) {
-        secret = result.data.secret;
-        setScreenSecret(secret);
-      } else if (!secret) {
-        // 本机无密钥且重复登记不回显时，换新标识重新登记
-        screenIdRef.current = resetScreenId();
-        result = await register(screenIdRef.current);
-        if (disposed) return;
-        if (result.ok && result.data?.secret) {
-          secret = result.data.secret;
-          setScreenSecret(secret);
-        }
-      }
-      if (!secret) return; // 无密钥不心跳，避免持续 403
-      beat();
-      heartbeat = window.setInterval(beat, 30_000);
-    })();
-
-    window.addEventListener("pagehide", leave);
-    return () => {
-      disposed = true;
-      window.clearInterval(heartbeat);
-      window.removeEventListener("pagehide", leave);
-      leave();
-    };
-  }, [hasToken]);
-
   /** 结对名册：进入页面、恢复可见时刷新；后续由 collab 事件驱动。 */
   useEffect(() => {
     if (!hasToken) return;
@@ -754,16 +721,16 @@ export function TwinPage() {
 
   useEffect(() => {
     aliveRef.current = true;
-    if (hasToken) void refreshLayout();
+    void refreshLayout();
     const onVisibility = () => {
-      if (!document.hidden && hasToken) void refreshLayout();
+      if (!document.hidden) void refreshLayout();
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       aliveRef.current = false;
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [hasToken, refreshLayout]);
+  }, [refreshLayout]);
 
   /** 多端同步：其它大屏切换楼层/员工时本屏跟随（带防回环标记）。 */
   const remoteRef = useRef<boolean | null>(null);
@@ -784,7 +751,7 @@ export function TwinPage() {
       }
     }
     setSelection(null);
-  }, { register: false });
+  });
 
   useEffect(() => {
     // 首次挂载不回播，避免新开一块大屏把已有大屏拉回整楼
@@ -919,57 +886,28 @@ export function TwinPage() {
   const sceneScale = scale * view.zoom * (activeIndex !== null ? 1.32 : 1);
   const centerZ = activeIndex !== null ? centerIndex * FLOOR_GAP : shellHeight / 2;
 
-  if (!hasToken) {
-    return (
-      <div className="twin-root is-day">
-        <header className="twin-header">
-          <div className="twin-brand">
-            <span className="brand-mark">◈</span>
-            <div>
-              <h1>Ziyan办公大楼</h1>
-              <p>需要登录后查看实时大屏</p>
-            </div>
-          </div>
-        </header>
-        <div className="twin-body">
-          <div
-            className="twin-stage"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-            }}
-          >
-            <p className="mono">登录后查看实时大屏</p>
-            <p
-              className="mono"
-              style={{ fontSize: 12, opacity: 0.7, maxWidth: 460, textAlign: "center" }}
-            >
-              大屏使用登录态 Bearer 连接 /api/stream，仅在业务变化时刷新公开布局。
-            </p>
-            <a className="btn-primary" href="/console">
-              前往管理中心登录
-            </a>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const rootClass = [
+    "twin-root",
+    activeFloorId ? "is-detail" : "is-overview",
+    night ? "is-night" : "is-day",
+    peek ? "is-peek" : "",
+    reducedMotion ? "is-reduced-motion" : "",
+    isKiosk ? "is-kiosk" : "",
+  ].filter(Boolean).join(" ");
 
   return (
-    <div
-      className={`twin-root${activeFloorId ? " is-detail" : " is-overview"}${
-        night ? " is-night" : " is-day"
-      }${peek ? " is-peek" : ""}`}
-    >
+    <div className={rootClass}>
       <header className="twin-header">
         <div className="twin-brand">
           <span className="brand-mark">◈</span>
           <div>
             <h1>Ziyan办公大楼</h1>
-            <p>{site ? `${site.org_name} · ${site.name}` : "等待布局数据"}</p>
+            <p>
+              {site ? `${site.org_name} · ${site.name}` : "等待布局数据"}
+              {screenConfig
+                ? ` · v${screenConfig.config_version} · ${screenConfig.theme}/${screenConfig.resolution}`
+                : ""}
+            </p>
           </div>
         </div>
         {activeFloor ? (
@@ -998,7 +936,7 @@ export function TwinPage() {
             <span className="metric"><i className="dot dot-online" />在线 {totals.online}</span>
             <span className="metric"><i className="dot dot-busy" />忙碌 {totals.busy}</span>
             <span className="metric"><i className="dot dot-offline" />离线 {totals.offline}</span>
-            <span className="metric"><i className="dot dot-busy" />结对 {pairs.length}</span>
+            <span className="metric"><i className="dot dot-busy" />结对 {pairRows.length}</span>
             <span className="metric"><i className="dot dot-online" />协同 {peers + 1} 屏</span>
             <span className={`metric metric-stream status-${stream.state}`}>
               {STREAM_LABEL[stream.state]}
@@ -1008,12 +946,26 @@ export function TwinPage() {
               {night ? "夜间" : "日间"}
             </span>
             <span className="metric metric-ghost">空位 {totals.empty} / 工位 {totals.total}</span>
+            {previewMode && <span className="metric metric-ghost">preview</span>}
             {loadFailed && <span className="metric metric-ghost">数据不可用</span>}
           </div>
         )}
+        {isKiosk && hasToken && !forcedKiosk ? (
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => {
+              setIdleKiosk(false);
+              resetKioskTimer();
+            }}
+          >
+            进入交互模式
+          </button>
+        ) : null}
       </header>
 
       <div className="twin-body">
+        {!isKiosk && (
         <aside className="collab-pairs">
           <div className="side-tabs" role="tablist">
             <button
@@ -1137,6 +1089,7 @@ export function TwinPage() {
             协同流：{STREAM_LABEL[collabStream]} · 本屏 {screenIdRef.current}
           </p>
         </aside>
+        )}
 
         {!site ? (
           <div
@@ -1150,9 +1103,11 @@ export function TwinPage() {
             }}
           >
             <p className="mono">{loadFailed ? "布局数据不可用" : "正在加载布局…"}</p>
-            <p className="mono" style={{ fontSize: 11, opacity: 0.6 }}>
-              首次读取 GET /api/public/layout · 之后由 /api/stream 变更信号触发刷新
-            </p>
+            {!isKiosk && (
+              <p className="mono" style={{ fontSize: 11, opacity: 0.6 }}>
+                首次读取 GET /api/public/layout · 之后由 /api/stream 变更信号触发刷新
+              </p>
+            )}
           </div>
         ) : activeFloor ? (
           // ── detail 模式：全屏独立办公室 2D 画面 ──────────
@@ -1165,7 +1120,7 @@ export function TwinPage() {
             pulseSeatId={pulseSeatId}
             onWalkerArrive={removeRoute}
             onSelectSeat={(seat, room) => {
-              if (!seat.agent) return;
+              if (isKiosk || !seat.agent) return;
               setSelection({ floorId: activeFloor.floor_id, room, seat });
             }}
           />
@@ -1243,7 +1198,7 @@ export function TwinPage() {
                           onWalkerArrive={removeRoute}
                           onSelectFloor={enterFloor}
                           onSelectSeat={(seat, room) => {
-                            if (!seat.agent) return;
+                            if (isKiosk || !seat.agent) return;
                             setSelection({ floorId: floor.floor_id, room, seat });
                           }}
                         />
@@ -1291,7 +1246,7 @@ export function TwinPage() {
           </aside>
         )}
 
-        {selection ? (
+        {selection && !isKiosk ? (
           <aside className="seat-drawer">
             <div className="drawer-head">
               <span className={`drawer-avatar status-${selection.seat.agent?.status}`}>
@@ -1299,7 +1254,11 @@ export function TwinPage() {
               </span>
               <div>
                 <strong>{selection.seat.agent?.display_name}</strong>
-                <p>{selection.seat.agent?.position} · {selection.seat.agent?.team}</p>
+                <p>
+                  {[selection.seat.agent?.position, selection.seat.agent?.team]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
               </div>
               <button type="button" className="drawer-close" onClick={() => setSelection(null)}>
                 ✕
@@ -1442,10 +1401,18 @@ export function TwinPage() {
 
       <footer className="twin-footer">
         <span>悬停大楼展开楼层 · 点击楼层聚焦 · 点击员工查看详情 · 滚轮缩放 / 拖拽平移 · 双击复位</span>
-        <span className="mono">
-          实时信号 /api/stream · 协同 /api/public/collab/stream · 布局 /api/public/layout
-          {loadFailed ? " · 上次数据可能过期" : ""}
-        </span>
+        {isKiosk ? (
+          <span className="mono">
+            {loadFailed ? "上次数据可能过期" : ""}
+            {previewMode ? " · preview" : ""}
+          </span>
+        ) : (
+          <span className="mono">
+            实时信号 /api/stream · 协同 /api/public/collab/stream · 布局 /api/public/layout
+            {loadFailed ? " · 上次数据可能过期" : ""}
+            {previewMode ? " · preview" : ""}
+          </span>
+        )}
       </footer>
     </div>
   );

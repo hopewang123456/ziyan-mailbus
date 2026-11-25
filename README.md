@@ -27,7 +27,7 @@ Log in through `POST /api/identity/bootstrap/super-admin` on first run.
 ## Java backend
 
 `java/` mirrors the Python service with Spring Boot 3.3 / JDK 17 and matches the
-OpenAPI contract in `shared/contracts/generated/openapi.json` (81 paths / 99
+OpenAPI contract in `shared/contracts/generated/openapi.json` (83 paths / 104
 operations). It shares the SQLite schema and `data/` directory, so teams without
 Python experience can build on it directly:
 

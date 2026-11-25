@@ -1,6 +1,9 @@
-"""大屏同步端到端：公开登记、心跳、离线与管理端列表/聚焦。"""
+"""大屏同步端到端：登记密钥、心跳/离线、草稿/发布、公开配置与布局。"""
 
 from __future__ import annotations
+
+import sqlite3
+from contextlib import closing
 
 from fastapi.testclient import TestClient
 
@@ -12,7 +15,7 @@ def _client(tmp_path) -> TestClient:
     return TestClient(create_app(Settings(data_dir=tmp_path)))
 
 
-def _bootstrap(client: TestClient) -> dict[str, str]:
+def _headers(client: TestClient) -> dict[str, str]:
     response = client.post(
         "/api/identity/bootstrap/super-admin", json={"display_name": "超级管理员"}
     )
@@ -20,194 +23,244 @@ def _bootstrap(client: TestClient) -> dict[str, str]:
     return {"Authorization": f"Bearer {response.json()['token']}"}
 
 
-def test_public_screen_register_heartbeat_leave(tmp_path):
-    with _client(tmp_path) as client:
-        headers = _bootstrap(client)
+def _register(client: TestClient, **payload) -> dict:
+    response = client.post("/api/public/collab/screens", json=payload)
+    assert response.status_code == 201, response.text
+    return response.json()
 
-        created = client.post(
-            "/api/public/collab/screens",
-            json={"screen_id": "screen-ab12", "name": "大屏 ab12"},
-        )
-        assert created.status_code == 201, created.text
-        assert created.json()["online"] is True
-        secret = created.json()["secret"]
-        assert secret  # M14：新建大屏回显一次性密钥
+
+def test_register_returns_secret_once_and_never_stores_plaintext(tmp_path):
+    with _client(tmp_path) as client:
+        admin = _headers(client)
+        created = _register(client, name="大屏 A")
+        screen_id = created["screen_id"]
+        secret = created["screen_secret"]
+        assert screen_id.startswith("screen_")
+        assert secret
+        assert created["config_version"] == 1
+
+        # 持有 id + secret 才复用；不回显第二次
+        reused = _register(client, screen_id=screen_id, secret=secret)
+        assert reused["screen_id"] == screen_id
+        assert reused["screen_secret"] is None
+
+        # 缺 secret / secret 错误：一律新屏，绝不覆盖既有配置
+        fresh = _register(client, screen_id=screen_id, name="新屏")
+        assert fresh["screen_id"] != screen_id
+        wrong = _register(client, screen_id=screen_id, secret="wrong-key")
+        assert wrong["screen_id"] != screen_id
+
+        with closing(sqlite3.connect(tmp_path / "mailbus.db")) as conn:
+            stored = conn.execute(
+                "SELECT secret_hash, source FROM collab_screens WHERE screen_id = ?",
+                (screen_id,),
+            ).fetchone()
+        assert stored[0] and stored[0] != secret and len(stored[0]) == 64
+        assert stored[1] == "auto"
+
+        listed = client.get("/api/collab/screens", headers=admin)
+        assert listed.status_code == 200, listed.text
+        body = listed.json()
+        assert body["total"] >= 1
+        assert all("secret" not in item for item in body["items"])
+        assert secret not in listed.text
+
+
+def test_heartbeat_and_leave_require_screen_secret(tmp_path):
+    with _client(tmp_path) as client:
+        admin = _headers(client)
+        created = _register(client, name="受保护大屏")
+        screen_id, secret = created["screen_id"], created["screen_secret"]
+
+        assert client.post(
+            f"/api/public/collab/screens/{screen_id}/heartbeat", json={}
+        ).status_code == 403
+        assert client.post(
+            f"/api/public/collab/screens/{screen_id}/heartbeat",
+            json={},
+            headers={"X-Screen-Secret": "wrong"},
+        ).status_code == 403
+        assert client.post(
+            "/api/public/collab/screens/screen-missing/heartbeat",
+            headers={"X-Screen-Secret": secret},
+        ).status_code == 404
 
         beat = client.post(
-            "/api/public/collab/screens/screen-ab12/heartbeat",
-            json={"floor_id": "f2", "seat_id": None, "secret": secret},
+            f"/api/public/collab/screens/{screen_id}/heartbeat",
+            json={"floor_id": "f2"},
+            headers={"X-Screen-Secret": secret},
         )
         assert beat.status_code == 200, beat.text
         assert beat.json() == {"ok": True}
 
-        listed = client.get("/api/collab/screens", headers=headers)
-        assert listed.status_code == 200, listed.text
-        assert listed.json()[0]["screen_id"] == "screen-ab12"
-        assert listed.json()[0]["floor_id"] == "f2"
-        assert listed.json()[0].get("secret") is None  # 列表不泄露密钥
-
-        # 公开重复登记是幂等的，不允许匿名覆盖既有名称与归属，且不回显密钥
-        overwrite = client.post(
-            "/api/public/collab/screens",
-            json={"screen_id": "screen-ab12", "name": "篡改名称", "floor_id": "f9"},
+        left = client.post(
+            f"/api/public/collab/screens/{screen_id}/leave",
+            headers={"X-Screen-Secret": secret},
         )
-        assert overwrite.status_code == 201, overwrite.text
-        assert overwrite.json()["name"] == "大屏 ab12"
-        assert overwrite.json()["floor_id"] == "f2"
-        assert overwrite.json().get("secret") is None
+        assert left.status_code == 204, left.text
+        left_again = client.post(
+            f"/api/public/collab/screens/{screen_id}/leave",
+            headers={"X-Screen-Secret": secret},
+        )
+        assert left_again.status_code == 204, "离线接口需幂等"
+
+        online = {
+            item["screen_id"]: item["online"]
+            for item in client.get("/api/collab/screens", headers=admin).json()["items"]
+        }
+        assert online[screen_id] is False
+
+
+def test_draft_publish_cas_and_public_projection(tmp_path):
+    with _client(tmp_path) as client:
+        admin = _headers(client)
+        screen_id = _register(client, name="配置大屏")["screen_id"]
+
+        saved = client.patch(
+            f"/api/collab/screens/{screen_id}",
+            json={
+                "config": {
+                    "layout_type": "grid",
+                    "theme": "dark",
+                    "resolution": "1920x1080",
+                    "team_id": "team-1",
+                }
+            },
+            headers=admin,
+        )
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["config_version"] == 1
+        assert saved.json()["config"]["theme"] == "dark"
+        assert client.get("/api/collab/screens", headers=admin).json()["items"][0][
+            "source"
+        ] == "manual"
+
+        before = client.get(f"/api/public/collab/screens/{screen_id}/config")
+        assert before.status_code == 200, before.text
+        assert before.json()["published"] is False
+        assert "team_id" not in before.json()
+
+        published = client.post(
+            f"/api/collab/screens/{screen_id}/publish",
+            json={"expected_config_version": 1},
+            headers=admin,
+        )
+        assert published.status_code == 200, published.text
+        assert published.json()["config_version"] == 2
+
+        stale = client.post(
+            f"/api/collab/screens/{screen_id}/publish",
+            json={"expected_config_version": 1},
+            headers=admin,
+        )
+        assert stale.status_code == 409, stale.text
+        assert stale.json()["error_code"] == "version_conflict"
+
+        public = client.get(f"/api/public/collab/screens/{screen_id}/config").json()
+        assert public["published"] is True
+        assert public["config_version"] == 2
+        assert public["layout_type"] == "grid"
+        assert public["team_bound"] is True
+        assert "team_id" not in public
+
+        bad_grid = client.patch(
+            f"/api/collab/screens/{screen_id}",
+            json={"config": {"layout_type": "grid"}},
+            headers=admin,
+        )
+        assert bad_grid.status_code == 422, bad_grid.text
+
+        empty = _register(client, name="空布局")["screen_id"]
+        cannot = client.post(
+            f"/api/collab/screens/{empty}/publish",
+            json={"expected_config_version": 1},
+            headers=admin,
+        )
+        assert cannot.status_code == 422, cannot.text
+
+
+def test_focus_and_delete_state_guards(tmp_path):
+    with _client(tmp_path) as client:
+        admin = _headers(client)
+        screen_id = _register(client, name="可删除大屏")["screen_id"]
+        secret = _register(client, name="另一块")["screen_secret"]
+
+        assert client.post(
+            "/api/collab/screens/screen-missing/focus",
+            json={"floor_id": "f1"},
+            headers=admin,
+        ).status_code == 404
+        assert client.post(
+            f"/api/collab/screens/{screen_id}/focus",
+            json={"seat_id": "s1"},
+            headers=admin,
+        ).status_code == 422
 
         focus = client.post(
-            "/api/collab/screens/screen-ab12/focus",
-            json={"floor_id": "f2", "seat_id": None},
-            headers=headers,
+            f"/api/collab/screens/{screen_id}/focus",
+            json={"floor_id": "f1", "seat_id": "s1"},
+            headers=admin,
         )
         assert focus.status_code == 204, focus.text
 
+        online_delete = client.delete(
+            f"/api/collab/screens/{screen_id}", headers=admin
+        )
+        assert online_delete.status_code == 409, online_delete.text
+
         left = client.post(
-            "/api/public/collab/screens/screen-ab12/leave",
-            json={"secret": secret},
+            f"/api/public/collab/screens/{screen_id}/leave",
+            headers={"X-Screen-Secret": secret},
         )
-        assert left.status_code == 204, left.text
-        offline = client.get("/api/collab/screens", headers=headers).json()[0]
-        assert offline["online"] is False
+        assert left.status_code == 403, "另一块大屏的密钥不能下线本屏"
 
-
-def test_public_heartbeat_and_leave_require_secret(tmp_path):
-    """M14：未持有密钥的匿名调用不能篡改已知大屏的归属或离线状态。"""
-    with _client(tmp_path) as client:
-        _bootstrap(client)
-        created = client.post(
-            "/api/public/collab/screens",
-            json={"screen_id": "screen-sec", "name": "受保护大屏"},
-        )
-        assert created.status_code == 201, created.text
-        secret = created.json()["secret"]
-        assert secret
-
-        no_secret = client.post(
-            "/api/public/collab/screens/screen-sec/heartbeat",
-            json={"floor_id": "hacked"},
-        )
-        assert no_secret.status_code == 403, no_secret.text
-
-        wrong_secret = client.post(
-            "/api/public/collab/screens/screen-sec/heartbeat",
-            json={"secret": "wrong-key"},
-        )
-        assert wrong_secret.status_code == 403, wrong_secret.text
-
-        leave_no_secret = client.post(
-            "/api/public/collab/screens/screen-sec/leave"
-        )
-        assert leave_no_secret.status_code == 403, leave_no_secret.text
-
-        ok = client.post(
-            "/api/public/collab/screens/screen-sec/heartbeat",
-            json={"secret": secret, "floor_id": "f3"},
-        )
-        assert ok.status_code == 200, ok.text
-
-        gone = client.post(
-            "/api/public/collab/screens/screen-sec/leave", json={"secret": secret}
-        )
-        assert gone.status_code == 204, gone.text
-
-
-def test_admin_screen_register_and_validation(tmp_path):
-    with _client(tmp_path) as client:
-        headers = _bootstrap(client)
-
-        created = client.post(
-            "/api/collab/screens",
-            json={"name": "管理端大屏", "floor_id": "f1"},
-            headers=headers,
-        )
-        assert created.status_code == 201, created.text
-        assert created.json()["screen_id"].startswith("screen_")
-
-        bad = client.post(
-            "/api/collab/screens/screen-unknown/focus",
-            json={"seat_id": None},
-            headers=headers,
-        )
-        assert bad.status_code == 422
-
-        missing = client.post(
-            "/api/public/collab/screens/screen-unknown/heartbeat", json={}
-        )
-        assert missing.status_code == 404
-
-
-def test_admin_can_force_offline_without_secret(tmp_path):
-    """管理端可免密钥下线他人大屏；普通员工无权强制下线。"""
-    with _client(tmp_path) as client:
-        headers = _bootstrap(client)
-        created = client.post(
-            "/api/public/collab/screens",
-            json={"screen_id": "screen-force", "name": "强制离线"},
-        )
-        assert created.status_code == 201, created.text
-        assert created.json()["secret"]
-
-        left = client.post("/api/collab/screens/screen-force/leave", headers=headers)
-        assert left.status_code == 204, left.text
-        listed = client.get("/api/collab/screens", headers=headers).json()
-        assert listed[0]["online"] is False
-
-        invite = client.post(
-            "/api/identity/invites",
-            json={"account_type": "human", "capabilities": []},
-            headers=headers,
-        ).json()
-        applied = client.post(
-            "/api/identity/staff",
-            json={
-                "display_name": "普通员工",
-                "account_type": "human",
-                "invite_code": invite["invite_code"],
-            },
-        ).json()
-        plain = {"Authorization": f"Bearer {applied['token']}"}
-
-        denied = client.post(
-            "/api/collab/screens/screen-force/leave", headers=plain
-        )
-        assert denied.status_code == 403, denied.text
-
-
-def test_public_screen_limit_counts_only_online(tmp_path):
-    """公开大屏上限只统计在线记录，历史离线屏不占用名额。"""
-    import sqlite3
-    import time
-
-    with _client(tmp_path) as client:
-        now = time.time()
-        # 直接落库，避免触发公开登记限流
-        with sqlite3.connect(tmp_path / "mailbus.db") as conn:
-            conn.executemany(
-                "INSERT INTO collab_screens"
-                " (screen_id, name, floor_id, seat_id, online,"
-                " last_seen_at, created_at, secret)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                [
-                    (f"bulk-{index:03d}", "批量大屏", None, None, 1, now, now, "s")
-                    for index in range(64)
-                ],
-            )
-
-        blocked = client.post(
-            "/api/public/collab/screens",
-            json={"screen_id": "bulk-over", "name": "超限大屏"},
-        )
-        assert blocked.status_code == 503, blocked.text
-
-        with sqlite3.connect(tmp_path / "mailbus.db") as conn:
+        with closing(sqlite3.connect(tmp_path / "mailbus.db")) as conn:
             conn.execute(
-                "UPDATE collab_screens SET last_seen_at = ?", (now - 3600,)
+                "UPDATE collab_screens SET online = 0 WHERE screen_id = ?", (screen_id,)
             )
+            conn.commit()
+        assert client.post(
+            f"/api/collab/screens/{screen_id}/focus",
+            json={"floor_id": "f1"},
+            headers=admin,
+        ).status_code == 409
 
-        allowed = client.post(
-            "/api/public/collab/screens",
-            json={"screen_id": "bulk-after", "name": "离线后登记"},
+        deleted = client.delete(f"/api/collab/screens/{screen_id}", headers=admin)
+        assert deleted.status_code == 204, deleted.text
+        assert client.delete(
+            f"/api/collab/screens/{screen_id}", headers=admin
+        ).status_code == 404
+
+
+def test_public_layout_filters_team_and_hides_team_name(tmp_path):
+    with _client(tmp_path) as client:
+        admin = _headers(client)
+        site = client.get("/api/public/layout", headers=admin)
+        assert site.status_code == 200, site.text
+        assert "team" not in site.text
+
+        screen_id = _register(client, name="团队屏")["screen_id"]
+        client.patch(
+            f"/api/collab/screens/{screen_id}",
+            json={
+                "config": {
+                    "layout_type": "grid",
+                    "resolution": "1920x1080",
+                    "team_id": "team-none",
+                }
+            },
+            headers=admin,
         )
-        assert allowed.status_code == 201, allowed.text
+        client.post(
+            f"/api/collab/screens/{screen_id}/publish",
+            json={"expected_config_version": 1},
+            headers=admin,
+        )
+        filtered = client.get(f"/api/public/layout?screen_id={screen_id}")
+        assert filtered.status_code == 200, filtered.text
+        for floor in filtered.json()["floors"]:
+            for room in floor["rooms"]:
+                for seat in room["seats"]:
+                    assert seat["agent"] is None
+        assert "team" not in filtered.text
+        assert client.get("/api/public/layout?screen_id=screen-missing").status_code == 404

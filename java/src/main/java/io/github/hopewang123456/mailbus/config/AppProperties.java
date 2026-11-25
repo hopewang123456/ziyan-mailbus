@@ -2,6 +2,8 @@ package io.github.hopewang123456.mailbus.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 @ConfigurationProperties(prefix = "mailbus")
@@ -68,6 +70,16 @@ public record AppProperties(
 
     public Path fileBusDir() {
         return dataDirPath().resolve("file_bus");
+    }
+
+    public Path artifactsDir() {
+        Path dir = dataDirPath().resolve("artifacts");
+        try {
+            Files.createDirectories(dir);
+        } catch (IOException e) {
+            throw new IllegalStateException("无法创建产物目录", e);
+        }
+        return dir;
     }
 
     public Path mcpDir() {

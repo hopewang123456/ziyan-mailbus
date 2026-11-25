@@ -7,22 +7,42 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from mailbus.core.org.values import RoomKind
-from mailbus.core.shared.values import Capability
 
 
 @dataclass(frozen=True, slots=True)
 class Team:
     team_id: str
     name: str
+    leader_employee_id: str | None = None
+    created_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class Position:
+    """岗位；capabilities 是业务技能标签，与登录权限无关。"""
+
     position_id: str
     name: str
-    capabilities: frozenset[Capability] = frozenset()
+    capabilities: frozenset[str] = frozenset()
+    created_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Role:
+    """角色；capabilities 是业务技能标签，供派活匹配。"""
+
+    role_id: str
+    name: str
+    capabilities: frozenset[str] = frozenset()
+    description: str | None = None
+    enabled: bool = True
+    icon: str | None = None
+    color: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -16,21 +16,17 @@ def _auth(token: str) -> dict[str, str]:
 
 
 def _activate(client: TestClient, admin: dict, name: str) -> tuple[str, str]:
-    applied = client.post(
-        "/api/identity/staff",
-        json={"display_name": name, "account_type": "human"},
-        headers=admin,
+    invite = client.post(
+        "/api/employees/invite", json={"display_name": name}, headers=admin
     )
-    employee_id = applied.json()["employee"]["employee_id"]
-    client.post(
-        f"/api/identity/staff/{employee_id}/review",
-        json={"approved": True},
-        headers=admin,
+    assert invite.status_code in (200, 201), invite.text
+    accepted = client.post(
+        "/api/invites/accept",
+        json={"invite_code": invite.json()["invite_code"], "display_name": name},
     )
-    token = client.post(
-        f"/api/identity/staff/{employee_id}/activate", headers=admin
-    ).json()["token"]
-    return employee_id, token
+    assert accepted.status_code == 201, accepted.text
+    body = accepted.json()
+    return body["employee"]["employee_id"], body["token"]
 
 
 def test_task_list_is_scoped_for_regular_staff() -> None:
@@ -53,7 +49,7 @@ def test_task_list_is_scoped_for_regular_staff() -> None:
             def titles(headers: dict, path: str = "/api/tasks") -> set[str]:
                 resp = client.get(path, headers=headers)
                 assert resp.status_code == 200, resp.text
-                return {item["title"] for item in resp.json()}
+                return {item["title"] for item in resp.json()["items"]}
 
             assert titles(admin_headers) == {"给甲的", "指派甲"}
             assert titles(_auth(staff_token)) == {"指派甲"}

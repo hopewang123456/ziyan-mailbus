@@ -27,6 +27,7 @@ class MessageView:
     created_at: datetime | None
     delivery_status: str | None = None
     pair_id: str | None = None
+    channel: str = "file_bus"
 
     @classmethod
     def of(cls, message: Message, delivery_status: str | None = None) -> "MessageView":
@@ -39,6 +40,7 @@ class MessageView:
             created_at=message.created_at,
             delivery_status=delivery_status,
             pair_id=message.pair_id,
+            channel=message.channel,
         )
 
 

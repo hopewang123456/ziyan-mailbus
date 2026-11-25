@@ -5,18 +5,11 @@ from __future__ import annotations
 from mailbus.api.schemas.tasks import (
     PublicTaskNodeOut,
     PublicTaskOut,
-    TaskAdvanceIn,
     TaskIn,
     TaskNodeOut,
     TaskOut,
 )
-from mailbus.application.workflow.dto import (
-    AdvanceCommand,
-    TaskCommand,
-    TaskView,
-    make_advance_command,
-    make_task_command,
-)
+from mailbus.application.workflow.dto import TaskCommand, TaskView, make_task_command
 
 
 def to_task_out(view: TaskView) -> TaskOut:
@@ -63,7 +56,3 @@ def task_command(payload: TaskIn) -> TaskCommand:
         workflow_id=payload.workflow_id,
         workflow_version=payload.workflow_version,
     )
-
-
-def advance_command(payload: TaskAdvanceIn) -> AdvanceCommand:
-    return make_advance_command(payload.node_id, payload.outcome, payload.note)

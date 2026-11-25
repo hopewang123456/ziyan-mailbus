@@ -25,7 +25,7 @@ uvicorn mailbus.bootstrap.main:app --port 9814
 ## Java 后端
 
 `java/` 提供与 Python 版同构的 Spring Boot 3.3 / JDK 17 实现，HTTP 契约对齐
-`shared/contracts/generated/openapi.json`（67 路径 / 82 操作），并与 Python 共用同一
+`shared/contracts/generated/openapi.json`（83 路径 / 104 操作），并与 Python 共用同一
 SQLite schema 与 `data/` 目录。不熟悉 Python 的团队可直接基于它二次开发：
 
 ```bash

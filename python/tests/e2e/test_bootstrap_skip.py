@@ -25,21 +25,18 @@ def _bootstrap(client: TestClient) -> dict[str, str]:
 
 
 def _staff(client: TestClient, headers: dict[str, str]) -> dict[str, str]:
-    applied = client.post(
-        "/api/identity/staff",
-        json={"display_name": "普通员工", "account_type": "human"},
-    )
-    assert applied.status_code == 201, applied.text
-    employee_id = applied.json()["employee"]["employee_id"]
-    client.post(
-        f"/api/identity/staff/{employee_id}/review",
-        json={"approved": True},
+    invite = client.post(
+        "/api/employees/invite",
+        json={"display_name": "普通员工"},
         headers=headers,
     )
-    token = client.post(
-        f"/api/identity/staff/{employee_id}/activate", headers=headers
-    ).json()["token"]
-    return _headers(token)
+    assert invite.status_code in (200, 201), invite.text
+    accepted = client.post(
+        "/api/invites/accept",
+        json={"invite_code": invite.json()["invite_code"]},
+    )
+    assert accepted.status_code == 201, accepted.text
+    return _headers(accepted.json()["token"])
 
 
 def test_skip_requires_admin_and_respects_step_whitelist(tmp_path):

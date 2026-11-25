@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Query, Request, Response
 
 from mailbus.api.deps import declares, get_actor
 from mailbus.api.mappers import approval as mapper
-from mailbus.api.schemas.approval import ApprovalIn, ApprovalOut, ResolveIn
+from mailbus.api.schemas.approval import ApprovalIn, ApprovalOut
+from mailbus.api.schemas.contract.task import ApprovalListOut, ResolveIn
+from mailbus.application.approval.dto import ApprovalView
 from mailbus.core.shared.values import Capability
 
 router = APIRouter(prefix="/api/approvals", tags=["approval"])
@@ -16,15 +18,24 @@ def _service(request: Request):
     return request.app.state.container.approvals
 
 
-@router.get("", response_model=list[ApprovalOut], summary="审批列表")
+def _engine(request: Request):
+    return request.app.state.container.task_engine
+
+
+@router.get("", response_model=ApprovalListOut, summary="审批列表")
 def list_approvals(
     request: Request,
-    status: str | None = None,
-    task_id: str | None = None,
-) -> list[ApprovalOut]:
-    actor = get_actor(request)
-    views = _service(request).list_approvals(actor, status, task_id)
-    return [mapper.to_approval_out(view) for view in views]
+    state: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> ApprovalListOut:
+    items, total = _engine(request).list_approvals(get_actor(request), state, limit, offset)
+    return ApprovalListOut(
+        items=[mapper.to_approval_out(ApprovalView.of(item)) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post("", response_model=ApprovalOut, status_code=201, summary="发起审批")
@@ -47,10 +58,9 @@ def get_approval(approval_id: str, request: Request) -> ApprovalOut:
 def resolve_approval(
     approval_id: str, payload: ResolveIn, request: Request
 ) -> ApprovalOut:
-    view = _service(request).resolve(
-        get_actor(request), approval_id, mapper.resolve_command(payload)
-    )
-    return mapper.to_approval_out(view)
+    item = _engine(request).resolve_approval(
+        get_actor(request), approval_id, payload.decision, payload.comment)
+    return mapper.to_approval_out(ApprovalView.of(item))
 
 
 @router.delete("/{approval_id}", status_code=204, summary="撤回审批")

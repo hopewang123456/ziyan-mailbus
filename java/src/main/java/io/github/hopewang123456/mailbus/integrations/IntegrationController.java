@@ -11,8 +11,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
-
 @RestController
 @RequestMapping("/api")
 public class IntegrationController {
@@ -37,7 +35,7 @@ public class IntegrationController {
     }
 
     @PostMapping("/settings/integrations/{name}/invoke")
-    public Map<String, Object> invoke(
+    public IntegrationDtos.IntegrationInvokeOut invoke(
             @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
             @PathVariable String name,
             @Valid @RequestBody IntegrationDtos.IntegrationInvokeIn input) {

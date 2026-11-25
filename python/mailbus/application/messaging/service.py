@@ -72,6 +72,9 @@ class MessagingService:
         actor: Actor,
         *,
         agent: str | None = None,
+        employee_id: str | None = None,
+        channel: str | None = None,
+        kind: str | None = None,
         status: str | None = None,
         since: datetime | None = None,
         pair_id: str | None = None,
@@ -87,6 +90,9 @@ class MessagingService:
             rows = uow.messages.search(
                 viewer_id=viewer_id,
                 agent=agent,
+                employee_id=employee_id,
+                channel=channel,
+                kind=kind,
                 status=status,
                 since=since,
                 pair_id=pair_id,
@@ -97,6 +103,35 @@ class MessagingService:
         return tuple(
             MessageView.of(message, delivery_status) for message, delivery_status in rows
         )
+
+    def count_messages(
+        self,
+        actor: Actor,
+        *,
+        agent: str | None = None,
+        employee_id: str | None = None,
+        channel: str | None = None,
+        kind: str | None = None,
+        status: str | None = None,
+        since: datetime | None = None,
+        pair_id: str | None = None,
+        collab_only: bool = False,
+    ) -> int:
+        viewer_id = (
+            None if Capability.ALL in actor.capabilities else actor.employee_id
+        )
+        with self._uow() as uow:
+            return uow.messages.count_search(
+                viewer_id=viewer_id,
+                agent=agent,
+                employee_id=employee_id,
+                channel=channel,
+                kind=kind,
+                status=status,
+                since=since,
+                pair_id=pair_id,
+                collab_only=collab_only,
+            )
 
     def list_collab(self, pair_id: str, limit: int = 50) -> tuple[MessageView, ...]:
         """公开大屏投影：只按结对读取，不校验调用者（由公开路由显式调用）。"""

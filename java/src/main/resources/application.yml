@@ -4,15 +4,15 @@ server:
 spring:
   application:
     name: mailbus-java
-  datasource:
-    url: jdbc:sqlite:${MAILBUS_DATA_DIR:../data}/mailbus.db
-    driver-class-name: org.sqlite.JDBC
-    hikari:
-      maximum-pool-size: 1
-      connection-timeout: 10000
+  # 数据源由 DatabaseConfig 用 SQLiteDataSource 显式装配（WAL / foreign_keys / busy_timeout），
+  # 不走 Spring Boot 自动配置，因此这里不再声明 spring.datasource。
   jackson:
     default-property-inclusion: always
     property-naming-strategy: SNAKE_CASE
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
 
 mailbus:
   data-dir: ${MAILBUS_DATA_DIR:../data}
@@ -25,6 +25,8 @@ mailbus:
   layout-path: ${MAILBUS_LAYOUT_PATH:../config/office-layout.json}
   metrics-manifest-path: ${MAILBUS_METRICS_MANIFEST:../shared/config/mailbus/metrics-manifest.json}
   contract-path: ${MAILBUS_CONTRACT_PATH:../shared/contracts/generated/openapi.json}
+  # Agent token 加密密钥；缺失时启动快速失败，避免明文落库。
+  token-encryption-key: ${MAILBUS_TOKEN_ENCRYPTION_KEY:}
 
 logging:
   level:

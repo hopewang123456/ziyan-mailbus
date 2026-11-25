@@ -1,44 +1,14 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
+import type { components } from "../../lib/contracts";
 import { ConsolePageHeader, ConsoleSection } from "../../components/console/ConsoleKit";
 
-type Overview = {
-  employees_total: number;
-  employees_active: number;
-  employees_pending: number;
-  employees_offline: number;
-  agents_total: number;
-  agents_enabled: number;
-  agents_online: number;
-  agents_busy: number;
-  teams: number;
-  positions: number;
-  seats_occupied: number;
-  tasks_total: number;
-  tasks_active: number;
-  tasks_running: number;
-  tasks_blocked: number;
-  tasks_done: number;
-  tasks_failed_today: number;
-  approvals_pending: number;
-  messages_total: number;
-  workflows_total: number;
-  workflows_published: number;
-  skills_total: number;
-  skills_enabled: number;
-};
-
-type Health = {
-  status: string;
-  service: string;
-  version: string;
-  schema_version: number;
-};
+type OverviewOut = components["schemas"]["OverviewOut"];
 
 /** 管理中心概览：所有数值均来自 GET /api/overview，版本信息来自 GET /api/health。 */
 export function ConsoleOverviewPage() {
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [health, setHealth] = useState<Health | null>(null);
+  const [overview, setOverview] = useState<OverviewOut | null>(null);
+  const [health, setHealth] = useState<{ status: string; service: string; version: string; schema_version: number } | null>(null);
   const [healthErr, setHealthErr] = useState("");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
@@ -46,8 +16,8 @@ export function ConsoleOverviewPage() {
   useEffect(() => {
     let alive = true;
     void Promise.all([
-      api<Overview>("/api/overview"),
-      api<Health>("/api/health"),
+      api<OverviewOut>("/api/overview"),
+      api<{ status: string; service: string; version: string; schema_version: number }>("/api/health"),
     ]).then(([result, healthResult]) => {
       if (!alive) return;
       setLoading(false);
@@ -69,7 +39,12 @@ export function ConsoleOverviewPage() {
     };
   }, []);
 
-  const value = (key: keyof Overview) => overview?.[key] ?? "—";
+  const value = (key: keyof OverviewOut): string | number => {
+    if (!overview) return "—";
+    const raw = overview[key];
+    if (Array.isArray(raw)) return `${raw.length} 项指标`;
+    return (raw as number | string) ?? "—";
+  };
 
   return (
     <>

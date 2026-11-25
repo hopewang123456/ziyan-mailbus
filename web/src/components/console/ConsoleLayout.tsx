@@ -1,23 +1,31 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
+import type { NavGroup } from "../../lib/navigation";
 
 /**
- * 管理中心布局（P3，D6：协同管理后台——正经表格表单范式）。
- *
- * 与孪生大屏的视觉分野：无星空/星云/3D 装饰；固定侧栏 + 顶栏 + 内容区
- * 的标准后台结构；沿用 mailbus 色板（abyss/hull/rail/frost/mute/mint）保持品牌一致。
+ * 管理中心布局（P4）：结构化分组侧栏 + wide/fluid 内容宽度。
+ * 视觉与孪生大屏保持分野：固定侧栏、无装饰背景。
  */
 export function ConsoleLayout({
-  nav,
+  groups,
   children,
   onLogout,
   logoutBusy,
+  width = "default",
 }: {
-  nav: ReactNode;
+  groups: NavGroup[];
   children: ReactNode;
   onLogout?: () => void;
   logoutBusy?: boolean;
+  width?: "default" | "wide" | "fluid";
 }) {
+  const widthClass =
+    width === "fluid"
+      ? "max-w-none"
+      : width === "wide"
+        ? "max-w-[1600px]"
+        : "max-w-5xl";
+
   return (
     <div className="flex min-h-screen bg-abyss text-frost">
       <aside className="fixed inset-y-0 left-0 z-40 flex w-56 flex-col border-r border-rail bg-hull">
@@ -25,8 +33,25 @@ export function ConsoleLayout({
           <p className="font-display text-sm font-semibold tracking-tight text-frost">mailbus</p>
           <p className="mt-0.5 text-[11px] text-mute">管理中心 · Console</p>
         </div>
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3" aria-label="管理导航">
-          {nav}
+        <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3" aria-label="管理导航">
+          {groups.map((group) => (
+            <div key={group.key}>
+              <p className="px-3 pb-1 text-[10px] font-medium uppercase tracking-wider text-mute/70">
+                {group.label}
+              </p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => (
+                  <ConsoleNavItem
+                    key={item.key}
+                    to={item.to}
+                    icon={item.icon}
+                    label={item.label}
+                    end={item.exact}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
         </nav>
         <div className="space-y-2 border-t border-rail px-4 py-3">
           <a href="/twin" className="block text-[11px] text-mute transition hover:text-frost">
@@ -45,17 +70,27 @@ export function ConsoleLayout({
         </div>
       </aside>
       <main className="ml-56 min-w-0 flex-1">
-        <div className="mx-auto max-w-5xl px-6 py-6">{children}</div>
+        <div className={`mx-auto px-6 py-6 ${widthClass}`}>{children}</div>
       </main>
     </div>
   );
 }
 
-export function ConsoleNavItem({ to, icon, label }: { to: string; icon: string; label: string }) {
+export function ConsoleNavItem({
+  to,
+  icon,
+  label,
+  end,
+}: {
+  to: string;
+  icon: string;
+  label: string;
+  end?: boolean;
+}) {
   return (
     <NavLink
       to={to}
-      end
+      end={end}
       className={({ isActive }) =>
         [
           "flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] transition",

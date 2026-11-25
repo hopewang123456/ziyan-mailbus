@@ -14,8 +14,8 @@ from mailbus.application.approval.dto import make_approval_command
 from mailbus.application.approval.service import ApprovalService
 from mailbus.application.dispatch.dispatcher import Dispatcher
 from mailbus.application.identity.dto import Actor
-from mailbus.application.workflow.dto import make_advance_command, make_task_command
-from mailbus.application.workflow.tasks import TaskService
+from mailbus.application.task.dto import CreateTaskCommand
+from mailbus.application.task.engine import TaskEngine
 from mailbus.core.identity.values import AccountType, EmployeeStatus
 from mailbus.core.shared.events import DeliveryResult
 from mailbus.core.shared.values import Capability, DataScope
@@ -55,21 +55,21 @@ def test_blocking_approval_times_out_and_keeps_task_blocked(tmp_path):
     clock = _FakeClock(datetime(2026, 1, 1, tzinfo=timezone.utc))
     ids = UuidGenerator()
     uow = lambda: SqliteUnitOfWork(lambda: connect(db_path), clock)
-    tasks = TaskService(uow, clock, ids, InProcessEventBus())
+    tasks = TaskEngine(uow, clock, ids, InProcessEventBus())
     approvals = ApprovalService(uow, clock, ids)
     actor = _actor()
 
-    task = tasks.create(actor, make_task_command("需要审批"))
-    tasks.dispatch(actor, task.task_id)
-    tasks.advance(actor, task.task_id, make_advance_command(None, "running"))
+    # B8：任务创建即自动启动，不再需要 dispatch/advance。
+    task = tasks.create(actor, CreateTaskCommand(title="需要审批"))
+    assert task.task.state.value == "running"
 
     approval = approvals.request(
         actor,
         make_approval_command(
-            task.task_id, "请确认", "blocking", timeout_minutes=30
+            task.task.task_id, "请确认", "blocking", timeout_minutes=30
         ),
     )
-    assert tasks.get(task.task_id).state == "blocked"
+    assert tasks.get(actor, task.task.task_id).task.state.value == "blocked"
     assert approval.status == "pending"
 
     clock.advance(minutes=31)
@@ -80,5 +80,5 @@ def test_blocking_approval_times_out_and_keeps_task_blocked(tmp_path):
 
     expired = approvals.get(actor, approval.approval_id)
     assert expired.status == "expired"
-    assert tasks.get(task.task_id).state == "blocked"
+    assert tasks.get(actor, task.task.task_id).task.state.value == "blocked"
     assert approvals.sweep_expired() == 0

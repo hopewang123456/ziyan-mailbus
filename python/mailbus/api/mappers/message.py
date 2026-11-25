@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from mailbus.api.schemas.contract.message import (
+    MessageListOut,
+    MessageOut as ContractMessageOut,
+    MessageTraceEventOut,
+    MessageTraceOut,
+)
 from mailbus.api.schemas.message import (
     DeliveryAttemptOut,
     MessageIn,
@@ -55,3 +61,53 @@ def to_attempt_out(view: DeliveryAttemptView) -> DeliveryAttemptOut:
         detail=view.detail,
         at=view.at,
     )
+
+
+def to_contract_message_out(view: MessageView) -> ContractMessageOut:
+    return ContractMessageOut(
+        message_id=view.message_id,
+        sender_id=view.sender_id,
+        recipient_id=view.recipient_id,
+        kind=view.kind,
+        body=view.body,
+        channel=view.channel,
+        pair_id=view.pair_id,
+        delivery_status=view.delivery_status,
+        created_at=view.created_at,
+    )
+
+
+def to_message_list_out(
+    views: tuple[MessageView, ...], total: int, limit: int, offset: int
+) -> MessageListOut:
+    return MessageListOut(
+        items=[to_contract_message_out(view) for view in views],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def to_trace_out(
+    view: MessageView, attempts: tuple[DeliveryAttemptView, ...]
+) -> MessageTraceOut:
+    events = [
+        MessageTraceEventOut(
+            at=view.created_at,
+            status="sent",
+            channel=view.channel,
+            detail={},
+        )
+    ]
+    events.extend(
+        MessageTraceEventOut(
+            at=attempt.at,
+            status="delivered" if attempt.ok else "failed",
+            attempt_no=attempt.attempt_no,
+            channel=view.channel,
+            error_code=attempt.error_code,
+            detail={"detail": attempt.detail} if attempt.detail else {},
+        )
+        for attempt in attempts
+    )
+    return MessageTraceOut(message_id=view.message_id, events=events)

@@ -20,13 +20,14 @@ from mailbus.application.org.dto import (
     seat_view,
     team_view,
 )
-from mailbus.core.identity.policy import Resource, can_grant_capabilities, ensure_allowed
+from mailbus.core.identity.policy import Resource, ensure_allowed
 from mailbus.core.org import rules
 from mailbus.core.org.models import LayoutDef, SeatAssignment
 from mailbus.core.org.ports import LayoutSeedPort, OrgUnitOfWork
-from mailbus.core.shared.errors import InvalidStateError, NotFoundError, PermissionDeniedError
+from mailbus.core.shared.errors import InvalidStateError, NotFoundError
 from mailbus.core.shared.ports import Clock, IdGenerator
 from mailbus.core.shared.values import Capability
+
 
 
 class OrgService:
@@ -80,8 +81,6 @@ class OrgService:
         ensure_allowed(
             actor.to_subject(), Capability.ORG_MANAGE, Resource(kind="position")
         )
-        if not can_grant_capabilities(actor.capabilities, frozenset(cmd.capabilities)):
-            raise PermissionDeniedError("不能授予超出自身范围的能力")
         now = self._clock.now()
         position_id = cmd.position_id or self._ids.new("pos")
         with self._uow() as uow:
@@ -166,12 +165,6 @@ class OrgService:
             raise NotFoundError("工位不存在")
         with self._uow() as uow:
             existing = uow.seats.get(seat_id)
-            if cmd.position_id is not None and not cmd.clear_position:
-                position = uow.positions.get(cmd.position_id)
-                if position is not None and not can_grant_capabilities(
-                    actor.capabilities, position.capabilities
-                ):
-                    raise PermissionDeniedError("不能授予超出自身范围的能力")
             assignment = self._merge(seat_id, existing, cmd)
             uow.seats.upsert(assignment)
             uow.commit()

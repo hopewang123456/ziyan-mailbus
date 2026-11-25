@@ -1,42 +1,17 @@
-import { useEffect, useState } from "react";
-import { api } from "../../lib/api";
+import { useCallback, useState } from "react";
 import {
   ConsolePageHeader,
   ConsoleSection,
   ConsoleTable,
   ConsoleTag,
 } from "../../components/console/ConsoleKit";
+import { ConsoleDrawer } from "../../components/console/ConsoleDrawer";
+import { Dialog } from "../../components/console/ConsoleDialog";
+import { useLiveMessages, useMessage, useTrace } from "../../lib/message/hooks";
+import { sendMessage, deleteMessage } from "../../lib/message/api";
+import type { MessageIn } from "../../lib/message/view";
 
-/** 消息与日志追迹：消息检索（超管全部 / 普通用户自己收发）+ 投递尝试 + 操作日志。 */
-
-type Message = {
-  message_id: string;
-  sender_id: string;
-  recipient_id?: string | null;
-  kind: string;
-  body: string;
-  created_at?: string | null;
-  delivery_status?: string | null;
-};
-
-type Attempt = {
-  message_id: string;
-  attempt_no: number;
-  ok: boolean;
-  error_code?: string | null;
-  detail?: string | null;
-  at?: string | null;
-};
-
-type LogEntry = {
-  event_id: string;
-  kind: string;
-  payload: Record<string, unknown>;
-  attempts: number;
-  created_at?: string | null;
-};
-
-type StatusFilter = "" | "pending" | "delivered" | "failed";
+/** 消息中心：列表、筛选、发送对话框、详情抽屉（含 trace 时间线）+ 实时 SSE 插入。 */
 
 function timeText(value?: string | null) {
   if (!value) return "—";
@@ -45,294 +20,210 @@ function timeText(value?: string | null) {
 }
 
 export function ConsoleMessagesPage({ can }: { can: (capability: string) => boolean }) {
-  const [scope, setScope] = useState<"all" | "inbox">("all");
-  const [agent, setAgent] = useState("");
-  const [status, setStatus] = useState<StatusFilter>("");
-  const [since, setSince] = useState("");
-  const [limit, setLimit] = useState(100);
-  const [hasMore, setHasMore] = useState(false);
-  const [recipient, setRecipient] = useState("");
-  const [kind, setKind] = useState("note");
-  const [body, setBody] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [selected, setSelected] = useState<Message | null>(null);
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
-  const [msg, setMsg] = useState("");
+  // === 筛选条件 ===
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
+  const [channel, setChannel] = useState<"file_bus" | "a2a" | "mcp" | null>(null);
+  const [kind, setKind] = useState<string | null>(null);
 
-  const load = async (nextOffset = 0) => {
-    setLoading(true);
-    const params = new URLSearchParams();
-    if (agent.trim()) params.set("agent", agent.trim());
-    if (status) params.set("status", status);
-    if (since) params.set("since", new Date(since).toISOString());
-    params.set("limit", String(limit));
-    params.set("offset", String(nextOffset));
-    const [m, l] = await Promise.all([
-      scope === "inbox"
-        ? api<Message[]>("/api/inbox")
-        : api<Message[]>(`/api/messages?${params.toString()}`),
-      api<LogEntry[]>("/api/log?limit=50"),
-    ]);
-    setLoading(false);
-    if (m.ok) {
-      setMessages((prev) => (nextOffset > 0 ? [...prev, ...m.data] : m.data));
-      setHasMore(m.data.length >= limit);
-    }
-    if (l.ok) setLogs(l.data);
-    const errors = [m, l]
-      .filter((result) => !result.ok)
-      .map((result) => (result.ok ? "" : result.error));
-    setErr(errors.filter(Boolean).join("; "));
+  const { items: messages, total, loading, error, refresh, streamState } = useLiveMessages({
+    employee_id: employeeId,
+    channel,
+    kind,
+    limit: 100,
+    offset: 0,
+  });
+  const streamText =
+    streamState === "live" ? "实时已连接"
+    : streamState === "lost" ? "实时中断，重连中"
+    : streamState === "expired" ? "登录已过期"
+    : streamState === "connecting" ? "实时连接中"
+    : "实时未连接";
+
+  // === 详情抽屉 ===
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { data: detail } = useMessage(selectedId);
+  const { data: trace } = useTrace(selectedId);
+
+  // === 发送对话框 ===
+  const [sendOpen, setSendOpen] = useState(false);
+  const [sendErr, setSendErr] = useState("");
+  const [recipient, setRecipient] = useState("");
+  const [sendKind, setSendKind] = useState("note");
+  const [body, setBody] = useState("");
+
+  const [deleteMsg, setDeleteMsg] = useState("");
+
+  const openDetail = (row: any) => {
+    setSelectedId(row.message_id);
   };
 
-  useEffect(() => {
-    void load();
-  }, [scope]);
+  const closeDetail = () => {
+    setSelectedId(null);
+  };
 
-  async function openMessage(row: Message) {
-    setSelected(row);
-    setAttempts([]);
-    const result = await api<Attempt[]>(
-      `/api/messages/${encodeURIComponent(row.message_id)}/attempts`,
-    );
-    if (result.ok) setAttempts(result.data);
-    else setErr(result.error);
-  }
-
-  async function send() {
-    setErr("");
-    setMsg("");
+  const handleSend = useCallback(async () => {
+    setSendErr("");
     if (!body.trim()) {
-      setErr("消息内容不能为空");
+      setSendErr("消息内容不能为空");
       return;
     }
-    const result = await api<Message>("/api/messages", {
-      method: "POST",
-      body: JSON.stringify({
-        body: body.trim(),
-        recipient_id: recipient.trim() || null,
-        kind: kind.trim() || "note",
-        channel: "file_bus",
-      }),
-    });
+    const payload: MessageIn = {
+      body: body.trim(),
+      channel: "file_bus",
+      kind: sendKind.trim() || "note",
+      recipient_id: recipient.trim() || null,
+    };
+    const result = await sendMessage(payload);
     if (!result.ok) {
-      setErr(result.error);
+      setSendErr(result.error);
       return;
     }
-    setMsg(
-      recipient.trim() ? `已发送给 ${recipient.trim()}` : "已广播给全部员工",
-    );
+    setSendOpen(false);
     setBody("");
-    await load();
-  }
+    setRecipient("");
+    setSendKind("note");
+    void refresh();
+  }, [body, sendKind, recipient, refresh]);
 
-  async function remove(row: Message) {
-    setErr("");
-    setMsg("");
-    const result = await api(
-      `/api/messages/${encodeURIComponent(row.message_id)}`,
-      { method: "DELETE" },
-    );
-    if (!result.ok) {
-      setErr(result.error);
-      return;
-    }
-    if (selected?.message_id === row.message_id) {
-      setSelected(null);
-      setAttempts([]);
-    }
-    setMsg(`已删除消息 ${row.message_id}`);
-    await load();
-  }
+  const handleDelete = useCallback(
+    async (row: any) => {
+      const result = await deleteMessage(row.message_id);
+      if (!result.ok) {
+        setDeleteMsg(`删除失败：${result.error}`);
+        return;
+      }
+      if (selectedId === row.message_id) setSelectedId(null);
+      setDeleteMsg(`已删除 ${row.message_id}`);
+      void refresh();
+    },
+    [selectedId, refresh],
+  );
 
   return (
     <>
       <ConsolePageHeader
-        title="消息与日志追迹"
-        description="全部消息按参与人/状态/时间检索；我的收件箱只显示发给我的消息；点击行查看投递尝试"
+        title="消息中心"
+        description="消息检索 + 发送 + 投递追迹"
+        actions={
+          <span className="flex items-center gap-2">
+            <ConsoleTag
+              tone={streamState === "live" ? "ok" : streamState === "expired" ? "danger" : "warn"}
+            >
+              {streamText}
+            </ConsoleTag>
+            <button
+              type="button"
+              className="hud-btn text-xs disabled:opacity-40"
+              disabled={!can("message_send")}
+              onClick={() => setSendOpen(true)}
+            >
+              发送消息
+            </button>
+          </span>
+        }
       />
+      {error && <p className="mb-3 text-xs text-flare">{error}</p>}
+      {deleteMsg && <p className="mb-3 text-xs text-mint">{deleteMsg}</p>}
 
-      <ConsoleSection title="发送消息">
-        <div className="flex flex-wrap items-end gap-2">
-          <label className="text-[11px] text-mute">
-            接收人
-            <input
-              className="mt-1 block w-40 rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
-              placeholder="留空 = 广播"
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value)}
-            />
-          </label>
-          <label className="text-[11px] text-mute">
-            类型
-            <input
-              className="mt-1 block w-24 rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
-              value={kind}
-              onChange={(e) => setKind(e.target.value)}
-            />
-          </label>
-          <label className="flex-1 text-[11px] text-mute">
-            内容
-            <input
-              className="mt-1 block w-full rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
-              placeholder="要发送的消息正文"
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void send();
-              }}
-            />
-          </label>
-          <button
-            type="button"
-            className="hud-btn text-xs disabled:opacity-40"
-            disabled={!can("message_send")}
-            onClick={() => void send()}
-          >
-            发送
-          </button>
-        </div>
-      </ConsoleSection>
-
+      {/* === 筛选区 === */}
       <div className="mb-4 flex flex-wrap items-end gap-2">
-        <label className="text-[11px] text-mute">
-          范围
-          <select
-            className="mt-1 block rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
-            value={scope}
-            onChange={(e) => setScope(e.target.value as "all" | "inbox")}
-          >
-            <option value="all">全部消息</option>
-            <option value="inbox">我的收件箱</option>
-          </select>
-        </label>
         <label className="text-[11px] text-mute">
           参与人
           <input
             className="mt-1 block w-40 rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
             placeholder="employee_id"
-            disabled={scope === "inbox"}
-            value={agent}
-            onChange={(e) => setAgent(e.target.value)}
+            value={employeeId ?? ""}
+            onChange={(e) => setEmployeeId(e.target.value || null)}
           />
         </label>
         <label className="text-[11px] text-mute">
-          投递状态
+          通道
           <select
             className="mt-1 block rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
-            disabled={scope === "inbox"}
-            value={status}
-            onChange={(e) => setStatus(e.target.value as StatusFilter)}
+            value={channel ?? ""}
+            onChange={(e) => setChannel((e.target.value as any) || null)}
           >
             <option value="">全部</option>
-            <option value="pending">未投递</option>
-            <option value="delivered">已送达</option>
-            <option value="failed">失败</option>
+            <option value="file_bus">文件总线</option>
+            <option value="a2a">A2A</option>
+            <option value="mcp">MCP</option>
           </select>
         </label>
         <label className="text-[11px] text-mute">
-          起始时间
+          类型
           <input
-            type="datetime-local"
-            className="mt-1 block rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
-            disabled={scope === "inbox"}
-            value={since}
-            onChange={(e) => setSince(e.target.value)}
+            className="mt-1 block w-24 rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+            placeholder="kind"
+            value={kind ?? ""}
+            onChange={(e) => setKind(e.target.value || null)}
           />
         </label>
-        <label className="text-[11px] text-mute">
-          条数
-          <input
-            type="number"
-            min={1}
-            max={500}
-            className="mt-1 block w-20 rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
-            disabled={scope === "inbox"}
-            value={limit}
-            onChange={(e) =>
-              setLimit(Math.max(1, Math.min(500, Number(e.target.value) || 100)))
-            }
-          />
-        </label>
-        <button type="button" className="hud-btn text-xs" onClick={() => void load()}>
-          查询
+        <button type="button" className="hud-btn text-xs" onClick={() => void refresh()}>
+          刷新
         </button>
-        {scope !== "inbox" && hasMore && (
-          <button
-            type="button"
-            className="hud-btn text-xs"
-            onClick={() => void load(messages.length)}
-          >
-            加载更多
-          </button>
-        )}
       </div>
 
-      {err && <p className="mb-3 text-xs text-flare">{err}</p>}
-      {msg && <p className="mb-3 text-xs text-mint">{msg}</p>}
-
-      <ConsoleSection title={`${scope === "inbox" ? "收件箱" : "消息"}（${messages.length}）`}>
+      {/* === 消息列表 === */}
+      <ConsoleSection title={`消息（${messages.length} / ${total}）`}>
         <ConsoleTable
           rows={messages}
-          rowKey={(row) => row.message_id}
+          rowKey={(row: any) => row.message_id}
           loading={loading}
           empty="暂无消息"
-          onRowClick={(row) => void openMessage(row)}
-          selectedKey={selected?.message_id}
+          onRowClick={(row: any) => openDetail(row)}
+          selectedKey={selectedId ?? undefined}
           columns={[
             {
               key: "time",
               header: "时间",
-              render: (row) => (
+              render: (row: any) => (
                 <span className="text-[11px] text-mute">{timeText(row.created_at)}</span>
               ),
             },
             {
               key: "sender",
               header: "发送人",
-              render: (row) => (
-                <span className="font-mono text-[11px]">{row.sender_id}</span>
-              ),
+              render: (row: any) => <span className="font-mono text-[11px]">{row.sender_id}</span>,
             },
             {
               key: "recipient",
               header: "接收人",
-              render: (row) => (
-                <span className="font-mono text-[11px]">
-                  {row.recipient_id || "广播"}
-                </span>
+              render: (row: any) => (
+                <span className="font-mono text-[11px]">{row.recipient_id || "广播"}</span>
               ),
             },
-            { key: "kind", header: "类型", render: (row) => <ConsoleTag>{row.kind}</ConsoleTag> },
+            { key: "kind", header: "类型", render: (row: any) => <ConsoleTag>{row.kind}</ConsoleTag> },
+            {
+              key: "channel",
+              header: "通道",
+              render: (row: any) => <ConsoleTag tone="default">{row.channel}</ConsoleTag>,
+            },
             {
               key: "body",
               header: "内容",
-              render: (row) => <span className="text-mute">{row.body.slice(0, 60)}</span>,
+              render: (row: any) => <span className="text-mute">{row.body.slice(0, 60)}</span>,
             },
             {
               key: "status",
               header: "投递",
-              render: (row) => {
+              render: (row: any) => {
                 const value = row.delivery_status || "pending";
                 const tone =
                   value === "delivered" ? "ok" : value === "failed" ? "danger" : "warn";
-                return <ConsoleTag tone={tone}>{value}</ConsoleTag>;
+                return <ConsoleTag tone={tone as "ok" | "danger" | "warn"}>{value}</ConsoleTag>;
               },
             },
             {
               key: "act",
               header: "操作",
-              render: (row) => (
+              render: (row: any) => (
                 <button
                   type="button"
                   className="rounded border border-flare/50 px-2 py-0.5 text-[11px] text-flare hover:bg-flare/10 disabled:opacity-40"
                   disabled={!can("system_config")}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void remove(row);
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleDelete(row);
                   }}
                 >
                   删除
@@ -343,76 +234,119 @@ export function ConsoleMessagesPage({ can }: { can: (capability: string) => bool
         />
       </ConsoleSection>
 
-      {selected && (
-        <ConsoleSection title={`投递尝试 · ${selected.message_id}`}>
-          <ConsoleTable
-            rows={attempts}
-            rowKey={(row) => `${row.message_id}-${row.attempt_no}`}
-            empty="暂无投递记录"
-            columns={[
-              { key: "no", header: "#", render: (row) => String(row.attempt_no) },
-              {
-                key: "ok",
-                header: "结果",
-                render: (row) => (
-                  <ConsoleTag tone={row.ok ? "ok" : "danger"}>
-                    {row.ok ? "成功" : "失败"}
-                  </ConsoleTag>
-                ),
-              },
-              {
-                key: "code",
-                header: "错误码",
-                render: (row) => <span className="font-mono text-[11px]">{row.error_code || "—"}</span>,
-              },
-              {
-                key: "detail",
-                header: "明细",
-                render: (row) => <span className="text-mute">{row.detail || "—"}</span>,
-              },
-              {
-                key: "at",
-                header: "时间",
-                render: (row) => (
-                  <span className="text-[11px] text-mute">{timeText(row.at)}</span>
-                ),
-              },
-            ]}
-          />
-        </ConsoleSection>
+      {/* === 详情抽屉 === */}
+      {selectedId && (
+        <ConsoleDrawer open onClose={closeDetail} title={`消息详情 · ${selectedId}`}>
+          {detail && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <Field label="发送人" value={detail.sender_id} />
+                <Field label="接收人" value={detail.recipient_id || "广播"} />
+                <Field label="类型" value={detail.kind} />
+                <Field label="通道" value={detail.channel} />
+                <Field label="投递状态" value={detail.delivery_status || "pending"} />
+                <Field label="创建时间" value={timeText(detail.created_at)} />
+                {detail.pair_id && <Field label="结对" value={detail.pair_id} />}
+                {detail.task_id && <Field label="任务" value={detail.task_id} />}
+              </div>
+              <div>
+                <p className="mb-1 text-[11px] text-mute">正文</p>
+                <pre className="rounded border border-rail bg-hull px-2 py-1 text-xs text-frost whitespace-pre-wrap break-all">
+                  {detail.body}
+                </pre>
+              </div>
+            </div>
+          )}
+          <div className="mt-4">
+            <p className="mb-2 text-[11px] text-mute">投递追迹时间线</p>
+            {trace?.events && trace.events.length > 0 ? (
+              <ol className="space-y-1">
+                {trace.events.map((evt: any, idx: number) => (
+                  <li key={idx} className="flex gap-2 text-[11px]">
+                    <span className="w-20 shrink-0 text-mute">{timeText(evt.at)}</span>
+                    <span className="font-mono">{evt.status}</span>
+                    {evt.error_code && (
+                      <span className="font-mono text-flare">{evt.error_code}</span>
+                    )}
+                    {evt.channel && <span className="text-mute">· {evt.channel}</span>}
+                    {evt.detail && (
+                      <span className="text-mute">
+                        · {JSON.stringify(evt.detail).slice(0, 40)}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-[11px] text-mute">暂无追迹事件</p>
+            )}
+          </div>
+        </ConsoleDrawer>
       )}
 
-      <ConsoleSection title={`操作日志（${logs.length}）`}>
-        <ConsoleTable
-          rows={logs}
-          rowKey={(row) => row.event_id}
-          empty="暂无日志"
-          columns={[
-            { key: "kind", header: "事件", render: (row) => <ConsoleTag>{row.kind}</ConsoleTag> },
-            {
-              key: "payload",
-              header: "载荷",
-              render: (row) => (
-                <span className="font-mono text-[11px] text-mute">
-                  {JSON.stringify(row.payload).slice(0, 90)}
-                </span>
-              ),
-            },
-            {
-              key: "attempts",
-              header: "投递次数",
-              render: (row) => String(row.attempts),
-            },
-            {
-              key: "time",
-              header: "时间",
-              render: (row) => (
-                <span className="text-[11px] text-mute">{timeText(row.created_at)}</span>
-              ),
-            },
-          ]}
-        />
-      </ConsoleSection>
+      {/* === 发送对话框 === */}
+      {sendOpen && (
+        <Dialog open title="发送消息" onClose={() => setSendOpen(false)}>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <label className="flex-1 text-[11px] text-mute">
+                接收人
+                <input
+                  className="mt-1 block w-full rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+                  placeholder="留空 = 广播"
+                  value={recipient}
+                  onChange={(e) => setRecipient(e.target.value)}
+                />
+              </label>
+              <label className="w-32 text-[11px] text-mute">
+                类型
+                <input
+                  className="mt-1 block w-full rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+                  value={sendKind}
+                  onChange={(e) => setSendKind(e.target.value)}
+                />
+              </label>
+            </div>
+            <label className="block text-[11px] text-mute">
+              消息正文
+              <textarea
+                className="mt-1 block w-full rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+                rows={4}
+                placeholder="要发送的消息正文"
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+              />
+            </label>
+            {sendErr && <p className="text-xs text-flare">{sendErr}</p>}
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                className="rounded border border-rail px-3 py-1.5 text-xs text-mute hover:text-frost"
+                onClick={() => setSendOpen(false)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="rounded bg-mint px-3 py-1.5 text-xs text-abyss hover:opacity-90 disabled:opacity-40"
+                disabled={!can("message_send")}
+                onClick={() => void handleSend()}
+              >
+                发送
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-mute">{label}</p>
+      <p className="font-mono text-frost break-all">{value}</p>
+    </div>
   );
 }

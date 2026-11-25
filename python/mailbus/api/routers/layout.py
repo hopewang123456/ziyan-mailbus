@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Query, Request
 
 from mailbus.api.deps import get_actor
 from mailbus.api.mappers.layout import to_office_site_out, to_public_office_site_out
@@ -21,7 +21,10 @@ def get_layout(request: Request) -> OfficeSiteOut:
 @router.get(
     "/public/layout", response_model=PublicOfficeSiteOut, summary="公开孪生布局（脱敏）"
 )
-def get_public_layout(request: Request) -> PublicOfficeSiteOut:
-    """大屏公开投影：只保留姓名/岗位/团队/状态/任务，不含 agent_id 与心跳。"""
+def get_public_layout(
+    request: Request, screen_id: str | None = Query(default=None)
+) -> PublicOfficeSiteOut:
+    """按屏幕已发布配置过滤团队；公开投影不含 team。"""
     container = request.app.state.container
-    return to_public_office_site_out(container.layout.get())
+    team_id = container.screens.published_team_id(screen_id) if screen_id else None
+    return to_public_office_site_out(container.layout.get(team_id=team_id))

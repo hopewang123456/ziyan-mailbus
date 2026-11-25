@@ -19,12 +19,33 @@ public final class MetricDtos {
                                  List<MetricSeriesOut> series) {
     }
 
+    public record MetricOverviewOut(String start, String end,
+                                    List<MetricPointOut> cards,
+                                    Map<String, Integer> totals) {
+    }
+
+    public record MetricTrendOut(String start, String end, String bucket,
+                                 List<MetricSeriesOut> series) {
+    }
+
+    public record MetricBreakdownItemOut(String key, String label, Number value) {
+    }
+
+    public record MetricBreakdownOut(String start, String end, String metric,
+                                     List<MetricBreakdownItemOut> items,
+                                     Map<String, Object> extra) {
+    }
+
     public record MetricRuleOut(String id, String metric, String op, double threshold,
                                 String severity, boolean enabled, String note,
                                 List<String> actions) {
     }
 
     public record MetricRuleListOut(List<MetricRuleOut> rules) {
+    }
+
+    public record MetricRulePageOut(List<MetricRuleOut> items, int total,
+                                    int limit, int offset) {
     }
 
     public record MetricRuleUpdateIn(Map<String, Object> fields) {

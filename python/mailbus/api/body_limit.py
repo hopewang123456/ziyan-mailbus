@@ -1,7 +1,8 @@
 """请求体大小上限中间件（纯 ASGI，无第三方依赖）。
 
-服务端没有文件上传接口，所有写路由都是 JSON；限制请求体可避免超大
-载荷拖垮解析与内存。先看 Content-Length，缺失时按流式累计字节数兜底。
+JSON 写路由用较小的 ``max_bytes``；multipart 产物上传单独放宽到
+``multipart_bytes``，并由路由层再次做单文件上限校验。先看
+Content-Length，缺失时按流式累计字节数兜底。
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ import json
 from typing import Any, Awaitable, Callable
 
 DEFAULT_MAX_BODY_BYTES = 1_048_576
+DEFAULT_MULTIPART_BYTES = 100 * 1024 * 1024
 
 _REJECT_BODY = json.dumps(
     {
@@ -26,9 +28,11 @@ class _BodyTooLarge(Exception):
 
 
 class BodySizeLimitMiddleware:
-    def __init__(self, app: Any, max_bytes: int = DEFAULT_MAX_BODY_BYTES) -> None:
+    def __init__(self, app: Any, max_bytes: int = DEFAULT_MAX_BODY_BYTES,
+                 multipart_bytes: int = DEFAULT_MULTIPART_BYTES) -> None:
         self.app = app
         self.max_bytes = max_bytes
+        self.multipart_bytes = multipart_bytes
 
     async def __call__(
         self,
@@ -39,8 +43,9 @@ class BodySizeLimitMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        limit = self.multipart_bytes if _is_multipart(scope) else self.max_bytes
         declared = _content_length(scope)
-        if declared is not None and declared > self.max_bytes:
+        if declared is not None and declared > limit:
             await _reject(send)
             return
         state = {"total": 0, "started": False}
@@ -49,7 +54,7 @@ class BodySizeLimitMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 state["total"] += len(message.get("body", b""))
-                if state["total"] > self.max_bytes:
+                if state["total"] > limit:
                     raise _BodyTooLarge
             return message
 
@@ -73,6 +78,13 @@ def _content_length(scope: dict[str, Any]) -> int | None:
             except ValueError:
                 return None
     return None
+
+
+def _is_multipart(scope: dict[str, Any]) -> bool:
+    for name, value in scope.get("headers", ()):
+        if name == b"content-type" and value.lower().startswith(b"multipart/form-data"):
+            return True
+    return False
 
 
 async def _reject(send: Callable[[dict[str, Any]], Awaitable[None]]) -> None:

@@ -1,8 +1,4 @@
-"""任务用例：创建、派发、推进、取消。
-
-自由任务与流程任务共用 Task 聚合：workflow_version 为空即自由任务，
-推进时直接改任务状态；否则按节点顺序推进。
-"""
+"""任务用例：创建、取消与查询。"""
 
 from __future__ import annotations
 
@@ -10,11 +6,7 @@ from collections.abc import Callable
 
 from mailbus.application.events import enqueue_events
 from mailbus.application.identity.dto import Actor
-from mailbus.application.workflow.dto import (
-    AdvanceCommand,
-    TaskCommand,
-    TaskView,
-)
+from mailbus.application.workflow.dto import TaskCommand, TaskView
 from mailbus.core.collab.ports import CollabEventBus
 from mailbus.core.identity.policy import Resource, ensure_allowed
 from mailbus.core.shared.errors import (
@@ -86,40 +78,6 @@ class TaskService:
         self._publish(view)
         return view
 
-    def dispatch(self, actor: Actor, task_id: str) -> TaskView:
-        now = self._clock.now()
-        with self._uow() as uow:
-            task = self._load(uow, task_id)
-            self._require(actor, Capability.TASK_DISPATCH, task)
-            updated, nodes, events = rules.dispatch(
-                task, tuple(uow.tasks.nodes(task_id)), now
-            )
-            uow.tasks.save(updated, nodes)
-            enqueue_events(uow.outbox, events, self._ids, now)
-            uow.commit()
-        view = TaskView.of(updated, nodes)
-        self._publish(view)
-        return view
-
-    def advance(self, actor: Actor, task_id: str, cmd: AdvanceCommand) -> TaskView:
-        now = self._clock.now()
-        with self._uow() as uow:
-            task = self._load(uow, task_id)
-            self._require(actor, Capability.RESULT_SUBMIT, task)
-            updated, nodes, events = rules.advance(
-                task,
-                tuple(uow.tasks.nodes(task_id)),
-                node_id=cmd.node_id,
-                outcome=cmd.outcome,
-                now=now,
-            )
-            uow.tasks.save(updated, nodes)
-            enqueue_events(uow.outbox, events, self._ids, now)
-            uow.commit()
-        view = TaskView.of(updated, nodes)
-        self._publish(view)
-        return view
-
     def cancel(self, actor: Actor, task_id: str) -> TaskView:
         now = self._clock.now()
         with self._uow() as uow:
@@ -145,7 +103,13 @@ class TaskService:
     ) -> tuple[TaskView, ...]:
         parsed = self._parse_state(state)
         with self._uow() as uow:
-            tasks = uow.tasks.list_all(parsed, owner_id, limit, offset, viewer_id)
+            tasks = uow.tasks.list_all(
+                state=parsed,
+                owner_id=owner_id,
+                limit=limit,
+                offset=offset,
+                viewer_id=viewer_id,
+            )
             views = tuple(TaskView.of(task, uow.tasks.nodes(task.task_id)) for task in tasks)
         return views
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 
@@ -23,11 +23,20 @@ class Pair:
 
 @dataclass(frozen=True, slots=True)
 class Screen:
+    """一块自动登记或已被接管的物理大屏。
+
+    密钥只保存不可逆哈希；明文仅在登记响应返回一次。
+    配置分草稿``config``与已发布``published_config``，``config_version``只随发布 +1。
+    """
+
     screen_id: str
     name: str
-    floor_id: str | None
-    seat_id: str | None
+    source: str
     online: bool
     last_seen_at: datetime | None
     created_at: datetime
-    secret: str | None = None
+    config: dict = field(default_factory=dict)
+    published_config: dict = field(default_factory=dict)
+    config_version: int = 1
+    updated_at: datetime | None = None
+    secret_hash: str | None = None

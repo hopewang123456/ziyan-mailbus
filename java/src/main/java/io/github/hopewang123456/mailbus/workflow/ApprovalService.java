@@ -28,20 +28,19 @@ public class ApprovalService {
         this.tasks = tasks;
     }
 
-    public List<ApprovalDtos.ApprovalOut> list(String status, String taskId) {
-        if (status != null && !status.isBlank()) {
-            return jdbc.query("""
-                    SELECT * FROM approval_items WHERE status = ? AND (? IS NULL OR task_id = ?)
-                     ORDER BY created_at
-                    """, this::map, status, blankToNull(taskId), blankToNull(taskId));
-        }
-        return jdbc.query("""
-                SELECT * FROM approval_items WHERE (? IS NULL OR task_id = ?) ORDER BY created_at
-                """, this::map, blankToNull(taskId), blankToNull(taskId));
+    public ApprovalDtos.ApprovalListOut list(Actor actor, String state, int limit, int offset) {
+        java.util.List<TaskRepository.ApprovalRow> rows =
+                tasks.listApprovals(actor, state, limit, offset);
+        int total = tasks.countApprovals(actor, state);
+        return new ApprovalDtos.ApprovalListOut(rows.stream().map(this::view).toList(),
+                total, limit, offset);
     }
 
     public ApprovalDtos.ApprovalOut get(String approvalId) {
-        return load(approvalId);
+        List<ApprovalDtos.ApprovalOut> rows = jdbc.query(
+                "SELECT * FROM approval_items WHERE approval_id = ?", this::map, approvalId);
+        return rows.stream().findFirst()
+                .orElseThrow(() -> ApiException.notFound("审批不存在"));
     }
 
     @Transactional
@@ -78,50 +77,21 @@ public class ApprovalService {
         }
         outbox.enqueue("approval.requested", java.util.Map.of("approval_id", approvalId,
                 "task_id", input.taskId(), "tier", tier, "status", status));
-        return load(approvalId);
+        return get(approvalId);
     }
 
     @Transactional
     public ApprovalDtos.ApprovalOut resolve(Actor actor, String approvalId,
                                             ApprovalDtos.ResolveIn input) {
-        Authz.require(actor, Authz.HITL_RESOLVE);
-        ApprovalDtos.ApprovalOut item = load(approvalId);
-        if ("acknowledged".equals(item.status())) {
-            throw ApiException.conflict("invalid_transition", "信息档审批无需裁决");
-        }
-        if ("expired".equals(item.status())) {
-            throw ApiException.conflict("invalid_transition", "审批已超时");
-        }
-        boolean approved = Boolean.TRUE.equals(input.approved());
-        if ("approved".equals(item.status()) || "rejected".equals(item.status())) {
-            if (("approved".equals(item.status())) == approved) {
-                return item;
-            }
-            throw ApiException.conflict("invalid_transition", "审批已裁决");
-        }
-        Instant now = Instant.now();
-        String status = approved ? "approved" : "rejected";
-        jdbc.update("""
-                UPDATE approval_items SET status = ?, resolved_by = ?, resolved_at = ?,
-                    resolution_note = ? WHERE approval_id = ?
-                """, status, actor.employeeId(), now.getEpochSecond(), input.note(), approvalId);
-        if ("blocking".equals(item.tier())) {
-            if (approved) {
-                tasks.resume(item.taskId());
-            } else {
-                tasks.fail(item.taskId(), "approval_rejected");
-            }
-        }
-        outbox.enqueue(approved ? "approval.approved" : "approval.rejected",
-                java.util.Map.of("approval_id", approvalId, "task_id", item.taskId(),
-                        "resolver_id", actor.employeeId()));
-        return load(approvalId);
+        TaskRepository.ApprovalRow item =
+                tasks.resolveApproval(actor, approvalId, input.decision(), input.comment());
+        return view(item);
     }
 
     /** 撤回审批：发起人或超管可撤回；仅待裁决可撤，阻塞档在任务仍阻塞时恢复执行。 */
     @Transactional
     public void withdraw(Actor actor, String approvalId) {
-        ApprovalDtos.ApprovalOut item = load(approvalId);
+        ApprovalDtos.ApprovalOut item = get(approvalId);
         if (!actor.employeeId().equals(item.requesterId())) {
             Authz.require(actor, Authz.SYSTEM_CONFIG);
         }
@@ -141,33 +111,11 @@ public class ApprovalService {
                 "tier", item.tier(), "actor_id", actor.employeeId()));
     }
 
-    @Transactional
-    public int sweepExpired() {
-        Instant now = Instant.now();
-        List<ApprovalDtos.ApprovalOut> due = jdbc.query("""
-                SELECT * FROM approval_items WHERE status = 'pending' AND expires_at <= ?
-                """, this::map, now.getEpochSecond());
-        for (ApprovalDtos.ApprovalOut item : due) {
-            jdbc.update("UPDATE approval_items SET status = 'expired', resolved_at = ?"
-                    + " WHERE approval_id = ?", now.getEpochSecond(), item.approvalId());
-            if ("blocking".equals(item.tier())) {
-                try {
-                    tasks.hold(item.taskId(), "approval_timeout");
-                } catch (ApiException ignored) {
-                    // 任务已结束或已阻塞时保持现状
-                }
-            }
-            outbox.enqueue("approval.expired", java.util.Map.of("approval_id", item.approvalId(),
-                    "task_id", item.taskId(), "tier", item.tier()));
-        }
-        return due.size();
-    }
-
-    private ApprovalDtos.ApprovalOut load(String approvalId) {
-        List<ApprovalDtos.ApprovalOut> rows = jdbc.query(
-                "SELECT * FROM approval_items WHERE approval_id = ?", this::map, approvalId);
-        return rows.stream().findFirst()
-                .orElseThrow(() -> ApiException.notFound("审批不存在"));
+    private ApprovalDtos.ApprovalOut view(TaskRepository.ApprovalRow row) {
+        return new ApprovalDtos.ApprovalOut(row.approvalId(), row.taskId(), row.nodeId(),
+                row.title(), row.tier(), row.status(), row.requesterId(), row.note(),
+                row.createdAt(), row.expiresAt(), row.resolvedBy(), row.resolvedAt(),
+                row.resolutionNote());
     }
 
     private String taskState(String taskId) {

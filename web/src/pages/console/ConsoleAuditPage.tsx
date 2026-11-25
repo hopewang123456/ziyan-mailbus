@@ -1,117 +1,207 @@
-import { useCallback, useEffect, useState } from "react";
-import { api } from "../../lib/api";
-import { ConsolePageHeader, ConsoleSection, ConsoleTable, ConsoleTag } from "../../components/console/ConsoleKit";
+import { useCallback, useState } from "react";
+import {
+  ConsolePageHeader,
+  ConsoleSection,
+  ConsoleTable,
+  ConsoleTag,
+} from "../../components/console/ConsoleKit";
+import { ConsoleDrawer } from "../../components/console/ConsoleDrawer";
+import { useAudits, useAudit } from "../../lib/audit/hooks";
 
-/** 审计与告警（P3）— 审核统计 + 最近告警（告警规则在「指标与报表」页管理）。 */
+/** 审计日志：列表 + 筛选（actor/action/resource/时间范围）+ 详情抽屉。 */
 
-type AuditStats = {
-  total_tasks?: number;
-  audited_tasks?: number;
-  pending_audit_tasks?: number;
-  pass_count?: number;
-  fail_count?: number;
-  warn_count?: number;
-  by_reviewer?: Record<string, { pass?: number; fail?: number; warn?: number; total?: number }>;
-};
-type Alert = {
-  id: string;
-  type?: string;
-  severity?: string;
-  agent?: string;
-  message?: string;
-  ts?: string;
-};
+function timeText(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
 
 export function ConsoleAuditPage() {
-  const [stats, setStats] = useState<AuditStats | null>(null);
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState("");
+  const [actor, setActor] = useState<string | null>(null);
+  const [action, setAction] = useState<string | null>(null);
+  const [resource, setResource] = useState<string | null>(null);
+  const [from, setFrom] = useState<string | null>(null);
+  const [to, setTo] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const [s, a] = await Promise.all([
-      api<AuditStats>("/api/tasks/audit/stats"),
-      api<{ alerts?: Alert[] }>("/api/alerts"),
-    ]);
-    setLoading(false);
-    if (s.ok && s.data) setStats(s.data);
-    if (a.ok && a.data?.alerts) setAlerts(a.data.alerts);
-    const errors = [s, a].filter((r) => !r.ok).map((r) => (r.ok ? "" : r.error));
-    setErr(errors.filter(Boolean).join("；"));
+  const {
+    items: audits,
+    total,
+    loading,
+    error,
+    refresh,
+  } = useAudits({
+    actor,
+    action,
+    resource,
+    from,
+    to,
+    limit: 200,
+    offset: 0,
+  });
+
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const { data: detail } = useAudit(selectedId);
+
+  const openDetail = useCallback((row: any) => {
+    setSelectedId(row.audit_id);
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const sevTone = (s?: string) => (s === "critical" ? "danger" : s === "warn" ? "warn" : "default");
+  const closeDetail = useCallback(() => {
+    setSelectedId(null);
+  }, []);
 
   return (
     <>
       <ConsolePageHeader
-        title="审计与告警"
-        description="工单审核统计与最近告警（规则编辑在「指标与报表」）"
+        title="审计日志"
+        description="全量操作审计，按 actor/action/resource/时间范围筛选"
         actions={
-          <button type="button" className="hud-btn text-xs" onClick={() => void load()}>
+          <button type="button" className="hud-btn text-xs" onClick={() => void refresh()}>
             刷新
           </button>
         }
       />
-      {err && <p className="mb-3 text-xs text-flare">{err}</p>}
+      {error && <p className="mb-3 text-xs text-flare">{error}</p>}
 
-      <ConsoleSection title="审核统计">
-        <div className="mb-4 grid gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-          <Stat label="总任务" value={stats?.total_tasks ?? "—"} />
-          <Stat label="已审" value={stats?.audited_tasks ?? "—"} />
-          <Stat label="待审" value={stats?.pending_audit_tasks ?? "—"} />
-          <Stat label="不通过" value={stats?.fail_count ?? "—"} danger />
-          <Stat label="告警（未消）" value={alerts.length} danger={alerts.length > 0} />
-        </div>
-        <ConsoleTable
-          rows={Object.entries(stats?.by_reviewer || {}).map(([k, v]) => ({ reviewer: k, ...v }))}
-          rowKey={(r) => r.reviewer}
-          loading={loading}
-          empty="暂无审核数据"
-          columns={[
-            { key: "r", header: "审核人", render: (r) => <span className="font-mono">{r.reviewer}</span> },
-            { key: "p", header: "通过", render: (r) => String(r.pass ?? 0) },
-            { key: "w", header: "警告", render: (r) => String(r.warn ?? 0) },
-            { key: "f", header: "不通过", render: (r) => String(r.fail ?? 0) },
-            { key: "t", header: "合计", render: (r) => String(r.total ?? 0) },
-          ]}
-        />
-      </ConsoleSection>
+      {/* === 筛选区 === */}
+      <div className="mb-4 flex flex-wrap items-end gap-2">
+        <label className="text-[11px] text-mute">
+          操作人
+          <input
+            className="mt-1 block w-32 rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+            placeholder="actor_id"
+            value={actor ?? ""}
+            onChange={(e) => setActor(e.target.value || null)}
+          />
+        </label>
+        <label className="text-[11px] text-mute">
+          动作
+          <input
+            className="mt-1 block w-28 rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+            placeholder="action"
+            value={action ?? ""}
+            onChange={(e) => setAction(e.target.value || null)}
+          />
+        </label>
+        <label className="text-[11px] text-mute">
+          资源
+          <input
+            className="mt-1 block w-36 rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+            placeholder="resource"
+            value={resource ?? ""}
+            onChange={(e) => setResource(e.target.value || null)}
+          />
+        </label>
+        <label className="text-[11px] text-mute">
+          起始
+          <input
+            type="datetime-local"
+            className="mt-1 block rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+            value={from ?? ""}
+            onChange={(e) => setFrom(e.target.value ? new Date(e.target.value).toISOString() : null)}
+          />
+        </label>
+        <label className="text-[11px] text-mute">
+          结束
+          <input
+            type="datetime-local"
+            className="mt-1 block rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+            value={to ?? ""}
+            onChange={(e) => setTo(e.target.value ? new Date(e.target.value).toISOString() : null)}
+          />
+        </label>
+        <button type="button" className="hud-btn text-xs" onClick={() => void refresh()}>
+          查询
+        </button>
+      </div>
 
-      <ConsoleSection title={`最近告警（${alerts.length}）`}>
+      {/* === 审计列表 === */}
+      <ConsoleSection title={`审计日志（${audits.length} / ${total}）`}>
         <ConsoleTable
-          rows={alerts}
-          rowKey={(a, i) => a.id || String(i)}
+          rows={audits}
+          rowKey={(row: any) => row.audit_id}
           loading={loading}
-          empty="暂无告警"
+          empty="暂无审计记录"
+          onRowClick={(row: any) => openDetail(row)}
+          selectedKey={selectedId !== null ? String(selectedId) : undefined}
           columns={[
             {
-              key: "sev",
-              header: "级别",
-              render: (a) => <ConsoleTag tone={sevTone(a.severity) as "danger" | "warn" | "default"}>{a.severity || "info"}</ConsoleTag>,
+              key: "id",
+              header: "#",
+              render: (row: any) => <span className="font-mono text-[11px]">{String(row.audit_id)}</span>,
             },
-            { key: "type", header: "类型", render: (a) => <span className="font-mono">{a.type || "—"}</span> },
-            { key: "agent", header: "对象", render: (a) => a.agent || "—" },
-            { key: "msg", header: "消息", render: (a) => <span className="text-mute">{(a.message || "").slice(0, 70)}</span> },
-            { key: "ts", header: "时间", render: (a) => <span className="text-mute">{a.ts || "—"}</span> },
+            {
+              key: "actor",
+              header: "操作人",
+              render: (row: any) => <span className="font-mono text-[11px]">{row.actor_id || "system"}</span>,
+            },
+            {
+              key: "action",
+              header: "动作",
+              render: (row: any) => <ConsoleTag>{row.action}</ConsoleTag>,
+            },
+            {
+              key: "resource",
+              header: "资源",
+              render: (row: any) => (
+                <span className="font-mono text-[11px] text-mute">{row.resource || "—"}</span>
+              ),
+            },
+            {
+              key: "detail",
+              header: "明细",
+              render: (row: any) => (
+                <span className="font-mono text-[11px] text-mute">
+                  {row.detail ? JSON.stringify(row.detail).slice(0, 80) : "—"}
+                </span>
+              ),
+            },
+            {
+              key: "time",
+              header: "时间",
+              render: (row: any) => <span className="text-[11px] text-mute">{timeText(row.created_at)}</span>,
+            },
           ]}
         />
       </ConsoleSection>
+
+      {/* === 详情抽屉 === */}
+      {selectedId !== null && (
+        <ConsoleDrawer
+          open
+          onClose={closeDetail}
+          title={`审计详情 · #${selectedId}`}
+        >
+          {detail && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <Field label="审计 ID" value={String(detail.audit_id)} />
+                <Field label="操作人" value={detail.actor_id || "system"} />
+                <Field label="动作" value={detail.action} />
+                <Field label="资源" value={detail.resource || "—"} />
+                <Field label="时间" value={timeText(detail.created_at)} />
+              </div>
+              {detail.detail && (
+                <div>
+                  <p className="mb-1 text-[11px] text-mute">详情</p>
+                  <pre className="rounded border border-rail bg-hull px-2 py-1 text-xs text-frost font-mono whitespace-pre-wrap break-all">
+                    {JSON.stringify(detail.detail, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
+        </ConsoleDrawer>
+      )}
     </>
   );
 }
 
-function Stat({ label, value, danger }: { label: string; value: number | string; danger?: boolean }) {
-  const bad = danger && typeof value === "number" && value > 0;
+function Field({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-rail bg-hull/50 px-3 py-2.5">
-      <p className="text-[11px] text-mute">{label}</p>
-      <p className={`mt-1 font-mono text-lg ${bad ? "text-flare" : "text-frost"}`}>{value}</p>
+    <div>
+      <p className="text-mute">{label}</p>
+      <p className="font-mono text-frost break-all">{value}</p>
     </div>
   );
 }

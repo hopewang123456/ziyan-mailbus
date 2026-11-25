@@ -38,20 +38,29 @@ public class LayoutService {
     }
 
     public LayoutDtos.OfficeSiteOut get() {
+        return get(null);
+    }
+
+    public LayoutDtos.OfficeSiteOut get(String teamId) {
         Map<String, SeatOverride> overrides = overrides();
         Map<String, String> teamNames = teamNames();
         Map<String, String> positionNames = positionNames();
         Map<String, Employee> occupants = new LinkedHashMap<>();
         for (Employee employee : employees.listAll()) {
-            if (employee.seatId() != null && !"deregistered".equals(employee.status())) {
-                occupants.put(employee.seatId(), employee);
+            if (employee.seatId() == null || "deregistered".equals(employee.status())) {
+                continue;
             }
+            if (teamId != null
+                    && !teamId.equals(occupantTeam(employee, overrides.get(employee.seatId())))) {
+                continue;
+            }
+            occupants.put(employee.seatId(), employee);
         }
         Map<String, Agent> agentMap = new LinkedHashMap<>();
         for (Agent agent : agents.listAll()) {
             agentMap.put(agent.agentId(), agent);
         }
-        Map<String, TaskDtos.TaskOut> busy = busyTasks();
+        Map<String, TaskDtos.TaskDetailOut> busy = busyTasks();
         List<LayoutDtos.LayoutFloorOut> floors = new ArrayList<>();
         for (LayoutSeed.Floor floor : seed.site().floors()) {
             List<LayoutDtos.LayoutRoomOut> rooms = new ArrayList<>();
@@ -81,7 +90,11 @@ public class LayoutService {
     }
 
     public LayoutDtos.PublicOfficeSiteOut getPublic() {
-        LayoutDtos.OfficeSiteOut site = get();
+        return getPublic(null);
+    }
+
+    public LayoutDtos.PublicOfficeSiteOut getPublic(String teamId) {
+        LayoutDtos.OfficeSiteOut site = get(teamId);
         List<LayoutDtos.PublicLayoutFloorOut> floors = new ArrayList<>();
         for (LayoutDtos.LayoutFloorOut floor : site.floors()) {
             List<LayoutDtos.PublicLayoutRoomOut> rooms = new ArrayList<>();
@@ -91,7 +104,7 @@ public class LayoutService {
                     LayoutDtos.SeatAgentOut agent = seat.agent();
                     LayoutDtos.PublicSeatAgentOut publicAgent = agent == null ? null
                             : new LayoutDtos.PublicSeatAgentOut(agent.displayName(),
-                            agent.position(), agent.team(), agent.status(), agent.task(),
+                            agent.position(), agent.status(), agent.task(),
                             agent.agentName(), agent.agentFramework(), agent.taskState(),
                             agent.currentNode(), agent.nodeState(), agent.progressDone(),
                             agent.progressTotal());
@@ -108,8 +121,8 @@ public class LayoutService {
                 site.orgName(), floors);
     }
 
-    /** 工位查询结果：exists=false 表示布局中无此工位；agentId 为空表示未绑定 Agent。 */
-    public record SeatLookup(boolean exists, String agentId) {
+    /** 工位查询结果：exists=false 表示布局中无此工位；ownerId 为空表示未绑定员工。 */
+    public record SeatLookup(boolean exists, String ownerId) {
     }
 
     public SeatLookup lookupSeat(String seatId) {
@@ -122,7 +135,7 @@ public class LayoutService {
                     for (Employee employee : employees.listAll()) {
                         if (seatId.equals(employee.seatId())
                                 && !"deregistered".equals(employee.status())) {
-                            return new SeatLookup(true, employee.agentId());
+                            return new SeatLookup(true, employee.employeeId());
                         }
                     }
                     return new SeatLookup(true, null);
@@ -132,9 +145,14 @@ public class LayoutService {
         return new SeatLookup(false, null);
     }
 
+    private String occupantTeam(Employee employee, SeatOverride override) {
+        return employee.teamId() != null ? employee.teamId()
+                : override == null ? null : override.teamId();
+    }
+
     private LayoutDtos.SeatAgentOut agentView(Employee employee, Map<String, String> teamNames,
                                               Map<String, String> positionNames,
-                                              TaskDtos.TaskOut task, Agent agent,
+                                              TaskDtos.TaskDetailOut task, Agent agent,
                                               SeatOverride override) {
         String status = "active".equals(employee.status()) ? "online"
                 : "offline".equals(employee.status()) ? "offline" : "offline";
@@ -173,7 +191,7 @@ public class LayoutService {
                 taskId, taskState, currentNode, nodeState, done, total);
     }
 
-    private TaskDtos.TaskNodeOut currentNode(TaskDtos.TaskOut task) {
+    private TaskDtos.TaskNodeOut currentNode(TaskDtos.TaskDetailOut task) {
         for (String state : List.of("running", "dispatched", "blocked")) {
             for (TaskDtos.TaskNodeOut node : task.nodes()) {
                 if (state.equals(node.state())) {
@@ -189,9 +207,9 @@ public class LayoutService {
         return task.nodes().isEmpty() ? null : task.nodes().get(task.nodes().size() - 1);
     }
 
-    private Map<String, TaskDtos.TaskOut> busyTasks() {
-        Map<String, TaskDtos.TaskOut> busy = new LinkedHashMap<>();
-        for (TaskDtos.TaskOut task : tasks.list(null, null)) {
+    private Map<String, TaskDtos.TaskDetailOut> busyTasks() {
+        Map<String, TaskDtos.TaskDetailOut> busy = new LinkedHashMap<>();
+        for (TaskDtos.TaskDetailOut task : tasks.allInternal()) {
             if (task.ownerId() != null && BUSY_TASKS.contains(task.state())) {
                 busy.putIfAbsent(task.ownerId(), task);
             }

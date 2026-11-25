@@ -25,21 +25,17 @@ def _bootstrap(client: TestClient) -> str:
 
 
 def _staff(client: TestClient, admin_headers: dict[str, str], name: str) -> tuple[str, str]:
-    applied = client.post(
-        "/api/identity/staff", json={"display_name": name, "account_type": "human"}
+    invite = client.post(
+        "/api/employees/invite", json={"display_name": name}, headers=admin_headers
     )
-    assert applied.status_code == 201, applied.text
-    employee_id = applied.json()["employee"]["employee_id"]
-    client.post(
-        f"/api/identity/staff/{employee_id}/review",
-        json={"approved": True},
-        headers=admin_headers,
+    assert invite.status_code in (200, 201), invite.text
+    accepted = client.post(
+        "/api/invites/accept",
+        json={"invite_code": invite.json()["invite_code"], "display_name": name},
     )
-    activated = client.post(
-        f"/api/identity/staff/{employee_id}/activate", headers=admin_headers
-    )
-    assert activated.status_code == 200, activated.text
-    return employee_id, activated.json()["token"]
+    assert accepted.status_code == 201, accepted.text
+    body = accepted.json()
+    return body["employee"]["employee_id"], body["token"]
 
 
 def test_inbox_is_projection_and_overview_log_reflect_messages(tmp_path):
@@ -110,19 +106,19 @@ def test_message_search_scope_and_filters(tmp_path):
         # 超管看全部
         everything = client.get("/api/messages", headers=admin_headers)
         assert everything.status_code == 200, everything.text
-        assert len(everything.json()) == 2
-        assert all("delivery_status" in item for item in everything.json())
+        assert len(everything.json()["items"]) == 2
+        assert all("delivery_status" in item for item in everything.json()["items"])
 
         # 普通用户只看自己收发（含广播）
         seen_a = [item["message_id"] for item in client.get(
             "/api/messages", headers=_headers(token_a)
-        ).json()]
+        ).json()["items"]]
         assert direct_id not in seen_a
         assert len(seen_a) == 1
 
         seen_b = [item["message_id"] for item in client.get(
             "/api/messages", headers=_headers(token_b)
-        ).json()]
+        ).json()["items"]]
         assert direct_id in seen_b
 
         # 明细同样受范围约束
@@ -135,13 +131,13 @@ def test_message_search_scope_and_filters(tmp_path):
             == 403
         )
 
-        # 过滤参数：按参与人 / 非法状态
+        # 过滤参数：按参与人 / 非法通道
         by_agent = client.get(
-            f"/api/messages?agent={employee_b}", headers=admin_headers
-        ).json()
+            f"/api/messages?employee_id={employee_b}", headers=admin_headers
+        ).json()["items"]
         assert [item["message_id"] for item in by_agent] == [direct_id]
         assert (
-            client.get("/api/messages?status=bogus", headers=admin_headers).status_code
+            client.get("/api/messages?channel=bogus", headers=admin_headers).status_code
             == 422
         )
 
@@ -177,4 +173,4 @@ def test_only_super_admin_deletes_message(tmp_path):
         assert client.delete(
             f"/api/messages/{message_id}", headers=admin_headers
         ).status_code == 404
-        assert client.get("/api/messages", headers=admin_headers).json() == []
+        assert client.get("/api/messages", headers=admin_headers).json()["items"] == []

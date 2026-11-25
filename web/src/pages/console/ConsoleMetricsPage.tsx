@@ -1,164 +1,341 @@
-import { useEffect, useState } from "react";
-import { api } from "../../lib/api";
-import { ConsolePageHeader, ConsoleSection, ConsoleTable, ConsoleTag } from "../../components/console/ConsoleKit";
-import { MetricCard } from "../../components/metrics/MetricCard";
-import { getLang } from "../../lib/i18n";
+import { useCallback, useMemo, useState } from "react";
+import {
+  ConsolePageHeader,
+  ConsoleSection,
+  ConsoleTable,
+  ConsoleTag,
+} from "../../components/console/ConsoleKit";
+import {
+  useMetricOverview,
+  useTrend,
+  useBreakdown,
+  useMetricRules,
+  useManifest,
+} from "../../lib/metric/hooks";
+import { metricExport, updateMetricRule } from "../../lib/metric/api";
 
-/** 指标与报表管理（P3 / B4+B5）— 指标清单、告警规则编辑、大盘卡片可见性。 */
+type RangeKey = "7d" | "30d" | "custom";
 
-type Rule = {
-  id: string;
-  metric: string;
-  op: string;
-  threshold: number;
-  severity: string;
-  enabled: boolean;
-  note?: string;
-  actions?: string[];
+const RANGE_PRESETS: Record<RangeKey, { days: number; bucket: string }> = {
+  "7d": { days: 7, bucket: "day" },
+  "30d": { days: 30, bucket: "day" },
+  custom: { days: 7, bucket: "day" },
 };
-type MetricEntry = { id: string; name?: { zh?: string }; unit?: string; description?: string };
-type MetricPoint = { metric?: string; value?: number; unit?: string; error?: string };
+
+function buildRange(range: RangeKey, customFrom?: string | null, customTo?: string | null) {
+  if (range === "custom" && customFrom && customTo) {
+    return { from: customFrom, to: customTo };
+  }
+  const days = RANGE_PRESETS[range].days;
+  const to = new Date();
+  const from = new Date();
+  from.setDate(from.getDate() - days);
+  return {
+    from: from.toISOString().slice(0, 10),
+    to: to.toISOString().slice(0, 10),
+  };
+}
+
+/** 画简易 SVG 折线图 — 接收 y 值数组，自动缩放 */
+function LineChart({
+  points,
+  width = 480,
+  height = 160,
+}: {
+  points: number[];
+  width?: number;
+  height?: number;
+}) {
+  if (points.length === 0) {
+    return <p className="text-[11px] text-mute">暂无数据</p>;
+  }
+  const max = Math.max(...points, 1);
+  const min = Math.min(...points, 0);
+  const range = max - min || 1;
+  const padX = 20;
+  const padY = 12;
+  const plotW = width - padX * 2;
+  const plotH = height - padY * 2;
+
+  const coords = points.map((v, i) => {
+    const x = padX + (i / Math.max(points.length - 1, 1)) * plotW;
+    const y = padY + plotH - ((v - min) / range) * plotH;
+    return { x, y };
+  });
+
+  const pathD = coords
+    .map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`)
+    .join(" ");
+
+  const areaD = `${pathD} L${coords[coords.length - 1].x.toFixed(1)},${padY + plotH} L${coords[0].x.toFixed(1)},${padY + plotH} Z`;
+
+  return (
+    <svg width={width} height={height} className="max-w-full">
+      {/* 网格 */}
+      {[0, 0.25, 0.5, 0.75, 1].map((t) => {
+        const y = padY + plotH * (1 - t);
+        return (
+          <line
+            key={t}
+            x1={padX}
+            x2={width - padX}
+            y1={y}
+            y2={y}
+            stroke="rgba(255,255,255,0.06)"
+          />
+        );
+      })}
+      {/* 面积 */}
+      <path d={areaD} fill="rgba(0,229,180,0.12)" />
+      {/* 折线 */}
+      <path d={pathD} fill="none" stroke="#00e5b4" strokeWidth={1.5} />
+      {/* 数据点 */}
+      {coords.map((c, i) => (
+        <circle key={i} cx={c.x} cy={c.y} r={2} fill="#00e5b4" />
+      ))}
+      {/* y 轴标签 */}
+      <text x={4} y={padY + 4} fill="rgba(255,255,255,0.4)" fontSize="9">
+        {max.toFixed(0)}
+      </text>
+      <text x={4} y={padY + plotH} fill="rgba(255,255,255,0.4)" fontSize="9">
+        {min.toFixed(0)}
+      </text>
+    </svg>
+  );
+}
 
 export function ConsoleMetricsPage({ can }: { can: (capability: string) => boolean }) {
-  const [rules, setRules] = useState<Rule[]>([]);
-  const [metrics, setMetrics] = useState<MetricEntry[]>([]);
-  const [points, setPoints] = useState<MetricPoint[]>([]);
-  const [hidden, setHidden] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState("");
-  const [err, setErr] = useState("");
-
   const canManage = can("system_config");
 
-  const load = async () => {
-    setLoading(true);
-    const [r, m, p, l] = await Promise.all([
-      api<{ rules?: Rule[] }>("/api/metrics/rules"),
-      api<{ manifest?: { metrics?: MetricEntry[] } }>("/api/metrics/manifest"),
-      api<{ points?: MetricPoint[] }>("/api/metrics/query"),
-      api<{ layout?: { hidden?: string[] } }>("/api/metrics/layout"),
-    ]);
-    setLoading(false);
-    const errors: string[] = [];
-    if (r.ok && r.data?.rules) setRules(r.data.rules);
-    else if (!r.ok) errors.push(`规则：${r.error}`);
-    if (m.ok && m.data?.manifest?.metrics) setMetrics(m.data.manifest.metrics);
-    else if (!m.ok) errors.push(`清单：${m.error}`);
-    if (p.ok && p.data?.points) setPoints(p.data.points);
-    else if (!p.ok) errors.push(`查询：${p.error}`);
-    if (l.ok && l.data?.layout) setHidden(l.data.layout.hidden || []);
-    else if (!l.ok) errors.push(`布局：${l.error}`);
-    setErr(errors.join("；"));
-  };
+  // === 范围选择 ===
+  const [range, setRange] = useState<RangeKey>("7d");
+  const [customFrom, setCustomFrom] = useState<string | null>(null);
+  const [customTo, setCustomTo] = useState<string | null>(null);
 
-  useEffect(() => {
-    void load();
-  }, []);
+  const { from, to } = useMemo(
+    () => buildRange(range, customFrom, customTo),
+    [range, customFrom, customTo],
+  );
 
-  async function patchRule(id: string, fields: Record<string, unknown>) {
+  // === hook 调用 ===
+  const overview = useMetricOverview({ from, to });
+  const trend = useTrend({
+    metric: ["messages.total"],
+    from,
+    to,
+    bucket: RANGE_PRESETS[range].bucket,
+  });
+  const breakdown = useBreakdown({ metric: "messages.by_kind", from, to });
+  const manifest = useManifest();
+  const rules = useMetricRules({ limit: 100 });
+
+  const [exporting, setExporting] = useState(false);
+  const [exportMsg, setExportMsg] = useState("");
+  const [err, setErr] = useState("");
+
+  const handleExport = useCallback(async () => {
+    setExporting(true);
     setErr("");
-    setMsg("");
-    const r = await api(`/api/metrics/rules/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      body: JSON.stringify({ fields }),
-    });
-    if (r.ok) {
-      setMsg(`规则 ${id} 已更新`);
-      await load();
-    } else setErr(r.error);
-  }
-
-  async function toggleHidden(metricId: string) {
-    setErr("");
-    setMsg("");
-    const prev = hidden;
-    const next = prev.includes(metricId) ? prev.filter((h) => h !== metricId) : [...prev, metricId];
-    setHidden(next);
-    const r = await api("/api/metrics/layout", { method: "PATCH", body: JSON.stringify({ hidden: next }) });
-    if (r.ok) setMsg(next.includes(metricId) ? `${metricId} 已从大盘隐藏` : `${metricId} 已恢复显示`);
-    else {
-      setHidden(prev);
-      setErr(r.error);
+    setExportMsg("");
+    try {
+      const r = await metricExport({ from, to });
+      if (r.ok) setExportMsg("CSV 已下载");
+      else setErr(r.error);
+    } finally {
+      setExporting(false);
     }
-  }
+  }, [from, to]);
 
-  const val = (id: string) => {
-    const p = points.find((x) => x.metric === id);
-    if (!p) return "—";
-    if (p.error) return p.error;
-    return p.value !== undefined ? p.value : "—";
-  };
+  const handleRuleToggle = useCallback(
+    async (id: string, enabled: boolean) => {
+      const r = await updateMetricRule(id, { fields: { enabled: !enabled } });
+      if (!r.ok) setErr(`规则更新失败：${r.error}`);
+      else rules.refresh();
+    },
+    [rules],
+  );
+
+  const trendPoints: number[] = useMemo(() => {
+    const series = trend.data?.series?.[0];
+    if (!series) return [];
+    return series.points.map((p: any) => Number(p.value ?? 0));
+  }, [trend.data]);
 
   return (
     <>
       <ConsolePageHeader
-        title="指标与报表"
-        description="指标口径 SoT（manifest）、告警规则（B5）、大盘布局（B4 dashboard as config）"
+        title="指标中心"
+        description="指标概览卡片、趋势 SVG、排行、CSV 导出 + 告警规则"
         actions={
-          <button type="button" className="hud-btn text-xs" onClick={() => void load()}>
-            刷新
-          </button>
+          <>
+            <div className="mr-3 flex items-center gap-1">
+              {(Object.keys(RANGE_PRESETS) as RangeKey[]).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`hud-btn text-xs ${range === key ? "text-mint" : ""}`}
+                  onClick={() => setRange(key)}
+                >
+                  {key === "custom" ? "自定义" : key}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="hud-btn text-xs disabled:opacity-40"
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              {exporting ? "导出中…" : "CSV 导出"}
+            </button>
+          </>
         }
       />
       {err && <p className="mb-3 text-xs text-flare">{err}</p>}
-      {msg && <p className="mb-3 text-xs text-mint">{msg}</p>}
-      {!canManage && (
-        <p className="mb-3 text-[11px] text-amber-signal">
-          规则与大盘布局为只读；修改需要 system_config。
-        </p>
+      {exportMsg && <p className="mb-3 text-xs text-mint">{exportMsg}</p>}
+
+      {/* 自定义时间范围输入 */}
+      {range === "custom" && (
+        <div className="mb-4 flex items-end gap-2">
+          <label className="text-[11px] text-mute">
+            起始
+            <input
+              type="date"
+              className="mt-1 block rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+              value={customFrom ?? ""}
+              onChange={(e) => setCustomFrom(e.target.value || null)}
+            />
+          </label>
+          <label className="text-[11px] text-mute">
+            结束
+            <input
+              type="date"
+              className="mt-1 block rounded border border-rail bg-hull px-2 py-1 text-xs text-frost"
+              value={customTo ?? ""}
+              onChange={(e) => setCustomTo(e.target.value || null)}
+            />
+          </label>
+        </div>
       )}
 
-      <ConsoleSection title={`告警规则（${rules.length}）— 触发即写告警并通知子言`}>
+      {/* === 概览卡片 === */}
+      <ConsoleSection title={`指标概览（${from} → ${to}）`}>
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+          {overview.data?.cards && overview.data.cards.length > 0 ? (
+            overview.data.cards.map((card, i) => (
+              <div
+                key={card.metric + i}
+                className="rounded-lg border border-rail bg-hull/50 px-3 py-2.5"
+              >
+                <p className="text-[11px] text-mute">{card.metric}</p>
+                <p className={`mt-1 font-mono text-lg ${card.error ? "text-flare" : "text-frost"}`}>
+                  {card.error ?? card.value}
+                  {card.unit !== "count" && <span className="ml-1 text-xs text-mute">{card.unit}</span>}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="col-span-full text-[11px] text-mute">
+              {overview.loading ? "加载中…" : overview.error ?? "暂无指标数据"}
+            </p>
+          )}
+        </div>
+      </ConsoleSection>
+
+      {/* === 趋势 SVG === */}
+      <ConsoleSection title="消息总量趋势">
+        <div className="rounded border border-rail bg-hull/50 p-2">
+          {trend.loading ? (
+            <p className="text-[11px] text-mute">加载中…</p>
+          ) : trend.error ? (
+            <p className="text-xs text-flare">{trend.error}</p>
+          ) : (
+            <LineChart points={trendPoints} />
+          )}
+        </div>
+      </ConsoleSection>
+
+      {/* === 排行 === */}
+      <ConsoleSection title="消息类型排行">
         <ConsoleTable
-          rows={rules}
-          rowKey={(r) => r.id}
-          loading={loading}
+          rows={breakdown.data?.items ?? []}
+          rowKey={(row: any) => row.key}
+          loading={breakdown.loading}
+          empty="暂无排行数据"
+          columns={[
+            {
+              key: "label",
+              header: "类型",
+              render: (row: any) => <ConsoleTag>{row.label || row.key}</ConsoleTag>,
+            },
+            {
+              key: "value",
+              header: "数量",
+              render: (row: any) => <span className="font-mono">{row.value}</span>,
+            },
+            {
+              key: "bar",
+              header: "",
+              render: (row: any) => {
+                const max = Math.max(
+                  ...((breakdown.data?.items ?? []) as any[]).map((i) => i.value),
+                  1,
+                );
+                const width = Math.round((row.value / max) * 100);
+                return (
+                  <div className="h-1.5 w-full bg-rail">
+                    <div className="h-full bg-mint" style={{ width: `${width}%` }} />
+                  </div>
+                );
+              },
+            },
+          ]}
+        />
+      </ConsoleSection>
+
+      {/* === 告警规则 === */}
+      <ConsoleSection title={`告警规则（${rules.items.length}）`}>
+        <ConsoleTable
+          rows={rules.items as any[]}
+          rowKey={(row: any) => row.id}
+          loading={rules.loading}
           empty="暂无告警规则"
           columns={[
-            { key: "id", header: "规则", render: (r) => <span className="font-mono">{r.id}</span> },
+            { key: "id", header: "规则", render: (row: any) => <span className="font-mono">{row.id}</span> },
             {
               key: "cond",
               header: "条件",
-              render: (r) => (
+              render: (row: any) => (
                 <span className="font-mono">
-                  {r.metric} {r.op} {r.threshold}
-                  <span className="ml-2 text-mute">(当前 {val(r.metric)})</span>
+                  {row.metric} {row.op} {row.threshold}
                 </span>
               ),
             },
             {
               key: "sev",
               header: "级别",
-              render: (r) => <ConsoleTag tone={r.severity === "critical" ? "danger" : "warn"}>{r.severity}</ConsoleTag>,
-            },
-            { key: "note", header: "说明", render: (r) => <span className="text-mute">{r.note || "—"}</span> },
-            {
-              key: "th",
-              header: "阈值",
-              render: (r) => (
-                <input
-                  type="number"
-                  defaultValue={r.threshold}
-                  disabled={!canManage}
-                  className="w-20 rounded border border-rail bg-hull px-1.5 py-0.5 font-mono text-xs text-frost disabled:opacity-50"
-                  onBlur={(e) => {
-                    const v = Number(e.target.value);
-                    if (!Number.isNaN(v) && v !== r.threshold) void patchRule(r.id, { threshold: v });
-                  }}
-                />
+              render: (row: any) => (
+                <ConsoleTag tone={row.severity === "critical" ? "danger" : "warn"}>
+                  {row.severity}
+                </ConsoleTag>
               ),
+            },
+            {
+              key: "note",
+              header: "说明",
+              render: (row: any) => <span className="text-mute">{row.note || "—"}</span>,
             },
             {
               key: "st",
               header: "状态",
-              render: (r) => (
+              render: (row: any) => (
                 <button
                   type="button"
                   disabled={!canManage}
-                  onClick={() => void patchRule(r.id, { enabled: !r.enabled })}
+                  onClick={() => void handleRuleToggle(row.id, row.enabled)}
                   className="rounded border border-rail px-2 py-0.5 text-[11px] text-mute hover:text-frost disabled:opacity-40"
                 >
-                  {r.enabled ? "停用" : "启用"}
+                  {row.enabled ? "停用" : "启用"}
                 </button>
               ),
             },
@@ -166,49 +343,13 @@ export function ConsoleMetricsPage({ can }: { can: (capability: string) => boole
         />
       </ConsoleSection>
 
-      <ConsoleSection title="效率报表（P5 B 类 — 工单周期 / 人工介入，7 天口径）">
-        <div className="grid gap-2.5 sm:grid-cols-2">
-          <MetricCard entry={{ id: "tasks.cycle_avg_minutes", name: { zh: "工单平均周期（7天）" }, unit: "minutes" }} lang={getLang()} />
-          <MetricCard entry={{ id: "tasks.interventions_week", name: { zh: "人工介入次数（7天）" }, unit: "count" }} lang={getLang()} />
-        </div>
-        <p className="mt-2 text-[11px] text-mute">
-          口径：周期 = 终态任务 created_at→updated_at；介入 = human_gate.resolve 审批决策（SoT：metrics-manifest.json）
-        </p>
-      </ConsoleSection>
-
-      <ConsoleSection title={`指标清单（${metrics.length}）— 管理大盘卡片可见性（B4）`}>
-        <ConsoleTable
-          rows={metrics}
-          rowKey={(m) => m.id}
-          loading={loading}
-          empty="指标清单为空"
-          columns={[
-            { key: "id", header: "指标", render: (m) => <span className="font-mono">{m.id}</span> },
-            { key: "name", header: "名称", render: (m) => m.name?.zh || "—" },
-            {
-              key: "desc",
-              header: "口径",
-              render: (m) => <span className="text-mute">{(m.description || "").slice(0, 50)}</span>,
-            },
-            { key: "val", header: "当前值", render: (m) => <span className="font-mono">{val(m.id)}</span> },
-            {
-              key: "vis",
-              header: "大盘",
-              render: (m) => (
-                <button
-                  type="button"
-                  disabled={!canManage}
-                  onClick={() => void toggleHidden(m.id)}
-                  className={`rounded border px-2 py-0.5 text-[11px] disabled:opacity-40 ${
-                    hidden.includes(m.id) ? "border-rail text-mute" : "border-mint/50 text-mint"
-                  }`}
-                >
-                  {hidden.includes(m.id) ? "已隐藏" : "显示中"}
-                </button>
-              ),
-            },
-          ]}
-        />
+      {/* === 指标清单 === */}
+      <ConsoleSection title="指标口径清单（manifest）">
+        {manifest.data?.manifest && (
+          <pre className="max-h-64 overflow-auto rounded border border-rail bg-hull px-2 py-1 text-[11px] text-mute font-mono">
+            {JSON.stringify(manifest.data.manifest, null, 2)}
+          </pre>
+        )}
       </ConsoleSection>
     </>
   );

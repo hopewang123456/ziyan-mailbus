@@ -23,9 +23,11 @@ def issue_session(
     employee: Employee,
     ids: IdGenerator,
     now: datetime,
+    ttl: timedelta | None = SESSION_TTL,
 ) -> str:
+    """签发会话；ttl 为 None 表示永久（expires_at 落库为空）。"""
     token = ids.new("mbk")
-    uow.sessions.issue(employee.employee_id, token, now, now + SESSION_TTL)
+    uow.sessions.issue(employee.employee_id, token, now, None if ttl is None else now + ttl)
     return token
 
 

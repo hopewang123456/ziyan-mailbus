@@ -24,14 +24,6 @@ public class ChannelController {
         this.service = service;
     }
 
-    @PostMapping("/a2a/messages")
-    @ResponseStatus(HttpStatus.CREATED)
-    public MessageDtos.MessageOut a2a(
-            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
-            @Valid @RequestBody MessageDtos.MessageIn input) {
-        return service.send(actor, input, "a2a");
-    }
-
     @PostMapping("/mcp/messages")
     @ResponseStatus(HttpStatus.CREATED)
     public MessageDtos.MessageOut mcp(

@@ -4,7 +4,8 @@ import io.github.hopewang123456.mailbus.config.AppProperties;
 import io.github.hopewang123456.mailbus.dispatch.FileBusIngress;
 import io.github.hopewang123456.mailbus.dispatch.OutboxDispatcher;
 import io.github.hopewang123456.mailbus.identity.IdentityService;
-import io.github.hopewang123456.mailbus.workflow.ApprovalService;
+import io.github.hopewang123456.mailbus.ops.OpsService;
+import io.github.hopewang123456.mailbus.workflow.TaskService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -20,18 +21,20 @@ public class MailbusScheduler {
 
     private final AppProperties properties;
     private final IdentityService identity;
-    private final ApprovalService approvals;
+    private final TaskService tasks;
     private final OutboxDispatcher dispatcher;
     private final FileBusIngress ingress;
+    private final OpsService ops;
 
     public MailbusScheduler(AppProperties properties, IdentityService identity,
-                            ApprovalService approvals, OutboxDispatcher dispatcher,
-                            FileBusIngress ingress) {
+                            TaskService tasks, OutboxDispatcher dispatcher,
+                            FileBusIngress ingress, OpsService ops) {
         this.properties = properties;
         this.identity = identity;
-        this.approvals = approvals;
+        this.tasks = tasks;
         this.dispatcher = dispatcher;
         this.ingress = ingress;
+        this.ops = ops;
     }
 
     @Scheduled(fixedDelayString = "${mailbus.heartbeat-sweep-seconds}000")
@@ -48,9 +51,14 @@ public class MailbusScheduler {
     @Scheduled(fixedDelayString = "${mailbus.dispatch-interval-seconds}000")
     public void dispatch() {
         try {
-            approvals.sweepExpired();
+            ops.evaluate();
         } catch (Exception exception) {
-            log.warn("审批超时扫描失败", exception);
+            log.warn("告警规则巡检失败", exception);
+        }
+        try {
+            tasks.sweepTimeouts();
+        } catch (Exception exception) {
+            log.warn("任务与审批超时扫描失败", exception);
         }
         try {
             dispatcher.tick();

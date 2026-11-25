@@ -45,7 +45,16 @@ public class AuthFilter extends OncePerRequestFilter {
         if (path.equals("/api/identity/bootstrap/super-admin") && "POST".equals(method)) {
             return true;
         }
-        return path.equals("/api/identity/staff") && "POST".equals(method);
+        if (path.equals("/api/invites/accept") && "POST".equals(method)) {
+            return true;
+        }
+        if (path.equals("/api/agents/register") && "POST".equals(method)) {
+            return true;
+        }
+        if (path.equals("/api/a2a/messages") && "POST".equals(method)) {
+            return true;
+        }
+        return false;
     }
 
     @Override

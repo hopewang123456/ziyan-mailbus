@@ -7,6 +7,7 @@ import io.github.hopewang123456.mailbus.layout.LayoutService;
 import io.github.hopewang123456.mailbus.messaging.MessageDtos;
 import io.github.hopewang123456.mailbus.workflow.TaskDtos;
 import io.github.hopewang123456.mailbus.workflow.TaskService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -14,11 +15,14 @@ import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -53,28 +57,26 @@ public class CollabController {
     }
 
     @GetMapping("/collab/screens")
-    public List<ScreenDtos.ScreenOut> listScreens(
-            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor) {
-        return screens.list();
+    public ScreenDtos.ScreenListOut listScreens(
+            @RequestParam(defaultValue = "100") @Min(1) @Max(500) int limit,
+            @RequestParam(defaultValue = "0") @Min(0) int offset) {
+        return screens.listPage(limit, offset);
     }
 
-    @PostMapping("/collab/screens")
-    @ResponseStatus(HttpStatus.CREATED)
-    public ScreenDtos.ScreenOut registerScreen(
-            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
-            @Valid @RequestBody ScreenDtos.ScreenIn input) {
-        return screens.register(actor, input);
-    }
-
-    @PostMapping("/collab/screens/{screen_id}/heartbeat")
-    public Map<String, Boolean> heartbeat(
+    @PatchMapping("/collab/screens/{screen_id}")
+    public ScreenDtos.ScreenConfigOut updateScreen(
             @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
             @PathVariable("screen_id") String screenId,
-            @RequestBody(required = false) ScreenDtos.ScreenHeartbeatIn input) {
-        screens.heartbeat(screenId,
-                input == null ? null : input.floorId(),
-                input == null ? null : input.seatId());
-        return Map.of("ok", true);
+            @Valid @RequestBody ScreenDtos.ScreenDraftIn input) {
+        return screens.saveDraft(actor, screenId, input);
+    }
+
+    @PostMapping("/collab/screens/{screen_id}/publish")
+    public ScreenDtos.ScreenPublishOut publishScreen(
+            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
+            @PathVariable("screen_id") String screenId,
+            @Valid @RequestBody ScreenDtos.ScreenPublishIn input) {
+        return screens.publish(actor, screenId, input.expectedConfigVersion());
     }
 
     @PostMapping("/collab/screens/{screen_id}/focus")
@@ -86,12 +88,63 @@ public class CollabController {
         screens.focus(actor, screenId, input.floorId(), input.seatId());
     }
 
-    @PostMapping("/collab/screens/{screen_id}/leave")
+    @DeleteMapping("/collab/screens/{screen_id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void consoleLeave(
+    public void deleteScreen(
             @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor,
             @PathVariable("screen_id") String screenId) {
-        screens.forceLeave(actor, screenId);
+        screens.delete(actor, screenId);
+    }
+
+    @GetMapping(value = "/collab/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter stream(
+            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor) {
+        return streamService.subscribe(null);
+    }
+
+    @PostMapping("/public/collab/screens")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ScreenDtos.ScreenRegisterOut publicRegister(
+            @Valid @RequestBody ScreenDtos.ScreenRegisterIn input,
+            HttpServletRequest request) {
+        ScreenService.Registered registered = screens.register(request.getRemoteAddr(), input);
+        return new ScreenDtos.ScreenRegisterOut(registered.screen().screenId(),
+                registered.secret(), registered.screen().configVersion());
+    }
+
+    @PostMapping("/public/collab/screens/{screen_id}/heartbeat")
+    public Map<String, Boolean> publicHeartbeat(
+            @PathVariable("screen_id") String screenId,
+            @RequestHeader(name = "X-Screen-Secret", required = false) String secret,
+            HttpServletRequest request) {
+        screens.heartbeat(request.getRemoteAddr(), screenId, secret);
+        return Map.of("ok", true);
+    }
+
+    @PostMapping("/public/collab/screens/{screen_id}/leave")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void publicLeave(
+            @PathVariable("screen_id") String screenId,
+            @RequestHeader(name = "X-Screen-Secret", required = false) String secret,
+            HttpServletRequest request) {
+        screens.leave(request.getRemoteAddr(), screenId, secret);
+    }
+
+    @GetMapping("/public/collab/screens/{screen_id}/config")
+    public ScreenDtos.PublicScreenConfigOut publicConfig(
+            @PathVariable("screen_id") String screenId) {
+        return screens.publicConfig(screenId);
+    }
+
+    @GetMapping(value = "/public/collab/stream",
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter publicStream(
+            @RequestParam(name = "screen_id", required = false) String screenId) {
+        String target = screenId == null || screenId.isBlank() ? null : screenId;
+        if (target != null) {
+            screens.publishedTeamId(target);
+        }
+        return streamService.subscribe(target, true);
     }
 
     @GetMapping("/collab/pairs")
@@ -134,42 +187,6 @@ public class CollabController {
         return messages.send(actor, input);
     }
 
-    @GetMapping(value = "/collab/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter stream(
-            @RequestAttribute(AuthFilter.ACTOR_ATTRIBUTE) Actor actor) {
-        return streamService.subscribe(null);
-    }
-
-    @PostMapping("/public/collab/screens")
-    @ResponseStatus(HttpStatus.CREATED)
-    public ScreenDtos.ScreenOut publicRegister(
-            @Valid @RequestBody ScreenDtos.PublicScreenIn input) {
-        return screens.registerPublic(input);
-    }
-
-    @PostMapping("/public/collab/screens/{screen_id}/heartbeat")
-    public Map<String, Boolean> publicHeartbeat(
-            @PathVariable("screen_id") String screenId,
-            @RequestBody(required = false) ScreenDtos.ScreenHeartbeatIn input) {
-        screens.heartbeat(screenId,
-                input == null ? null : input.floorId(),
-                input == null ? null : input.seatId());
-        return Map.of("ok", true);
-    }
-
-    @PostMapping("/public/collab/screens/{screen_id}/leave")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void publicLeave(@PathVariable("screen_id") String screenId) {
-        screens.leave(screenId);
-    }
-
-    @GetMapping(value = "/public/collab/stream",
-            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter publicStream(
-            @RequestParam(name = "screen_id", required = false) String screenId) {
-        return streamService.subscribe(screenId);
-    }
-
     @GetMapping("/public/collab/messages")
     public List<MessageDtos.MessageOut> publicCollabMessages(
             @RequestParam(name = "pair_id") String pairId,
@@ -184,10 +201,10 @@ public class CollabController {
         if (!seat.exists()) {
             throw ApiException.notFound("工位不存在");
         }
-        if (seat.agentId() == null) {
+        if (seat.ownerId() == null) {
             return List.of();
         }
-        return tasks.list(null, seat.agentId()).stream()
+        return tasks.listByOwner(seat.ownerId()).stream()
                 .map(TaskDtos.PublicTaskOut::of)
                 .toList();
     }
@@ -196,7 +213,7 @@ public class CollabController {
     public TaskDtos.PublicTaskOut publicTask(
             @PathVariable("task_id") String taskId,
             @RequestParam(name = "owner_id", required = false) String ownerId) {
-        TaskDtos.TaskOut task = tasks.get(taskId);
+        TaskDtos.TaskDetailOut task = tasks.getInternal(taskId);
         if (ownerId != null && !ownerId.equals(task.ownerId())) {
             throw ApiException.notFound("任务不存在");
         }

@@ -24,6 +24,11 @@ class Capability(str, Enum):
     SYSTEM_CONFIG = "system_config"
     ORG_MANAGE = "org_manage"
     CONSOLE_ADMIN = "console_admin"
+    ROLE_MANAGE = "role_manage"
+    ROLE_BIND = "role_bind"
+    WORKFLOW_PUBLISH = "workflow_publish"
+    ESCALATION_RESOLVE = "escalation_resolve"
+    ARTIFACT_READ_ALL = "artifact_read_all"
     ALL = "*"
 
 

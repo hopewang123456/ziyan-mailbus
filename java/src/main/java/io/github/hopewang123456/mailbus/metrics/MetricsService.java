@@ -15,9 +15,19 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
+import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.DateTimeException;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -25,7 +35,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.TreeSet;
 
 @Service
 public class MetricsService {
@@ -96,6 +108,91 @@ public class MetricsService {
         return new MetricDtos.MetricQueryOut(points, series);
     }
 
+    public MetricDtos.MetricOverviewOut overviewReport(Actor actor, String from, String to) {
+        Range range = range(from, to);
+        List<String> owners = visibleOwners(actor);
+        TaskSummary summary = taskSummary(range.start(), range.end(), owners);
+        int escalations = escalations(range.start(), range.end(), owners);
+        int online = onlineAgents(epochNow() - 180.0);
+        Map<String, Integer> totals = new LinkedHashMap<>();
+        totals.put("total", summary.total());
+        totals.put("done", summary.done());
+        totals.put("failed", summary.failed());
+        totals.put("cancelled", summary.cancelled());
+        totals.put("active", summary.active());
+        totals.put("queued", summary.queued());
+        return new MetricDtos.MetricOverviewOut(iso(range.start()), iso(range.end()),
+                cards(summary, escalations, online), totals);
+    }
+
+    public MetricDtos.MetricTrendOut trendReport(Actor actor, List<String> metrics,
+                                                  String from, String to, String bucket) {
+        Range range = range(from, to);
+        int step = bucketSeconds(bucket);
+        List<String> ids = metrics == null || metrics.isEmpty()
+                ? List.of("tasks.created", "tasks.completed") : metrics;
+        Set<String> unknown = new TreeSet<>(ids);
+        unknown.removeAll(Set.of("tasks.created", "tasks.completed"));
+        if (!unknown.isEmpty()) {
+            throw unprocessable("不支持的趋势指标：" + String.join(", ", unknown));
+        }
+        List<String> owners = visibleOwners(actor);
+        List<TimelineRow> timeline = taskTimeline(range.start(), range.end(), owners);
+        List<MetricDtos.MetricSeriesOut> series = new ArrayList<>();
+        for (String metric : ids) {
+            series.add(new MetricDtos.MetricSeriesOut(metric, bucket,
+                    points(timeline, metric, range.start(), range.end(), step)));
+        }
+        return new MetricDtos.MetricTrendOut(iso(range.start()), iso(range.end()),
+                bucket, series);
+    }
+
+    public MetricDtos.MetricBreakdownOut breakdownReport(Actor actor, String metric,
+                                                          String from, String to) {
+        String selected = metric == null || metric.isEmpty()
+                ? "workflow_completion_rate" : metric;
+        Range range = range(from, to);
+        List<String> owners = visibleOwners(actor);
+        List<BreakdownEntry> entries;
+        if (Set.of("workflow_completion_rate", "workflow_avg_duration").contains(selected)) {
+            entries = workflowItems(selected, range.start(), range.end(), owners);
+        } else if (Set.of("agent_load", "agent_failure_rate").contains(selected)) {
+            entries = agentItems(selected, range.start(), range.end(), owners);
+        } else {
+            throw unprocessable("不支持的排行指标：" + selected);
+        }
+        Map<String, Object> extras = new LinkedHashMap<>();
+        for (BreakdownEntry entry : entries) {
+            if (!entry.extra().isEmpty()) {
+                extras.put(entry.key(), entry.extra());
+            }
+        }
+        List<BreakdownEntry> sorted = new ArrayList<>(entries);
+        sorted.sort(Comparator.comparingDouble(
+                (BreakdownEntry entry) -> entry.value().doubleValue()).reversed());
+        List<MetricDtos.MetricBreakdownItemOut> items = sorted.stream()
+                .map(entry -> new MetricDtos.MetricBreakdownItemOut(
+                        entry.key(), entry.label(), entry.value()))
+                .toList();
+        return new MetricDtos.MetricBreakdownOut(iso(range.start()), iso(range.end()),
+                selected, items, extras);
+    }
+
+    public String exportCsv(Actor actor, String from, String to) {
+        MetricDtos.MetricOverviewOut overview = overviewReport(actor, from, to);
+        MetricDtos.MetricBreakdownOut workflows = breakdownReport(
+                actor, "workflow_completion_rate", from, to);
+        MetricDtos.MetricBreakdownOut agents = breakdownReport(actor, "agent_load", from, to);
+        StringBuilder buffer = new StringBuilder("\uFEFF");
+        csvRow(buffer, "section", "key", "label", "metric", "value", "unit");
+        for (MetricDtos.MetricPointOut card : overview.cards()) {
+            csvRow(buffer, "card", card.metric(), "", card.metric(), card.value(), card.unit());
+        }
+        csvBreakdownRows(buffer, "workflow", workflows);
+        csvBreakdownRows(buffer, "agent", agents);
+        return buffer.toString();
+    }
+
     public List<MetricDtos.AlertOut> alerts() {
         Map<String, Number> current = new LinkedHashMap<>();
         for (ObservabilityDtos.MetricPoint point : overview.get().metrics()) {
@@ -122,6 +219,11 @@ public class MetricsService {
 
     public List<MetricDtos.MetricRuleOut> listRules() {
         return rules().stream().map(this::toOut).toList();
+    }
+
+    public MetricDtos.MetricRuleOut getRule(String ruleId) {
+        return findRule(ruleId).map(this::toOut)
+                .orElseThrow(() -> ApiException.notFound("告警规则不存在"));
     }
 
     @Transactional
@@ -239,6 +341,306 @@ public class MetricsService {
     }
 
     // ---------- helpers ----------
+
+    /** global 全量（null）；team 本队含本人；self 仅本人。 */
+    private List<String> visibleOwners(Actor actor) {
+        if ("global".equals(actor.dataScope())) {
+            return null;
+        }
+        if ("self".equals(actor.dataScope())) {
+            return List.of(actor.employeeId());
+        }
+        Set<String> owners = new TreeSet<>();
+        List<Map<String, Object>> employees = jdbc.queryForList(
+                "SELECT employee_id, team_id FROM identity_employees"
+                        + " WHERE deleted_at IS NULL ORDER BY created_at");
+        for (Map<String, Object> employee : employees) {
+            if (Objects.equals(employee.get("team_id"), actor.teamId())) {
+                owners.add(String.valueOf(employee.get("employee_id")));
+            }
+        }
+        owners.add(actor.employeeId());
+        return new ArrayList<>(owners);
+    }
+
+    private TaskSummary taskSummary(double start, double end, List<String> owners) {
+        OwnerScope scope = ownerScope(owners, "owner_id");
+        String sql = """
+                SELECT COUNT(*) AS total,
+                 SUM(CASE WHEN state = 'queued' THEN 1 ELSE 0 END) AS queued,
+                 SUM(CASE WHEN state IN ('queued','running','blocked') THEN 1 ELSE 0 END) AS active,
+                 SUM(CASE WHEN state = 'done' THEN 1 ELSE 0 END) AS done,
+                 SUM(CASE WHEN state = 'failed' THEN 1 ELSE 0 END) AS failed,
+                 SUM(CASE WHEN state = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
+                 AVG(CASE WHEN state = 'done' THEN updated_at - created_at END) AS avg_done
+                 FROM task_tasks WHERE created_at BETWEEN ? AND ?
+                """ + scope.sql();
+        return jdbc.queryForObject(sql, (row, index) -> new TaskSummary(
+                        row.getInt("total"), row.getInt("queued"), row.getInt("active"),
+                        row.getInt("done"), row.getInt("failed"), row.getInt("cancelled"),
+                        round1(row.getDouble("avg_done") / 60.0)),
+                params(scope, start, end));
+    }
+
+    private int escalations(double start, double end, List<String> owners) {
+        OwnerScope scope = ownerScope(owners, "t.owner_id");
+        String sql = "SELECT COUNT(*) AS total FROM task_escalations e"
+                + " JOIN task_tasks t ON t.task_id = e.task_id"
+                + " WHERE t.created_at BETWEEN ? AND ?" + scope.sql();
+        Integer count = jdbc.queryForObject(sql, Integer.class, params(scope, start, end));
+        return count == null ? 0 : count;
+    }
+
+    private int onlineAgents(double cutoff) {
+        Integer count = jdbc.queryForObject("SELECT COUNT(*) AS total FROM agents"
+                + " WHERE enabled = 1 AND deleted_at IS NULL AND last_seen_at >= ?",
+                Integer.class, cutoff);
+        return count == null ? 0 : count;
+    }
+
+    private List<TimelineRow> taskTimeline(double start, double end, List<String> owners) {
+        OwnerScope scope = ownerScope(owners, "owner_id");
+        String sql = "SELECT created_at, updated_at, state FROM task_tasks"
+                + " WHERE (created_at BETWEEN ? AND ?"
+                + " OR (state = 'done' AND updated_at BETWEEN ? AND ?))" + scope.sql();
+        return jdbc.query(sql, (row, index) -> new TimelineRow(
+                        row.getDouble("created_at"), row.getDouble("updated_at"),
+                        row.getString("state")), params(scope, start, end, start, end));
+    }
+
+    private List<BreakdownEntry> workflowItems(String metric, double start, double end,
+                                               List<String> owners) {
+        OwnerScope scope = ownerScope(owners, "t.owner_id");
+        String sql = """
+                SELECT t.workflow_id, COALESCE(d.name, '') AS name, COUNT(*) AS total,
+                 SUM(CASE WHEN t.state = 'done' THEN 1 ELSE 0 END) AS done,
+                 SUM(CASE WHEN t.state = 'failed' THEN 1 ELSE 0 END) AS failed,
+                 AVG(CASE WHEN t.state = 'done' THEN t.updated_at - t.created_at END) AS avg_done
+                 FROM task_tasks t LEFT JOIN wf_defs d ON d.workflow_id = t.workflow_id
+                 WHERE t.created_at BETWEEN ? AND ? AND t.workflow_id IS NOT NULL
+                """ + scope.sql() + " GROUP BY t.workflow_id";
+        return jdbc.query(sql, (row, index) -> {
+            String workflowId = row.getString("workflow_id");
+            String name = row.getString("name");
+            int total = row.getInt("total");
+            int done = row.getInt("done");
+            int failed = row.getInt("failed");
+            double minutes = round1(row.getDouble("avg_done") / 60.0);
+            double rate = percentage(done, total);
+            Number value = "workflow_completion_rate".equals(metric) ? rate : minutes;
+            Map<String, Object> extra = new LinkedHashMap<>();
+            extra.put("total", total);
+            extra.put("done", done);
+            extra.put("failed", failed);
+            extra.put("avg_minutes", minutes);
+            return new BreakdownEntry(workflowId,
+                    name == null || name.isEmpty() ? workflowId : name, value, extra);
+        }, params(scope, start, end));
+    }
+
+    private List<BreakdownEntry> agentItems(String metric, double start, double end,
+                                            List<String> owners) {
+        OwnerScope scope = ownerScope(owners, "r.assigned_employee_id");
+        String sql = """
+                SELECT r.assigned_employee_id AS employee_id,
+                 COALESCE(e.display_name, '') AS name, COUNT(*) AS total,
+                 SUM(CASE WHEN r.state = 'failed' THEN 1 ELSE 0 END) AS failed,
+                 SUM(CASE WHEN r.state IN ('dispatched','running','blocked') THEN 1 ELSE 0 END) AS active
+                 FROM task_node_runs r
+                 LEFT JOIN identity_employees e ON e.employee_id = r.assigned_employee_id
+                 WHERE r.assigned_employee_id IS NOT NULL
+                 AND COALESCE(r.started_at, r.dispatched_at, 0) BETWEEN ? AND ?
+                """ + scope.sql() + " GROUP BY r.assigned_employee_id";
+        return jdbc.query(sql, (row, index) -> {
+            String employeeId = row.getString("employee_id");
+            String name = row.getString("name");
+            int total = row.getInt("total");
+            int failed = row.getInt("failed");
+            int active = row.getInt("active");
+            Number value;
+            if ("agent_load".equals(metric)) {
+                value = total;
+            } else {
+                value = percentage(failed, total);
+            }
+            Map<String, Object> extra = new LinkedHashMap<>();
+            extra.put("total", total);
+            extra.put("failed", failed);
+            extra.put("active", active);
+            return new BreakdownEntry(employeeId,
+                    name == null || name.isEmpty() ? employeeId : name, value, extra);
+        }, params(scope, start, end));
+    }
+
+    private List<MetricDtos.MetricPointOut> cards(TaskSummary summary, int escalations,
+                                                   int onlineAgents) {
+        return List.of(
+                new MetricDtos.MetricPointOut("tasks.total", summary.total(), "count", null),
+                new MetricDtos.MetricPointOut("tasks.running", summary.active(), "count", null),
+                new MetricDtos.MetricPointOut("tasks.completion_rate",
+                        percentage(summary.done(), summary.total()), "percent", null),
+                new MetricDtos.MetricPointOut("tasks.avg_done_minutes",
+                        summary.avgDoneMinutes(), "minutes", null),
+                new MetricDtos.MetricPointOut("tasks.failure_rate",
+                        percentage(summary.failed(), summary.total()), "percent", null),
+                new MetricDtos.MetricPointOut("tasks.escalations", escalations, "count", null),
+                new MetricDtos.MetricPointOut("agents.online", onlineAgents, "count", null),
+                new MetricDtos.MetricPointOut("tasks.backlog", summary.queued(), "count", null));
+    }
+
+    private List<Map<String, Object>> points(List<TimelineRow> timeline, String metric,
+                                             double start, double end, int step) {
+        Map<Integer, Integer> counts = new LinkedHashMap<>();
+        for (TimelineRow row : timeline) {
+            if ("tasks.created".equals(metric)
+                    && start <= row.createdAt() && row.createdAt() <= end) {
+                int index = (int) Math.floor((row.createdAt() - start) / step);
+                counts.put(index, counts.getOrDefault(index, 0) + 1);
+            }
+            if ("tasks.completed".equals(metric) && "done".equals(row.state())
+                    && start <= row.updatedAt() && row.updatedAt() <= end) {
+                int index = (int) Math.floor((row.updatedAt() - start) / step);
+                counts.put(index, counts.getOrDefault(index, 0) + 1);
+            }
+        }
+        int buckets = Math.max(1, (int) ((end - start) / step) + 1);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (int index = 0; index < buckets; index++) {
+            Map<String, Object> point = new LinkedHashMap<>();
+            point.put("ts", iso(start + (double) index * step));
+            point.put("value", counts.getOrDefault(index, 0));
+            result.add(point);
+        }
+        return result;
+    }
+
+    private int bucketSeconds(String bucket) {
+        if (Set.of("1h", "hour").contains(bucket)) {
+            return 3600;
+        }
+        if (Set.of("1d", "day").contains(bucket)) {
+            return 86400;
+        }
+        throw unprocessable("不支持的 bucket：" + bucket);
+    }
+
+    private Range range(String from, String to) {
+        Double parsedEnd = parseTime(to);
+        double end = parsedEnd == null ? epochNow() : parsedEnd;
+        Double parsedStart = parseTime(from);
+        double start = parsedStart == null ? end - 7.0 * 86400.0 : parsedStart;
+        if (start > end) {
+            throw unprocessable("from 不能晚于 to");
+        }
+        return new Range(start, end);
+    }
+
+    private Double parseTime(String value) {
+        if (value == null || value.isEmpty()) {
+            return null;
+        }
+        String text = value.strip().replace("Z", "+00:00");
+        String normalized = text.replace(' ', 'T');
+        try {
+            try {
+                TemporalAccessor parsed = DateTimeFormatter.ISO_DATE_TIME.parseBest(
+                        normalized, OffsetDateTime::from, LocalDateTime::from);
+                if (parsed instanceof OffsetDateTime offset) {
+                    return epoch(offset.toInstant());
+                }
+                return epoch(((LocalDateTime) parsed).toInstant(ZoneOffset.UTC));
+            } catch (DateTimeParseException ignored) {
+                return epoch(LocalDate.parse(text, DateTimeFormatter.ISO_LOCAL_DATE)
+                        .atStartOfDay().toInstant(ZoneOffset.UTC));
+            }
+        } catch (DateTimeException exception) {
+            throw unprocessable("时间格式不合法：" + value);
+        }
+    }
+
+    private double epochNow() {
+        return epoch(Instant.now().truncatedTo(ChronoUnit.MICROS));
+    }
+
+    private double epoch(Instant instant) {
+        return instant.getEpochSecond() + instant.getNano() / 1_000_000_000.0;
+    }
+
+    private String iso(double epoch) {
+        long seconds = (long) Math.floor(epoch);
+        long micros = Math.round((epoch - seconds) * 1_000_000.0);
+        if (micros == 1_000_000) {
+            seconds++;
+            micros = 0;
+        }
+        String text = DateTimeFormatter.ISO_LOCAL_DATE_TIME.format(
+                LocalDateTime.ofEpochSecond(seconds, 0, ZoneOffset.UTC));
+        if (micros != 0) {
+            text += String.format(Locale.ROOT, ".%06d", micros);
+        }
+        return text + "+00:00";
+    }
+
+    private double percentage(int part, int total) {
+        return total == 0 ? 0.0 : round1((double) part / total * 100.0);
+    }
+
+    private double round1(double value) {
+        return BigDecimal.valueOf(value).setScale(1, RoundingMode.HALF_EVEN).doubleValue();
+    }
+
+    private OwnerScope ownerScope(List<String> owners, String column) {
+        if (owners == null) {
+            return new OwnerScope("", List.of());
+        }
+        if (owners.isEmpty()) {
+            return new OwnerScope(" AND 1 = 0", List.of());
+        }
+        String marks = String.join(", ", java.util.Collections.nCopies(owners.size(), "?"));
+        return new OwnerScope(" AND " + column + " IN (" + marks + ")", owners);
+    }
+
+    private Object[] params(OwnerScope scope, Object... leading) {
+        Object[] result = new Object[leading.length + scope.params().size()];
+        System.arraycopy(leading, 0, result, 0, leading.length);
+        for (int index = 0; index < scope.params().size(); index++) {
+            result[leading.length + index] = scope.params().get(index);
+        }
+        return result;
+    }
+
+    private void csvBreakdownRows(StringBuilder buffer, String section,
+                                  MetricDtos.MetricBreakdownOut report) {
+        for (MetricDtos.MetricBreakdownItemOut item : report.items()) {
+            csvRow(buffer, section, item.key(), item.label(), report.metric(), item.value(), "count");
+        }
+    }
+
+    private void csvRow(StringBuilder buffer, Object... values) {
+        for (int index = 0; index < values.length; index++) {
+            if (index > 0) {
+                buffer.append(',');
+            }
+            buffer.append(csvValue(values[index]));
+        }
+        buffer.append("\r\n");
+    }
+
+    private String csvValue(Object value) {
+        if (value == null) {
+            return "";
+        }
+        String text = String.valueOf(value);
+        if (text.indexOf(',') >= 0 || text.indexOf('"') >= 0
+                || text.indexOf('\r') >= 0 || text.indexOf('\n') >= 0) {
+            return '"' + text.replace("\"", "\"\"") + '"';
+        }
+        return text;
+    }
+
+    private ApiException unprocessable(String message) {
+        return ApiException.unprocessable("unprocessable", message);
+    }
 
     private Map<String, Map<String, Object>> catalog() {
         Map<String, Map<String, Object>> result = new LinkedHashMap<>();
@@ -425,6 +827,23 @@ public class MetricsService {
 
     private String actionsJson(List<String> actions) {
         return json(actions);
+    }
+
+    private record TaskSummary(int total, int queued, int active, int done,
+                               int failed, int cancelled, double avgDoneMinutes) {
+    }
+
+    private record TimelineRow(double createdAt, double updatedAt, String state) {
+    }
+
+    private record BreakdownEntry(String key, String label, Number value,
+                                  Map<String, Object> extra) {
+    }
+
+    private record Range(double start, double end) {
+    }
+
+    private record OwnerScope(String sql, List<String> params) {
     }
 
     private record RuleRow(String ruleId, String metric, String op, double threshold,

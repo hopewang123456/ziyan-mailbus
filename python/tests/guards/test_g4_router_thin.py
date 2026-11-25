@@ -23,4 +23,6 @@ def test_router_functions_are_thin() -> None:
                 size = (node.end_lineno or node.lineno) - node.lineno + 1
                 if size > MAX_ROUTER_LINES:
                     problems.append(f"{path.name}:{node.lineno} {node.name}() {size} 行")
-    assert not problems, "路由函数过长（业务逻辑应下沉到 application）：\n" + "\n".join(problems)
+    assert not problems, "路由函数过长（业务逻辑应下沉到 application）：\n" + "\n".join(
+        problems
+    )

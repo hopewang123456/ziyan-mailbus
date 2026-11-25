@@ -25,14 +25,11 @@ def _bootstrap(client: TestClient) -> str:
 
 
 def _running_task(client: TestClient, headers: dict[str, str]) -> str:
+    # B8：任务创建即自动启动，不再需要 dispatch/advance。
     task = client.post("/api/tasks", json={"title": "等待审批"}, headers=headers)
     assert task.status_code == 201, task.text
-    task_id = task.json()["task_id"]
-    client.post(f"/api/tasks/{task_id}/dispatch", headers=headers)
-    client.post(
-        f"/api/tasks/{task_id}/advance", json={"outcome": "running"}, headers=headers
-    )
-    return task_id
+    assert task.json()["state"] == "running"
+    return task.json()["task_id"]
 
 
 def _request(
@@ -45,6 +42,15 @@ def _request(
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def _resolve(client, headers, approval_id: str, approved: bool, note: str | None = None):
+    payload: dict = {"decision": "approved" if approved else "rejected"}
+    if note is not None:
+        payload["comment"] = note
+    return client.post(
+        f"/api/approvals/{approval_id}/resolve", json=payload, headers=headers
+    )
 
 
 def test_blocking_tier_blocks_task_until_approved(tmp_path):
@@ -60,11 +66,7 @@ def test_blocking_tier_blocks_task_until_approved(tmp_path):
         blocked = client.get(f"/api/tasks/{task_id}", headers=headers).json()
         assert blocked["state"] == "blocked"
 
-        resolved = client.post(
-            f"/api/approvals/{approval['approval_id']}/resolve",
-            json={"approved": True},
-            headers=headers,
-        )
+        resolved = _resolve(client, headers, approval["approval_id"], True)
         assert resolved.status_code == 200, resolved.text
         assert resolved.json()["status"] == "approved"
 
@@ -82,11 +84,7 @@ def test_advisory_tier_never_blocks_task(tmp_path):
         still = client.get(f"/api/tasks/{task_id}", headers=headers).json()
         assert still["state"] == "running"
 
-        rejected = client.post(
-            f"/api/approvals/{approval['approval_id']}/resolve",
-            json={"approved": False, "note": "仅记录"},
-            headers=headers,
-        )
+        rejected = _resolve(client, headers, approval["approval_id"], False, "仅记录")
         assert rejected.status_code == 200, rejected.text
         assert rejected.json()["status"] == "rejected"
 
@@ -106,35 +104,37 @@ def test_informational_tier_is_acknowledged_and_not_resolvable(tmp_path):
         unchanged = client.get(f"/api/tasks/{task_id}", headers=headers).json()
         assert unchanged["state"] == "running"
 
-        denied = client.post(
-            f"/api/approvals/{approval['approval_id']}/resolve",
-            json={"approved": True},
-            headers=headers,
-        )
+        denied = _resolve(client, headers, approval["approval_id"], True)
         assert denied.status_code == 409
 
         pending = client.get(
-            f"/api/approvals?task_id={task_id}&status=pending", headers=headers
+            f"/api/approvals?task_id={task_id}&state=pending", headers=headers
         )
         assert pending.status_code == 200
-        assert pending.json() == []
+        assert pending.json()["items"] == []
+
+
+def _hire(
+    client: TestClient, admin: dict[str, str], name: str, **invite_fields
+) -> tuple[str, str]:
+    invite = client.post(
+        "/api/employees/invite",
+        json={"display_name": name, **invite_fields},
+        headers=admin,
+    )
+    assert invite.status_code in (200, 201), invite.text
+    accepted = client.post(
+        "/api/invites/accept",
+        json={"invite_code": invite.json()["invite_code"], "display_name": name},
+    )
+    assert accepted.status_code == 201, accepted.text
+    body = accepted.json()
+    return body["employee"]["employee_id"], body["token"]
 
 
 def _create_user_token(client: TestClient, admin: dict[str, str]) -> str:
-    invite = client.post(
-        "/api/identity/invites",
-        json={"account_type": "human", "capabilities": []},
-        headers=admin,
-    ).json()
-    applied = client.post(
-        "/api/identity/staff",
-        json={
-            "display_name": "路人",
-            "account_type": "human",
-            "invite_code": invite["invite_code"],
-        },
-    ).json()
-    return applied["token"]
+    _, token = _hire(client, admin, "路人")
+    return token
 
 
 def test_approvals_are_scoped_to_data_scope(tmp_path):
@@ -145,7 +145,7 @@ def test_approvals_are_scoped_to_data_scope(tmp_path):
         approval = _request(client, admin, task_id, "advisory")
 
         other = _headers(_create_user_token(client, admin))
-        assert client.get("/api/approvals", headers=other).json() == []
+        assert client.get("/api/approvals", headers=other).json()["items"] == []
         assert (
             client.get(
                 f"/api/approvals/{approval['approval_id']}", headers=other
@@ -153,7 +153,7 @@ def test_approvals_are_scoped_to_data_scope(tmp_path):
             == 404
         )
 
-        listed = client.get("/api/approvals", headers=admin).json()
+        listed = client.get("/api/approvals", headers=admin).json()["items"]
         assert any(a["approval_id"] == approval["approval_id"] for a in listed)
 
 
@@ -161,53 +161,30 @@ def test_manager_cannot_resolve_own_requested_approval(tmp_path):
     """M15：同时持有 hitl_request + hitl_resolve 的非超管不得自审。"""
     with _client(tmp_path) as client:
         admin = _headers(_bootstrap(client))
-        invite = client.post(
-            "/api/identity/invites",
-            json={
-                "account_type": "human",
-                "capabilities": [
-                    "hitl_request",
-                    "hitl_resolve",
-                    "task_create",
-                    "task_dispatch",
-                ],
-            },
-            headers=admin,
-        ).json()
-        applied = client.post(
-            "/api/identity/staff",
-            json={
-                "display_name": "自审经理",
-                "account_type": "human",
-                "invite_code": invite["invite_code"],
-            },
-        ).json()
-        manager = _headers(applied["token"])
+        _, manager_token = _hire(
+            client,
+            admin,
+            "自审经理",
+            permissions=[
+                "hitl_request",
+                "hitl_resolve",
+                "task_create",
+                "task_dispatch",
+            ],
+        )
+        manager = _headers(manager_token)
 
         task = client.post("/api/tasks", json={"title": "自审任务"}, headers=manager)
+        assert task.status_code == 201, task.text
         task_id = task.json()["task_id"]
-        client.post(f"/api/tasks/{task_id}/dispatch", headers=manager)
-        client.post(
-            f"/api/tasks/{task_id}/advance",
-            json={"outcome": "running"},
-            headers=manager,
-        )
 
         approval = _request(client, manager, task_id, "advisory")
 
-        denied = client.post(
-            f"/api/approvals/{approval['approval_id']}/resolve",
-            json={"approved": True},
-            headers=manager,
-        )
+        denied = _resolve(client, manager, approval["approval_id"], True)
         assert denied.status_code == 403, denied.text
 
         # 超管（ALL）裁决同一审批不受自审规则限制
-        resolved = client.post(
-            f"/api/approvals/{approval['approval_id']}/resolve",
-            json={"approved": True},
-            headers=admin,
-        )
+        resolved = _resolve(client, admin, approval["approval_id"], True)
         assert resolved.status_code == 200, resolved.text
         assert resolved.json()["status"] == "approved"
 
@@ -220,22 +197,12 @@ def test_withdraw_pending_approval_restores_task(tmp_path):
         blocked = client.get(f"/api/tasks/{task_id}", headers=headers).json()
         assert blocked["state"] == "blocked"
 
-        invite = client.post(
-            "/api/identity/invites",
-            json={"account_type": "human", "capabilities": ["hitl_request"]},
-            headers=headers,
-        ).json()
-        applicant = client.post(
-            "/api/identity/staff",
-            json={
-                "display_name": "同僚",
-                "account_type": "human",
-                "invite_code": invite["invite_code"],
-            },
-        ).json()
+        _, applicant_token = _hire(
+            client, headers, "同僚", permissions=["hitl_request"]
+        )
         denied = client.delete(
             f"/api/approvals/{approval['approval_id']}",
-            headers=_headers(applicant["token"]),
+            headers=_headers(applicant_token),
         )
         assert denied.status_code == 403
 
@@ -251,11 +218,7 @@ def test_withdraw_pending_approval_restores_task(tmp_path):
         assert detail["status"] == "withdrawn"
 
         assert (
-            client.post(
-                f"/api/approvals/{approval['approval_id']}/resolve",
-                json={"approved": True},
-                headers=headers,
-            ).status_code
+            _resolve(client, headers, approval["approval_id"], True).status_code
             == 409
         )
         assert (

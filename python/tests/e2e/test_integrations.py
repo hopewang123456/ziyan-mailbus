@@ -108,4 +108,6 @@ def test_integrations_plugins_env_and_reload(tmp_path):
             headers=headers,
         )
         assert invoked.status_code == 200, invoked.text
-        assert invoked.json()["ok"] is False
+        assert invoked.json()["name"] == "comfyui"
+        assert invoked.json()["action"] == "probe"
+        assert invoked.json()["result"]["ok"] is False

@@ -27,31 +27,39 @@ def _bootstrap(client: TestClient) -> str:
 def _active_agent_employee(
     client: TestClient, headers: dict[str, str]
 ) -> tuple[str, str]:
-    agent = client.post(
-        "/api/agents",
-        json={"name": "研究员", "framework": "claude"},
+    position = client.post(
+        "/api/positions", json={"name": "研究岗"}, headers=headers
+    )
+    assert position.status_code == 201, position.text
+    invite = client.post(
+        "/api/agent-invites",
+        json={"employee_name": "执行者", "position_id": position.json()["position_id"]},
         headers=headers,
     )
-    assert agent.status_code == 201, agent.text
-    seat_id = client.get("/api/org/seats", headers=headers).json()[0]["seat_id"]
-    applied = client.post(
-        "/api/identity/staff",
+    assert invite.status_code == 201, invite.text
+    agent = client.post(
+        "/api/agents/register",
         json={
-            "display_name": "执行者",
-            "account_type": "human",
-            "seat_id": seat_id,
-            "agent_id": agent.json()["agent_id"],
+            "invite_code": invite.json()["invite_code"],
+            "name": "研究员",
+            "framework": "claude",
         },
     )
-    assert applied.status_code == 201, applied.text
-    employee_id = applied.json()["employee"]["employee_id"]
-    client.post(
-        f"/api/identity/staff/{employee_id}/review",
-        json={"approved": True},
+    assert agent.status_code == 201, agent.text
+    body = agent.json()
+    seat_id = [
+        seat["seat_id"]
+        for floor in client.get("/api/layout", headers=headers).json()["floors"]
+        for room in floor["rooms"]
+        for seat in room["seats"]
+    ][0]
+    seated = client.put(
+        f"/api/seats/{seat_id}/assign",
+        json={"employee_id": body["employee_id"]},
         headers=headers,
     )
-    client.post(f"/api/identity/staff/{employee_id}/activate", headers=headers)
-    return agent.json()["agent_id"], employee_id
+    assert seated.status_code == 200, seated.text
+    return body["agent_id"], body["employee_id"]
 
 
 def _workflow(client: TestClient, headers: dict[str, str]) -> str:
@@ -87,17 +95,17 @@ def test_overview_aggregates_domains_and_metrics(tmp_path):
         )
         assert task.status_code == 201, task.text
         task_id = task.json()["task_id"]
-        client.post(f"/api/tasks/{task_id}/dispatch", headers=headers)
 
-        failed = client.post(
+        # 取消是新的终态路径（失败只保留给历史任务）；概览只统计当日失败数
+        cancelled = client.post(
             "/api/tasks", json={"title": "失败示例"}, headers=headers
         ).json()
-        client.post(f"/api/tasks/{failed['task_id']}/dispatch", headers=headers)
-        client.post(
-            f"/api/tasks/{failed['task_id']}/advance",
-            json={"outcome": "failed"},
+        cancelled_resp = client.post(
+            f"/api/tasks/{cancelled['task_id']}/cancel",
+            json={"reason": "manual"},
             headers=headers,
         )
+        assert cancelled_resp.status_code == 200, cancelled_resp.text
 
         overview = client.get("/api/overview", headers=headers)
         assert overview.status_code == 200, overview.text
@@ -111,11 +119,11 @@ def test_overview_aggregates_domains_and_metrics(tmp_path):
         assert body["workflows_published"] == 1
         assert body["tasks_total"] == 2
         assert body["tasks_active"] == 1
-        assert body["tasks_failed_today"] == 1
+        assert body["tasks_failed_today"] == 0
 
         points = {item["metric"]: item["value"] for item in body["metrics"]}
         assert points["tasks.active"] == 1
-        assert points["tasks.failed_today"] == 1
+        assert points["tasks.failed_today"] == 0
         assert points["agents.online"] == 1
         assert points["agents.total"] == 1
         assert points["workflows.total"] == 1

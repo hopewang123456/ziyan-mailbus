@@ -25,21 +25,17 @@ def _bootstrap(client: TestClient) -> str:
 
 
 def _hire(client: TestClient, admin: dict[str, str], name: str) -> tuple[str, str]:
-    applied = client.post(
-        "/api/identity/staff", json={"display_name": name, "account_type": "human"}
+    invite = client.post(
+        "/api/employees/invite", json={"display_name": name}, headers=admin
     )
-    assert applied.status_code == 201, applied.text
-    employee_id = applied.json()["employee"]["employee_id"]
-    client.post(
-        f"/api/identity/staff/{employee_id}/review",
-        json={"approved": True},
-        headers=admin,
+    assert invite.status_code in (200, 201), invite.text
+    accepted = client.post(
+        "/api/invites/accept",
+        json={"invite_code": invite.json()["invite_code"], "display_name": name},
     )
-    activated = client.post(
-        f"/api/identity/staff/{employee_id}/activate", headers=admin
-    )
-    assert activated.status_code == 200, activated.text
-    return employee_id, activated.json()["token"]
+    assert accepted.status_code == 201, accepted.text
+    body = accepted.json()
+    return body["employee"]["employee_id"], body["token"]
 
 
 def test_pair_lifecycle_and_collab_projection(tmp_path):
@@ -147,7 +143,7 @@ def test_pair_lifecycle_and_collab_projection(tmp_path):
         assert public_message["pair_id"] == pair_id
         assert client.get("/api/public/collab/messages").status_code == 422
 
-        assert client.get("/api/tasks", headers=admin).json() == []
+        assert client.get("/api/tasks", headers=admin).json()["items"] == []
 
         created_task = client.post(
             "/api/tasks",
@@ -248,9 +244,9 @@ def test_public_layout_carries_active_pair(tmp_path):
         free = [seat["seat_id"] for seat in seats if seat["agent"] is None]
         assert len(free) >= 2
         for employee_id, seat_id in ((me, free[0]), (partner_id, free[1])):
-            seated = client.patch(
-                f"/api/identity/staff/{employee_id}/seat",
-                json={"seat_id": seat_id},
+            seated = client.put(
+                f"/api/seats/{seat_id}/assign",
+                json={"employee_id": employee_id},
                 headers=admin,
             )
             assert seated.status_code == 200, seated.text
@@ -352,9 +348,9 @@ def test_public_seat_tasks_resolve_occupant(tmp_path):
         ]
         occupied_seat = seats[0]["seat_id"]
         empty_seat = seats[1]["seat_id"]
-        seated = client.patch(
-            f"/api/identity/staff/{employee_id}/seat",
-            json={"seat_id": occupied_seat},
+        seated = client.put(
+            f"/api/seats/{occupied_seat}/assign",
+            json={"employee_id": employee_id},
             headers=admin,
         )
         assert seated.status_code == 200, seated.text

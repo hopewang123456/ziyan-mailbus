@@ -34,9 +34,15 @@ CONTRACTS: dict[tuple[str, str], tuple[str, str]] = {
     ("mailbus.core.messaging.ports", "MessageRepository"): (f"{SQLITE}.messaging_repo", "SqliteMessageRepository"),
     ("mailbus.core.metrics.ports", "MetricRuleRepository"): (f"{SQLITE}.metrics_repo", "SqliteMetricRuleRepository"),
     ("mailbus.core.metrics.ports", "MetricLayoutRepository"): (f"{SQLITE}.metrics_repo", "SqliteMetricLayoutRepository"),
+    ("mailbus.core.metrics.ports", "MetricReportRepository"): (
+        f"{SQLITE}.metrics_report_repo",
+        "SqliteMetricReportRepository",
+    ),
+    ("mailbus.core.ops.ports", "OpsRepository"): (f"{SQLITE}.ops_repo", "SqliteOpsRepository"),
     ("mailbus.core.org.ports", "TeamRepository"): (f"{SQLITE}.org_repo", "SqliteTeamRepository"),
     ("mailbus.core.org.ports", "PositionRepository"): (f"{SQLITE}.org_repo", "SqlitePositionRepository"),
     ("mailbus.core.org.ports", "SeatRepository"): (f"{SQLITE}.org_repo", "SqliteSeatRepository"),
+    ("mailbus.core.org.ports", "RoleRepository"): (f"{SQLITE}.org_repo", "SqliteRoleRepository"),
     ("mailbus.core.skills.ports", "SkillPackageRepository"): (f"{SQLITE}.skills_repo", "SqliteSkillPackageRepository"),
     ("mailbus.core.skills.ports", "SkillBindingRepository"): (f"{SQLITE}.skills_repo", "SqliteSkillBindingRepository"),
     ("mailbus.core.workflow.ports", "WorkflowDefinitionRepository"): (
@@ -47,7 +53,24 @@ CONTRACTS: dict[tuple[str, str], tuple[str, str]] = {
         f"{SQLITE}.workflow_repo",
         "SqliteWorkflowVersionRepository",
     ),
+    ("mailbus.core.workflow.ports", "WorkflowGraphRepository"): (
+        f"{SQLITE}.workflow_graph_repo",
+        "SqliteWorkflowGraphRepository",
+    ),
     ("mailbus.core.workflow.ports", "TaskRepository"): (f"{SQLITE}.workflow_repo", "SqliteTaskRepository"),
+    ("mailbus.core.workflow.ports", "TaskRunRepository"): (f"{SQLITE}.task_repo", "SqliteTaskRunRepository"),
+    ("mailbus.core.workflow.ports", "TaskArtifactRepository"): (
+        f"{SQLITE}.task_repo",
+        "SqliteTaskArtifactRepository",
+    ),
+    ("mailbus.core.workflow.ports", "TaskEscalationRepository"): (
+        f"{SQLITE}.task_repo",
+        "SqliteTaskEscalationRepository",
+    ),
+    ("mailbus.core.workflow.ports", "TaskVariableRepository"): (
+        f"{SQLITE}.task_repo",
+        "SqliteTaskVariableRepository",
+    ),
 }
 
 

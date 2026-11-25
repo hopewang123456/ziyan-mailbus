@@ -30,6 +30,10 @@ public final class IntegrationDtos {
         }
     }
 
+    public record IntegrationInvokeOut(String name, String action,
+                                       Map<String, Object> result) {
+    }
+
     public record EnvEntryOut(String key, String label, String value, boolean configured) {
     }
 

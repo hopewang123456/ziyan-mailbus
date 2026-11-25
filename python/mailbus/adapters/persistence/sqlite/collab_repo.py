@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from sqlite3 import Connection, Row
 
@@ -16,9 +17,32 @@ def _epoch(value: datetime | None) -> float | None:
     return None if value is None else value.timestamp()
 
 
+def _json(value: object) -> dict:
+    if not value:
+        return {}
+    try:
+        data = json.loads(str(value))
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 class SqliteScreenRepository:
     def __init__(self, conn: Connection) -> None:
         self._conn = conn
+
+    def list_page(self, limit: int, offset: int) -> list[Screen]:
+        rows = self._conn.execute(
+            "SELECT * FROM collab_screens"
+            " ORDER BY COALESCE(last_seen_at, created_at) DESC, screen_id"
+            " LIMIT ? OFFSET ?",
+            (limit, offset),
+        ).fetchall()
+        return [self._map(row) for row in rows]
+
+    def count(self) -> int:
+        row = self._conn.execute("SELECT COUNT(*) AS total FROM collab_screens").fetchone()
+        return int(row["total"]) if row else 0
 
     def list_all(self, limit: int | None = None) -> list[Screen]:
         sql = (
@@ -42,39 +66,59 @@ class SqliteScreenRepository:
         self._conn.execute(
             """
             INSERT INTO collab_screens
-                (screen_id, name, floor_id, seat_id, online, last_seen_at, created_at, secret)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (screen_id, name, online, last_seen_at, created_at, secret_hash,
+                 source, config_json, published_config_json, config_version, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (screen_id) DO UPDATE SET
                 name = excluded.name,
-                floor_id = excluded.floor_id,
-                seat_id = excluded.seat_id,
                 online = excluded.online,
                 last_seen_at = excluded.last_seen_at,
-                secret = excluded.secret
+                secret_hash = excluded.secret_hash,
+                source = excluded.source,
+                config_json = excluded.config_json,
+                published_config_json = excluded.published_config_json,
+                config_version = excluded.config_version,
+                updated_at = excluded.updated_at
             """,
             (
                 screen.screen_id,
                 screen.name,
-                screen.floor_id,
-                screen.seat_id,
                 int(screen.online),
                 _epoch(screen.last_seen_at),
                 _epoch(screen.created_at),
-                screen.secret,
+                screen.secret_hash,
+                screen.source,
+                json.dumps(screen.config, ensure_ascii=False),
+                json.dumps(screen.published_config, ensure_ascii=False),
+                screen.config_version,
+                _epoch(screen.updated_at),
             ),
         )
 
+    def delete(self, screen_id: str) -> None:
+        self._conn.execute("DELETE FROM collab_screens WHERE screen_id = ?", (screen_id,))
+
     @staticmethod
     def _map(row: Row) -> Screen:
+        keys = row.keys()
         return Screen(
             screen_id=row["screen_id"],
             name=row["name"],
-            floor_id=row["floor_id"],
-            seat_id=row["seat_id"],
+            source=row["source"] if "source" in keys else "auto",
             online=bool(row["online"]),
             last_seen_at=_dt(row["last_seen_at"]),
             created_at=_dt(row["created_at"]) or datetime.now(timezone.utc),
-            secret=row["secret"],
+            config=_json(row["config_json"]) if "config_json" in keys else {},
+            published_config=(
+                _json(row["published_config_json"])
+                if "published_config_json" in keys else {}
+            ),
+            config_version=(
+                int(row["config_version"])
+                if "config_version" in keys and row["config_version"] is not None else 1
+            ),
+            updated_at=_dt(row["updated_at"]) if "updated_at" in keys else None,
+            secret_hash=row["secret_hash"] if "secret_hash" in keys else None,
         )
 
 

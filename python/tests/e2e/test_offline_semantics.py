@@ -38,20 +38,20 @@ def _bootstrap(client: TestClient) -> dict:
 
 
 def _offline_staff_token(client: TestClient, admin_token: str) -> str:
-    """签发一张带 log_read 的邀请码，建号后推到离线，返回该员工 token。"""
+    """签发一张带 log_read 的真人邀请，接受后推到离线，返回该员工 token。"""
     invite = client.post(
-        "/api/identity/invites",
-        json={"account_type": "human", "capabilities": ["log_read"], "data_scope": "global"},
-        headers=_headers(admin_token),
-    )
-    assert invite.status_code == 201, invite.text
-    applied = client.post(
-        "/api/identity/staff",
+        "/api/employees/invite",
         json={
             "display_name": "离席员工",
-            "account_type": "human",
-            "invite_code": invite.json()["invite_code"],
+            "permissions": ["log_read"],
+            "data_scope": "global",
         },
+        headers=_headers(admin_token),
+    )
+    assert invite.status_code in (200, 201), invite.text
+    applied = client.post(
+        "/api/invites/accept",
+        json={"invite_code": invite.json()["invite_code"]},
     )
     assert applied.status_code == 201, applied.text
     token = applied.json()["token"]

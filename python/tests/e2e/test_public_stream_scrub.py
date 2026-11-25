@@ -50,6 +50,16 @@ def test_scrub_public_strips_internal_ids() -> None:
     # 未知事件在公开流直接丢弃
     assert _scrub_public("something.secret", {"secret": "x"}) is None
 
+    # B6：登记事件不进公开流；配置发布只下发安全字段
+    assert _scrub_public(
+        "screen.registered", {"screen_id": "s1", "name": "大屏", "at": "t"}
+    ) is None
+    config = _scrub_public(
+        "screen.config",
+        {"screen_id": "s1", "config_version": 3, "at": "t", "team_id": "team-1"},
+    )
+    assert config == {"screen_id": "s1", "config_version": 3, "at": "t"}
+
 
 def _run(coro) -> None:
     asyncio.run(coro)

@@ -40,7 +40,7 @@ public class TokenResolver {
         Map<String, Object> row = rows.get(0);
         String employeeId = String.valueOf(row.get("employee_id"));
         Set<String> capabilities = new HashSet<>(jdbc.queryForList(
-                "SELECT capability FROM identity_capability_grants WHERE employee_id = ?",
+                "SELECT permission FROM identity_permission_grants WHERE employee_id = ?",
                 String.class, employeeId));
         return new Actor(
                 employeeId,

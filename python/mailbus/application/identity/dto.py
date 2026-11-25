@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from mailbus.core.agents.models import AgentSummary
-from mailbus.core.identity.models import Employee, Invite, Subject
+from mailbus.core.identity.models import Employee, Subject
 from mailbus.core.identity.values import AccountType, EmployeeStatus
 from mailbus.core.shared.values import Capability, DataScope, FileScope
 
@@ -64,7 +64,7 @@ class EmployeeView:
     agent_id: str | None
     agent_name: str | None
     agent_framework: str | None
-    capabilities: tuple[str, ...]
+    permissions: tuple[str, ...]
     data_scope: str
     file_scope: tuple[str, ...]
     endpoint: str | None
@@ -86,7 +86,7 @@ class EmployeeView:
             agent_id=employee.agent_id,
             agent_name=agent.name if agent else None,
             agent_framework=agent.framework if agent else None,
-            capabilities=tuple(sorted(cap.value for cap in employee.capabilities)),
+            permissions=tuple(sorted(cap.value for cap in employee.capabilities)),
             data_scope=employee.data_scope.value,
             file_scope=employee.file_scope.paths,
             endpoint=employee.endpoint,
@@ -96,38 +96,9 @@ class EmployeeView:
 
 
 @dataclass(frozen=True, slots=True)
-class InviteView:
-    invite_code: str
-    account_type: str
-    team_id: str | None
-    position_id: str | None
-    data_scope: str
-    capabilities: tuple[str, ...]
-    expires_at: datetime | None
-
-    @classmethod
-    def of(cls, invite: Invite) -> "InviteView":
-        return cls(
-            invite_code=invite.invite_code,
-            account_type=invite.account_type.value,
-            team_id=invite.team_id,
-            position_id=invite.position_id,
-            data_scope=invite.data_scope.value,
-            capabilities=tuple(sorted(cap.value for cap in invite.capabilities)),
-            expires_at=invite.expires_at,
-        )
-
-
-@dataclass(frozen=True, slots=True)
 class SessionResult:
     employee: EmployeeView
     token: str
-
-
-@dataclass(frozen=True, slots=True)
-class ApplyResult:
-    employee: EmployeeView
-    token: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,32 +112,6 @@ class BootstrapStepView:
 class BootstrapStatusView:
     steps: tuple[BootstrapStepView, ...]
     completed: bool
-
-
-@dataclass(frozen=True, slots=True)
-class ApplyCommand:
-    display_name: str
-    account_type: AccountType
-    invite_code: str | None = None
-    endpoint: str | None = None
-    seat_id: str | None = None
-    agent_id: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class ReviewCommand:
-    approved: bool
-    note: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class InviteCommand:
-    account_type: AccountType
-    team_id: str | None = None
-    position_id: str | None = None
-    capabilities: tuple[Capability, ...] = ()
-    data_scope: DataScope = DataScope.SELF
-    expires_in_hours: int = 72
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,50 +145,6 @@ def employee_view(
     employee: Employee, agent: AgentSummary | None = None
 ) -> EmployeeView:
     return EmployeeView.of(employee, agent)
-
-
-def invite_view(invite: Invite) -> InviteView:
-    return InviteView.of(invite)
-
-
-def make_apply_command(
-    display_name: str,
-    account_type: str,
-    invite_code: str | None = None,
-    endpoint: str | None = None,
-    seat_id: str | None = None,
-    agent_id: str | None = None,
-) -> ApplyCommand:
-    return ApplyCommand(
-        display_name=display_name,
-        account_type=AccountType(account_type),
-        invite_code=invite_code,
-        endpoint=endpoint,
-        seat_id=seat_id,
-        agent_id=agent_id,
-    )
-
-
-def make_review_command(approved: bool, note: str | None = None) -> ReviewCommand:
-    return ReviewCommand(approved=approved, note=note)
-
-
-def make_invite_command(
-    account_type: str,
-    team_id: str | None = None,
-    position_id: str | None = None,
-    capabilities: tuple[Capability, ...] = (),
-    data_scope: str = "self",
-    expires_in_hours: int = 72,
-) -> InviteCommand:
-    return InviteCommand(
-        account_type=AccountType(account_type),
-        team_id=team_id,
-        position_id=position_id,
-        capabilities=capabilities,
-        data_scope=DataScope(data_scope),
-        expires_in_hours=expires_in_hours,
-    )
 
 
 def make_super_admin_command(

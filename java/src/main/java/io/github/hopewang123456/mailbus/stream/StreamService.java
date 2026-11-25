@@ -1,6 +1,7 @@
 package io.github.hopewang123456.mailbus.stream;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.hopewang123456.mailbus.common.ApiException;
 import io.github.hopewang123456.mailbus.observability.ObservabilityDtos;
 import io.github.hopewang123456.mailbus.observability.OverviewService;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -18,27 +19,39 @@ public class StreamService {
     private final List<SseEmitter> emitters = new CopyOnWriteArrayList<>();
     private final OverviewService overview;
     private final ObjectMapper objectMapper;
+    private final StreamGate gate;
     private volatile String last;
 
-    public StreamService(OverviewService overview, ObjectMapper objectMapper) {
+    public StreamService(OverviewService overview, ObjectMapper objectMapper,
+                         StreamGate gate) {
         this.overview = overview;
         this.objectMapper = objectMapper;
+        this.gate = gate;
     }
 
     public SseEmitter subscribe() {
+        if (!gate.acquire()) {
+            throw ApiException.capacityExceeded("事件流连接数已达上限，请稍后重试");
+        }
         SseEmitter emitter = new SseEmitter(0L);
-        emitter.onCompletion(() -> emitters.remove(emitter));
-        emitter.onTimeout(() -> emitters.remove(emitter));
-        emitter.onError(error -> emitters.remove(emitter));
+        emitter.onCompletion(() -> close(emitter));
+        emitter.onTimeout(() -> close(emitter));
+        emitter.onError(error -> close(emitter));
         emitters.add(emitter);
         try {
             String snapshot = snapshot();
             emitter.send(SseEmitter.event().data(snapshot));
             last = snapshot;
         } catch (Exception exception) {
-            emitters.remove(emitter);
+            close(emitter);
         }
         return emitter;
+    }
+
+    private void close(SseEmitter emitter) {
+        if (emitters.remove(emitter)) {
+            gate.release();
+        }
     }
 
     @Scheduled(fixedDelayString = "${mailbus.stream-interval-ms:15000}")
@@ -61,7 +74,7 @@ public class StreamService {
                     emitter.send(SseEmitter.event().comment("heartbeat"));
                 }
             } catch (Exception exception) {
-                emitters.remove(emitter);
+                close(emitter);
                 try {
                     emitter.complete();
                 } catch (Exception ignored) {

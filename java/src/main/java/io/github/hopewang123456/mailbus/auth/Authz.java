@@ -23,6 +23,11 @@ public final class Authz {
     public static final String SYSTEM_CONFIG = "system_config";
     public static final String ORG_MANAGE = "org_manage";
     public static final String CONSOLE_ADMIN = "console_admin";
+    public static final String ROLE_MANAGE = "role_manage";
+    public static final String ROLE_BIND = "role_bind";
+    public static final String WORKFLOW_PUBLISH = "workflow_publish";
+    public static final String ESCALATION_RESOLVE = "escalation_resolve";
+    public static final String ARTIFACT_READ_ALL = "artifact_read_all";
 
     private static final Set<String> ENDPOINT_GATED = Set.of(
             MESSAGE_SEND, TASK_DISPATCH, RESULT_SUBMIT);

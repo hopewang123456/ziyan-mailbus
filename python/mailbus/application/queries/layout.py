@@ -49,19 +49,10 @@ class LayoutQuery:
         self._agents = agents
         self._pairs = pairs
 
-    def get(self) -> OfficeSiteView:
+    def get(self, team_id: str | None = None) -> OfficeSiteView:
         seed = self._seed.load()
-        with self._uow() as uow:
-            overrides = {item.seat_id: item for item in uow.seats.list_all()}
-            team_names = {team.team_id: team.name for team in uow.teams.list_all()}
-            position_names = {
-                position.position_id: position.name for position in uow.positions.list_all()
-            }
-        occupants = {
-            occupant.seat_id: occupant
-            for occupant in self._staff.occupants()
-            if occupant.seat_id
-        }
+        overrides, team_names, position_names = self._load()
+        occupants = self._occupants(team_id, overrides)
         summaries = self._agents.summaries(
             tuple(occupant.agent_id for occupant in occupants.values() if occupant.agent_id)
         )
@@ -97,6 +88,35 @@ class LayoutQuery:
             org_name=seed.org_name,
             floors=floors,
         )
+
+    def _load(self) -> tuple[dict[str, SeatAssignment], dict[str, str], dict[str, str]]:
+        with self._uow() as uow:
+            overrides = {item.seat_id: item for item in uow.seats.list_all()}
+            team_names = {team.team_id: team.name for team in uow.teams.list_all()}
+            position_names = {
+                position.position_id: position.name for position in uow.positions.list_all()
+            }
+        return overrides, team_names, position_names
+
+    def _occupants(
+        self, team_id: str | None, overrides: dict[str, SeatAssignment]
+    ) -> dict[str, OccupantView]:
+        occupants = {
+            occupant.seat_id: occupant
+            for occupant in self._staff.occupants()
+            if occupant.seat_id
+        }
+        if team_id is None:
+            return occupants
+        return {
+            seat_id: occupant
+            for seat_id, occupant in occupants.items()
+            if _occupant_team(occupant, overrides.get(seat_id)) == team_id
+        }
+
+
+def _occupant_team(occupant: OccupantView, assignment: SeatAssignment | None) -> str | None:
+    return occupant.team_id or (assignment.team_id if assignment else None)
 
 
 def _floor_view(

@@ -1,71 +1,169 @@
-"""task 路由：创建、派发、推进、取消。"""
+"""任务域路由：冻结契约实现 + 旧派发/推进别名（deprecated）。"""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, Request
+from pathlib import Path
 
-from mailbus.api.deps import declares, get_actor
-from mailbus.api.mappers import tasks as mapper
-from mailbus.api.schemas.tasks import TaskAdvanceIn, TaskIn, TaskOut, TaskStateFilter
+from fastapi import APIRouter, File, Form, Query, Request, UploadFile
+from fastapi.responses import FileResponse
+
+from mailbus.api.deps import SELF, declares, get_actor
+from mailbus.api.mappers import task_domain as mapper
+from mailbus.api.schemas.contract.task import (
+    ArtifactOut,
+    CancelIn,
+    RerunJoinIn,
+    ResultIn,
+    TaskCountersOut,
+    TaskCreateIn,
+    TaskDetailOut,
+    TaskListOut,
+    TaskTraceOut,
+)
+from mailbus.application.task.dto import (
+    CreateTaskCommand,
+    RerunJoinCommand,
+    SubmitResultCommand,
+)
+from mailbus.core.shared.errors import ResourceGoneError, UnprocessableError
 from mailbus.core.shared.values import Capability
 
 router = APIRouter(prefix="/api/tasks", tags=["task"])
+artifact_router = APIRouter(prefix="/api", tags=["task"])
+
+_MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 
 
-def _service(request: Request):
-    return request.app.state.container.tasks
+def _engine(request: Request):
+    return request.app.state.container.task_engine
 
 
-@router.get("", response_model=list[TaskOut], summary="任务列表")
+@router.get("", response_model=TaskListOut, summary="任务列表")
 def list_tasks(
     request: Request,
-    state: TaskStateFilter | None = None,
+    state: str | None = None,
     owner_id: str | None = None,
-    limit: int = Query(default=200, ge=1, le=500),
+    workflow_id: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-) -> list[TaskOut]:
-    actor = get_actor(request)
-    viewer = None if Capability.ALL in actor.capabilities else actor.employee_id
-    views = _service(request).list_tasks(
-        state, owner_id, limit=limit, offset=offset, viewer_id=viewer
-    )
-    return [mapper.to_task_out(view) for view in views]
+) -> TaskListOut:
+    views, total = _engine(request).list_tasks(
+        get_actor(request), state, owner_id, workflow_id, limit, offset)
+    return mapper.to_list(views, total, limit, offset)
 
 
-@router.post("", response_model=TaskOut, status_code=201, summary="创建任务")
+@router.post("", response_model=TaskDetailOut, status_code=201, summary="创建并启动任务")
 @declares(Capability.TASK_CREATE)
-def create_task(payload: TaskIn, request: Request) -> TaskOut:
-    view = _service(request).create(get_actor(request), mapper.task_command(payload))
-    return mapper.to_task_out(view)
+def create_task(payload: TaskCreateIn, request: Request) -> TaskDetailOut:
+    view = _engine(request).create(get_actor(request), CreateTaskCommand(
+        title=payload.title,
+        workflow_id=payload.workflow_id,
+        owner_id=payload.owner_id,
+        variables=dict(payload.variables),
+    ))
+    return mapper.to_detail(view)
 
 
-@router.get("/{task_id}", response_model=TaskOut, summary="任务详情")
-def get_task(task_id: str, request: Request) -> TaskOut:
-    actor = get_actor(request)
-    viewer = None if Capability.ALL in actor.capabilities else actor.employee_id
-    return mapper.to_task_out(_service(request).get(task_id, viewer_id=viewer))
+@router.get("/summary", response_model=TaskCountersOut, summary="导航角标")
+def task_summary(request: Request) -> TaskCountersOut:
+    return mapper.to_counters(_engine(request).counters(get_actor(request)))
 
 
-@router.post("/{task_id}/dispatch", response_model=TaskOut, summary="派发任务")
-@declares(Capability.TASK_DISPATCH)
-def dispatch_task(task_id: str, request: Request) -> TaskOut:
-    view = _service(request).dispatch(get_actor(request), task_id)
-    return mapper.to_task_out(view)
+@router.get("/{task_id}", response_model=TaskDetailOut, summary="任务详情")
+def get_task(task_id: str, request: Request) -> TaskDetailOut:
+    return mapper.to_detail(_engine(request).get(get_actor(request), task_id))
 
 
-@router.post("/{task_id}/advance", response_model=TaskOut, summary="推进任务")
+@router.get("/{task_id}/trace", response_model=TaskTraceOut, summary="任务追迹")
+def get_task_trace(task_id: str, request: Request) -> TaskTraceOut:
+    return mapper.to_trace(_engine(request).get(get_actor(request), task_id))
+
+
+@router.post(
+    "/{task_id}/nodes/{node_id}/claim",
+    response_model=TaskDetailOut,
+    summary="CAS 认领节点",
+)
+@declares(SELF)
+def claim_node(task_id: str, node_id: str, request: Request) -> TaskDetailOut:
+    view = _engine(request).claim(get_actor(request), task_id, node_id)
+    return mapper.to_detail(view)
+
+
+@router.post(
+    "/{task_id}/nodes/{node_id}/result",
+    response_model=TaskDetailOut,
+    summary="提交节点结果",
+)
 @declares(Capability.RESULT_SUBMIT)
-def advance_task(
-    task_id: str, payload: TaskAdvanceIn, request: Request
-) -> TaskOut:
-    view = _service(request).advance(
-        get_actor(request), task_id, mapper.advance_command(payload)
+def submit_result(
+    task_id: str, node_id: str, payload: ResultIn, request: Request
+) -> TaskDetailOut:
+    view = _engine(request).submit(get_actor(request), task_id, node_id,
+                                   SubmitResultCommand(
+                                       attempt_no=payload.attempt_no,
+                                       result=payload.result,
+                                       artifact_ids=tuple(payload.artifact_ids),
+                                   ))
+    return mapper.to_detail(view)
+
+
+@router.post(
+    "/{task_id}/nodes/{node_id}/artifacts",
+    response_model=ArtifactOut,
+    summary="上传任务节点产物",
+)
+@declares(Capability.RESULT_SUBMIT)
+async def upload_artifact(
+    task_id: str,
+    node_id: str,
+    request: Request,
+    file: UploadFile = File(...),
+    description: str | None = Form(default=None),
+) -> ArtifactOut:
+    data = await file.read(_MAX_UPLOAD_BYTES + 1)
+    if len(data) > _MAX_UPLOAD_BYTES:
+        raise UnprocessableError("产物文件超过 100MB 上限")
+    view = _engine(request).upload_artifact(
+        get_actor(request), task_id, node_id,
+        file.filename or "artifact", data, description,
     )
-    return mapper.to_task_out(view)
+    return mapper.to_artifact(view)
 
 
-@router.post("/{task_id}/cancel", response_model=TaskOut, summary="取消任务")
-@declares(Capability.TASK_DISPATCH)
-def cancel_task(task_id: str, request: Request) -> TaskOut:
-    view = _service(request).cancel(get_actor(request), task_id)
-    return mapper.to_task_out(view)
+@router.post("/{task_id}/cancel", response_model=TaskDetailOut, summary="取消任务")
+@declares(SELF)
+def cancel_task(
+    task_id: str, request: Request, payload: CancelIn | None = None
+) -> TaskDetailOut:
+    reason = payload.reason if payload is not None else "manual"
+    return mapper.to_detail(_engine(request).cancel(get_actor(request), task_id, reason))
+
+
+@router.post(
+    "/{task_id}/nodes/{node_id}/rerun-join",
+    response_model=TaskDetailOut,
+    summary="显式重跑汇聚",
+)
+@declares(SELF)
+def rerun_join(
+    task_id: str, node_id: str, payload: RerunJoinIn, request: Request
+) -> TaskDetailOut:
+    view = _engine(request).rerun_join(
+        get_actor(request), task_id, node_id,
+        RerunJoinCommand(fanout_group=payload.fanout_group, scope=payload.scope))
+    return mapper.to_detail(view)
+
+
+@artifact_router.get(
+    "/artifacts/{artifact_id}/download",
+    summary="产物签名下载",
+    response_class=FileResponse,
+)
+@declares(Capability.ARTIFACT_READ_ALL)
+def download_artifact(artifact_id: str, request: Request):
+    artifact = _engine(request).download(get_actor(request), artifact_id)
+    path = Path(artifact.file_path)
+    if not path.is_file():
+        raise ResourceGoneError("产物文件已失效")
+    return FileResponse(path, filename=artifact.file_name)

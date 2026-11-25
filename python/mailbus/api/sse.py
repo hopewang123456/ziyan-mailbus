@@ -30,7 +30,7 @@ _PUBLIC_EVENT_FIELDS: dict[str, tuple[str, ...]] = {
         "progress_total",
         "updated_at",
     ),
-    "screen.registered": ("screen_id", "name", "floor_id", "at"),
+    "screen.config": ("screen_id", "config_version", "at"),
     "screen.focus": ("screen_id", "floor_id", "seat_id", "at"),
 }
 

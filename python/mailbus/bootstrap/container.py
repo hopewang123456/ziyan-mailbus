@@ -15,10 +15,14 @@ from mailbus.adapters.persistence.sqlite.maintenance import (
 )
 from mailbus.adapters.persistence.sqlite.migrations import apply_migrations
 from mailbus.adapters.persistence.sqlite.uow import SqliteUnitOfWork
+from mailbus.adapters.security.endpoint_guard import validate_endpoint
+from mailbus.adapters.security.token_cipher import TokenCipher
+from mailbus.adapters.security.screen_secret import ScreenSecretHasher
 from mailbus.adapters.system.clock import SystemClock
 from mailbus.adapters.system.concurrency import StreamGate
 from mailbus.adapters.system.ids import UuidGenerator
 from mailbus.adapters.system.metrics_manifest import MetricsManifest
+from mailbus.adapters.transport.notify import AlertNotifier
 from mailbus.adapters.system.rate_limit import RateLimiter
 from mailbus.adapters.system.settings_store import JsonSettingsStore
 from mailbus.adapters.system.skill_source import SkillSource
@@ -28,7 +32,9 @@ from mailbus.adapters.transport.file_bus import FileBusTransport
 from mailbus.adapters.transport.file_bus_inbox import FileBusInbox
 from mailbus.adapters.transport.mcp_pull import McpPullTransport
 from mailbus.adapters.transport.routing import RoutingTransport
+from mailbus.application.agents.a2a import A2AService
 from mailbus.application.agents.directory import AgentDirectory
+from mailbus.application.agents.registration import AgentRegistrationService
 from mailbus.application.agents.service import AgentService
 from mailbus.application.approval.service import ApprovalService
 from mailbus.application.collab.messages import CollabMessageService
@@ -39,6 +45,8 @@ from mailbus.application.identity.facade import IdentityServices
 from mailbus.application.messaging.ingress import FileBusIngress
 from mailbus.application.messaging.service import MessagingService
 from mailbus.application.metrics.service import MetricsService
+from mailbus.application.ops.service import OpsService
+from mailbus.application.org.admin import OrgAdminServices
 from mailbus.application.org.service import OrgService
 from mailbus.application.queries.audit import AuditQuery
 from mailbus.application.queries.layout import LayoutQuery
@@ -47,9 +55,11 @@ from mailbus.application.queries.overview import OverviewQuery
 from mailbus.application.settings.service import IntegrationService
 from mailbus.application.skills.effective import SkillEffectiveQuery
 from mailbus.application.skills.service import SkillService
+from mailbus.application.task.engine import TaskEngine
 from mailbus.application.workflow.service import WorkflowService
 from mailbus.application.workflow.tasks import TaskService
 from mailbus.bootstrap.settings import Settings
+from mailbus.core.agents import rules as agent_rules
 from mailbus.core.identity.values import ON_DUTY_STATUSES
 
 logger = logging.getLogger(__name__)
@@ -60,10 +70,11 @@ class Container:
         self.settings = settings
         self.clock = SystemClock()
         self.ids = UuidGenerator()
+        self.token_cipher = TokenCipher.from_env()
         self.layout_seed = JsonLayoutSeed(settings.layout_path)
         self.file_bus = FileBusTransport(settings.file_bus_dir)
         self.mcp_pull = McpPullTransport(settings.mcp_dir)
-        self.a2a = A2aTransport(self._endpoint_of)
+        self.a2a = A2aTransport(self._endpoint_of, resolve_token=self._token_of)
         self.transport = RoutingTransport(
             {"file_bus": self.file_bus, "mcp": self.mcp_pull, "a2a": self.a2a}
         )
@@ -72,6 +83,7 @@ class Container:
         self.public_register_limiter = RateLimiter(max_events=10, window_sec=60.0)
         self.public_apply_limiter = RateLimiter(max_events=5, window_sec=60.0)
         self.public_bootstrap_limiter = RateLimiter(max_events=5, window_sec=60.0)
+        self.screen_limiter = RateLimiter(max_events=10, window_sec=60.0)
         self._build_domain_services()
         self.schema_version = 0
         self._stop: asyncio.Event | None = None
@@ -82,15 +94,19 @@ class Container:
 
     def _build_domain_services(self) -> None:
         """装配领域服务；依赖方向保持单向：组织 → 身份 → 任务 → 观测。"""
-        self.org = OrgService(self.uow, self.clock, self.ids, self.layout_seed)
         self.agent_directory = AgentDirectory(self.uow)
-        self.agents = AgentService(self.uow, self.clock, self.ids)
+        self.org = OrgService(self.uow, self.clock, self.ids, self.layout_seed)
+        self.org_admin = OrgAdminServices.create(
+            self.uow, self.clock, self.ids, self.layout_seed, self.agent_directory)
+        self.agents = AgentService(self.uow, self.clock, self.ids, self.token_cipher)
+        self.agent_registration = AgentRegistrationService(
+            self.uow, self.clock, self.ids, self.token_cipher, validate_endpoint
+        )
         self.identity = IdentityServices.create(
             self.uow,
             self.clock,
             self.ids,
             self.org,
-            self.layout_seed,
             self.agent_directory,
         )
         self.workflows = WorkflowService(self.uow, self.clock, self.ids)
@@ -100,7 +116,19 @@ class Container:
             self.uow, self.clock, self.ids, self.collab_events, self.identity.staff.seat_of
         )
         self.approvals = ApprovalService(self.uow, self.clock, self.ids)
+        self.task_engine = TaskEngine(
+            self.uow, self.clock, self.ids, self.collab_events,
+            seat_of=self.identity.staff.seat_of, approvals=self.approvals,
+            artifacts_dir=self.settings.artifacts_dir,
+        )
         self.skills = SkillService(self.uow, self.clock, self.ids, SkillSource())
+        self._build_cross_services()
+
+    def _build_cross_services(self) -> None:
+        self.a2a_messages = A2AService(
+            self.uow, self.clock, self.ids, self.token_cipher, self.task_engine,
+            self.messages, validate_endpoint,
+        )
         self.skill_effective = SkillEffectiveQuery(self.uow)
         self.file_bus_ingress = FileBusIngress(
             self.messages, self.identity.sessions.resolve, self.file_bus_inbox
@@ -111,39 +139,49 @@ class Container:
             self.uow, self.clock, self.ids, manifest, self.overview
         )
         self.audit = AuditQuery(self.uow, self.metrics)
+        self.ops = OpsService(self.uow, self.clock, self.ids, AlertNotifier())
         self.integrations = IntegrationService(JsonSettingsStore(self.settings.settings_store_path))
         self.log = LogQuery(self.uow)
         self.screens = ScreenService(
             self.uow, self.clock, self.ids, self.collab_events,
-            self.settings.public_screen_limit,
+            self.screen_limiter, ScreenSecretHasher(), self.settings.public_screen_limit,
         )
         self.pairs = PairService(self.uow, self.clock, self.ids, self.collab_events)
-        self.collab_messages = CollabMessageService(
-            self.messages, self.uow, self.collab_events
-        )
-        self.layout = LayoutQuery(
-            self.uow,
-            self.layout_seed,
-            self.identity.staff,
-            self.tasks,
-            self.agent_directory,
-            self.pairs,
-        )
+        self.collab_messages = CollabMessageService(self.messages, self.uow, self.collab_events)
+        self.layout = LayoutQuery(self.uow, self.layout_seed, self.identity.staff,
+                                  self.tasks, self.agent_directory, self.pairs)
 
     def uow(self) -> SqliteUnitOfWork:
         return SqliteUnitOfWork(lambda: connect(self.settings.db_path), self.clock)
 
     def _endpoint_of(self, employee_id: str) -> str | None:
-        """A2A 出站只投递到「在勤且端点已审核」的员工，防止自报端点被滥用。"""
+        """A2A 出站只投递到「在勤、端点已审核且心跳在线」的员工。"""
+        now = self.clock.now()
         with self.uow() as uow:
             employee = uow.employees.get(employee_id)
-        if employee is None or not employee.endpoint_approved:
+            if employee is None:
+                return None
+            if employee.agent_id:
+                agent = uow.agents.get(employee.agent_id)
+                if agent is not None:
+                    return agent.endpoint if agent_rules.dispatchable(agent, now) else None
+        if not employee.endpoint_approved:
             return None
         if employee.status not in ON_DUTY_STATUSES:
             return None
         return employee.endpoint
 
+    def _token_of(self, employee_id: str) -> str | None:
+        """按员工找到所属 Agent，解密其当前 token；无 Agent 时回退环境变量。"""
+        with self.uow() as uow:
+            employee = uow.employees.get(employee_id)
+            agent = uow.agents.get(employee.agent_id) if employee and employee.agent_id else None
+        if agent is None:
+            return None
+        return self.token_cipher.decrypt(agent.endpoint_token)
+
     async def start(self) -> None:
+        self.token_cipher.require()
         with closing(connect(self.settings.db_path)) as conn:
             self.schema_version = apply_migrations(conn)
         dispatcher = Dispatcher(
@@ -151,7 +189,7 @@ class Container:
             self.transport,
             interval_sec=self.settings.dispatch_interval_sec,
             batch=self.settings.dispatch_batch,
-            sweeper=self.approvals.sweep_expired,
+            sweeper=self._sweep,
             on_result=self.messages.record_delivery,
             max_attempts=self.settings.dispatch_max_attempts,
         )
@@ -170,6 +208,14 @@ class Container:
         )
         self._maintenance_task = asyncio.create_task(
             self._prune_loop(), name="mailbus-retention-pruner"
+        )
+
+    def _sweep(self) -> int:
+        self.ops.evaluate(self.clock.now())
+        return (
+            self.approvals.sweep_expired()
+            + self.task_engine.sweep_timeouts()
+            + self.screens.prune_stale(self.clock.now())
         )
 
     async def _reap_loop(self) -> None:

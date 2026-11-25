@@ -20,12 +20,17 @@ public final class ApprovalDtos {
                              @Min(1) Integer timeoutMinutes) {
     }
 
-    public record ResolveIn(@NotNull Boolean approved, String note) {
+    public record ResolveIn(@NotBlank @Pattern(regexp = "approved|rejected") String decision,
+                            String comment) {
     }
 
     public record ApprovalOut(String approvalId, String taskId, String nodeId, String title,
                               String tier, String status, String requesterId, String note,
                               Instant createdAt, Instant expiresAt, String resolvedBy,
                               Instant resolvedAt, String resolutionNote) {
+    }
+
+    public record ApprovalListOut(java.util.List<ApprovalOut> items, int total, int limit,
+                                  int offset) {
     }
 }

@@ -1,5 +1,7 @@
 # Migration guide (Ports & Adapters deep cleanup)
 
+> **历史文档（2026-11-25 标注）**：本文记录 2026-08 的 `lib/` 包重命名，与当前 SQLite 迁移无关。当前迁移基线见 [design/migration-review.md](../design/migration-review.md)。
+
 This document summarizes the package rename/move from the pre-cleanup layout to the current tree.
 
 ## Package map

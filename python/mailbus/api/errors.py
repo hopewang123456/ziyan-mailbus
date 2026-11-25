@@ -14,19 +14,25 @@ from mailbus.core.shared.errors import (
     InvalidStateError,
     InvalidTransitionError,
     NotFoundError,
+    NotImplementedFeatureError,
     PermissionDeniedError,
     RateLimitedError,
+    ResourceGoneError,
+    UnprocessableError,
 )
 
 _STATUS_BY_ERROR: dict[type[DomainError], int] = {
     AuthenticationError: 401,
     NotFoundError: 404,
     PermissionDeniedError: 403,
+    ResourceGoneError: 410,
+    UnprocessableError: 422,
     InvalidTransitionError: 409,
     InvalidStateError: 409,
     IdempotencyConflictError: 409,
     CapacityError: 503,
     RateLimitedError: 429,
+    NotImplementedFeatureError: 501,
 }
 
 # 领域错误码 → HTTP 状态：需要大写契约码的场景（api 不能 import 具体上下文）
@@ -39,7 +45,13 @@ _STATUS_BY_CODE: dict[str, int] = {
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def _domain_error(_: Request, exc: DomainError) -> JSONResponse:
-        return _envelope(exc.code, exc.message_zh, _status_of(exc))
+        return _envelope(
+            exc.code,
+            exc.message_zh,
+            _status_of(exc),
+            getattr(exc, "issues", None),
+            getattr(exc, "revision", None),
+        )
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
@@ -57,8 +69,20 @@ def _status_of(exc: DomainError) -> int:
     return 400
 
 
-def _envelope(code: str, message_zh: str, status: int) -> JSONResponse:
-    return JSONResponse(
-        status_code=status,
-        content={"error": code, "error_code": code, "message_zh": message_zh},
-    )
+def _envelope(
+    code: str,
+    message_zh: str,
+    status: int,
+    issues: tuple[dict[str, object], ...] | list[dict[str, object]] | None = None,
+    revision: int | None = None,
+) -> JSONResponse:
+    content: dict[str, object] = {
+        "error": code,
+        "error_code": code,
+        "message_zh": message_zh,
+    }
+    if issues:
+        content["errors"] = list(issues)
+    if revision is not None:
+        content["revision"] = revision
+    return JSONResponse(status_code=status, content=content)

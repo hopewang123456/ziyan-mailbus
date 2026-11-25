@@ -8,7 +8,7 @@ from typing import Any, TypeVar
 from fastapi import Request
 
 from mailbus.application.identity.dto import Actor
-from mailbus.core.shared.errors import AuthenticationError
+from mailbus.core.shared.errors import AuthenticationError, NotImplementedFeatureError
 from mailbus.core.shared.values import Capability
 
 # 写路由的两种非能力标记：公开入口 / 仅需登录（由用例内部自行约束）
@@ -27,6 +27,11 @@ def declares(marker: Capability | str) -> Callable[[_F], _F]:
         return func
 
     return decorate
+
+
+def not_implemented() -> None:
+    """B1.5 契约桩：契约已冻结，实现留给 B2–B7。"""
+    raise NotImplementedFeatureError("该契约端点尚未实现")
 
 
 def get_actor(request: Request) -> Actor:

@@ -38,7 +38,7 @@ def test_metrics_manifest_query_rules_and_layout(tmp_path):
         assert points["tasks.active"]["value"] == 0
         assert points["alerts.active"]["value"] == 0
 
-        rules = client.get("/api/metrics/rules", headers=headers).json()["rules"]
+        rules = client.get("/api/metrics/rules", headers=headers).json()["items"]
         ids = {item["id"] for item in rules}
         assert {"tasks_failed_today", "agents_offline"} <= ids
 
@@ -72,9 +72,12 @@ def test_metrics_manifest_query_rules_and_layout(tmp_path):
             json={"fields": {"enabled": True}},
             headers=headers,
         )
+        # /api/alerts 现为 ops_alerts 分页契约；未评估前为空
         alerts = client.get("/api/alerts", headers=headers)
         assert alerts.status_code == 200, alerts.text
-        assert [item["id"] for item in alerts.json()["alerts"]] == ["agents_offline"]
+        assert alerts.json()["items"] == []
+        assert alerts.json()["total"] == 0
+        # 旧指标规则视图仍驱动 alerts.active 指标点
         point = client.get(
             "/api/metrics/query",
             params={"metric": "alerts.active"},
@@ -88,16 +91,12 @@ def test_metrics_writes_require_system_config(tmp_path):
     with _client(tmp_path) as client:
         admin_headers = _headers(_bootstrap(client))
         applied = client.post(
-            "/api/identity/staff", json={"display_name": "小王", "account_type": "human"}
+            "/api/employees/invite", json={"display_name": "小王"}, headers=admin_headers
         )
-        employee_id = applied.json()["employee"]["employee_id"]
-        client.post(
-            f"/api/identity/staff/{employee_id}/review",
-            json={"approved": True},
-            headers=admin_headers,
-        )
+        assert applied.status_code in (200, 201), applied.text
         token = client.post(
-            f"/api/identity/staff/{employee_id}/activate", headers=admin_headers
+            "/api/invites/accept",
+            json={"invite_code": applied.json()["invite_code"]},
         ).json()["token"]
         denied = client.patch(
             "/api/metrics/rules/tasks_failed_today",

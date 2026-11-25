@@ -21,6 +21,12 @@ class EmployeeRepository(Protocol):
 
     def list_all(self) -> list[Employee]: ...
 
+    def active_run_count(self, employee_id: str) -> int:
+        """未终结 run 数量：软删除前的冲突判定。"""
+
+    def soft_delete(self, employee_id: str, actor_id: str, at) -> None:
+        """写 deleted_at/deleted_by；历史任务与审计保留。"""
+
 
 class InviteRepository(Protocol):
     def add(self, invite: Invite) -> None: ...
@@ -28,7 +34,10 @@ class InviteRepository(Protocol):
     def get(self, invite_code: str) -> Invite | None: ...
 
     def consume(self, invite_code: str, employee_id: str, at: datetime) -> bool:
-        """原子消费；返回 False 表示已被消费。"""
+        """原子消费；返回 False 表示已被消费或已撤销。"""
+
+    def revoke(self, invite_code: str, actor_id: str, at: datetime) -> bool:
+        """撤销未消费邀请；返回 False 表示已消费或已撤销。"""
 
 
 class SessionRepository(Protocol):

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Protocol, Self
+from typing import Any, Protocol, Self
 
 from .events import DeliveryResult, InboundEnvelope, OutboxEvent
 
@@ -41,6 +41,18 @@ class OutboxPort(Protocol):
         """最近的出站事件（只读投影，用于操作日志）。"""
 
 
+class AuditPort(Protocol):
+    """审计流水：与业务变更同事务写入。"""
+
+    def record(
+        self,
+        actor_id: str | None,
+        action: str,
+        resource: str | None,
+        detail: dict[str, Any],
+    ) -> None: ...
+
+
 class InboundQueue(Protocol):
     """入站报文队列（file_bus 等本地通道）。"""
 
@@ -49,6 +61,34 @@ class InboundQueue(Protocol):
     def complete(self, name: str) -> None: ...
 
     def fail(self, name: str, error_code: str) -> None: ...
+
+
+class SecretHasherPort(Protocol):
+    """不可逆摘要与常量时间比对；具体算法由适配器实现。"""
+
+    def digest(self, secret: str) -> str: ...
+
+    def verify(self, stored: str | None, secret: str | None) -> bool: ...
+
+
+class RateLimiterPort(Protocol):
+    """滑动窗口限流；本期进程内实现，后续可替换 Redis 适配。"""
+
+    def allow(self, key: str, now: float | None = None) -> bool: ...
+
+
+class StreamGatePort(Protocol):
+    """长连接容量闸门；本期进程内实现，后续可替换分布式计数。"""
+
+    @property
+    def full(self) -> bool: ...
+
+    @property
+    def active(self) -> int: ...
+
+    def acquire(self) -> bool: ...
+
+    def release(self) -> None: ...
 
 
 class UnitOfWork(Protocol):

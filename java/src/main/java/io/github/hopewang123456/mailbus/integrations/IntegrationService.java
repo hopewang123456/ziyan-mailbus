@@ -60,8 +60,8 @@ public class IntegrationService {
         return new IntegrationDtos.PluginActionOut(plugins);
     }
 
-    public Map<String, Object> invoke(Actor actor, String name, String action,
-                                      Map<String, Object> params) {
+    public IntegrationDtos.IntegrationInvokeOut invoke(Actor actor, String name, String action,
+                                                       Map<String, Object> params) {
         Authz.ensureAllowed(actor, Authz.SYSTEM_CONFIG, Authz.Resource.of("integration"));
         IntegrationDtos.IntegrationItemOut entry = CATALOG.stream()
                 .filter(item -> item.name().equals(name)).findFirst()
@@ -72,15 +72,13 @@ public class IntegrationService {
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("ok", false);
-        result.put("name", name);
-        result.put("action", action);
         result.put("error", "not_configured");
         if ("txt2img".equals(action)) {
             result.put("prompt", text(params.get("prompt")));
         } else {
             result.put("detail", "尚未配置外部地址，仅返回探测合同");
         }
-        return result;
+        return new IntegrationDtos.IntegrationInvokeOut(name, action, result);
     }
 
     public IntegrationDtos.EnvGroupsOut envGroups() {
@@ -120,7 +118,7 @@ public class IntegrationService {
 
     public IntegrationDtos.ReloadOut reload(Actor actor) {
         Authz.ensureAllowed(actor, Authz.SYSTEM_CONFIG, Authz.Resource.of("integration"));
-        return new IntegrationDtos.ReloadOut(true, plugins(store.read()));
+        return new IntegrationDtos.ReloadOut(false, plugins(store.read()));
     }
 
     private IntegrationDtos.EnvEntryOut entry(Map<String, Object> values, String key,

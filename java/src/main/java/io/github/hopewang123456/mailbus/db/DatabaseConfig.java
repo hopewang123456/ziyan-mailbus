@@ -20,6 +20,8 @@ public class DatabaseConfig {
         config.setJournalMode(SQLiteConfig.JournalMode.WAL);
         config.enforceForeignKeys(true);
         config.setBusyTimeout(5000);
+        // WAL 下 NORMAL 已能保证崩溃一致性，减少每次提交的 fsync 开销。
+        config.setSynchronous(SQLiteConfig.SynchronousMode.NORMAL);
         SQLiteDataSource dataSource = new SQLiteDataSource(config);
         dataSource.setUrl("jdbc:sqlite:" + properties.dbPath());
         return dataSource;

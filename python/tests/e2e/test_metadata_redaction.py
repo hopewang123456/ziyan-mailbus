@@ -26,19 +26,15 @@ def _bootstrap(client: TestClient) -> str:
 
 def _create_plain_user(client: TestClient, admin: dict[str, str]) -> str:
     invite = client.post(
-        "/api/identity/invites",
-        json={"account_type": "human", "capabilities": []},
-        headers=admin,
-    ).json()
-    applied = client.post(
-        "/api/identity/staff",
-        json={
-            "display_name": "普通员工",
-            "account_type": "human",
-            "invite_code": invite["invite_code"],
-        },
-    ).json()
-    return applied["token"]
+        "/api/employees/invite", json={"display_name": "普通员工"}, headers=admin
+    )
+    assert invite.status_code in (200, 201), invite.text
+    accepted = client.post(
+        "/api/invites/accept",
+        json={"invite_code": invite.json()["invite_code"]},
+    )
+    assert accepted.status_code == 201, accepted.text
+    return accepted.json()["token"]
 
 
 def test_skills_and_agents_metadata_redacted_for_non_privileged(tmp_path):
@@ -57,23 +53,44 @@ def test_skills_and_agents_metadata_redacted_for_non_privileged(tmp_path):
         )
         assert skill.status_code == 201, skill.text
 
-        agent = client.post(
-            "/api/agents",
-            json={"name": "研究员", "endpoint": "http://127.0.0.1:9001"},
+        position = client.post(
+            "/api/positions", json={"name": "Agent 岗"}, headers=admin
+        )
+        assert position.status_code == 201, position.text
+        invite = client.post(
+            "/api/agent-invites",
+            json={
+                "employee_name": "研究员",
+                "position_id": position.json()["position_id"],
+            },
             headers=admin,
         )
+        assert invite.status_code == 201, invite.text
+        agent = client.post(
+            "/api/agents/register",
+            json={
+                "invite_code": invite.json()["invite_code"],
+                "name": "研究员",
+                "endpoint": "http://127.0.0.1:9001",
+            },
+        )
         assert agent.status_code == 201, agent.text
+        approved = client.post(
+            f"/api/agents/{agent.json()['agent_id']}/endpoint/approve",
+            headers=admin,
+        )
+        assert approved.status_code == 200, approved.text
 
         # 管理员可见全部敏感字段
         admin_skill = client.get("/api/skills", headers=admin).json()[0]
         assert admin_skill["source_uri"] == "http://127.0.0.1:9/vault/research"
         assert admin_skill["entry"] == "SKILL.md"
-        admin_agent = client.get("/api/agents", headers=admin).json()[0]
+        admin_agent = client.get("/api/agents", headers=admin).json()["items"][0]
         assert admin_agent["endpoint"] == "http://127.0.0.1:9001"
 
         user = _headers(_create_plain_user(client, admin))
 
-        # 非特权账号：来源路径 / 入口 / 端点均被隐藏
+        # 非特权账号：来源路径 / 入口均被隐藏
         user_skill = client.get("/api/skills", headers=user).json()[0]
         assert user_skill["source_uri"] is None
         assert user_skill["entry"] is None
@@ -86,8 +103,7 @@ def test_skills_and_agents_metadata_redacted_for_non_privileged(tmp_path):
         )
         assert eff.status_code == 403, eff.text
 
-        user_agent = client.get("/api/agents", headers=user).json()[0]
-        assert user_agent["endpoint"] is None
+        # B5 后 Agent 台账仅对 org_manage 开放，非特权账号直接 403
+        assert client.get("/api/agents", headers=user).status_code == 403
         # 非敏感字段仍可见
-        assert user_agent["name"] == "研究员"
         assert user_skill["name"] == "research"

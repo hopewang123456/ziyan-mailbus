@@ -29,14 +29,28 @@ from mailbus.adapters.persistence.sqlite.metrics_repo import (
     SqliteMetricLayoutRepository,
     SqliteMetricRuleRepository,
 )
+from mailbus.adapters.persistence.sqlite.metrics_report_repo import (
+    SqliteMetricReportRepository,
+)
+from mailbus.adapters.persistence.sqlite.ops_repo import SqliteOpsRepository
 from mailbus.adapters.persistence.sqlite.org_repo import (
     SqlitePositionRepository,
+    SqliteRoleRepository,
     SqliteSeatRepository,
     SqliteTeamRepository,
 )
 from mailbus.adapters.persistence.sqlite.skills_repo import (
     SqliteSkillBindingRepository,
     SqliteSkillPackageRepository,
+)
+from mailbus.adapters.persistence.sqlite.task_repo import (
+    SqliteTaskArtifactRepository,
+    SqliteTaskEscalationRepository,
+    SqliteTaskRunRepository,
+    SqliteTaskVariableRepository,
+)
+from mailbus.adapters.persistence.sqlite.workflow_graph_repo import (
+    SqliteWorkflowGraphRepository,
 )
 from mailbus.adapters.persistence.sqlite.workflow_repo import (
     SqliteTaskRepository,
@@ -138,6 +152,33 @@ class SqliteOutbox:
         ]
 
 
+class SqliteAuditLog:
+    """审计流水写入；与业务变更同连接、同事务。"""
+
+    def __init__(self, conn: sqlite3.Connection, clock: Clock) -> None:
+        self._conn = conn
+        self._clock = clock
+
+    def record(
+        self,
+        actor_id: str | None,
+        action: str,
+        resource: str | None,
+        detail: dict[str, object],
+    ) -> None:
+        self._conn.execute(
+            "INSERT INTO ops_audit_log (actor_id, action, resource, detail, created_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            (
+                actor_id,
+                action,
+                resource,
+                json.dumps(detail, ensure_ascii=False),
+                _to_epoch(self._clock.now()),
+            ),
+        )
+
+
 class SqliteUnitOfWork:
     def __init__(self, connect: Callable[[], sqlite3.Connection], clock: Clock) -> None:
         self._connect = connect
@@ -150,11 +191,18 @@ class SqliteUnitOfWork:
         self.sessions: SqliteSessionRepository
         self.teams: SqliteTeamRepository
         self.positions: SqlitePositionRepository
+        self.roles: SqliteRoleRepository
         self.seats: SqliteSeatRepository
         self.bootstrap: SqliteBootstrapRepository
         self.definitions: SqliteWorkflowDefinitionRepository
         self.versions: SqliteWorkflowVersionRepository
+        self.graphs: SqliteWorkflowGraphRepository
+        self.audit: SqliteAuditLog
         self.tasks: SqliteTaskRepository
+        self.runs: SqliteTaskRunRepository
+        self.artifacts: SqliteTaskArtifactRepository
+        self.escalations: SqliteTaskEscalationRepository
+        self.variables: SqliteTaskVariableRepository
         self.approvals: SqliteApprovalRepository
         self.messages: SqliteMessageRepository
         self.agents: SqliteAgentRepository
@@ -162,6 +210,8 @@ class SqliteUnitOfWork:
         self.bindings: SqliteSkillBindingRepository
         self.metric_rules: SqliteMetricRuleRepository
         self.metric_layout: SqliteMetricLayoutRepository
+        self.reports: SqliteMetricReportRepository
+        self.ops: SqliteOpsRepository
         self.screens: SqliteScreenRepository
         self.pairs: SqlitePairRepository
 
@@ -179,11 +229,18 @@ class SqliteUnitOfWork:
         self.sessions = SqliteSessionRepository(self._conn, self._clock)
         self.teams = SqliteTeamRepository(self._conn, self._clock)
         self.positions = SqlitePositionRepository(self._conn, self._clock)
+        self.roles = SqliteRoleRepository(self._conn, self._clock)
         self.seats = SqliteSeatRepository(self._conn, self._clock)
         self.bootstrap = SqliteBootstrapRepository(self._conn, self._clock)
         self.definitions = SqliteWorkflowDefinitionRepository(self._conn, self._clock)
         self.versions = SqliteWorkflowVersionRepository(self._conn, self._clock)
+        self.graphs = SqliteWorkflowGraphRepository(self._conn)
+        self.audit = SqliteAuditLog(self._conn, self._clock)
         self.tasks = SqliteTaskRepository(self._conn, self._clock)
+        self.runs = SqliteTaskRunRepository(self._conn, self._clock)
+        self.artifacts = SqliteTaskArtifactRepository(self._conn, self._clock)
+        self.escalations = SqliteTaskEscalationRepository(self._conn, self._clock)
+        self.variables = SqliteTaskVariableRepository(self._conn, self._clock)
         self.approvals = SqliteApprovalRepository(self._conn, self._clock)
         self.messages = SqliteMessageRepository(self._conn, self._clock)
         self.agents = SqliteAgentRepository(self._conn, self._clock)
@@ -191,6 +248,8 @@ class SqliteUnitOfWork:
         self.bindings = SqliteSkillBindingRepository(self._conn, self._clock)
         self.metric_rules = SqliteMetricRuleRepository(self._conn, self._clock)
         self.metric_layout = SqliteMetricLayoutRepository(self._conn, self._clock)
+        self.reports = SqliteMetricReportRepository(self._conn, self._clock)
+        self.ops = SqliteOpsRepository(self._conn, self._clock)
         self.screens = SqliteScreenRepository(self._conn)
         self.pairs = SqlitePairRepository(self._conn)
         self._conn.execute("BEGIN IMMEDIATE")

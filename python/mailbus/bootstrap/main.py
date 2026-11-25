@@ -26,7 +26,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = build_app(lifespan=lifespan, web_dist=container.settings.web_dist)
     app.add_middleware(
-        BodySizeLimitMiddleware, max_bytes=container.settings.max_body_bytes
+        BodySizeLimitMiddleware, max_bytes=container.settings.max_body_bytes,
+        multipart_bytes=container.settings.max_upload_bytes,
     )
     app.state.container = container
     return app

@@ -26,19 +26,15 @@ def _bootstrap(client: TestClient) -> str:
 
 def _plain_token(client: TestClient, admin: dict[str, str]) -> str:
     invite = client.post(
-        "/api/identity/invites",
-        json={"account_type": "human", "capabilities": []},
-        headers=admin,
-    ).json()
-    applied = client.post(
-        "/api/identity/staff",
-        json={
-            "display_name": "普通员工",
-            "account_type": "human",
-            "invite_code": invite["invite_code"],
-        },
-    ).json()
-    return applied["token"]
+        "/api/employees/invite", json={"display_name": "普通员工"}, headers=admin
+    )
+    assert invite.status_code in (200, 201), invite.text
+    accepted = client.post(
+        "/api/invites/accept",
+        json={"invite_code": invite.json()["invite_code"]},
+    )
+    assert accepted.status_code == 201, accepted.text
+    return accepted.json()["token"]
 
 
 def test_alerts_hidden_for_non_privileged(tmp_path):
@@ -48,8 +44,8 @@ def test_alerts_hidden_for_non_privileged(tmp_path):
 
         assert client.get("/api/alerts", headers=admin).status_code == 200
         body = client.get("/api/alerts", headers=user)
-        assert body.status_code == 200, body.text
-        assert body.json()["alerts"] == []
+        # B7 起告警需要 log_read 或 console_admin，普通员工 403
+        assert body.status_code == 403, body.text
 
 
 def test_effective_skills_restricted_to_self(tmp_path):

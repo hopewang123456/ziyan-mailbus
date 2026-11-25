@@ -26,6 +26,9 @@ class MessageRepository(Protocol):
         *,
         viewer_id: str | None = None,
         agent: str | None = None,
+        employee_id: str | None = None,
+        channel: str | None = None,
+        kind: str | None = None,
         status: str | None = None,
         since: datetime | None = None,
         pair_id: str | None = None,
@@ -34,6 +37,20 @@ class MessageRepository(Protocol):
         offset: int = 0,
     ) -> list[tuple[Message, str]]:
         """按条件检索，返回 (消息, 最近投递状态)；viewer_id=None 表示不限可见范围。"""
+
+    def count_search(
+        self,
+        *,
+        viewer_id: str | None = None,
+        agent: str | None = None,
+        employee_id: str | None = None,
+        channel: str | None = None,
+        kind: str | None = None,
+        status: str | None = None,
+        since: datetime | None = None,
+        pair_id: str | None = None,
+        collab_only: bool = False,
+    ) -> int: ...
 
     def count(self) -> int: ...
 

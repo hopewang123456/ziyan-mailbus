@@ -42,6 +42,26 @@ def scope_is_within(actor_scope: DataScope, target_scope: DataScope) -> bool:
     return _SCOPE_RANK[target_scope] <= _SCOPE_RANK[actor_scope]
 
 
+def ensure_grantable(
+    actor_caps: frozenset[Capability],
+    actor_scope: DataScope,
+    requested: frozenset[Capability],
+    target_scope: DataScope,
+) -> None:
+    """邀请/授权上界：权限子集 + 范围不越级；console_admin/*/global 仅超管可授。"""
+    super_admin = Capability.ALL in actor_caps
+    if not can_grant_capabilities(actor_caps, requested):
+        raise PermissionDeniedError("不能授予超出自身范围的权限")
+    if not super_admin and (
+        Capability.CONSOLE_ADMIN in requested or Capability.ALL in requested
+    ):
+        raise PermissionDeniedError("console_admin 与全量权限仅超级管理员可授予")
+    if target_scope is DataScope.GLOBAL and not super_admin:
+        raise PermissionDeniedError("global 数据范围仅超级管理员可授予")
+    if not scope_is_within(actor_scope, target_scope):
+        raise PermissionDeniedError("不能授予超出自身范围的数据可见范围")
+
+
 def can_read_sensitive(actor_caps: frozenset[Capability]) -> bool:
     """是否可见技能来源路径 / Agent 端点等敏感元数据：仅系统配置或全局超管。"""
     return Capability.ALL in actor_caps or Capability.SYSTEM_CONFIG in actor_caps

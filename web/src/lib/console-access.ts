@@ -1,97 +1,156 @@
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { api, getToken } from "./api";
+import {
+  can as checkPermission,
+  canAny as checkAnyPermission,
+  type DataScope,
+  type Permission,
+} from "./permissions";
 
 export type ConsoleAccessState =
   | "loading"
   | "setup"
   | "unauthenticated"
   | "unavailable"
-  | "denied"
   | "allowed";
 
 export interface ConsoleAccess {
   state: ConsoleAccessState;
-  /** 超级管理员（capabilities 含 "*"）：可进设置向导、开关端点与管理者。 */
+  /** `permissions` 含 `*` 或 `console_admin`：可进设置向导、开关端点与管理者。 */
   superAdmin: boolean;
-  capabilities: string[];
+  permissions: string[];
+  dataScope: DataScope;
   employeeId?: string;
+  displayName?: string;
+  can: (permission: Permission) => boolean;
+  canAny: (permissions: Permission[]) => boolean;
   retry: () => void;
 }
 
-type AccessState = Omit<ConsoleAccess, "retry">;
+type Snapshot = Omit<ConsoleAccess, "can" | "canAny" | "retry">;
 type BootstrapStatus = { steps?: Array<{ step: string; done: boolean }> };
+
+const initial: Snapshot = {
+  state: "loading",
+  superAdmin: false,
+  permissions: [],
+  dataScope: "self",
+};
 
 /** 直连失败为 0；开发代理在上游断连时可能返回 5xx。 */
 export function isServiceUnavailable(status: number): boolean {
   return status === 0 || status >= 500;
 }
 
-const state = (
+function derive(
   value: ConsoleAccessState,
-  capabilities: string[] = [],
+  permissions: string[] = [],
   employeeId?: string,
-): AccessState => ({
-  state: value,
-  superAdmin: capabilities.includes("*"),
-  capabilities,
-  employeeId,
-});
-
-/** 管理端可见性：首装、未登录、无权限和服务不可用分别呈现。 */
-export function useConsoleAccess(): ConsoleAccess {
-  const [access, setAccess] = useState<AccessState>(state("loading"));
-  const [revision, setRevision] = useState(0);
-
-  useEffect(() => {
-    let alive = true;
-    let sequence = 0;
-    const check = async () => {
-      const current = ++sequence;
-      setAccess(state("loading"));
-      if (!getToken()) {
-        const bootstrap = await api<BootstrapStatus>("/api/identity/bootstrap");
-        if (!alive || current !== sequence) return;
-        if (!bootstrap.ok) {
-          setAccess(state(isServiceUnavailable(bootstrap.status) ? "unavailable" : "unauthenticated"));
-          return;
-        }
-        const superAdminDone = bootstrap.data.steps?.some(
-          (step) => step.step === "super_admin" && step.done,
-        );
-        setAccess(state(superAdminDone ? "unauthenticated" : "setup"));
-        return;
-      }
-
-      const result = await api<{ employee_id?: string; capabilities?: string[] }>("/api/identity/me");
-      if (!alive || current !== sequence) return;
-      if (!result.ok) {
-        const next = isServiceUnavailable(result.status)
-          ? "unavailable"
-          : result.status === 401
-            ? "unauthenticated"
-            : "denied";
-        setAccess(state(next));
-        return;
-      }
-      const capabilities = result.data.capabilities ?? [];
-      const allowed = capabilities.includes("*") || capabilities.includes("console_admin");
-      setAccess(state(allowed ? "allowed" : "denied", capabilities, result.data.employee_id));
-    };
-    void check();
-    const onAuthChange = () => void check();
-    window.addEventListener("mailbus:auth-ok", onAuthChange);
-    window.addEventListener("mailbus:auth-required", onAuthChange);
-    return () => {
-      alive = false;
-      window.removeEventListener("mailbus:auth-ok", onAuthChange);
-      window.removeEventListener("mailbus:auth-required", onAuthChange);
-    };
-  }, [revision]);
-
-  return { ...access, retry: () => setRevision((value) => value + 1) };
+  displayName?: string,
+  dataScope: DataScope = "self",
+): Snapshot {
+  return {
+    state: value,
+    superAdmin: permissions.includes("*") || permissions.includes("console_admin"),
+    permissions,
+    dataScope,
+    employeeId,
+    displayName,
+  };
 }
 
-/** 保持当前登录员工在线：每 60 秒上报心跳；大屏常驻时同样需要。 */
+function parseScope(value: unknown): DataScope {
+  return value === "team" || value === "global" ? value : "self";
+}
+
+// 单一身份快照：多个 useConsoleAccess() 共享同一次请求，避免每挂载一次就打 /me。
+let snapshot: Snapshot = initial;
+const listeners = new Set<() => void>();
+let refreshInFlight: Promise<void> | null = null;
+let listening = false;
+
+function publish(next: Snapshot): void {
+  snapshot = next;
+  for (const listener of listeners) listener();
+}
+
+async function check(): Promise<void> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    publish(derive("loading"));
+    if (!getToken()) {
+      const bootstrap = await api<BootstrapStatus>("/api/identity/bootstrap");
+      if (!bootstrap.ok) {
+        publish(derive(isServiceUnavailable(bootstrap.status) ? "unavailable" : "unauthenticated"));
+        return;
+      }
+      const superAdminDone = bootstrap.data.steps?.some(
+        (step) => step.step === "super_admin" && step.done,
+      );
+      publish(derive(superAdminDone ? "unauthenticated" : "setup"));
+      return;
+    }
+
+    const result = await api<{
+      employee_id?: string;
+      display_name?: string;
+      permissions?: string[];
+      data_scope?: string;
+    }>("/api/identity/me");
+    if (!result.ok) {
+      publish(derive(isServiceUnavailable(result.status) ? "unavailable" : "unauthenticated"));
+      return;
+    }
+    const permissions = Array.isArray(result.data.permissions) ? result.data.permissions : [];
+    // 所有有效登录员工均可进入控制台；页面级权限由 can()/RequirePermission 判断。
+    publish(
+      derive(
+        "allowed",
+        permissions,
+        result.data.employee_id,
+        result.data.display_name,
+        parseScope(result.data.data_scope),
+      ),
+    );
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+function ensureListening(): void {
+  if (listening || typeof window === "undefined") return;
+  listening = true;
+  const onAuthChange = () => void check();
+  window.addEventListener("mailbus:auth-ok", onAuthChange);
+  window.addEventListener("mailbus:auth-required", onAuthChange);
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  ensureListening();
+  if (snapshot.state === "loading" && !refreshInFlight) void check();
+  return () => listeners.delete(listener);
+}
+
+function getSnapshot(): Snapshot {
+  return snapshot;
+}
+
+export function useConsoleAccess(): ConsoleAccess {
+  const value = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return {
+    ...value,
+    can: (permission) => checkPermission(value.permissions, permission),
+    canAny: (permissions) => checkAnyPermission(value.permissions, permissions),
+    retry: () => void check(),
+  };
+}
+
+/**
+ * 保持当前登录员工在线：每 60 秒上报心跳；大屏常驻时同样需要。
+ * 路径仍为 Phase 1 员工心跳，等 B1.5 契约桩冻结后随 `permissions` 重命名一并切换。
+ */
 export function useStaffHeartbeat(employeeId?: string, enabled = true): void {
   useEffect(() => {
     if (!enabled || !getToken()) return;

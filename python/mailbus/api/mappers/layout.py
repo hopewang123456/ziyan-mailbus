@@ -130,7 +130,6 @@ def _public_seat(view: LayoutSeatView) -> PublicLayoutSeatOut:
         else PublicSeatAgentOut(
             display_name=agent.display_name,
             position=agent.position,
-            team=agent.team,
             status=agent.status,
             task=agent.task,
             agent_name=agent.agent_name,

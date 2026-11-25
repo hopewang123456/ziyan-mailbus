@@ -30,13 +30,44 @@ class AdvanceOutcome(str, Enum):
 
 
 class TaskState(str, Enum):
-    DRAFT = "draft"
-    QUEUED = "queued"
+    """任务聚合态；draft/queued 仅为旧行兼容，新任务不再产生。"""
+
+    PENDING = "pending"
     RUNNING = "running"
     BLOCKED = "blocked"
     DONE = "done"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    DRAFT = "draft"
+    QUEUED = "queued"
+
+
+class RunState(str, Enum):
+    """节点执行实例状态；waiting_human 表示共享人工待办。"""
+
+    PENDING = "pending"
+    DISPATCHED = "dispatched"
+    RUNNING = "running"
+    WAITING_HUMAN = "waiting_human"
+    DONE = "done"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+
+class TerminationReason(str, Enum):
+    """任务终止原因（task_tasks.termination_reason）。"""
+
+    MANUAL = "manual"
+    NO_MATCHING_BRANCH = "no_matching_branch"
+    AUTO_TERMINATED = "auto_terminated"
+    APPROVAL_REJECTED = "approval_rejected"
+
+
+class EscalationReason(str, Enum):
+    APPROVAL_TIMEOUT = "approval_timeout"
+    WORK_TIMEOUT = "work_timeout"
+    LOOP_EXCEEDED = "loop_exceeded"
+    RUN_FAILED = "run_failed"
 
 
 class NodeState(str, Enum):
@@ -50,6 +81,7 @@ class NodeState(str, Enum):
 
 
 TASK_STATE_TAGS: dict[TaskState, SemanticTag] = {
+    TaskState.PENDING: SemanticTag.START,
     TaskState.DRAFT: SemanticTag.START,
     TaskState.QUEUED: SemanticTag.START,
     TaskState.RUNNING: SemanticTag.ACTIVE,
@@ -57,6 +89,16 @@ TASK_STATE_TAGS: dict[TaskState, SemanticTag] = {
     TaskState.DONE: SemanticTag.SUCCESS,
     TaskState.FAILED: SemanticTag.FAILURE,
     TaskState.CANCELLED: SemanticTag.CANCELLED,
+}
+
+RUN_STATE_TAGS: dict[RunState, SemanticTag] = {
+    RunState.PENDING: SemanticTag.START,
+    RunState.DISPATCHED: SemanticTag.ACTIVE,
+    RunState.RUNNING: SemanticTag.ACTIVE,
+    RunState.WAITING_HUMAN: SemanticTag.BLOCKED,
+    RunState.DONE: SemanticTag.SUCCESS,
+    RunState.FAILED: SemanticTag.FAILURE,
+    RunState.SKIPPED: SemanticTag.CANCELLED,
 }
 
 NODE_STATE_TAGS: dict[NodeState, SemanticTag] = {
@@ -84,9 +126,38 @@ TERMINAL_TASK_STATES: frozenset[TaskState] = frozenset(
 
 # 「手上有业务」：已派发、执行中、阻塞都算忙，布局与概览共用同一口径。
 BUSY_TASK_STATES: frozenset[TaskState] = frozenset(
-    {TaskState.QUEUED, TaskState.RUNNING, TaskState.BLOCKED}
+    {
+        TaskState.PENDING,
+        TaskState.QUEUED,
+        TaskState.RUNNING,
+        TaskState.BLOCKED,
+    }
 )
 
 TERMINAL_NODE_STATES: frozenset[NodeState] = frozenset(
     {NodeState.DONE, NodeState.FAILED, NodeState.SKIPPED}
 )
+
+TERMINAL_RUN_STATES: frozenset[RunState] = frozenset(
+    {RunState.DONE, RunState.FAILED, RunState.SKIPPED}
+)
+
+OPEN_RUN_STATES: frozenset[RunState] = frozenset(
+    {
+        RunState.PENDING,
+        RunState.DISPATCHED,
+        RunState.RUNNING,
+        RunState.WAITING_HUMAN,
+    }
+)
+
+# 节点类型中无需人工/AI 执行的自动节点。
+AUTOMATIC_NODE_TYPES: frozenset[str] = frozenset({"start", "condition"})
+
+DEFAULT_WORK_TIMEOUT_SECONDS = 72 * 3600
+DEFAULT_APPROVAL_TIMEOUT_MINUTES = 24 * 60
+DEFAULT_FANOUT_WAIT_SECONDS = 600
+
+# 一级升级后仍无人处理，72 小时自动终止任务（设计 10.17）。
+ESCALATION_TERMINATE_SECONDS = 72 * 3600
+
