@@ -9,10 +9,13 @@ import json
 from dataclasses import replace
 from datetime import timedelta
 
+from mailbus.application.events import enqueue_events
 from mailbus.application.task.conditions import evaluate, parse_result
 from mailbus.application.task.fanout import FanoutMixin
 from mailbus.core.approval import rules as approval_rules
 from mailbus.core.approval.values import ApprovalStatus, ApprovalTier
+from mailbus.core.identity.values import AccountType
+from mailbus.core.shared.events import DomainEvent
 from mailbus.core.task import GraphIndex
 from mailbus.core.workflow.models import Task, TaskEscalation, TaskNode, TaskRun
 from mailbus.core.workflow.values import (
@@ -72,6 +75,23 @@ class Flow(FanoutMixin):
         )
         self.uow.runs.add(run)
         self._save_node(replace(node, current_run_id=run.run_id))
+        owner = self.uow.employees.get(owner_id)
+        if owner is not None and owner.account_type is AccountType.AGENT:
+            enqueue_events(self.uow.outbox, [DomainEvent(
+                kind="task.assigned",
+                payload={
+                    "task_id": self.task.task_id,
+                    "node_id": FREE_NODE_ID,
+                    "node_name": self.task.title,
+                    "run_id": run.run_id,
+                    "attempt_no": run.attempt_no,
+                    "fanout_slot": 0,
+                    "title": self.task.title,
+                    "recipient_id": owner_id,
+                    "channel": "a2a",
+                    "at": now.isoformat(),
+                },
+            )], self.ids, now)
         return run
 
     # ---- 派发 ----

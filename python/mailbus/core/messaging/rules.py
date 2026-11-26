@@ -49,6 +49,8 @@ def compose(
             "recipient_id": message.recipient_id,
             "channel": channel,
             "pair_id": message.pair_id,
+            "body": message.body,
+            "kind": label,
             "at": now.isoformat(),
         },
     )

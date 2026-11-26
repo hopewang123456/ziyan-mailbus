@@ -150,6 +150,8 @@ class A2AService:
             SendMessageCommand(
                 recipient_id=msg.payload.get("recipient_id"),
                 body=msg.body or msg.output or "",
+                kind=str(msg.payload.get("kind") or "note"),
+                channel=str(msg.payload.get("channel") or "a2a"),
             ),
         )
         return {

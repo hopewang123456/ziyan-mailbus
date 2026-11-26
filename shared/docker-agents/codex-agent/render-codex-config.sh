@@ -1,6 +1,5 @@
 #!/bin/bash
-# 生成容器内 ~/.codex/config.toml — 委托 Python lib.adapters.container.codex_config
+# 生成容器内 ~/.codex/config.toml
+# 旧栈（python/lib）已于 B7 移除，此处调用新栈 python/tools 下的等价实现。
 set -euo pipefail
-ROOT="${MAILBUS_ROOT:-/mailbus}"
-cd "$ROOT"
-exec python3 -m lib.adapters.container.codex_config
+exec python3 "${MAILBUS_PY_ROOT:-/mailbus/python}/tools/codex_config_render.py"

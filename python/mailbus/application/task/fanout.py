@@ -6,8 +6,10 @@ import json
 from dataclasses import replace
 from datetime import timedelta
 
+from mailbus.application.events import enqueue_events
 from mailbus.application.task import staff
 from mailbus.core.identity.values import AccountType
+from mailbus.core.shared.events import DomainEvent
 from mailbus.core.workflow.models import TaskRun
 from mailbus.core.workflow.values import (
     NodeState,
@@ -50,6 +52,7 @@ class FanoutMixin:
         group = f"{self.task.task_id}:{node.node_id}:{attempt}" if fanout > 1 else None
         slots = range(1, len(workers) + 1) if fanout > 1 else [0]
         latest = None
+        assigned: list[TaskRun] = []
         for slot, employee in zip(slots, workers):
             run = TaskRun(
                 run_id=self.ids.new("run"), task_id=self.task.task_id,
@@ -60,10 +63,35 @@ class FanoutMixin:
                 deadline_at=now + timedelta(seconds=self._timeout(wf)),
             )
             self.uow.runs.add(run)
+            assigned.append(run)
             latest = run
         self._save_node(replace(node, state=NodeState.RUNNING,
                                 current_run_id=latest.run_id if latest else None))
         self._mark_running()
+        self._announce_assignment(node, assigned, now)
+
+    def _announce_assignment(self, node, runs: list[TaskRun], now) -> None:
+        events = [
+            DomainEvent(
+                kind="task.assigned",
+                payload={
+                    "task_id": self.task.task_id,
+                    "node_id": node.node_id,
+                    "node_name": node.name,
+                    "run_id": run.run_id,
+                    "attempt_no": run.attempt_no,
+                    "fanout_slot": run.fanout_slot,
+                    "title": self.task.title,
+                    "recipient_id": run.assigned_employee_id,
+                    "channel": "a2a",
+                    "at": now.isoformat(),
+                },
+            )
+            for run in runs
+            if run.assigned_employee_id
+        ]
+        if events:
+            enqueue_events(self.uow.outbox, events, self.ids, now)
 
     def _retry_slot(self, run: TaskRun, wf) -> None:
         """扇出分片独立重试：沿用原执行人与槽位，仅递增 attempt。"""

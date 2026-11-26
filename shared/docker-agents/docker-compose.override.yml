@@ -2,6 +2,35 @@
 # Regenerated from absolute-path style; keep .env as SoT for host paths.
 
 services:
+  # 本机 mailbus 由 WSL 宿主进程提供（9814），容器内旧 mailbus 服务不启动。
+  # 给心跳 sidecar 一个可达别名，避免依赖未运行的 compose 服务名。
+  agent-heartbeat:
+    extra_hosts:
+      - "mailbus:host-gateway"
+  # Hermes A2A 桥：把 mailbus 事件文档转成 A2A JSON-RPC，并回传结果/心跳。
+  hermes-a2a-bridge:
+    image: docker-agents-agent-heartbeat
+    pull_policy: never
+    entrypoint: ["python", "-u", "/app/hermes_a2a_bridge.py"]
+    ports:
+      - "9910:9910"
+    networks:
+      - mailbus-net
+    volumes:
+      - ../../python/tools/hermes_a2a_bridge.py:/app/hermes_a2a_bridge.py:ro
+      - ../../data/hermes-a2a-agents.json:/tokens/agents.json:ro
+    environment:
+      MAILBUS_API_URL: http://172.28.0.1:9814
+      MAILBUS_AGENTS_FILE: /tokens/agents.json
+      HERMES_A2A_BASE: http://hermes:9900
+      HERMES_A2A_TOKEN: ${A2A_BEARER_TOKEN:-}
+      BRIDGE_ENDPOINT: http://172.28.0.1:9910/
+      BRIDGE_PORT: "9910"
+      HEARTBEAT_INTERVAL_SEC: "60"
+      TZ: Asia/Shanghai
+    depends_on:
+      - hermes
+    restart: unless-stopped
   hermes:
     volumes:
       - ${MAILBUS_HOST_ROOT}/data:/mailbus/store
@@ -15,18 +44,27 @@ services:
       - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
       - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
       - ${OPENCLAW_WORKSPACE}:/workspace:rw
+      # 旧栈 python/lib 已移除：profile 初始化改用 python/tools 新实现，热挂免 rebuild
+      - ../../python/tools:/mailbus/python/tools:ro
+      - ./openclaw-agent/init-openclaw-profiles.sh:/init-openclaw-profiles.sh:ro
   codex-web:
     volumes:
       - ${MAILBUS_HOST_ROOT}/data:/mailbus/store
       - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
       - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
       - ${CODEX_WORKSPACE}:/workspace/codex:ro
+      # 旧栈 python/lib 已移除：config.toml 渲染改用 python/tools 新实现，热挂免 rebuild
+      - ../../python/tools:/mailbus/python/tools:ro
+      - ./codex-agent/render-codex-config.sh:/usr/local/bin/render-codex-config.sh:ro
   codex-review:
     volumes:
       - ${MAILBUS_HOST_ROOT}/data:/mailbus/store
       - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
       - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
       - ${CODEX_REVIEW_WORKSPACE}:/workspace/codex-review:ro
+      # 旧栈 python/lib 已移除：config.toml 渲染改用 python/tools 新实现，热挂免 rebuild
+      - ../../python/tools:/mailbus/python/tools:ro
+      - ./codex-agent/render-codex-config.sh:/usr/local/bin/render-codex-config.sh:ro
   opencode:
     volumes:
       - ${MAILBUS_HOST_ROOT}/data:/mailbus/store
