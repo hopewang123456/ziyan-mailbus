@@ -121,7 +121,7 @@
 
 ### B0：基线、备份与驱动链
 
-- [x] 备份生产库，`integrity_check` 通过；记录迁移前 schema（本次实际 14）、grants 行数、Agent 数（14）、员工数（6）、大屏数（0）。
+- [x] 备份生产库，`integrity_check` 通过；记录迁移前 schema、权限行数、Agent / 员工 / 大屏规模。
 - [x] 核对 001–036 双端哈希一致（B9 执行时扩展核对到 036，全部一致）。
 - [x] 落地 OpenAPI 导出与 diff 校验脚本；约定字段归属表、契约矩阵、状态机位置。
 - [x] 确认 `MAILBUS_TOKEN_ENCRYPTION_KEY` 注入方式；缺失 fail fast（`container.start()` 调用 `token_cipher.require()`）。
@@ -205,7 +205,7 @@
 - [x] Python：`pick_candidates` 对待审批/被拒/离线/软删除 Agent 不派单；`/api/a2a/messages` 与 `/api/agents/register` 免登录入口，A2A 由 Agent token 自校验。
 - [x] Java 同构：`Agent`/`AgentRepository`/`TokenCipher`/`EndpointGuard`/`AgentService`/`AgentRegistrationService`/`AgentA2AService`/`AgentController`/`A2AController`/`AgentInviteController`；`TaskStaff` 增加 Agent 派单门禁；`AuthFilter` 放行两个公开入口。
 - [x] 门禁：Python `tests/e2e/test_agent_a2a.py` 3 passed、`tests/e2e/test_task_domain.py` 9 passed、`tests/guards` 13 passed；OpenAPI 148 path 与契约矩阵一致；Java `mvn test` 13 passed（含 `agentA2ADomainParity`：注册/密文非明文/SSRF 422/待审批不派单/审批+心跳派单/幂等/409 `stale_run`/轮转/吊销）。
-- [x] 6 个 Agent 回归准备（切换前单独确认）：B8 用生产库副本 `mailbus-20261122-201615.db` 演练，6 个 Agent 心跳全部 201。
+- [x] 既有 Agent 回归准备（切换前单独确认）：B8 用生产库副本演练，Agent 心跳全部 201。
 
 **门禁**：日志/库/界面无明文；待审批不派单；双端一致。
 
@@ -249,44 +249,44 @@
   - Python：`python -m pytest tests/e2e tests/guards tests/integration -q` → 152 passed。
   - Java：`mvn -q -o test` → 20 passed（BackendSmokeTest 15 + AuthzOfflineTest 3 + ContractStubsTest 2）。
   - 迁移测试覆盖：真人邀请/接受、员工软删除、团队/岗位/工位新契约、Agent 注册/审批、任务创建即启动。
-- [x] 生产库副本演练：迁移、完整性、6 个 Agent 心跳与 A2A。
-  - 源库 `data/backups/mailbus-20261122-201615.db`（schema 14，6 个 Agent）；用 SQLite backup API 复制到临时目录后启动应用。
-  - 结果：`schema_version=36`、`integrity_check=ok`、`foreign_key_check=[]`、6 个 Agent token 全部 `enc:` 密文、`collab_screens` 无 `secret` 旧列。
-  - 6 个 Agent 经 `/api/a2a/messages` 心跳全部 201（灵昭/灵瑾/灵犀/灵巡/灵拓/灵账）。
+- [x] 生产库副本演练：迁移、完整性、既有 Agent 心跳与 A2A。
+  - 源库为发布前一致性副本（schema 14，含既有 Agent）；用 SQLite backup API 复制到临时目录后启动应用。
+  - 结果：`schema_version=36`、`integrity_check=ok`、`foreign_key_check=[]`、Agent token 全部 `enc:` 密文、`collab_screens` 无 `secret` 旧列。
+  - 既有 Agent 经 `/api/a2a/messages` 心跳全部 201。
 - [x] 输出发布清单：迁移顺序、环境变量、回滚点。
   - 迁移顺序：`034_final_contract_alignment.sql` → `035_collab_screen_layout.sql` → `036_collab_screen_secret_hash.sql`；Python/Java 同编号同内容，先备份后迁移，停机窗口内执行一次。
   - 环境变量：`MAILBUS_TOKEN_ENCRYPTION_KEY` 必须提供（32 字节 base64/文本），缺失 fail fast；登录入口与 Agent 注册使用的域名/端口按部署环境配置。
   - 回滚点：迁移前完整备份（含 WAL）；034/035 可通过恢复备份回滚；036 不可逆（`secret` → `secret_hash` 明文清空），发布前需公告设备重新登记。
-  - 发布后校验：`/api/health` schema_version=36、`PRAGMA integrity_check`、6 Agent 心跳、公开大屏登记/心跳。
+  - 发布后校验：`/api/health` schema_version=36、`PRAGMA integrity_check`、Agent 心跳、公开大屏登记/心跳。
 - [x] B8 遗留清零：实现 C-014 Agent 解绑与 C-100 任务追迹的 Python/Java 同构；路由层无 501 桩；旧身份集成测试已迁移到 Agent 注册/审批/禁用链路，旧 DTO 与 service 死代码无残留。
 
 ### B9：生产发布与验收（已执行，待用户验收）
 
 目标：在明确维护窗口内完成唯一一次生产切换，使生产库到 schema 36，双端运行同一 OpenAPI 契约，并完成核心链路验收。
 
-- [x] 发布前确认：用户授权执行；本次运行栈为 WSL 内 Python；回滚由用户确认。
-- [x] 发布前确认：`MAILBUS_TOKEN_ENCRYPTION_KEY` 已生成并写入当前 Windows 用户环境变量（仅记录长度 64、指纹 `09A63E425D47`）；后端以 stdin 注入进程环境，不落盘、不进命令行。
-- [x] 补齐 B0 基线：发布前一致性备份 `data/backups/b9-pre-036-20261126-092457/mailbus.db`（schema 14、integrity ok、fk 0、14 Agent / 6 员工 / 0 大屏）；001–036 双端迁移哈希一致。
+- [x] 发布前确认：用户授权执行；本次运行栈为 Python；回滚由用户确认。
+- [x] 发布前确认：`MAILBUS_TOKEN_ENCRYPTION_KEY` 已生成并按约定方式注入运行进程，不落盘、不进命令行；缺失 fail fast。
+- [x] 补齐 B0 基线：发布前完成一致性备份；001–036 双端迁移哈希一致。
 - [x] 发布候选冻结：Python 152 项与 Java 20 项全绿；`export_openapi.py --check` 与契约矩阵 149 个 path+method 一致。
 - [x] 停服并做发布前完整备份；副本试迁移通过后对生产库执行 015–036（034/035/036 已包含），`schema_version=36`、`integrity_check=ok`、`foreign_key_check=[]`。
-- [x] 启动发布候选并完成服务端 smoke：`/api/health` 200（schema 36）、bootstrap completed、OpenAPI 117 paths、`/api/public/layout` 200、未登录 `/api/collab/screens` 401、公开大屏 register/heartbeat/config/SSE/leave 全通过（SSE 200 `text/event-stream`）。
-- [x] 验证 6 个既有 Agent：14 个 Agent 全部签发 token，库内 14/14 为 `enc:` 密文且有 lookup digest、明文 0；灵昭/灵瑾/灵犀/灵巡/灵拓/灵账 A2A 心跳全部 201。
-- [x] 验证 web 只读：登录页 `/console` 正常渲染；`/twin` 3D 大屏正常渲染、无错误覆盖层；Vite 代理 `/api/health` 返回 schema 36。
-- [x] 记录回滚点与结果：036 已执行；回滚需恢复 `b9-pre-036-20261126-092457` 备份并回滚旧包，同时公告设备重新登记。
-- [ ] 用户验收：登录后关键写链路（邀请接受、任务创建/追迹、Agent 解绑/注销）尚未在浏览器内执行；验收后把涉及契约行标为「已验收」。
+- [x] 启动发布候选并完成服务端 smoke：`/api/health` 200（schema 36）、bootstrap completed、OpenAPI 117 paths、`/api/public/layout` 200、未登录 `/api/collab/screens` 401、公开大屏 register/heartbeat/config/SSE/leave 全通过。
+- [x] 验证既有 Agent：全部签发 token，库内均为 `enc:` 密文且有 lookup digest、明文 0；Agent A2A 心跳全部 201。
+- [x] 验证 web 只读：登录页正常渲染；大屏页面正常渲染、无错误覆盖层；前端代理返回 schema 36。
+- [x] 记录回滚点与结果：036 已执行；回滚需恢复发布前备份并回滚旧包，同时公告设备重新登记。
+- [ ] 用户验收：登录后关键写链路验收待完成。
 
 **职责边界（按 2026-11-26 澄清）**
 
-- Mailbus 只负责在自身运行环境内监听并就绪（本次为 `0.0.0.0:9814`），不承诺多平台部署适配。
+- Mailbus 只负责在自身运行环境内监听并就绪，不承诺多平台部署适配。
 - 其它 Agent/平台运行在 Windows、Linux、WSL、Docker 或任意外部环境，如何打通到 Mailbus 由其自行负责：端口映射、防火墙、反向代理、VPN 等均属调用方部署范畴。
 - `MAILBUS_TOKEN_ENCRYPTION_KEY` 只要求以环境变量注入；自启动、密钥托管（systemd、env file、secret manager）由部署方按自身环境选择，不作为 Mailbus 缺陷。
 
 **执行后遗留（不阻塞本次切换，但需跟进）**
 
-1. 本次验收环境中的 Windows `localhost:9814` 转发失效属宿主网络配置；WSL 内与直连 WSL IP 均正常。按上述职责边界，不作为 Mailbus 遗留项，由部署方按需配置对外暴露。
+1. 验收环境中宿主网络转发失效属部署方配置范畴；服务本身在运行环境内正常监听。
 2. 前端 `/twin` 在无 Bearer token 时不发起屏幕登记（`shouldRegister` 依赖 `hasToken`），匿名页面会停留在“实时待连接”；后端公开登记/心跳/SSE 已独立验证通过。该项属于前端计划，与跨环境通信无关。
 
-**门禁**：生产 schema 36、完整性与外键检查通过、6 Agent 心跳通过、服务端与公开大屏 smoke 通过、回滚点可用；用户验收待完成。
+**门禁**：生产 schema 36、完整性与外键检查通过、Agent 心跳通过、服务端与公开大屏 smoke 通过、回滚点可用；用户验收待完成。
 
 ---
 
