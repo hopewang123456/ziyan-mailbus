@@ -121,11 +121,11 @@
 
 ### B0：基线、备份与驱动链
 
-- [ ] 备份生产库，`integrity_check` 通过；记录 schema 33、grants 行数、Agent 数。
-- [ ] 核对 001–033 双端哈希一致。
-- [ ] 落地 OpenAPI 导出与 diff 校验脚本；约定字段归属表、契约矩阵、状态机位置。
-- [ ] 确认 `MAILBUS_TOKEN_ENCRYPTION_KEY` 注入方式；缺失 fail fast。
-- [ ] 建立双端 parity 测试骨架。
+- [x] 备份生产库，`integrity_check` 通过；记录迁移前 schema（本次实际 14）、grants 行数、Agent 数（14）、员工数（6）、大屏数（0）。
+- [x] 核对 001–036 双端哈希一致（B9 执行时扩展核对到 036，全部一致）。
+- [x] 落地 OpenAPI 导出与 diff 校验脚本；约定字段归属表、契约矩阵、状态机位置。
+- [x] 确认 `MAILBUS_TOKEN_ENCRYPTION_KEY` 注入方式；缺失 fail fast（`container.start()` 调用 `token_cipher.require()`）。
+- [x] 建立双端 parity 测试骨架。
 
 **门禁**：驱动链可执行；矩阵/状态机/归属表模板已建；备份可打开。
 
@@ -260,22 +260,33 @@
   - 发布后校验：`/api/health` schema_version=36、`PRAGMA integrity_check`、6 Agent 心跳、公开大屏登记/心跳。
 - [x] B8 遗留清零：实现 C-014 Agent 解绑与 C-100 任务追迹的 Python/Java 同构；路由层无 501 桩；旧身份集成测试已迁移到 Agent 注册/审批/禁用链路，旧 DTO 与 service 死代码无残留。
 
-### B9：生产发布与验收（已定义，待确认后执行）
+### B9：生产发布与验收（已执行，待用户验收）
 
 目标：在明确维护窗口内完成唯一一次生产切换，使生产库到 schema 36，双端运行同一 OpenAPI 契约，并完成核心链路验收。
 
-- [ ] 发布前确认：用户明确维护窗口、实际运行栈（Python/Java）与回滚责任人；未确认前不操作生产库。
-- [ ] 发布前确认：`MAILBUS_TOKEN_ENCRYPTION_KEY` 已安全注入并通过缺失 fail fast；036 设备重新登记公告已发。
-- [ ] 补齐 B0 基线：生产备份含 DB/WAL/SHM 且可恢复；记录当前 schema、grants 行数与 Agent 数；核对 001–036 双端迁移文件哈希一致。
-- [ ] 发布候选冻结：Python 152 项与 Java 20 项全绿；`export_openapi.py --check` 与契约矩阵 149 个 path+method 一致；无未登记差异。
-- [ ] 停服并做发布前完整备份；`integrity_check`/`foreign_key_check` 通过后，依次执行 034 → 035 → 036，每步校验完整性，最终 `schema_version=36`。
-- [ ] 启动发布候选，执行生产 smoke：`/api/health`、登录/邀请接受、任务创建与追迹、Agent 解绑/注销、公开大屏登记/心跳/配置/SSE。
-- [ ] 验证 6 个既有 Agent：token 均为 `enc:` 密文、A2A 心跳 201、在线状态恢复；库内无旧明文 token/secret。
-- [ ] 验证 web 只读与关键写链路无 404/501；保留的 `GET /api/identity/staff` 与员工心跳正常；日志无 token/secret 明文。
-- [ ] 记录回滚点与结果：034/035 阶段失败可停服恢复备份；036 已执行后只能通过“恢复迁移前备份 + 回滚旧包”回退，并公告设备重新登记。
-- [ ] 用户验收后，将本次涉及契约行标为「已验收」，输出实际发布时间、备份位置、校验结果与回滚点。
+- [x] 发布前确认：用户授权执行；本次运行栈为 WSL 内 Python；回滚由用户确认。
+- [x] 发布前确认：`MAILBUS_TOKEN_ENCRYPTION_KEY` 已生成并写入当前 Windows 用户环境变量（仅记录长度 64、指纹 `09A63E425D47`）；后端以 stdin 注入进程环境，不落盘、不进命令行。
+- [x] 补齐 B0 基线：发布前一致性备份 `data/backups/b9-pre-036-20261126-092457/mailbus.db`（schema 14、integrity ok、fk 0、14 Agent / 6 员工 / 0 大屏）；001–036 双端迁移哈希一致。
+- [x] 发布候选冻结：Python 152 项与 Java 20 项全绿；`export_openapi.py --check` 与契约矩阵 149 个 path+method 一致。
+- [x] 停服并做发布前完整备份；副本试迁移通过后对生产库执行 015–036（034/035/036 已包含），`schema_version=36`、`integrity_check=ok`、`foreign_key_check=[]`。
+- [x] 启动发布候选并完成服务端 smoke：`/api/health` 200（schema 36）、bootstrap completed、OpenAPI 117 paths、`/api/public/layout` 200、未登录 `/api/collab/screens` 401、公开大屏 register/heartbeat/config/SSE/leave 全通过（SSE 200 `text/event-stream`）。
+- [x] 验证 6 个既有 Agent：14 个 Agent 全部签发 token，库内 14/14 为 `enc:` 密文且有 lookup digest、明文 0；灵昭/灵瑾/灵犀/灵巡/灵拓/灵账 A2A 心跳全部 201。
+- [x] 验证 web 只读：登录页 `/console` 正常渲染；`/twin` 3D 大屏正常渲染、无错误覆盖层；Vite 代理 `/api/health` 返回 schema 36。
+- [x] 记录回滚点与结果：036 已执行；回滚需恢复 `b9-pre-036-20261126-092457` 备份并回滚旧包，同时公告设备重新登记。
+- [ ] 用户验收：登录后关键写链路（邀请接受、任务创建/追迹、Agent 解绑/注销）尚未在浏览器内执行；验收后把涉及契约行标为「已验收」。
 
-**门禁**：生产 schema 36、完整性与外键检查通过、6 Agent 心跳通过、核心链路 smoke 通过、回滚点可用且经用户验收。036 不可逆，未取得维护窗口与密钥确认不得执行。
+**职责边界（按 2026-11-26 澄清）**
+
+- Mailbus 只负责在自身运行环境内监听并就绪（本次为 `0.0.0.0:9814`），不承诺多平台部署适配。
+- 其它 Agent/平台运行在 Windows、Linux、WSL、Docker 或任意外部环境，如何打通到 Mailbus 由其自行负责：端口映射、防火墙、反向代理、VPN 等均属调用方部署范畴。
+- `MAILBUS_TOKEN_ENCRYPTION_KEY` 只要求以环境变量注入；自启动、密钥托管（systemd、env file、secret manager）由部署方按自身环境选择，不作为 Mailbus 缺陷。
+
+**执行后遗留（不阻塞本次切换，但需跟进）**
+
+1. 本次验收环境中的 Windows `localhost:9814` 转发失效属宿主网络配置；WSL 内与直连 WSL IP 均正常。按上述职责边界，不作为 Mailbus 遗留项，由部署方按需配置对外暴露。
+2. 前端 `/twin` 在无 Bearer token 时不发起屏幕登记（`shouldRegister` 依赖 `hasToken`），匿名页面会停留在“实时待连接”；后端公开登记/心跳/SSE 已独立验证通过。该项属于前端计划，与跨环境通信无关。
+
+**门禁**：生产 schema 36、完整性与外键检查通过、6 Agent 心跳通过、服务端与公开大屏 smoke 通过、回滚点可用；用户验收待完成。
 
 ---
 
