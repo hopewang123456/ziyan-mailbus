@@ -7,6 +7,9 @@ import {
   ConsoleTag,
 } from "../../components/console/ConsoleKit";
 import { ConsolePageState } from "../../components/console/ConsolePageState";
+import type { PageStateKind } from "../../components/console/ConsolePageState";
+import { useEventStream } from "../../lib/events";
+import type { ErrorKind } from "../../lib/api";
 import { ConsoleTabs, useTabParam } from "../../components/console/ConsoleTabs";
 import { ConfirmDialog, Dialog } from "../../components/console/ConsoleDialog";
 import { useTask, useTaskTrace, useApproval } from "../../lib/task/hooks";
@@ -81,6 +84,22 @@ export function ConsoleTaskDetailPage({
   const trace = useTaskTrace(taskId || null);
   const approvalId = searchParams.get("approval_id");
   const approval = useApproval(approvalId);
+
+  // 登录 SSE：task.updated 携带 task_id，命中当前任务时刷新详情（节点、运行与产物）。
+  useEventStream({
+    enabled: Boolean(taskId),
+    path: "/api/stream",
+    auth: true,
+    onEvent: (event) => {
+      if (event.event !== "task.updated") return;
+      try {
+        const payload = JSON.parse(event.data) as { task_id?: string };
+        if (payload.task_id === taskId) detail.refresh();
+      } catch {
+        // 非 JSON 负载直接忽略，等待下一次事件
+      }
+    },
+  });
 
   const task = detail.data;
 
@@ -178,8 +197,7 @@ export function ConsoleTaskDetailPage({
   if (detail.error && !task) {
     return (
       <ConsolePageState
-        kind="error"
-        title="加载失败"
+        kind={pageStateKind(detail.errorKind)}
         description={detail.error}
         action={
           <button type="button" className="hud-btn text-xs" onClick={() => navigate("/console/tasks")}>
@@ -221,6 +239,15 @@ export function ConsoleTaskDetailPage({
       )}
       {flash?.kind === "ok" && (
         <p className="mb-3 text-xs text-mint">{flash.text}</p>
+      )}
+
+      {task && detail.error && (
+        <p
+          role="alert"
+          className="mb-3 rounded border border-amber-signal/50 bg-amber-signal/10 px-3 py-2 text-xs text-amber-signal"
+        >
+          实时数据同步失败：{detail.error}。当前展示的是上次成功加载的快照。
+        </p>
       )}
 
       {approvalId && (
@@ -696,6 +723,14 @@ function mapTaskDetailLocal(_t: unknown) {
     runs: ReturnType<typeof import("../../lib/task/view").mapRun>[];
     nodes: ReturnType<typeof import("../../lib/task/view").mapNode>[];
   };
+}
+
+/** 加载失败 → 统一页面状态：403 / 404 / 服务不可用分别展示，其余回落通用错误。 */
+function pageStateKind(kind: ErrorKind | null): PageStateKind {
+  if (kind === "forbidden") return "forbidden";
+  if (kind === "not_found") return "not-found";
+  if (kind === "unavailable" || kind === "network") return "unavailable";
+  return "error";
 }
 
 function TraceTab({ events, loading, error }: { events: ReturnType<typeof import("../../lib/task/view").mapTraceEvent>[]; loading: boolean; error: string | null }) {

@@ -113,8 +113,8 @@
 | 3 | §3.6 审批卡片：申请内容、变量、历史意见、通过/驳回、或签提示 | 完全没有审批处理 UI | 缺失 |
 | 4 | §3.4 左节点时间线 + 右粘性操作卡，节点可点击切换，显示结果摘要与产物数 | 是节点表格 + Run 表格，无选中交互、无产物数 | 部分 |
 | 5 | §3.4 parallel_join 显示前驱终态与 missing 分片；重跑汇聚仅发起人或超管 | 只有 fanout_group 文本与 rerun-join 按钮，权限挂在 `result_submit`（L391-400） | 缺失 + 权限错配 |
-| 6 | §3.8 详情页订阅 task.updated / artifact.updated | 无订阅，操作后手动 refresh | 缺失 |
-| 7 | §3.9 403 整页无权限、404 任务不存在、服务不可用黄条 | 统一「加载失败」+ 返回列表（L167-180） | 缺失 |
+| 6 | §3.8 详情页订阅 task.updated / artifact.updated | 已修复：详情页订阅登录流 `/api/stream`，按 `task_id` 命中后刷新详情；后端未提供 `artifact.updated`，产物变化由 `task.updated` 携带 | 已修复 |
+| 7 | §3.9 403 整页无权限、404 任务不存在、服务不可用黄条 | 已修复：按 `errorKind` 映射 forbidden / not-found / unavailable；已有数据时降级为黄色提示条 | 已修复 |
 | 8 | §3.7 产物列表与内联预览、24h 签名下载 | 已修复：`TaskDetailOut.artifacts` + `POST /api/tasks/{task_id}/nodes/{node_id}/artifacts`；产物 Tab 列出/下载/上传，结果弹窗可勾选挂载 `artifact_ids` | 已修复 |
 | 9 | §3.4 变量表 task_variables，来源 input/system | 变量 Tab 为占位（L471-485） | 占位（契约缺口） |
 

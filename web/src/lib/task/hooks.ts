@@ -22,7 +22,7 @@ import type {
   SummaryRow,
   ApprovalRow,
 } from "./view";
-import type { ApiResult } from "../api";
+import type { ApiResult, ErrorKind } from "../api";
 
 /**
  * 任务域 hooks：统一 AbortController、竞态丢弃、刷新。
@@ -100,24 +100,30 @@ export function useTask(taskId: string | null) {
   const [data, setData] = useState<TaskDetailRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<ErrorKind | null>(null);
   const [rev, setRev] = useState(0);
 
   useEffect(() => {
-    if (!taskId) { setData(null); setError(null); return; }
+    if (!taskId) { setData(null); setError(null); setErrorKind(null); return; }
     const controller = new AbortController();
     setLoading(true);
     setError(null);
     void apiGetTask(taskId).then((result) => {
       if (controller.signal.aborted) return;
       setLoading(false);
-      if (result.ok) setData(mapTaskDetail(result.data));
-      else setError(result.error ?? "加载失败");
+      if (result.ok) {
+        setData(mapTaskDetail(result.data));
+        setErrorKind(null);
+      } else {
+        setError(result.error ?? "加载失败");
+        setErrorKind(result.kind);
+      }
     });
     return () => controller.abort();
   }, [taskId, rev]);
 
   const refresh = () => setRev((v) => v + 1);
-  return { data, loading, error, refresh };
+  return { data, loading, error, errorKind, refresh };
 }
 
 export function useApproval(approvalId: string | null) {
