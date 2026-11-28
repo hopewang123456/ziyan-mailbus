@@ -68,6 +68,8 @@ logger = logging.getLogger(__name__)
 class Container:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+        # 把配置真正接入核心在线判定（此前 heartbeat_timeout_sec 只作用于巡检）。
+        agent_rules.configure_heartbeat_timeout(settings.heartbeat_timeout_sec)
         self.clock = SystemClock()
         self.ids = UuidGenerator()
         self.token_cipher = TokenCipher.from_env()

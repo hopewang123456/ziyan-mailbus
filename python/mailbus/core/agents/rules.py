@@ -124,7 +124,23 @@ def delete_agent(agent: Agent, now: datetime) -> tuple[DomainEvent, ...]:
 
 
 ROTATION_GRACE = timedelta(hours=24)
-HEARTBEAT_TIMEOUT = timedelta(seconds=180)
+# 设计约定：连续 90 秒无心跳判离线（见 docs/design/agent-onboarding-template.md）。
+HEARTBEAT_TIMEOUT = timedelta(seconds=90)
+_heartbeat_timeout = HEARTBEAT_TIMEOUT
+
+
+def heartbeat_timeout() -> timedelta:
+    """当前生效的心跳超时；装配层可按配置注入，默认对齐设计 90s。"""
+    return _heartbeat_timeout
+
+
+def configure_heartbeat_timeout(seconds: float) -> None:
+    """装配期一次性注入心跳超时（非正值回落默认），避免配置项形同虚设。"""
+    global _heartbeat_timeout
+    value = float(seconds)
+    _heartbeat_timeout = (
+        timedelta(seconds=value) if value > 0 else HEARTBEAT_TIMEOUT
+    )
 
 
 def is_online(agent: Agent, now: datetime) -> bool:
@@ -133,7 +149,7 @@ def is_online(agent: Agent, now: datetime) -> bool:
         return False
     if agent.last_seen_at is None:
         return False
-    return now - agent.last_seen_at <= HEARTBEAT_TIMEOUT
+    return now - agent.last_seen_at <= _heartbeat_timeout
 
 
 def dispatchable(agent: Agent, now: datetime) -> bool:

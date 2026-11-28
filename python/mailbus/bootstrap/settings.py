@@ -39,7 +39,7 @@ class Settings:
     dispatch_interval_sec: float = 5.0
     dispatch_batch: int = 50
     dispatch_max_attempts: int = 3
-    heartbeat_timeout_sec: float = 180.0
+    heartbeat_timeout_sec: float = 90.0
     heartbeat_sweep_interval_sec: float = 30.0
     sse_max_streams: int = 256
     public_screen_limit: int = 64
@@ -99,7 +99,7 @@ class Settings:
             dispatch_batch=int(os.environ.get("MAILBUS_DISPATCH_BATCH", "50")),
             dispatch_max_attempts=int(os.environ.get("MAILBUS_DISPATCH_MAX_ATTEMPTS", "3")),
             heartbeat_timeout_sec=float(
-                os.environ.get("MAILBUS_HEARTBEAT_TIMEOUT_SEC", "180")
+                os.environ.get("MAILBUS_HEARTBEAT_TIMEOUT_SEC", "90")
             ),
             heartbeat_sweep_interval_sec=float(
                 os.environ.get("MAILBUS_HEARTBEAT_SWEEP_SEC", "30")

@@ -19,6 +19,7 @@ from mailbus.application.metrics.dto import (
     MetricSeriesView,
 )
 from mailbus.application.queries.overview import OverviewQuery
+from mailbus.core.agents import rules as agent_rules
 from mailbus.core.identity.policy import Resource, ensure_allowed
 from mailbus.core.metrics import rules
 from mailbus.core.metrics.ports import MetricsManifestPort, MetricsUnitOfWork
@@ -80,7 +81,9 @@ class MetricsService:
         owners = self._visible_owners(actor)
         with self._uow() as uow:
             summary = uow.reports.task_summary(start, end, owners)
-            online = uow.reports.online_agents(self._clock.now().timestamp() - 180.0)
+            online = uow.reports.online_agents(
+                self._clock.now().timestamp() - agent_rules.heartbeat_timeout().total_seconds()
+            )
         totals = {
             key: summary[key]
             for key in ("total", "done", "failed", "cancelled", "active", "queued")
