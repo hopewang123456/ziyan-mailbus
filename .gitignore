@@ -72,6 +72,8 @@ docker-agents/comfyui-data/
 
 # Generated sync copies
 access/hermes/.sync/
+# 单源在 shared/access/hermes/.sync/_shared/，各 profile 的 skills/ 为生成产物
+shared/access/hermes/.sync/*/skills/
 
 # Runtime messages / ad-hoc scripts
 outbox/
