@@ -23,7 +23,7 @@
 
 ## 工具面
 
-唯一 SoT：`shared/contracts/mcp-tools-v0.json`（15 个默认工具 + 1 个管理工具）。
+唯一 SoT：`shared/contracts/mcp-tools-v0.json`（收敛为 4 个工具：inbox / send / ack / result）。
 双栈工具面一致性由 `tools/mcp_surface_diff.py` 对拍钉死。
 
 ## 交付 SoT（exclusive）

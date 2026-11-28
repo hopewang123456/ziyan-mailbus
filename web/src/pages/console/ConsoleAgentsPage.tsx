@@ -3,6 +3,7 @@ import { ConfirmDialog } from "../../components/console/ConsoleDialog";
 import { ConsoleDrawer } from "../../components/console/ConsoleDrawer";
 import { ConsolePageState } from "../../components/console/ConsolePageState";
 import { ConsoleTabs, useTabParam } from "../../components/console/ConsoleTabs";
+import { buildA2aOnboardingPrompt } from "../../lib/collab/agentOnboarding";
 import {
   ConsolePageHeader,
   ConsoleSection,
@@ -769,7 +770,7 @@ function InviteCodeShowcase({
   agentType: string;
   channelType: string;
 }) {
-  const [subTab, setSubTab] = useState<"curl" | "mcp" | "prompt">("curl");
+  const [subTab, setSubTab] = useState<"a2a" | "curl" | "mcp" | "prompt">("a2a");
   const curlCmd = `curl -X POST /api/agents/register \\\n  -H 'Content-Type: application/json' \\\n  -d '{
   "name": "my-agent",
   "agent_type": "${agentType}",
@@ -778,7 +779,7 @@ function InviteCodeShowcase({
   "endpoint": "http://127.0.0.1:8000/agent",
   "invite_code": "${inviteCode}"
 }'`;
-  const mcpConfig = `# mcp__server entry (MCP servers.json)
+  const mcpConfig = `# MCP servers.json 示例（需自备 MCP 适配层；无适配层可改用「HTTP curl」直连）
 {
   "mcpServers": {
     "mailbus-agent": {
@@ -792,11 +793,11 @@ function InviteCodeShowcase({
   }
 }
 
-# Tools
-- mailbus.send_message
-- mailbus.read_queue
-- mailbus.submit_result
-- mailbus.heartbeat`;
+# Tools（MCP 工具面已收敛为 4 个，见 shared/contracts/mcp-tools-v0.json）
+- mailbus_inbox      GET  /api/mcp/pull
+- mailbus_send       POST /api/mcp/messages
+- mailbus_ack        POST /api/a2a/messages (type=ack)
+- mailbus_result     POST /api/a2a/messages (type=result)`;
   const prompt = `# System Prompt for Mailbus Agent Integration
 
 You are joining the Mailbus multi-agent bus.
@@ -815,14 +816,24 @@ Available endpoints:
   GET  /api/tasks
   POST /api/tasks/{task_id}/result`;
 
+  const mailbusBase = typeof window !== "undefined" ? window.location.origin : "";
+  const a2aPrompt = buildA2aOnboardingPrompt({ mailbusBase, inviteCode });
+
   const tabs = [
+    { key: "a2a" as const, label: "A2A 接入模板" },
     { key: "curl" as const, label: "HTTP curl" },
     { key: "mcp" as const, label: "MCP 四工具" },
-    { key: "prompt" as const, label: "接入说明" },
+    { key: "prompt" as const, label: "快速上手" },
   ];
 
   const content =
-    subTab === "curl" ? curlCmd : subTab === "mcp" ? mcpConfig : prompt;
+    subTab === "a2a"
+      ? a2aPrompt
+      : subTab === "curl"
+        ? curlCmd
+        : subTab === "mcp"
+          ? mcpConfig
+          : prompt;
 
   return (
     <div className="space-y-3">
@@ -831,7 +842,7 @@ Available endpoints:
         {inviteCode}
       </div>
       <ConsoleTabs tabs={tabs} value={subTab} onChange={setSubTab} />
-      <pre className="max-h-64 overflow-auto rounded border border-rail bg-hull/60 p-3 font-mono text-[11px] leading-relaxed text-frost/90 whitespace-pre-wrap">
+      <pre className="max-h-[28rem] overflow-auto rounded border border-rail bg-hull/60 p-3 font-mono text-[11px] leading-relaxed text-frost/90 whitespace-pre-wrap">
         {content}
       </pre>
       <button

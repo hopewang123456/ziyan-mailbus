@@ -6,7 +6,7 @@ All notable changes to mailbus are documented here. Format loosely follows
 ## [Unreleased — 2026-10-26 大版本：指挥席位 + 指标中心 + 管理中心 + AI 助手]
 
 ### MCP 接入（D17 — mailbus 自带 MCP server，Trae 平级接入）
-- **契约 SoT**：`shared/contracts/mcp-tools-v0.json`（15 个默认工具 + 1 个管理只读工具），服务从同一清单派生注册
+- **契约 SoT**：`shared/contracts/mcp-tools-v0.json`（收敛为 4 个工具：inbox / send / ack / result），服务从同一清单派生注册
 - **MCP server**：`mailbus mcp`（stdio 主形态 / `--transport http` streamable-http）；工具面复用同一张路由表与 handlers，与 HTTP 面零漂移；`mailbus_wait` 长轮询补偿拉模式
 - **Trae 接入**：`FRAMEWORKS` 新增 `type_name=trae`（`allow_no_push_cli`、无 auto_ack、交付 SoT=msg-results）+ `shared/access/trae/adapter/SPEC.md` + [runbook](docs/runbooks/mcp-trae.md)
 - **边界**：管理面写能力（agent-add / 改配置）与细粒度权限点留 D20；D17 仅开放只读 `mailbus_config_get`（`--enable-admin`）

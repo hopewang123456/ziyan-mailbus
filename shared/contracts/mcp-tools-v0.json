@@ -1,277 +1,97 @@
 {
-  "version": "0.1.0",
-  "description": "mailbus MCP 工具面契约（D17 SoT）。双栈各自从此清单派生 MCP server 工具注册；python 侧每个 http 工具复用 lib/api/routes.py 的同一路由，java 侧直调 application service。admin=true 的工具仅在显式开启管理面时注册。",
+  "version": "1.0.0",
+  "description": "mailbus MCP 工具面契约（唯一 SoT）。已按 docs/design/agent-unification-design.md §11.3 收敛为 4 个工具；工作流由引擎驱动，Agent 不得自建任务或推进状态机。旧的 task_create/task_fsm/step_result 等工具已移除，调用应返回 404。",
   "identity": {
-    "note": "接入身份由进程参数/环境变量确定（--agent 或 MAILBUS_AGENT），工具入参不得跨身份伪造 from/to。",
+    "note": "身份由接入会话确定，入参不得跨身份伪造。inbox/send 使用员工能力会话（Bearer 会话 token，需 message:send 能力）；ack/result 使用 Agent endpoint token（/api/a2a/messages），身份由 token 反查。",
     "from_parameter": "from"
   },
   "tools": [
     {
+      "name": "mailbus_inbox",
+      "title": "拉取待办",
+      "group": "message",
+      "transport": "http",
+      "auth": "employee_session",
+      "http": {"method": "GET", "path": "/api/mcp/pull"},
+      "description": "拉取当前接入身份对应员工的待办事件队列（drain 语义：取走即清空）。",
+      "input": {"type": "object", "properties": {}},
+      "returns": "[{event_id, kind, payload, attempts}]"
+    },
+    {
       "name": "mailbus_send",
       "title": "发送消息",
       "group": "message",
-      "admin": false,
-      "http": {"method": "POST", "path": "/api/send-msg"},
-      "description": "向指定 agent 的收件箱投递消息并触发推送。from 缺省取当前接入身份；写操作需总线 token。",
+      "transport": "http",
+      "auth": "employee_session",
+      "http": {"method": "POST", "path": "/api/mcp/messages"},
+      "description": "向指定员工投递消息；发送方取当前接入身份，不得伪造 from。",
       "input": {
         "type": "object",
         "properties": {
-          "to": {"type": "string", "description": "目标 agent 名"},
-          "content": {"type": "string", "description": "消息正文"},
-          "from": {"type": "string", "description": "发送方；缺省为接入身份"},
-          "priority": {"type": "string", "enum": ["low", "normal", "high", "urgent"], "default": "normal"},
-          "type": {"type": "string", "default": "notice", "description": "消息类型"},
-          "task_id": {"type": "string", "description": "关联任务 id（可选）"}
+          "recipient_id": {"type": "string", "description": "收件员工 id（字符集 [A-Za-z0-9_-]）"},
+          "body": {"type": "string", "description": "消息正文，1-4000 字"},
+          "kind": {"type": "string", "default": "note", "description": "消息类型"}
         },
-        "required": ["to", "content"]
+        "required": ["body"]
       },
-      "returns": "{status, msg_id}"
-    },
-    {
-      "name": "mailbus_inbox",
-      "title": "读取收件箱",
-      "group": "message",
-      "admin": false,
-      "http": {"method": "GET", "path": "/api/inbox/{agent}"},
-      "description": "读取指定 agent 的收件箱快照（messages/unread/total）。会话开始时应先调用。",
-      "input": {
-        "type": "object",
-        "properties": {
-          "agent": {"type": "string", "description": "agent 名"},
-          "status_filter": {"type": "string", "description": "状态过滤"},
-          "limit": {"type": "integer", "description": "最近 N 条"}
-        },
-        "required": ["agent"]
-      },
-      "returns": "{agent, messages[], unread, total}"
+      "returns": "{message_id, sender_id, recipient_id, kind, body, created_at, delivery_status}"
     },
     {
       "name": "mailbus_ack",
-      "title": "确认消息",
-      "group": "message",
-      "admin": false,
-      "http": {"method": "POST", "path": "/api/inbox/ack/{id}"},
-      "description": "确认（ack）单条消息，状态跃迁至终态 DONE。",
-      "input": {
-        "type": "object",
-        "properties": {"id": {"type": "string", "description": "消息 id"}},
-        "required": ["id"]
-      },
-      "returns": "{status, id, state}"
-    },
-    {
-      "name": "mailbus_mark_read",
-      "title": "标记已读",
-      "group": "message",
-      "admin": false,
-      "http": {"method": "POST", "path": "/api/mark-read/{agent}"},
-      "description": "把指定 agent 的一组消息标记为已读。",
+      "title": "确认受理",
+      "group": "task",
+      "transport": "a2a",
+      "auth": "agent_token",
+      "http": {"method": "POST", "path": "/api/a2a/messages"},
+      "description": "确认受理一条 task_assignment（payload.type=ack）。收到投递后应尽快调用。",
       "input": {
         "type": "object",
         "properties": {
-          "agent": {"type": "string", "description": "agent 名"},
-          "msg_ids": {"type": "array", "items": {"type": "string"}, "description": "消息 id 列表"}
+          "type": {"type": "string", "const": "ack"},
+          "message_id": {"type": "string", "description": "被确认的投递 message_id"}
         },
-        "required": ["agent", "msg_ids"]
+        "required": ["message_id"]
       },
-      "returns": "{status, marked}"
+      "returns": "{message_id, accepted, duplicate}"
     },
     {
-      "name": "mailbus_status",
-      "title": "总线状态",
-      "group": "message",
-      "admin": false,
-      "http": {"method": "GET", "path": "/api/status"},
-      "description": "总线运行状态总览（服务健康、agent 数、消息统计）。",
-      "input": {"type": "object", "properties": {}},
-      "returns": "状态总览对象"
-    },
-    {
-      "name": "mailbus_wait",
-      "title": "等待新消息",
-      "group": "message",
-      "admin": false,
-      "local": "inbox_poll",
-      "description": "长轮询收件箱，直到出现未读消息或超时（上限 60 秒）。用于拉模式接入减少空转。",
+      "name": "mailbus_result",
+      "title": "回推节点结果",
+      "group": "task",
+      "transport": "a2a",
+      "auth": "agent_token",
+      "http": {"method": "POST", "path": "/api/a2a/messages"},
+      "description": "回推节点执行结果（payload.type=result）；run_id 与 attempt_no 必填，旧 attempt 返回 409。",
       "input": {
         "type": "object",
         "properties": {
-          "agent": {"type": "string", "description": "agent 名"},
-          "timeout_s": {"type": "integer", "default": 30, "minimum": 1, "maximum": 60},
-          "poll_interval_s": {"type": "number", "default": 2, "minimum": 0.2, "maximum": 10}
-        },
-        "required": ["agent"]
-      },
-      "returns": "{status: messages|timeout, messages[]}"
-    },
-    {
-      "name": "mailbus_task_create",
-      "title": "创建任务",
-      "group": "task",
-      "admin": false,
-      "http": {"method": "POST", "path": "/api/tasks/create"},
-      "description": "按 v3 A2A Envelope 创建任务并派发首步。planned_chain 为显式计划链（mode=explicit 时必填）。",
-      "input": {
-        "type": "object",
-        "properties": {
-          "task_id": {"type": "string"},
-          "intent": {"type": "string"},
-          "initiator": {"type": "string"},
-          "mode": {"type": "string", "enum": ["explicit", "auto"]},
-          "tier": {"type": "string"},
-          "planned_chain": {"type": "array", "items": {"type": "object"}}
-        },
-        "required": ["task_id", "intent", "initiator", "mode", "tier"],
-        "additionalProperties": true
-      },
-      "returns": "{status, task_id, fsm}"
-    },
-    {
-      "name": "mailbus_tasks",
-      "title": "任务列表",
-      "group": "task",
-      "admin": false,
-      "http": {"method": "GET", "path": "/api/tasks"},
-      "description": "任务列表查询，支持状态/负责人过滤与分页。",
-      "input": {
-        "type": "object",
-        "properties": {
-          "status": {"type": "string"},
-          "assignee": {"type": "string"},
-          "limit": {"type": "integer"},
-          "offset": {"type": "integer"}
-        }
-      },
-      "returns": "任务列表"
-    },
-    {
-      "name": "mailbus_task_get",
-      "title": "任务详情",
-      "group": "task",
-      "admin": false,
-      "http": {"method": "GET", "path": "/api/tasks/{id}"},
-      "description": "读取单个任务详情（含状态机摘要）。",
-      "input": {
-        "type": "object",
-        "properties": {"id": {"type": "string", "description": "任务 id"}},
-        "required": ["id"]
-      },
-      "returns": "任务详情对象"
-    },
-    {
-      "name": "mailbus_task_fsm",
-      "title": "任务状态机动作",
-      "group": "task",
-      "admin": false,
-      "http": {"method": "POST", "path": "/api/tasks/{id}/fsm/{action}"},
-      "description": "执行任务状态机动作（rollback/skip/cancel/pause/priority/approve-plan/approve-join/accept/continue）。",
-      "input": {
-        "type": "object",
-        "properties": {
-          "id": {"type": "string", "description": "任务 id"},
-          "action": {
+          "type": {"type": "string", "const": "result"},
+          "run_id": {"type": "string"},
+          "attempt_no": {"type": "integer", "minimum": 1},
+          "status": {
             "type": "string",
-            "enum": ["rollback", "skip", "cancel", "pause", "priority", "approve-plan", "approve-join", "accept", "continue"]
+            "enum": ["completed", "failed", "needs_human", "needs_info", "rejected"]
           },
-          "reason": {"type": "string"}
-        },
-        "required": ["id", "action"]
-      },
-      "returns": "{status, fsm, action}"
-    },
-    {
-      "name": "mailbus_command_draft",
-      "title": "发令草稿预演",
-      "group": "task",
-      "admin": false,
-      "http": {"method": "POST", "path": "/api/command/draft"},
-      "description": "无副作用地预演发令计划（tier0 规则优先，否则 LLM 规划），返回 planned_chain 供确认后正式创建。",
-      "input": {
-        "type": "object",
-        "properties": {
-          "intent": {"type": "string", "description": "发令意图描述"},
-          "target": {"type": "string", "description": "目标 agent（可选）"}
-        },
-        "required": ["intent"]
-      },
-      "returns": "{status, planned_chain, plan_meta}"
-    },
-    {
-      "name": "mailbus_step_result",
-      "title": "提交工单回执",
-      "group": "task",
-      "admin": false,
-      "http": {"method": "POST", "path": "/api/agents/{id}/step-result"},
-      "description": "agent 提交工单执行回执，落 msg-results 并立即推进任务。",
-      "input": {
-        "type": "object",
-        "properties": {
-          "id": {"type": "string", "description": "agent 名"},
-          "task_id": {"type": "string"},
-          "step_id": {"type": "string"},
-          "conclusion": {
-            "type": "string",
-            "enum": ["done", "pass", "approved", "fail", "dispatched", "rejected", "need_research", "blocked", "warning"],
-            "default": "done"
+          "output": {"type": "string", "description": "结果文本或可解析的 JSON 字符串"},
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {"type": "string", "enum": ["path", "artifact"]},
+                "file_path": {"type": "string"},
+                "artifact_id": {"type": "string"},
+                "file_name": {"type": "string"},
+                "description": {"type": "string"}
+              },
+              "required": ["type"]
+            }
           },
-          "summary": {"type": "string"},
-          "artifacts": {"type": "array", "items": {"type": "string"}}
+          "completed_at": {"type": "string", "format": "date-time"}
         },
-        "required": ["id", "task_id", "step_id"]
+        "required": ["run_id", "attempt_no", "status"]
       },
-      "returns": "{status, task_id, step_id}"
-    },
-    {
-      "name": "mailbus_agents",
-      "title": "agent 列表",
-      "group": "observe",
-      "admin": false,
-      "http": {"method": "GET", "path": "/api/agents"},
-      "description": "列出已注册 agent 及其类型、框架、运行端配置。",
-      "input": {"type": "object", "properties": {}},
-      "returns": "{agents, canonical_root}"
-    },
-    {
-      "name": "mailbus_metrics",
-      "title": "指标查询",
-      "group": "observe",
-      "admin": false,
-      "http": {"method": "GET", "path": "/api/metrics/query"},
-      "description": "按指标 id 查询当前值（point）或近期时序窗口（1h）。",
-      "input": {
-        "type": "object",
-        "properties": {
-          "metric": {"type": "string", "description": "指标 id"},
-          "granularity": {"type": "string", "enum": ["point", "1h"], "default": "point"},
-          "hours": {"type": "integer", "description": "回溯小时数"}
-        },
-        "required": ["metric"]
-      },
-      "returns": "指标点位或时序序列"
-    },
-    {
-      "name": "mailbus_task_trace",
-      "title": "任务生命周期回放",
-      "group": "observe",
-      "admin": false,
-      "http": {"method": "GET", "path": "/api/tasks/trace"},
-      "description": "回放任务生命周期时序（E9 留痕）。",
-      "input": {
-        "type": "object",
-        "properties": {"id": {"type": "string", "description": "任务 id"}},
-        "required": ["id"]
-      },
-      "returns": "{status, trace}"
-    },
-    {
-      "name": "mailbus_config_get",
-      "title": "读取总线配置",
-      "group": "admin",
-      "admin": true,
-      "http": {"method": "GET", "path": "/api/config"},
-      "description": "读取总线配置（只读）。管理面工具默认不注册，需 --enable-admin 显式开启；细粒度授权由 D20 权限点收口。",
-      "input": {"type": "object", "properties": {}},
-      "returns": "配置对象"
+      "returns": "{message_id, accepted, duplicate}"
     }
   ]
 }
