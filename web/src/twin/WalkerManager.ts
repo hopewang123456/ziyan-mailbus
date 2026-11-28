@@ -33,6 +33,15 @@ function findSeat(floor: Floor, seatId: string): Seat | null {
 /** 每人离座后至少回座待这么久，保证员工大部分时间都在工位上。 */
 const LEAVE_COOLDOWN_MS = 45_000;
 
+/** 任务终态：这些状态下员工恢复空闲，可以离座走动。 */
+const TERMINAL_TASK_STATES = new Set(["done", "failed", "cancelled"]);
+
+/** 有进行中任务的人应当坐定在工位（或去会议室协同），不参与随机闲逛。 */
+function hasActiveTask(agent: SeatAgent): boolean {
+  if (!agent.task_id) return false;
+  return !TERMINAL_TASK_STATES.has(agent.task_state ?? "");
+}
+
 /**
  * 管理一组 Walker 的活动。
  * 返回 routes 列表（含正在走的）+ startAgent / clearAll 方法。
@@ -67,6 +76,8 @@ export function useWalkers(
   const pairCooldownRef = useRef<Map<string, number>>(new Map());
   /** seat_id → 上次离座时间：空闲员工也要先在工位待够时间才会走动。 */
   const leaveAtRef = useRef<Map<string, number>>(new Map());
+  /** 每个任务协同会议的上次发起时间，避免会议刚散又立刻重新集合。 */
+  const taskMeetingCooldownRef = useRef<Map<string, number>>(new Map());
 
   /** 把两人一起派到同一间会议室/休息区，面对面讨论。 */
   const sendPair = useCallback(
@@ -90,8 +101,8 @@ export function useWalkers(
                 [{ x: cx - 114, y: cy - 24 }, { x: cx + 114, y: cy - 24 }],
               ]
             : [
-                [{ x: cx - 118, y: cy + 6 }, { x: cx + 118, y: cy + 6 }],
-                [{ x: cx - 60, y: cy + 78 }, { x: cx + 60, y: cy + 78 }],
+                [{ x: cx - 130, y: cy + 6 }, { x: cx + 130, y: cy + 6 }],
+                [{ x: cx - 76, y: cy + 78 }, { x: cx + 76, y: cy + 78 }],
               ];
         for (const [pa, pb] of spots) {
           if (pointBlocked(floor, pa.x, pa.y) || pointBlocked(floor, pb.x, pb.y)) continue;
@@ -129,7 +140,11 @@ export function useWalkers(
         const free: Array<{ seat: Seat; room: Floor["rooms"][number] }> = [];
         for (const room of floor.rooms) {
           for (const seat of room.seats) {
-            if (seat.agent?.status === "online" && !busyRef.current.has(seat.seat_id)) {
+            if (
+              seat.agent?.status === "online" &&
+              !hasActiveTask(seat.agent) &&
+              !busyRef.current.has(seat.seat_id)
+            ) {
               free.push({ seat, room });
             }
           }
@@ -151,6 +166,45 @@ export function useWalkers(
     [floors, sendPair],
   );
 
+  /** 同一任务的多人协同：一起进会议室围着会议桌讨论，结束后各自回工位。 */
+  const sendTaskMeeting = useCallback(
+    (floor: Floor, members: Seat[], groupKey: string, label: string): boolean => {
+      const room = floor.rooms.find((r) => r.kind === "meeting");
+      if (!room) return false;
+      const cx = room.x + room.w / 2;
+      const cy = room.y + room.h / 2;
+      const spots: Point[] = [
+        { x: cx - 114, y: cy + 38 },
+        { x: cx + 114, y: cy + 38 },
+        { x: cx - 114, y: cy - 24 },
+        { x: cx + 114, y: cy - 24 },
+      ];
+      const group = members.slice(0, spots.length);
+      if (group.length < 2) return false;
+      const planned: WalkerRoute[] = [];
+      for (let i = 0; i < group.length; i += 1) {
+        const seat = group[i];
+        if (!seat.agent) return false;
+        const spot = spots[i];
+        if (pointBlocked(floor, spot.x, spot.y)) return false;
+        const route = planRoute(seat.agent, seat, floor, {
+          to: spot,
+          action: "meeting",
+          actionDuration: 20000 + Math.random() * 6000,
+          pairId: groupKey,
+          faceX: cx,
+          taskLabel: label,
+        });
+        if (!route) return false;
+        planned.push(route);
+      }
+      for (const seat of group) busyRef.current.set(seat.seat_id, 1);
+      setRoutes((prev) => [...prev, ...planned]);
+      return true;
+    },
+    [],
+  );
+
   const tick = useCallback(() => {
     if (!enabled) return;
     if (routesRef.current.length >= maxConcurrent) return;
@@ -159,6 +213,37 @@ export function useWalkers(
     const now = Date.now();
     const canLeave = (seatId: string) =>
       now - (leaveAtRef.current.get(seatId) ?? 0) >= LEAVE_COOLDOWN_MS;
+
+    // 同任务多人协同（最高优先级）：集中到会议室开会，而不是各自在工位或闲逛。
+    if (routesRef.current.length <= maxConcurrent - 2) {
+      const byTask = new Map<string, { floor: Floor; seats: Seat[]; label: string }>();
+      for (const floor of floors) {
+        for (const room of floor.rooms) {
+          for (const seat of room.seats) {
+            const agent = seat.agent;
+            if (!agent?.task_id || !hasActiveTask(agent)) continue;
+            if (busyRef.current.has(seat.seat_id)) continue;
+            const key = `${floor.floor_id}:${agent.task_id}`;
+            const entry = byTask.get(key) ?? {
+              floor,
+              seats: [],
+              label: agent.task || "协同任务",
+            };
+            entry.seats.push(seat);
+            byTask.set(key, entry);
+          }
+        }
+      }
+      for (const [key, entry] of byTask) {
+        if (entry.seats.length < 2) continue;
+        if (now - (taskMeetingCooldownRef.current.get(key) ?? 0) < 90_000) continue;
+        if (routesRef.current.length + entry.seats.length > maxConcurrent) continue;
+        if (sendTaskMeeting(entry.floor, entry.seats, key, entry.label)) {
+          taskMeetingCooldownRef.current.set(key, now);
+          return;
+        }
+      }
+    }
 
     // 真实结对优先：把真实协同的两人一起派到会议室/休息区面对面讨论。
     if (
@@ -172,8 +257,9 @@ export function useWalkers(
           const a = findSeat(floor, link.aSeatId);
           const b = findSeat(floor, link.bSeatId);
           if (!a || !b || !a.agent || !b.agent) continue;
-          // 只有两人都空闲（online）才结伴离座；忙碌的人默认坐定在工位。
+          // 只有两人都空闲（online 且无进行中任务）才结伴离座；忙碌的人坐定在工位。
           if (a.agent.status !== "online" || b.agent.status !== "online") continue;
+          if (hasActiveTask(a.agent) || hasActiveTask(b.agent)) continue;
           if (busyRef.current.has(a.seat_id) || busyRef.current.has(b.seat_id)) continue;
           if (!canLeave(a.seat_id) || !canLeave(b.seat_id)) continue;
           if (sendPair(floor, a, b, link.pairId)) {
@@ -204,6 +290,7 @@ export function useWalkers(
         for (const seat of room.seats) {
           if (
             seat.agent?.status === "online" &&
+            !hasActiveTask(seat.agent) &&
             !busyRef.current.has(seat.seat_id) &&
             canLeave(seat.seat_id)
           ) {
@@ -255,7 +342,7 @@ export function useWalkers(
       setRoutes((prev) => [...prev, route]);
       return;
     }
-  }, [floors, maxConcurrent, enabled, startPair, sendPair]);
+  }, [floors, maxConcurrent, enabled, startPair, sendPair, sendTaskMeeting]);
 
   useEffect(() => {
     if (!enabled) return;

@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
 import type { Floor, Room, Seat, SeatAgent } from "./types";
 import { planPath, pointBlocked, roomSpot } from "./pathfind";
+import { personAppearance } from "./appearance";
+import { PersonHoverCard } from "./PersonCard";
 
-const SHIRTS = ["#a8c8ee", "#cbb6e8", "#f6c9a0", "#a9d8c4", "#f2b6c6", "#f2d98f"];
-const HAIRS = ["#f0d28c", "#f4afcb", "#a9785b", "#c9bbec", "#6e5344", "#c98b65"];
 const TAGS = [
   { tag: "#f5a9c8", text: "#e05893" },
   { tag: "#c3b0ee", text: "#8a6bcf" },
@@ -16,13 +16,6 @@ function pick<T>(list: T[], seed: string): T {
   let n = 0;
   for (const ch of seed) n += ch.charCodeAt(0);
   return list[n % list.length];
-}
-
-/** 稳定哈希：让每个员工的外观特征（眼镜 / 长发 / 背包）固定不变。 */
-function hash(seed: string): number {
-  let n = 0;
-  for (let i = 0; i < seed.length; i += 1) n = (n * 31 + seed.charCodeAt(i)) % 9973;
-  return n;
 }
 
 export interface Point {
@@ -131,16 +124,69 @@ export function Walker({ route, onArrive, onSelect, doors, onDoorEnter, onDoorEx
       if (phaseRef.current === "done") return;
 
       if (phaseRef.current === "walk") {
-        const dt = now - last;
+        // 限幅：切到后台/其他标签页时 rAF 会暂停，恢复后 now-last 可能很大，
+        // 不钳制会让人物整段瞬移；钳到 100ms 内，靠后续几帧平滑追上。
+        const dt = Math.min(100, now - last);
         last = now;
-        segT += speed * dt;
 
+        // 先取「当前进度」的位置用于过门检测。
+        // 关键点：等待时绝不推进 segT，否则门口等完后进度已偷偷累加、人物会向前瞬移。
+        let px = route.points[0].x;
+        let py = route.points[0].y;
+        if (segLens.length > 0) {
+          const a0 = route.points[segIndex];
+          const b0 = route.points[segIndex + 1];
+          const segLen = segLens[segIndex] || 1;
+          const tt = Math.min(1, segT / segLen);
+          px = a0.x + (b0.x - a0.x) * tt;
+          py = a0.y + (b0.y - a0.y) * tt;
+        }
+
+        // 过门检测：进入/离开门洞半径时触发开/关门回调。
+        // 同一扇门同一时刻只放行一个人，其余人在门口等，避免几个人叠在一起穿门。
+        let waiting = false;
+        if (doors && doors.length) {
+          const nowMs = performance.now();
+          const nowInside = new Set<string>();
+          for (const d of doors) {
+            const dist = Math.hypot(px - d.x, py - d.y);
+            if (dist <= DOOR_RADIUS) nowInside.add(d.roomId);
+          }
+          for (const id of nowInside) {
+            if (insideDoors.has(id)) {
+              doorGate.set(id, nowMs + DOOR_GATE_MS); // 占着门时不断续期
+              continue;
+            }
+            if ((doorGate.get(id) ?? 0) > nowMs) {
+              waiting = true; // 门被占用，先等
+              continue;
+            }
+            doorGate.set(id, nowMs + DOOR_GATE_MS);
+            insideDoors.add(id);
+            onDoorEnter?.(id);
+          }
+          for (const id of insideDoors) {
+            if (!nowInside.has(id)) {
+              insideDoors.delete(id);
+              if ((doorGate.get(id) ?? 0) <= nowMs) doorGate.delete(id);
+              onDoorExit?.(id);
+            }
+          }
+        }
+        if (waiting) {
+          // 门口稍等：不推进进度、不更新 transform，保持原地
+          raf = requestAnimationFrame(frame);
+          return;
+        }
+
+        // 确认可通行后再推进进度
+        segT += speed * dt;
         while (segIndex < segLens.length - 1 && segT >= segLens[segIndex]) {
           segT -= segLens[segIndex];
           segIndex += 1;
         }
 
-        if (segIndex >= segLens.length - 1) {
+        if (segLens.length === 0 || (segIndex === segLens.length - 1 && segT >= segLens[segIndex])) {
           // 走完了 → 进入 action 阶段
           const end = route.points[route.points.length - 1];
           // 结对时转身看向对方
@@ -183,43 +229,6 @@ export function Walker({ route, onArrive, onSelect, doors, onDoorEnter, onDoorEx
         if (dx > 0.5) facing = 1;
         else if (dx < -0.5) facing = -1;
 
-        // 过门检测：进入/离开门洞半径时触发开/关门回调。
-        // 同一扇门同一时刻只放行一个人，其余人在门口等，避免几个人叠在一起穿门。
-        let waiting = false;
-        if (doors && doors.length) {
-          const now = performance.now();
-          const nowInside = new Set<string>();
-          for (const d of doors) {
-            const dist = Math.hypot(x - d.x, y - d.y);
-            if (dist <= DOOR_RADIUS) nowInside.add(d.roomId);
-          }
-          for (const id of nowInside) {
-            if (insideDoors.has(id)) {
-              doorGate.set(id, now + DOOR_GATE_MS); // 占着门时不断续期
-              continue;
-            }
-            if ((doorGate.get(id) ?? 0) > now) {
-              waiting = true; // 门被占用，先等
-              continue;
-            }
-            doorGate.set(id, now + DOOR_GATE_MS);
-            insideDoors.add(id);
-            onDoorEnter?.(id);
-          }
-          for (const id of insideDoors) {
-            if (!nowInside.has(id)) {
-              insideDoors.delete(id);
-              if ((doorGate.get(id) ?? 0) <= now) doorGate.delete(id);
-              onDoorExit?.(id);
-            }
-          }
-        }
-        if (waiting) {
-          // 门口稍等，不推进进度
-          raf = requestAnimationFrame(frame);
-          return;
-        }
-
         node.style.transform = `translate(${x}px, ${y}px) scaleX(${facing}) translateZ(7px)`;
         node.style.setProperty("--facing", String(facing));
         raf = requestAnimationFrame(frame);
@@ -240,11 +249,7 @@ export function Walker({ route, onArrive, onSelect, doors, onDoorEnter, onDoorEx
 
   const agent = route.agent;
   const tag = pick(TAGS, agent.display_name);
-  const seed = agent.agent_id ?? agent.display_name;
-  const h = hash(seed);
-  const hasGlasses = h % 100 < 42;
-  const hasLongHair = h % 7 === 0 || h % 7 === 3;
-  const hasBackpack = h % 100 >= 68;
+  const look = personAppearance(agent.agent_id ?? agent.display_name);
   // 手里的东西随动作变化：开会拿文件夹、敲键盘抱笔记本、喝水/接水端杯子
   const item =
     route.action === "coffee" ? "coffee" :
@@ -259,7 +264,14 @@ export function Walker({ route, onArrive, onSelect, doors, onDoorEnter, onDoorEx
       className={`walker is-walking${route.action ? "" : " walk-home"}${onSelect ? " is-clickable" : ""}`}
       data-seat={route.seatId}
       data-pair={route.pairId ?? undefined}
-      style={{ "--tag": tag.tag, "--tag-text": tag.text } as React.CSSProperties}
+      style={
+        {
+          "--tag": tag.tag,
+          "--tag-text": tag.text,
+          "--shirt": look.shirt,
+          "--hair": look.hair,
+        } as React.CSSProperties
+      }
       onClick={onSelect ? (e) => { e.stopPropagation(); onSelect(); } : undefined}
       role={onSelect ? "button" : undefined}
       tabIndex={onSelect ? 0 : undefined}
@@ -269,8 +281,13 @@ export function Walker({ route, onArrive, onSelect, doors, onDoorEnter, onDoorEx
         className="walker-figure"
         style={
           {
-            "--shirt": pick(SHIRTS, agent.display_name),
-            "--hair": pick(HAIRS, agent.agent_id ?? agent.display_name),
+            "--shirt": look.shirt,
+            "--shirt-accent": look.shirtAccent,
+            "--hair": look.hair,
+            "--skin": look.skin,
+            "--fig-w": String(look.figW),
+            "--head": String(look.head),
+            "--acc-color": look.accessoryColor,
           } as React.CSSProperties
         }
       >
@@ -278,27 +295,34 @@ export function Walker({ route, onArrive, onSelect, doors, onDoorEnter, onDoorEx
         <i className="w-leg l2" />
         <i className="w-foot f1" />
         <i className="w-foot f2" />
-        {hasBackpack ? <i className="w-backpack" /> : null}
+        {look.backpack ? <i className="w-backpack" /> : null}
         <i className="w-arm a1" />
         <i className="w-arm a2" />
         <i className="w-body" />
         <i className="w-collar" />
         <i className="w-lanyard" />
         <i className="w-badge" />
-        <i className="w-head" />
-        {hasLongHair ? <i className="w-hair w-hair-long" /> : <i className="w-hair" />}
-        <i className="w-brow b1" />
-        <i className="w-brow b2" />
-        <i className="w-eye e1" />
-        <i className="w-eye e2" />
-        {hasGlasses ? <i className="w-glasses" /> : null}
-        <i className="w-mouth" />
-        <i className="w-blush b1" />
-        <i className="w-blush b2" />
+        <span className="person-head-group">
+          <i className="w-head" />
+          <i className={`w-hair${look.hairStyle === "short" ? "" : ` w-hair-${look.hairStyle}`}`} />
+          {look.accessory === "cap" ? <i className="acc acc-cap" /> : null}
+          <i className="w-brow b1" />
+          <i className="w-brow b2" />
+          <i className="w-eye e1" />
+          <i className="w-eye e2" />
+          {look.glasses ? <i className="w-glasses" /> : null}
+          <i className="w-mouth" />
+          {look.accessory === "beard" ? <i className="acc acc-beard" /> : null}
+          <i className="w-blush b1" />
+          <i className="w-blush b2" />
+          {look.accessory === "headphones" ? <i className="acc acc-headphones" /> : null}
+        </span>
+        {look.accessory === "tie" ? <i className="acc acc-tie" /> : null}
         {item ? <i className={`w-item w-item-${item}`} /> : null}
         {route.action === "fetch" ? <i className="w-stream" /> : null}
       </span>
       <span className="walker-tag">{agent.display_name}</span>
+      <PersonHoverCard agent={agent} />
       {route.taskLabel ? <span className="walker-task">{route.taskLabel}</span> : null}
       {route.action === "pair" ? (
         <span className="w-speech">

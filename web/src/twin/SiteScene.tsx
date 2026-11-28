@@ -280,11 +280,6 @@ function Tree({ tree }: { tree: TreeSpec }) {
             <i className="tree-leaf l3" />
             <i className="tree-leaf l4" />
             <i className="tree-leaf l5" />
-            <i className="tree-leaf l6" />
-            <i className="tree-leaf l7" />
-            <i className="tree-leaf l8" />
-            <i className="tree-leaf l9" />
-            <i className="tree-leaf l10" />
           </span>
         )}
       </span>

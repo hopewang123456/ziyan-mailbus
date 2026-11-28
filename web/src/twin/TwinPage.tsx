@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api, getToken } from "../lib/api";
 import { useStaffHeartbeat } from "../lib/console-access";
 import { BuildingShell } from "./BuildingShell";
@@ -123,11 +123,12 @@ function detectReducedMotion(): boolean {
 
 export function TwinPage() {
   const scale = useStageScale();
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
   const [site, setSite] = useState<OfficeSite | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [activeFloorId, setActiveFloorId] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const [view, setView] = useState({ zoom: 1, panX: 0, panY: 0 });
   const [night, setNight] = useState(() => isNightNow());
   const [peek, setPeek] = useState(false);
   const [hasToken, setHasToken] = useState(() => Boolean(getToken()));
@@ -195,6 +196,10 @@ export function TwinPage() {
 
   const [loadedAt, setLoadedAt] = useState("");
   const stageRef = useRef<HTMLDivElement>(null);
+  // 视口（平移 / 缩放）放在 ref 里：拖拽、滚轮直接写 DOM transform，
+  // 不再走 React setState，避免每次指针移动都重渲染整栋大楼。
+  const viewRef = useRef({ zoom: 1, panX: 0, panY: 0 });
+  const sceneScaleElRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const floors = useMemo(() => site?.floors ?? [], [site]);
   const shellHeight = Math.max(190, (floors.length - 1) * FLOOR_GAP + 190);
@@ -211,7 +216,7 @@ export function TwinPage() {
   seatRef.current = selection?.seat.seat_id ?? null;
 
   /** 屏幕身份：登记 + 心跳 + 离线；preview/kiosk/无 token 时不登记。 */
-  const { screenId } = useScreenSession({
+  const { screenId, registered: screenRegistered } = useScreenSession({
     enabled: shouldRegister,
     name: "孪生大屏",
     getPayload: () => ({
@@ -495,6 +500,34 @@ export function TwinPage() {
 
   const drawerTaskNodes = taskNodes[activeTaskId ?? ""] ?? [];
 
+  /** 抽屉「最近协同」：当前员工参与的结对中，各自最新一条消息。 */
+  const seatRecent = useMemo(() => {
+    const sid = selection?.seat.seat_id;
+    if (!sid) return [];
+    const rows: Array<{
+      message_id: string;
+      body: string;
+      peer: string;
+      created_at: string | null;
+    }> = [];
+    for (const link of pairLinks) {
+      const isA = link.a_seat_id === sid;
+      const isB = link.b_seat_id === sid;
+      if (!isA && !isB) continue;
+      const latest = pairMessages[link.pair_id]?.[0];
+      if (!latest) continue;
+      rows.push({
+        message_id: latest.message_id,
+        body: latest.body,
+        peer: isA ? link.b_name : link.a_name,
+        created_at: latest.created_at,
+      });
+    }
+    return rows
+      .sort((x, y) => (y.created_at ?? "").localeCompare(x.created_at ?? ""))
+      .slice(0, 3);
+  }, [pairLinks, pairMessages, selection]);
+
   /** 消息气泡：每个同层结对取最新一条，锚定在连线中点。 */
   const pairBubbles = useMemo<PairBubble[]>(() => {
     const bubbles: PairBubble[] = [];
@@ -562,12 +595,26 @@ export function TwinPage() {
   const activeFloor = activeFloorId
     ? floors.find((f) => f.floor_id === activeFloorId) ?? null
     : null;
+
+  // kiosk 轮播：仅在显式 ?kiosk=1 时启用；匿名浏览与闲置待机都不自动切画面
+  useEffect(() => {
+    if (!forcedKiosk || reducedMotion || floors.length === 0) return;
+    const ids: Array<string | null> = [null, ...floors.map((f) => f.floor_id)];
+    const timer = window.setInterval(() => {
+      setActiveFloorId((prev) => {
+        const idx = ids.indexOf(prev);
+        return ids[(idx + 1) % ids.length];
+      });
+    }, 22_000);
+    return () => window.clearInterval(timer);
+  }, [forcedKiosk, reducedMotion, floors]);
+
   // 只为当前查看的楼层派活动，避免并发名额被其它楼层分摊
   const walkerFloors = useMemo(() => (activeFloor ? [activeFloor] : []), [activeFloor]);
 
   /** Walker 活动：仅在 focused 模式下启用，避免 overview 渲染/走路太多 DOM。 */
   const { routes: walkerRoutes, removeRoute } = useWalkers(walkerFloors, {
-    maxConcurrent: 3,
+    maxConcurrent: 6,
     tickMs: 2400,
     enabled: !!activeFloorId && !reducedMotion,
     realPairs,
@@ -616,7 +663,8 @@ export function TwinPage() {
   const applyRemoteFocus = useCallback((floorId: string, seatId?: string | null) => {
     setActiveFloorId(floorId);
     setPeek(false);
-    setView({ zoom: 1, panX: 0, panY: 0 });
+    viewRef.current = { zoom: 1, panX: 0, panY: 0 };
+    commitSceneTransform();
     if (!seatId) {
       setSelection(null);
       return;
@@ -659,7 +707,7 @@ export function TwinPage() {
   const collabStream = useCollabEvents({
     enabled: true,
     url: "/api/public/collab/stream",
-    screenId: screenId,
+    screenId: screenRegistered ? screenId : null,
     onEvent: (event) => {
       if (event.event === "message.created") {
         applyMessageEvent(event.data);
@@ -795,7 +843,7 @@ export function TwinPage() {
     const box = stageRef.current?.querySelector<HTMLElement>(".building");
     if (!box) return;
     const rect = box.getBoundingClientRect();
-    const rise = shellHeight * scale * view.zoom * 0.7;
+    const rise = shellHeight * scale * viewRef.current.zoom * 0.7;
     const pad = 40;
     const inside =
       clientX >= rect.left - pad &&
@@ -816,31 +864,55 @@ export function TwinPage() {
     };
   }, [floors]);
 
+  // 稳定的视口提交函数 —— 必须在 enterFloor/onWheel/onPointerMove 等依赖它的 handler 之前声明。
+  // activeIndexRef 声明在这里（前向引用），真正的 current 赋值放在 activeIndex 声明之后。
+  const activeIndexRef = useRef<number | null>(null);
+  const commitSceneTransform = useCallback(() => {
+    const el = sceneScaleElRef.current;
+    if (!el) return;
+    const v = viewRef.current;
+    const s = scaleRef.current * v.zoom * (activeIndexRef.current !== null ? 1.32 : 1);
+    el.style.transform = `translate(${v.panX}px, ${v.panY}px) scale(${s})`;
+  }, []);
+
   const activeIndex = useMemo(() => {
     if (!activeFloorId) return null;
     return floors.findIndex((f) => f.floor_id === activeFloorId);
   }, [activeFloorId, floors]);
+  activeIndexRef.current = activeIndex;
+  // 基础缩放或聚焦楼层变化时（罕见）重新提交一次 transform。
+  useLayoutEffect(() => {
+    commitSceneTransform();
+  }, [scale, activeIndex, commitSceneTransform]);
 
   /** 点哪层进哪层：直接聚焦，不再切换回整楼。 */
-  const enterFloor = (floorId: string) => {
-    setActiveFloorId(floorId);
-    setSelection(null);
-    setPeek(false);
-    setView({ zoom: 1, panX: 0, panY: 0 });
-  };
+  const enterFloor = useCallback(
+    (floorId: string) => {
+      setActiveFloorId(floorId);
+      setSelection(null);
+      setPeek(false);
+      viewRef.current = { zoom: 1, panX: 0, panY: 0 };
+      commitSceneTransform();
+    },
+    [commitSceneTransform],
+  );
 
-  const locateSeat = () => {
+  const locateSeat = useCallback(() => {
     if (!selection) return;
     setActiveFloorId(selection.floorId);
-  };
+  }, [selection]);
 
   /** 定位到某个工位：进入所在楼层、居中复位并打开详情抽屉。 */
-  const focusSeat = (floorId: string, room: Room, seat: Seat) => {
-    setActiveFloorId(floorId);
-    setPeek(false);
-    setView({ zoom: 1, panX: 0, panY: 0 });
-    setSelection({ floorId, room, seat });
-  };
+  const focusSeat = useCallback(
+    (floorId: string, room: Room, seat: Seat) => {
+      setActiveFloorId(floorId);
+      setPeek(false);
+      viewRef.current = { zoom: 1, panX: 0, panY: 0 };
+      commitSceneTransform();
+      setSelection({ floorId, room, seat });
+    },
+    [commitSceneTransform],
+  );
 
   /** 点击侧栏结对：定位到发起人所在楼层并打开其详情抽屉。 */
   const focusPair = (link: PairLink) => {
@@ -855,36 +927,78 @@ export function TwinPage() {
     }
   };
 
-  const onWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const next = Math.min(2.6, Math.max(0.65, view.zoom * Math.exp(-e.deltaY * 0.0012)));
-    setView((v) => ({ ...v, zoom: next }));
-  };
+  const onWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const v = viewRef.current;
+      const next = Math.min(2.6, Math.max(0.65, v.zoom * Math.exp(-e.deltaY * 0.0012)));
+      viewRef.current = { ...v, zoom: next };
+      commitSceneTransform();
+    },
+    [commitSceneTransform],
+  );
 
-  const onPointerDown = (e: React.PointerEvent) => {
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    dragRef.current = { x: e.clientX, y: e.clientY, panX: view.panX, panY: view.panY };
+    const v = viewRef.current;
+    dragRef.current = { x: e.clientX, y: e.clientY, panX: v.panX, panY: v.panY };
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-  };
+  }, []);
 
-  const onPointerMove = (e: React.PointerEvent) => {
-    updatePeekFromPointer(e.clientX, e.clientY);
-    const drag = dragRef.current;
-    if (!drag) return;
-    setView((v) => ({
-      ...v,
-      panX: drag.panX + (e.clientX - drag.x),
-      panY: drag.panY + (e.clientY - drag.y),
-    }));
-  };
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      updatePeekFromPointer(e.clientX, e.clientY);
+      const drag = dragRef.current;
+      if (!drag) return;
+      viewRef.current = {
+        ...viewRef.current,
+        panX: drag.panX + (e.clientX - drag.x),
+        panY: drag.panY + (e.clientY - drag.y),
+      };
+      commitSceneTransform();
+    },
+    [commitSceneTransform],
+  );
 
-  const endDrag = () => {
+  const endDrag = useCallback(() => {
     dragRef.current = null;
-  };
+  }, []);
 
   const centerIndex = activeIndex ?? Math.floor((floors.length - 1) / 2);
-  const sceneScale = scale * view.zoom * (activeIndex !== null ? 1.32 : 1);
   const centerZ = activeIndex !== null ? centerIndex * FLOOR_GAP : shellHeight / 2;
+
+  // 按楼层稳定分组，避免每次渲染都 new filter 数组传给 FloorSlab
+  const walkersByFloor = useMemo(() => {
+    const map: Record<string, typeof walkerRoutes> = {};
+    for (const floor of floors) {
+      const ids = new Set(floor.rooms.flatMap((r) => r.seats.map((s) => s.seat_id)));
+      map[floor.floor_id] = walkerRoutes.filter((r) => ids.has(r.seatId));
+    }
+    return map;
+  }, [floors, walkerRoutes]);
+  const pairLinksByFloor = useMemo(() => {
+    const map: Record<string, PairLink[]> = {};
+    for (const link of pairLinks) {
+      (map[link.floor_id] ||= []).push(link);
+    }
+    return map;
+  }, [pairLinks]);
+  const pairBubblesByFloor = useMemo(() => {
+    const map: Record<string, PairBubble[]> = {};
+    for (const bubble of pairBubbles) {
+      (map[bubble.floor_id] ||= []).push(bubble);
+    }
+    return map;
+  }, [pairBubbles]);
+
+  // 稳定的座位选择 handler，传给 FloorSlab/FloorDetailView
+  const selectSeat = useCallback(
+    (seat: Seat, room: Room) => {
+      if (isKiosk || !seat.agent) return;
+      setSelection({ floorId: room.room_id.startsWith("f1") ? "f1" : "f2", room, seat });
+    },
+    [isKiosk],
+  );
 
   const rootClass = [
     "twin-root",
@@ -938,8 +1052,10 @@ export function TwinPage() {
             <span className="metric"><i className="dot dot-offline" />离线 {totals.offline}</span>
             <span className="metric"><i className="dot dot-busy" />结对 {pairRows.length}</span>
             <span className="metric"><i className="dot dot-online" />协同 {peers + 1} 屏</span>
-            <span className={`metric metric-stream status-${stream.state}`}>
-              {STREAM_LABEL[stream.state]}
+            <span
+              className={`metric metric-stream status-${hasToken ? stream.state : collabStream}`}
+            >
+              {STREAM_LABEL[hasToken ? stream.state : collabStream]}
               {loadedAt ? ` · ${timeText(loadedAt)}` : ""}
             </span>
             <span className={`metric metric-clock${night ? " is-night" : ""}`}>
@@ -1112,17 +1228,15 @@ export function TwinPage() {
         ) : activeFloor ? (
           // ── detail 模式：全屏独立办公室 2D 画面 ──────────
           <FloorDetailView
+            key={activeFloor.floor_id}
             floor={activeFloor}
             selection={selection}
             walkerRoutes={walkerRoutes}
-            pairLinks={pairLinks.filter((link) => link.floor_id === activeFloor.floor_id)}
-            pairBubbles={pairBubbles.filter((bubble) => bubble.floor_id === activeFloor.floor_id)}
+            pairLinks={pairLinksByFloor[activeFloor.floor_id] ?? []}
+            pairBubbles={pairBubblesByFloor[activeFloor.floor_id] ?? []}
             pulseSeatId={pulseSeatId}
             onWalkerArrive={removeRoute}
-            onSelectSeat={(seat, room) => {
-              if (isKiosk || !seat.agent) return;
-              setSelection({ floorId: activeFloor.floor_id, room, seat });
-            }}
+            onSelectSeat={selectSeat}
           />
         ) : (
           // ── overview 模式：3D 大楼场景 ────────────────────
@@ -1137,7 +1251,10 @@ export function TwinPage() {
               endDrag();
               setPeek(false);
             }}
-            onDoubleClick={() => setView({ zoom: 1, panX: 0, panY: 0 })}
+            onDoubleClick={() => {
+              viewRef.current = { zoom: 1, panX: 0, panY: 0 };
+              commitSceneTransform();
+            }}
           >
             <div className="sky">
               <span className="sun" />
@@ -1163,12 +1280,7 @@ export function TwinPage() {
               <span className="cloud c3" />
             </div>
             <div className="twin-scene">
-              <div
-                className="scene-scale"
-                style={{
-                  transform: `translate(${view.panX}px, ${view.panY}px) scale(${sceneScale})`,
-                }}
-              >
+              <div className="scene-scale" ref={sceneScaleElRef}>
                 <div
                   className="building"
                   style={{
@@ -1178,32 +1290,23 @@ export function TwinPage() {
                   <SiteScene visible={!activeFloorId} />
                   <div className="building-core">
                     <BuildingShell height={shellHeight} detail={peek} />
-                    {(peek) && floors.map((floor, index) => {
-                      const floorSeatIds = new Set(
-                        floor.rooms.flatMap((r) => r.seats.map((s) => s.seat_id)),
-                      );
-                      const floorWalkers = walkerRoutes.filter((route) => floorSeatIds.has(route.seatId));
-                      return (
-                        <FloorSlab
-                          key={floor.floor_id}
-                          floor={floor}
-                          index={index}
-                          active={false}
-                          dimmed={false}
-                          selectedSeatId={selection?.seat.seat_id ?? null}
-                          walkerRoutes={floorWalkers}
-                          pairLinks={pairLinks.filter((link) => link.floor_id === floor.floor_id)}
-                          pairBubbles={pairBubbles.filter((bubble) => bubble.floor_id === floor.floor_id)}
-                          pulseSeatId={pulseSeatId}
-                          onWalkerArrive={removeRoute}
-                          onSelectFloor={enterFloor}
-                          onSelectSeat={(seat, room) => {
-                            if (isKiosk || !seat.agent) return;
-                            setSelection({ floorId: floor.floor_id, room, seat });
-                          }}
-                        />
-                      );
-                    })}
+                    {(peek) && floors.map((floor, index) => (
+                      <FloorSlab
+                        key={floor.floor_id}
+                        floor={floor}
+                        index={index}
+                        active={false}
+                        dimmed={false}
+                        selectedSeatId={selection?.seat.seat_id ?? null}
+                        walkerRoutes={walkersByFloor[floor.floor_id] ?? []}
+                        pairLinks={pairLinksByFloor[floor.floor_id] ?? []}
+                        pairBubbles={pairBubblesByFloor[floor.floor_id] ?? []}
+                        pulseSeatId={pulseSeatId}
+                        onWalkerArrive={removeRoute}
+                        onSelectFloor={enterFloor}
+                        onSelectSeat={selectSeat}
+                      />
+                    ))}
                   </div>
                 </div>
               </div>
@@ -1376,6 +1479,21 @@ export function TwinPage() {
                         </li>
                       ))}
                     </ol>
+                  </dd>
+                </div>
+              ) : null}
+              {seatRecent.length > 0 ? (
+                <div>
+                  <dt>最近协同</dt>
+                  <dd>
+                    <ul className="drawer-recent">
+                      {seatRecent.map((msg) => (
+                        <li key={msg.message_id}>
+                          <span className="drawer-recent-peer">{msg.peer}</span>
+                          <span className="drawer-recent-body">{msg.body}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </dd>
                 </div>
               ) : null}

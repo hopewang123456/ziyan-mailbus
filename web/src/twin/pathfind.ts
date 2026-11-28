@@ -74,8 +74,8 @@ export function getDoorCenter(room: Room, wall: "n" | "s" | "w" | "e"): Pt {
 /** 电梯位置：各层走廊里的固定落点（纯视觉，不参与寻路障碍）。 */
 export function elevatorSpot(floor: Floor): Pt {
   const byLevel: Record<number, Pt> = {
-    1: { x: 700, y: 340 },
-    2: { x: 700, y: 640 },
+    1: { x: 240, y: 360 },
+    2: { x: 1100, y: 740 },
     3: { x: 700, y: 640 },
   };
   return byLevel[floor.level] ?? { x: 700, y: 340 };
@@ -91,33 +91,28 @@ export interface Grid {
 }
 
 const gridCache = new Map<string, Grid>();
-const GRID_VERSION = "v5"; // 墙厚/门洞/家具/膨胀参数变更时递增，强制重建网格
+const GRID_VERSION = "v6"; // 墙厚/门洞/家具/膨胀参数变更时递增，强制重建网格
 
-/** 房间内不可穿越的家具（会议桌 / 沙发 / 前台台面），尺寸自适应房间大小。
- *  关键：膨胀后的家具不得覆盖房间四角，确保 roomSpot 能找到可站立点。 */
+/** 与 FloorSlab 中实际台面/扶手的地面投影一致；椅子允许员工走近就座。 */
 function roomFurniture(room: Room): Array<{ x0: number; y0: number; x1: number; y1: number }> {
   const cx = room.x + room.w / 2;
   const cy = room.y + room.h / 2;
-  // roomSpot 的四角兜底点在 inset+6 处，inset = min(48, min(w,h)/5)
-  const inset = Math.min(48, Math.floor(Math.min(room.w, room.h) / 5));
-  const margin = inset + 6 + 4 + CHAR_R; // 家具边到房间边至少留这么多，保证四角空闲
   if (room.kind === "meeting") {
-    const tw = Math.min(160, room.w - margin * 2);
-    const th = Math.min(100, room.h - margin * 2);
-    if (tw <= 0 || th <= 0) return [];
-    return [{ x0: cx - tw / 2, y0: cy - th / 2, x1: cx + tw / 2, y1: cy + th / 2 }];
+    return [{ x0: cx - 82, y0: cy - 52, x1: cx + 82, y1: cy + 52 }];
   }
   if (room.kind === "lounge") {
-    const sw = Math.min(180, room.w - margin * 2);
-    const sh = Math.min(100, room.h - margin * 2);
-    if (sw <= 0 || sh <= 0) return [];
-    return [{ x0: cx - sw / 2, y0: cy - sh / 2, x1: cx + sw / 2, y1: cy + sh / 2 }];
+    return [
+      { x0: cx - 104, y0: cy - 48, x1: cx + 106, y1: cy + 28 },
+      { x0: cx - 46, y0: cy + 40, x1: cx + 46, y1: cy + 90 },
+      { x0: room.x + 24, y0: room.y + 26, x1: room.x + 144, y1: room.y + 56 },
+      { x0: room.x + 152, y0: room.y + 30, x1: room.x + 186, y1: room.y + 52 },
+      { x0: room.x + room.w - 64, y0: room.y + 30, x1: room.x + room.w - 34, y1: room.y + 56 },
+      { x0: room.x + 24, y0: room.y + room.h - 60, x1: room.x + 58, y1: room.y + room.h - 32 },
+      { x0: room.x + room.w - 74, y0: room.y + room.h - 88, x1: room.x + room.w - 40, y1: room.y + room.h - 40 },
+    ];
   }
   if (room.kind === "reception") {
-    const rw = Math.min(200, room.w - margin * 2);
-    const rh = Math.min(80, room.h - margin * 2);
-    if (rw <= 0 || rh <= 0) return [];
-    return [{ x0: cx - rw / 2, y0: cy - rh / 2, x1: cx + rw / 2, y1: cy + rh / 2 }];
+    return [{ x0: cx - 90, y0: cy + 34, x1: cx + 90, y1: cy + 86 }];
   }
   return [];
 }
@@ -186,7 +181,10 @@ function buildGrid(floor: Floor): Grid {
 }
 
 function gridFor(floor: Floor): Grid {
-  const key = `${floor.floor_id}-${GRID_VERSION}`;
+  const geometry = floor.rooms.map(({ room_id, kind, x, y, w, h, seats }) =>
+    [room_id, kind, x, y, w, h, seats.map((seat) => [seat.x, seat.y])],
+  );
+  const key = `${floor.floor_id}-${GRID_VERSION}-${JSON.stringify(geometry)}`;
   const cached = gridCache.get(key);
   if (cached) return cached;
   const g = buildGrid(floor);
