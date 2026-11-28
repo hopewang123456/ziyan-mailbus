@@ -35,6 +35,8 @@ DEFAULT_MODELS = {
 
 def _identity_paths(agent: str) -> list[str]:
     return [
+        # 容器实际挂载的身份根（MAILBUS_IDENTITIES_ROOT=/mailbus/shared/access）
+        f"/mailbus/shared/access/codex/{agent}/IDENTITY.md",
         f"/mailbus/store/identities/codex/{agent}/IDENTITY.md",
         f"/mailbus/access/codex/{agent}/IDENTITY.md",
         f"/mailbus/01-mailbus/018-identities/{agent}/IDENTITY.md",

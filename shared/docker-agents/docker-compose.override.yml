@@ -18,7 +18,9 @@ services:
       - mailbus-net
     volumes:
       - ../../python/tools/hermes_a2a_bridge.py:/app/hermes_a2a_bridge.py:ro
-      - ../../data/hermes-a2a-agents.json:/tokens/agents.json:ro
+      # 桥公共骨架（6 个框架桥共用），与入口同目录以便直接 import
+      - ../../python/tools/a2a_bridge_base.py:/app/a2a_bridge_base.py:ro
+      - ${MAILBUS_DATA_HOST}/hermes-a2a-agents.json:/tokens/agents.json:ro
     environment:
       MAILBUS_API_URL: http://172.28.0.1:9814
       MAILBUS_AGENTS_FILE: /tokens/agents.json
@@ -33,14 +35,14 @@ services:
     restart: unless-stopped
   hermes:
     volumes:
-      - ${MAILBUS_HOST_ROOT}/data:/mailbus/store
+      - ${MAILBUS_DATA_HOST}:/mailbus/store
       - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
       - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
       - ${MAILBUS_HOST_ROOT}/shared/access/hermes/.sync:/mailbus/shared/access/hermes/.sync
-      - ${MAILBUS_HOST_ROOT}/data/inbox:/home/hermes/inbox:ro
+      - ${MAILBUS_DATA_HOST}/inbox:/home/hermes/inbox:ro
   openclaw:
     volumes:
-      - ${MAILBUS_HOST_ROOT}/data:/mailbus/store
+      - ${MAILBUS_DATA_HOST}:/mailbus/store
       - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
       - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
       - ${OPENCLAW_WORKSPACE}:/workspace:rw
@@ -49,7 +51,7 @@ services:
       - ./openclaw-agent/init-openclaw-profiles.sh:/init-openclaw-profiles.sh:ro
   codex-web:
     volumes:
-      - ${MAILBUS_HOST_ROOT}/data:/mailbus/store
+      - ${MAILBUS_DATA_HOST}:/mailbus/store
       - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
       - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
       - ${CODEX_WORKSPACE}:/workspace/codex:ro
@@ -58,7 +60,7 @@ services:
       - ./codex-agent/render-codex-config.sh:/usr/local/bin/render-codex-config.sh:ro
   codex-review:
     volumes:
-      - ${MAILBUS_HOST_ROOT}/data:/mailbus/store
+      - ${MAILBUS_DATA_HOST}:/mailbus/store
       - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
       - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
       - ${CODEX_REVIEW_WORKSPACE}:/workspace/codex-review:ro
@@ -67,16 +69,16 @@ services:
       - ./codex-agent/render-codex-config.sh:/usr/local/bin/render-codex-config.sh:ro
   opencode:
     volumes:
-      - ${MAILBUS_HOST_ROOT}/data:/mailbus/store
+      - ${MAILBUS_DATA_HOST}:/mailbus/store
       - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
       - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
       - ${OPENCODE_ROOT}:/workspace/opencode:rw
   mailbus:
     volumes:
       - ${MAILBUS_HOST_ROOT}:/mailbus
-      - ${MAILBUS_HOST_ROOT}/data:/mailbus/store
+      - ${MAILBUS_DATA_HOST}:/mailbus/store
       # 本地覆盖：数据根直接落宿主目录，便于 Windows 侧查看/备份
-      - ${MAILBUS_HOST_ROOT}/data:/mailbus/data
+      - ${MAILBUS_DATA_HOST}:/mailbus/data
       - ${MAILBUS_HOST_ROOT}/run:/mailbus/run
       - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
       - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro

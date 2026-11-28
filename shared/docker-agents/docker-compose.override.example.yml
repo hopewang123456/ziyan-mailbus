@@ -1,63 +1,57 @@
 # EXAMPLE — local-only volume overrides via env (no hardcoded sibling paths).
 #   cp docker-compose.override.example.yml docker-compose.override.yml
-#   cp .env.example .env   # fill MAILBUS_HOST_ROOT + workspace vars
+#   cp .env.example .env   # fill MAILBUS_HOST_ROOT + MAILBUS_DATA_HOST + workspace vars
 #
 # docker compose reads docker-agents/.env for ${VAR} substitution.
 # Do not commit override.yml or .env — machine-private.
 #
-# Optional: mailbus compose sync
+# 目录约定（与 docker-compose.yml / 实际 override 一致）：
+#   数据根      : ${MAILBUS_DATA_HOST}（默认 ../../data；建议指向 WSL ext4）
+#   共享资源    : ${MAILBUS_HOST_ROOT}/shared/{access,skills,rules}
+#   Python 工具 : ${MAILBUS_HOST_ROOT}/python/tools
+#   旧栈 python/lib 已移除，不再挂载
 
 services:
   hermes:
     volumes:
-      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
-      - ${MAILBUS_HOST_ROOT}/tools:/mailbus/tools:ro
-      - ${MAILBUS_HOST_ROOT}/lib:/mailbus/lib:ro
-      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
-      - ${MAILBUS_HOST_ROOT}/access/external-tools:/mailbus/external-tools:ro
-      - ${HERMES_DATA}/.hermes:/home/hermes/.hermes:rw
+      - ${MAILBUS_DATA_HOST:-../../data}:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access/external-tools:/mailbus/shared/external-tools:ro
+      - ${HERMES_DATA:-./workspaces/hermes-data}/.hermes:/home/hermes/.hermes:rw
   openclaw:
     volumes:
-      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
-      - ${MAILBUS_HOST_ROOT}/tools:/mailbus/tools:ro
-      - ${MAILBUS_HOST_ROOT}/lib:/mailbus/lib:ro
-      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
-      - ${OPENCLAW_WORKSPACE}:/workspace:rw
+      - ${MAILBUS_DATA_HOST:-../../data}:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
+      - ${OPENCLAW_WORKSPACE:-./workspaces/openclaw}:/workspace:rw
+      - ${MAILBUS_HOST_ROOT}/python/tools:/mailbus/python/tools:ro
   codex-web:
     volumes:
-      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
-      - ${MAILBUS_HOST_ROOT}/tools:/mailbus/tools:ro
-      - ${MAILBUS_HOST_ROOT}/lib:/mailbus/lib:ro
-      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
-      - ${CODEX_WORKSPACE}:/workspace/codex:ro
+      - ${MAILBUS_DATA_HOST:-../../data}:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
+      - ${CODEX_WORKSPACE:-./workspaces/codex}:/workspace/codex:ro
+      - ${MAILBUS_HOST_ROOT}/python/tools:/mailbus/python/tools:ro
   codex-review:
     volumes:
-      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
-      - ${MAILBUS_HOST_ROOT}/tools:/mailbus/tools:ro
-      - ${MAILBUS_HOST_ROOT}/lib:/mailbus/lib:ro
-      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
-      - ${CODEX_REVIEW_WORKSPACE}:/workspace/codex-review:ro
+      - ${MAILBUS_DATA_HOST:-../../data}:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
+      - ${CODEX_REVIEW_WORKSPACE:-./workspaces/codex-review}:/workspace/codex-review:ro
+      - ${MAILBUS_HOST_ROOT}/python/tools:/mailbus/python/tools:ro
   opencode:
     volumes:
-      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
-      - ${MAILBUS_HOST_ROOT}/tools:/mailbus/tools:ro
-      - ${MAILBUS_HOST_ROOT}/lib:/mailbus/lib:ro
-      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
-      - ${OPENCODE_ROOT}:/workspace/opencode:rw
+      - ${MAILBUS_DATA_HOST:-../../data}:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
+      - ${OPENCODE_ROOT:-./workspaces/opencode}:/workspace/opencode:rw
   dsh:
     volumes:
-      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
-      - ${MAILBUS_HOST_ROOT}/skills:/mailbus/skills:ro
-      - ${MAILBUS_HOST_ROOT}/rules:/mailbus/rules:ro
-      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
-      - ${MAILBUS_HOST_ROOT}/access/external-tools:/mailbus/external-tools:ro
-      - ${DSH_WORKSPACE}:/home/dsh/.dsh
+      - ${MAILBUS_DATA_HOST:-../../data}:/mailbus/store
+      - ${MAILBUS_HOST_ROOT}/shared/skills:/mailbus/shared/skills:ro
+      - ${MAILBUS_HOST_ROOT}/shared/rules:/mailbus/shared/rules:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro
+      - ${DSH_WORKSPACE:-./workspaces/dsh}:/home/dsh/.dsh
   mailbus:
     volumes:
       - ${MAILBUS_HOST_ROOT}:/mailbus
-      - ${MAILBUS_HOST_ROOT}/store:/mailbus/store
+      - ${MAILBUS_DATA_HOST:-../../data}:/mailbus/data
+      - ${MAILBUS_DATA_HOST:-../../data}:/mailbus/store
       - ${MAILBUS_HOST_ROOT}/run:/mailbus/run
-      - ${MAILBUS_HOST_ROOT}/tools:/mailbus/tools:ro
-      - ${MAILBUS_HOST_ROOT}/lib:/mailbus/lib:ro
-      - ${MAILBUS_HOST_ROOT}/access:/mailbus/access:ro
-      - ${MAILBUS_HOST_ROOT}/access/external-tools:/mailbus/external-tools:ro
+      - ${MAILBUS_HOST_ROOT}/shared/access:/mailbus/shared/access:ro

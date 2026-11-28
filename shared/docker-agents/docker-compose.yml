@@ -86,7 +86,7 @@ services:
       HEARTBEAT_INTERVAL_SEC: ${HEARTBEAT_INTERVAL_SEC:-60}
       TZ: Asia/Shanghai
     volumes:
-      - ../../data/hermes-agent-tokens.json:/tokens/hermes-agent-tokens.json:ro
+      - ${MAILBUS_DATA_HOST}/hermes-agent-tokens.json:/tokens/hermes-agent-tokens.json:ro
     networks:
       - mailbus-net
     depends_on:
@@ -183,13 +183,13 @@ services:
       - ${HERMES_DATA:-./workspaces/hermes-data}:/opt/data
       # profiles/*/memories 是指向 Vault 记忆树的 symlink，必须挂真源否则初始化失败
       - /mnt/e/Obsidian/Vaults/Agent/02-members/022-category/0221-hermes/02214-memory:/mnt/e/Obsidian/Vaults/Agent/02-members/022-category/0221-hermes/02214-memory
-      - ../data:/mailbus/store
+      - ${MAILBUS_DATA_HOST}:/mailbus/store
       - ../skills:/mailbus/shared/skills:ro
       - ../rules:/mailbus/shared/rules:ro
       - ../access:/mailbus/shared/access:ro
       - ../access/external-tools:/mailbus/shared/external-tools:ro
       - ../access/hermes/.sync:/mailbus/access/hermes/.sync
-      - ../data/inbox:/home/hermes/inbox:ro
+      - ${MAILBUS_DATA_HOST}/inbox:/home/hermes/inbox:ro
     environment:
       - HERMES_HOME=/opt/data
       - TZ=Asia/Shanghai
@@ -229,7 +229,7 @@ services:
       - mailbus-net
     volumes:
       - ${OPENCLAW_WORKSPACE:-./workspaces/openclaw}:/workspace
-      - ../data:/mailbus/store
+      - ${MAILBUS_DATA_HOST}:/mailbus/store
       # 热挂 entrypoint，避免每次改配对逻辑都要 rebuild 镜像
       - ./openclaw-agent/entrypoint.sh:/entrypoint.sh:ro
       - ../skills:/mailbus/shared/skills:ro
@@ -239,7 +239,7 @@ services:
       - ${OPENCLAW_WORKSPACE:-./workspaces/openclaw}/memory:/workspace/memory
       - ../access:/mailbus/shared/access:ro
       - ../access/external-tools:/mailbus/shared/external-tools:ro
-      - ../data/inbox:/inbox:ro
+      - ${MAILBUS_DATA_HOST}/inbox:/inbox:ro
       - ${HERMES_DATA:-./workspaces/hermes-data}:/hermes-secrets:ro
     environment:
       - TZ=Asia/Shanghai
@@ -272,7 +272,7 @@ services:
     networks:
       - mailbus-net
     volumes:
-      - ../data:/mailbus/store
+      - ${MAILBUS_DATA_HOST}:/mailbus/store
       - ../skills:/mailbus/shared/skills:ro
       - ../rules:/mailbus/shared/rules:ro
       - ../access:/mailbus/shared/access:ro
@@ -330,7 +330,7 @@ services:
     networks:
       - mailbus-net
     volumes:
-      - ../data:/mailbus/store
+      - ${MAILBUS_DATA_HOST}:/mailbus/store
       - ../skills:/mailbus/shared/skills:ro
       - ../rules:/mailbus/shared/rules:ro
       - ../access:/mailbus/shared/access:ro
@@ -380,7 +380,7 @@ services:
     networks:
       - mailbus-net
     volumes:
-      - ../data:/mailbus/store
+      - ${MAILBUS_DATA_HOST}:/mailbus/store
       - ../skills:/mailbus/shared/skills:ro
       - ../rules:/mailbus/shared/rules:ro
       - ../access:/mailbus/shared/access:ro
@@ -425,7 +425,7 @@ services:
       - mailbus-net
     volumes:
       - ${DSH_WORKSPACE:-./workspaces/dsh}:/home/dsh/.dsh
-      - ../data:/mailbus/store
+      - ${MAILBUS_DATA_HOST}:/mailbus/store
       - ../skills:/mailbus/shared/skills:ro
       - ../rules:/mailbus/shared/rules:ro
       - ../access:/mailbus/shared/access:ro

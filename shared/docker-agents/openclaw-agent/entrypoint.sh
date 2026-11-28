@@ -21,10 +21,6 @@ bash /init-openclaw-profiles.sh || {
   bash /init-openclaw-profiles.sh || echo "[entrypoint] WARN: profile init still failed — gateways may be degraded"
 }
 
-if [ -f /mailbus/tools/sync-all-agent-layers.py ]; then
-  python3 /mailbus/tools/sync-all-agent-layers.py --data-dir /mailbus/store --skip-hermes --skip-codex --skip-claude || true
-fi
-
 echo "[entrypoint] Starting OpenClaw gateways..."
 OPENCLAW_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-}"
 if [ "$OPENCLAW_TOKEN" = "change-me" ]; then

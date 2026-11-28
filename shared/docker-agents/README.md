@@ -5,7 +5,7 @@ mailbus Docker full-agent stack (compose SoT in this directory).
 | Item | Path |
 |------|------|
 | Source | `../..` (mailbus repo root) |
-| `MAILBUS_DATA` | `../data` (SQLite + file_bus / MCP queues) |
+| Data root (`MAILBUS_DATA_HOST`) | `.env` 中的绝对路径（SQLite + file_bus / MCP 队列）；默认 `../data`，建议指向 WSL ext4 |
 | Compose env sample | [`.env.example`](.env.example) → copy to `.env` |
 | Agent homes | `.env` absolute paths (`OPENCLAW_WORKSPACE`, …); see [`workspaces/README.md`](workspaces/README.md) |
 | Local overrides | `docker-compose.override.yml` (gitignored; copy from `docker-compose.override.example.yml`) |
